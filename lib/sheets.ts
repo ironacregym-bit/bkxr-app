@@ -28,6 +28,7 @@ if (!PRIVATE_KEY.includes('BEGIN PRIVATE KEY') || !PRIVATE_KEY.includes('END PRI
 
 // Debug: Check if newlines are real
 console.log('PRIVATE_KEY preview:', PRIVATE_KEY.slice(0, 80));
+console.log('PRIVATE_KEY length:', PRIVATE_KEY.length);
 
 
 // Initialize Google Sheets API client
