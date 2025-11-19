@@ -1,3 +1,4 @@
+// pages/api/health.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { readRange } from "../../lib/sheets";
 
@@ -16,7 +17,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   } catch (err: any) {
     console.error("API /health failed:", err?.message || err);
-    // Always return a safe shape instead of crashing
     return res.status(200).json({
       ok: false,
       settingsRows: 0,
