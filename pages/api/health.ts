@@ -15,6 +15,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
   } catch (err: any) {
-    return res.status(500).json({ ok: false, error: String(err?.message || err) });
+    console.error("API /health failed:", err?.message || err);
+    // Always return a safe shape instead of crashing
+    return res.status(200).json({
+      ok: false,
+      settingsRows: 0,
+      env: {
+        SHEETS_SPREADSHEET_ID: !!process.env.SHEETS_SPREADSHEET_ID,
+        GOOGLE_CLIENT_EMAIL: !!process.env.GOOGLE_CLIENT_EMAIL,
+        GOOGLE_PRIVATE_KEY: !!process.env.GOOGLE_PRIVATE_KEY,
+        NEXTAUTH_URL: !!process.env.NEXTAUTH_URL
+      },
+      error: String(err?.message || err)
+    });
   }
 }
