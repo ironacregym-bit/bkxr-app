@@ -1,9 +1,16 @@
 import useSWR from "swr";
-const fetcher=(u:string)=>fetch(u).then(r=>r.json());
+import { signIn, signOut, useSession } from "next-auth/react";
 
-export default function Home(){
-  const { data } = useSWR("/api/workouts", fetcher);
-  return <main style={{padding:16}}>
+
+const fetcher=(u:string)=>fetch(u).then(r=>r.json());
+const { data: session } = useSession();
+return <main style={{padding:16}}>
+  <h1>BXKR</h1>
+  <div style={{marginBottom:12}}>
+    {!session ? <button onClick={()=>signIn("google")}>Sign in with Google</button>
+              : <button onClick={()=>signOut()}>Sign out ({session.user?.email})</button>}
+  </div>
+
     <h1>BXKR</h1>
     {!data ? "Loading…" : data.workouts.map((w:any)=>(
       <div key={w.id} style={{margin:"8px 0",padding:12,border:"1px solid #222",borderRadius:8}}>
