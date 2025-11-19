@@ -1,8 +1,13 @@
 import { google } from 'googleapis';
 
 // Validate env vars
-const CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
+
+if (!process.env.GOOGLE_PRIVATE_KEY) {
+  throw new Error("Missing GOOGLE_PRIVATE_KEY in environment variables");
+}
 const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n");
+
+const CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
 const SPREADSHEET_ID = process.env.SHEETS_SPREADSHEET_ID;
 
 if (!CLIENT_EMAIL || !PRIVATE_KEY || !SPREADSHEET_ID) {
@@ -16,7 +21,7 @@ if (!PRIVATE_KEY.includes('BEGIN PRIVATE KEY') || !PRIVATE_KEY.includes('END PRI
 
 
 // Debug: Check if newlines are real
-console.log('PRIVATE_KEY preview:', PRIVATE_KEY.slice(0, 80));
+console.log('PRIVATE_KEY preview:', PRIVATE_KEY.slice(0, 300));
 console.log('PRIVATE_KEY length:', PRIVATE_KEY.length);
 
 
