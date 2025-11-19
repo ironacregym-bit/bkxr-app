@@ -9,6 +9,11 @@ function normalizeKey(k?: string) {
   return cleaned.replace(/^"+|"+$/g, "");
 }
 
+
+if (!process.env.GOOGLE_PRIVATE_KEY) {
+  throw new Error('Missing GOOGLE_PRIVATE_KEY in environment variables');
+}
+
 const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n');
 const CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
 
