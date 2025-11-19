@@ -30,5 +30,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
-// Debug: Check if newlines are real
-console.log('PRIVATE_KEY preview:', process.env.GOOGLE_PRIVATE_KEY.slice(0, 80));
