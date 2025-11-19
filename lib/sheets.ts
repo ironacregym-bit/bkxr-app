@@ -1,14 +1,15 @@
 import { google } from 'googleapis';
 
-// Normalize private key from Vercel env (convert escaped \n to real newlines)
+
 function normalizeKey(key?: string): string {
   if (!key) return '';
   return key
-    .replace(/\r\\n|\\r\\n/g, '\n') // handle CRLF escapes
-    .replace(/\\n/g, '\n')          // handle LF escapes
+    .replace(/\\n/g, '\n') // handles escaped \n
+    .replace(/\n/g, '\n')  // handles actual newlines if any
     .trim()
-    .replace(/^"+|"+$/g, '');       // strip accidental quotes
+    .replace(/^"+|"+$/g, '');
 }
+
 
 // Validate env vars
 const CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
