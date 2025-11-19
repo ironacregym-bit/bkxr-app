@@ -1,19 +1,8 @@
 import { google } from 'googleapis';
 
-
-function normalizeKey(key?: string): string {
-  if (!key) return '';
-  return key
-    .replace(/\\n/g, '\n') // handles escaped \n
-    .replace(/\n/g, '\n')  // handles actual newlines if any
-    .trim()
-    .replace(/^"+|"+$/g, '');
-}
-
-
 // Validate env vars
 const CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
-const PRIVATE_KEY = normalizeKey(process.env.GOOGLE_PRIVATE_KEY);
+const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n");
 const SPREADSHEET_ID = process.env.SHEETS_SPREADSHEET_ID;
 
 if (!CLIENT_EMAIL || !PRIVATE_KEY || !SPREADSHEET_ID) {
