@@ -1,13 +1,16 @@
 import { google } from 'googleapis';
 
 // Validate env vars
-
-if (!process.env.GOOGLE_PRIVATE_KEY) {
-  throw new Error("Missing GOOGLE_PRIVATE_KEY in environment variables");
+function normalizeKey(key?: string): string {
+  if (!key) return '';
+  return key
+    .replace(/\r?\n/g, '\n')      // convert real line breaks to \n
+    .replace(/\\n/g, '\n')        // convert escaped \n to real newlines
+    .trim()
+    .replace(/^"+|"+$/g, '');
 }
-const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n");
-PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY.replace(/\r?\n/g, '\n');
 
+const PRIVATE_KEY = normalizeKey(process.env.GOOGLE_PRIVATE_KEY);
 const CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
 const SPREADSHEET_ID = process.env.SHEETS_SPREADSHEET_ID;
 
