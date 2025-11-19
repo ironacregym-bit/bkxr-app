@@ -24,6 +24,11 @@ if (!PRIVATE_KEY.includes('BEGIN PRIVATE KEY') || !PRIVATE_KEY.includes('END PRI
   console.error('GOOGLE_PRIVATE_KEY format looks invalid (missing BEGIN/END markers).');
 }
 
+
+// Debug: Check if newlines are real
+console.log('PRIVATE_KEY preview:', PRIVATE_KEY.slice(0, 80));
+
+
 // Initialize Google Sheets API client
 const auth = new google.auth.JWT(
   CLIENT_EMAIL,
