@@ -22,4 +22,3 @@ return <main style={{padding:16}}>
       <a href={`https://wa.me/${process.env.NEXT_PUBLIC_TRAINER_PHONE || process.env.TRAINER_PHONE}?text=Hi%20Coach%20I%27m%20doing%20BXKR`} target="_blank">Speak to trainer</a>
     </div>
   </main>;
-}
