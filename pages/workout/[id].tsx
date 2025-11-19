@@ -3,6 +3,10 @@ import useSWR from "swr";
 export default function RoundTimer({ rounds=10, boxRounds=5, work=180, rest=60 }:{
   rounds?:number; boxRounds?:number; work?:number; rest?:number;
 }) {
+  const { data: wdata } = useSWR(`/api/workouts`, (u)=>fetch(u).then(r=>r.json()));
+  const { data: sdata } = useSWR(`/api/settings`, (u)=>fetch(u).then(r=>r.json()));
+  if(!wdata || !sdata) return <div style={{padding:16}}>Loading…</div>;
+  const s = { rounds:sdata.rounds, boxRounds:sdata.boxing_rounds, work:sdata.work_sec, rest:sdata.rest_sec };
   const [r,setR]=useState(1), [t,setT]=useState(work), [mode,setMode]=useState<"work"|"rest">("work"), [on,setOn]=useState(false);
   const ref = useRef<any>(null); const bell = useRef<HTMLAudioElement|null>(null);
   useEffect(()=>{ if(typeof Audio!=="undefined") bell.current=new Audio("/beep.ogg"); },[]);
@@ -25,8 +29,4 @@ export default function RoundTimer({ rounds=10, boxRounds=5, work=180, rest=60 }
     </div>
   </div>);
 }
-const { data: wdata } = useSWR(`/api/workouts`, (u)=>fetch(u).then(r=>r.json()));
-const { data: sdata } = useSWR(`/api/settings`, (u)=>fetch(u).then(r=>r.json()));
-if(!wdata || !sdata) return <div style={{padding:16}}>Loading…</div>;
-const s = { rounds:sdata.rounds, boxRounds:sdata.boxing_rounds, work:sdata.work_sec, rest:sdata.rest_sec };
 
