@@ -6,7 +6,7 @@ if (!process.env.GOOGLE_PRIVATE_KEY) {
   throw new Error("Missing GOOGLE_PRIVATE_KEY in environment variables");
 }
 const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n");
-const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY.replace(/\r?\n/g, '\n');
+PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY.replace(/\r?\n/g, '\n');
 
 const CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
 const SPREADSHEET_ID = process.env.SHEETS_SPREADSHEET_ID;
