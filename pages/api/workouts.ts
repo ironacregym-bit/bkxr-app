@@ -4,13 +4,11 @@ import { batchGet } from "../../lib/sheets";
 import { startOfWeek, formatISO } from "date-fns";
 
 type Matrix = string[][];
-type WorkoutRow = {
-  id: string; day: string; title: string; video?: string; notes?: string;
-};
+type WorkoutRow = { id: string; day: string; title: string; video?: string; notes?: string };
 type ExerciseRow = { type?: string; name?: string; video?: string };
 
 const headerIndex = (headerRow: string[] | undefined) =>
-  headerRow ? Object.fromEntries(headerRow.map((h, i) => [h, i])) as Record<string, number> : {};
+  headerRow ? (Object.fromEntries(headerRow.map((h, i) => [h, i])) as Record<string, number>) : {};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -37,7 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Verify required columns exist in Workouts
     const requiredW = ["WorkoutID", "WeekStart", "DayName", "Title", "VideoURL", "Notes"];
-    const missingW = requiredW.filter(k => wHdr[k] === undefined);
+    const missingW = requiredW.filter((k) => wHdr[k] === undefined);
     if (missingW.length) {
       console.error("Workouts header missing:", missingW.join(", "));
       return res.status(500).json({ error: "WORKOUTS_HEADERS_MISSING", missing: missingW });
@@ -49,8 +47,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Filter workouts for this week
     const Ws: WorkoutRow[] = wRows
-      .filter(r => r[wHdr["WeekStart"]] === weekISO)
-      .map(r => ({
+      .filter((r) => r[wHdr["WeekStart"]] === weekISO)
+      .map((r) => ({
         id: r[wHdr["WorkoutID"]],
         day: r[wHdr["DayName"]],
         title: r[wHdr["Title"]],
@@ -58,28 +56,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         notes: r[wHdr["Notes"]],
       }))
       // guard against malformed rows
-      .filter(w => !!w.id && !!w.day && !!w.title);
+      .filter((w) => !!w.id && !!w.day && !!w.title);
 
     // If no exercises header, return workouts without exercises
     if (!safeExercisesMat.length || Object.keys(eHdr).length === 0) {
-      return res.json({ weekStart: weekISO, workouts: Ws.map(w => ({ ...w, exercises: [] })) });
+      return res.json({ weekStart: weekISO, workouts: Ws.map((w) => ({ ...w, exercises: [] })) });
     }
 
     // Verify required exercise columns exist
     const requiredE = ["WorkoutID", "Seq", "Type", "Name", "VideoURL"];
-    const missingE = requiredE.filter(k => eHdr[k] === undefined);
+    const missingE = requiredE.filter((k) => eHdr[k] === undefined);
     if (missingE.length) {
       console.warn("Exercises header missing:", missingE.join(", "));
       // Still return workouts without exercises rather than 500
-      return res.json({ weekStart: weekISO, workouts: Ws.map(w => ({ ...w, exercises: [] })) });
+      return res.json({ weekStart: weekISO, workouts: Ws.map((w) => ({ ...w, exercises: [] })) });
     }
 
     // Attach exercises to each workout
-    const workouts = Ws.map(w => {
+    const workouts = Ws.map((w) => {
       const items: ExerciseRow[] = eRows
-        .filter(e => e[eHdr["WorkoutID"]] === w.id)
+        .filter((e) => e[eHdr["WorkoutID"]] === w.id)
         .sort((a, b) => Number(a[eHdr["Seq"]] ?? 0) - Number(b[eHdr["Seq"]] ?? 0))
-        .map(e => ({
+        .map((e) => ({
           type: e[eHdr["Type"]],
           name: e[eHdr["Name"]],
           video: e[eHdr["VideoURL"]],
@@ -92,3 +90,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error("API /workouts failed:", err?.message || err, err);
     return res.status(500).json({ error: "WORKOUTS_FETCH_FAILED", detail: String(err?.message || err) });
   }
+}
