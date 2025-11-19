@@ -9,7 +9,7 @@ function normalizeKey(k?: string) {
   return cleaned.replace(/^"+|"+$/g, "");
 }
 
-const PRIVATE_KEY = normalizeKey(process.env.GOOGLE_PRIVATE_KEY);
+const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n');
 const CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
 
 if (!PRIVATE_KEY.includes("BEGIN PRIVATE KEY") || !PRIVATE_KEY.endsWith("-----END PRIVATE KEY-----\n")) {
