@@ -1,33 +1,29 @@
 import { google } from 'googleapis';
 
-// Validate env vars
+// Normalize private key from Vercel env (convert escaped \n to real newlines)
 function normalizeKey(key?: string): string {
   if (!key) return '';
   return key
-    .replace(/\r?\n/g, '\n')      // convert real line breaks to \n
-    .replace(/\\n/g, '\n')        // convert escaped \n to real newlines
-    .trim()
-    .replace(/^"+|"+$/g, '');
+    .replace(/\\n/g, '\n')          // convert escaped newlines
+    .replace(/^"+|"+$/g, '')        // remove accidental quotes
+    .trim();
 }
 
-const PRIVATE_KEY = normalizeKey(process.env.GOOGLE_PRIVATE_KEY);
+// Load and validate environment variables
 const CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
+const PRIVATE_KEY = normalizeKey(process.env.GOOGLE_PRIVATE_KEY);
 const SPREADSHEET_ID = process.env.SHEETS_SPREADSHEET_ID;
 
 if (!CLIENT_EMAIL || !PRIVATE_KEY || !SPREADSHEET_ID) {
   throw new Error('Missing Google Sheets environment variables');
 }
 
-// Optional sanity check
+// Debug: Check first few lines of the key (safe preview)
+console.log('PRIVATE_KEY preview:', PRIVATE_KEY.split('\n').slice(0, 3));
+
 if (!PRIVATE_KEY.includes('BEGIN PRIVATE KEY') || !PRIVATE_KEY.includes('END PRIVATE KEY')) {
   console.error('GOOGLE_PRIVATE_KEY format looks invalid (missing BEGIN/END markers).');
 }
-
-
-// Debug: Check if newlines are real
-console.log('First 3 lines:', PRIVATE_KEY.split('\n').slice(0, 3));
-console.log('PRIVATE_KEY length:', PRIVATE_KEY.length);
-
 
 // Initialize Google Sheets API client
 const auth = new google.auth.JWT(
