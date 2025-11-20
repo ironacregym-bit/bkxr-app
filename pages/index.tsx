@@ -13,12 +13,11 @@ function getWeek(startMonday = true) {
   const diffToMon = ((day + 6) % 7); // Mon=0..Sun=6
   const monday = new Date(today);
   monday.setDate(today.getDate() - diffToMon);
-  const days = Array.from({ length: 7 }, (_, i) => {
+  return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
     return d;
   });
-  return days;
 }
 
 function fmt(d: Date) {
@@ -26,10 +25,10 @@ function fmt(d: Date) {
 }
 
 export default function Home() {
-  const { data: session, status } = useSession(); // 'loading' | 'authenticated' | 'unauthenticated'
+  const { data: session, status } = useSession();
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
 
-  // Upsert the user into Sheets once authenticated
+  // Upsert user into Sheets after sign-in
   useEffect(() => {
     if (status === "authenticated" && session?.user?.email) {
       fetch("/api/users/upsert", {
@@ -53,7 +52,7 @@ export default function Home() {
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-          integrity="sha384-GtvQFJr7WqF6v1m6D8r1qI6S1lqJcMZpQ8fKQbTqYI        <div className="mb-3 d-flex gap-2 align-items-center">
+          integrity="sha384-GtvQFJr7WqF6v1m6D8r1qI6S1lqJcMZpQ8fKQbTqYIhBfQn6kQqH3fWcH2lZName="mb-3 d-flex gap-2 align-items-center">
           {status === "loading" ? (
             <span>Checking session…</span>
           ) : !session ? (
@@ -82,7 +81,7 @@ export default function Home() {
         {error && <div className="alert alert-danger">Failed to load workouts</div>}
         {isLoading && <div className="alert alert-secondary">Loading…</div>}
 
-        {/* Weekly calendar: 3 workouts per week target */}
+        {/* Weekly calendar */}
         <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
           {weekDays.map((d, i) => {
             const dayName = d.toLocaleDateString(undefined, { weekday: "long" });
