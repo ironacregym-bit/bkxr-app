@@ -62,7 +62,7 @@ export default function Home() {
               <button className="btn btn-dark" onClick={() => signIn("google")}>
                 Sign in with Google
               </button>
-              <button className="btn btn-outline-secondary">
+              <button className="btn btn-outline-secondary" onClick={() => signIn("email")}>
                 Sign in with Email
               </button>
             </>
@@ -74,15 +74,13 @@ export default function Home() {
                 style={{ width: 32, height: 32, borderRadius: "50%" }}
               />
               <span className="text-muted">{session.user?.email}</span>
-              <button
-                className="btn btn-outline-dark"
-                onClick={() => signOut()}
-              >
+              <button className="btn btn-outline-dark" onClick={() => signOut()}>
                 Sign out
               </button>
             </div>
           )}
         </div>
+
 
         {/* Errors/Loading */}
         {error && <div className="alert alert-danger">Failed to load workouts</div>}
