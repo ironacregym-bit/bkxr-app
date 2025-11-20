@@ -51,7 +51,9 @@ export default function Home() {
         <title>BXKR</title>
         <link
           rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+      </Head>
+      <main>
           {status === "loading" ? (
             <span>Checking session…</span>
           ) : !session ? (
@@ -74,7 +76,6 @@ export default function Home() {
               </button>
             </>
           )}
-        </div>
 
         {/* Errors/Loading */}
         {error && <div className="alert alert-danger">Failed to load workouts</div>}
