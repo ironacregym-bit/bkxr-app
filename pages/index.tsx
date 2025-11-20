@@ -51,8 +51,7 @@ export default function Home() {
         <title>BXKR</title>
         <link
           rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-          integrity="sha384-GtvQFJr7WqF6v1m6D8r1qI6S1lqJcMZpQ8fKQbTqYIhBfQn6kQqH3fWcH2lZName="mb-3 d-flex gap-2 align-items-center">
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
           {status === "loading" ? (
             <span>Checking session…</span>
           ) : !session ? (
