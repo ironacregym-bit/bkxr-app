@@ -1,36 +1,32 @@
 import Head from "next/head";
 import Link from "next/link";
-import useSWR from "swr";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { signIn, signOut, useSession } from "next-auth/react";
+import useSWR from "swr";
+import { useEffect, useRef, useState } from "react";
 
 const fetcher = (u: string) => fetch(u).then(r => r.json());
 
-function ytEmbed(url?: string) {
-  if (!url) return null;
-  // Supports full YouTube links; otherwise return original URL
-  const m = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
-  return m ? `https://www.youtube.com/embed/${m[1]}` : null;
+function mmss(sec: number) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 export default function WorkoutPage() {
   const router = useRouter();
-  const { id } = router.query as { id?: string };
+  const { id } = router.query;
 
-  const { data: session, status } = useSession();
-  const { data, error, isLoading } = useSWR(id ? `/api/workouts/${id}` : null, fetcher);
+  const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
 
-  // Simple timer (count-up in seconds)
-  const [seconds, setSeconds] = useState(0);
+  // Basic 3:00 round timer
+  const [seconds, setSeconds] = useState(180);
   const [running, setRunning] = useState(false);
-  const timerRef = useRef<NodeJS.Timer | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (running && !timerRef.current) {
-      timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
-    }
-    if (!running && timerRef.current) {
+    if (running) {
+      timerRef.current = setInterval(() => setSeconds(prev => (prev > 0 ? prev - 1 : 0)), 1000);
+    } else if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
@@ -39,172 +35,153 @@ export default function WorkoutPage() {
     };
   }, [running]);
 
-  const mmss = useMemo(() => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, "0");
-    const s = (seconds % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  }, [seconds]);
+  const start = () => setRunning(true);
+  const pause = () => setRunning(false);
+  const reset = () => {
+    setRunning(false);
+    setSeconds(180);
+  };
 
-  const DEFAULT_EXERCISE_SECONDS = Number(process.env.NEXT_PUBLIC_DEFAULT_EXERCISE_SECONDS || 60);
-  const userWeightKg = Number(process.env.NEXT_PUBLIC_DEFAULT_WEIGHT_KG || 75); // fallback if not stored in Users
+  if (error) return <main className="container py-3"><div className="alert alert-danger">Failed to load workout</div></main>;
+  if (isLoading || !data) return <main className="container py-3"><div className="alert alert-secondary">Loading…</div></main>;
 
-  function estimateCalories(): number {
-    // MET × weight(kg) × time(hr) across exercises with missing durations → default seconds
-    const exs = data?.workout?.exercises || [];
-    const totalSeconds = exs.length * DEFAULT_EXERCISE_SECONDS;
-    const avgMET =
-      exs.length === 0
-        ? 0
-        : exs.reduce((sum: number, e: any) => sum + Number(e.met_value || 0), 0) / exs.length;
-    const hours = totalSeconds / 3600;
-    return Math.round(avgMET * userWeightKg * hours);
-  }
-
-  async function completeWorkout() {
-    if (!session?.user?.email) {
-      alert("Please sign in first.");
-      return;
-    }
-    try {
-      const calories = estimateCalories();
-      const resp = await fetch("/api/completions/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_email: session.user.email,
-          workout_id: data?.workout?.id,
-          calories_burned: calories,
-          notes: `Timer ${mmss}`
-        })
-      });
-      const json = await resp.json();
-      if (json?.ok) {
-        alert("Workout recorded—nice work!");
-      } else {
-        alert("Could not record workout");
-      }
-    } catch {
-      alert("Error recording workout");
-    }
+  const workout = (data.workouts || []).find((w: any) => String(w.id) === String(id));
+  if (!workout) {
+    return (
+      <main className="container py-3">
+        <div className="alert alert-warning">No workout found</div>
+        /Back to week</Link>
+      </main>
+    );
   }
 
   return (
     <>
       <Head>
-        <title>{data?.workout?.title ? `BXKR • ${data.workout.title}` : "BXKR"}</title>
+        <title>{workout.title} · BXKR</title>
         https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css
+        https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css
       </Head>
 
       <main className="container py-3">
-        <div className="mb-3 d-flex gap-2 align-items-center">
-          /← Back</Link>
-          <div className="ms-auto d-flex gap-2 align-items-center">
-            {status === "loading" ? (
-              <span>Checking session…</span>
-            ) : !session ? (
-              <button className="btn btn-dark btn-sm" onClick={() => signIn("google")}>
-                Sign in with Google
-              </button>
+        {/* Header */}
+        <div className="d-flex align-items-center justify-content-between mb-3">
+          <div>
+            <h1 className="h3 mb-0">{workout.title}</h1>
+            <small className="text-muted">{workout.day}</small>
+          </div>
+          /Back to week</Link>
+        </div>
+
+        {/* Notes */}
+        {workout.notes && (
+          <div className="alert alert-info">{workout.notes}</div>
+        )}
+
+        {/* Full workout video (if present) */}
+        {workout.video && workout.video.startsWith("http") && (
+          <div className="ratio ratio-16x9 mb-3">
+            {/* Use iframe for YouTube/Vimeo; plain <video> tag for direct MP4s */}
+            {workout.video.includes("youtube") || workout.video.includes("youtu.be") || workout.video.includes("vimeo") ? (
+              <iframe
+                src={workout.video}
+                title="Workout video"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
             ) : (
-              <>
-                <img src={session.user?.image ?? ""} alt="" style={{ width: 24, height: 24, borderRadius: "50%" }} />
-                <span className="text-muted small">{session.user?.email}</span>
-                <button className="btn btn-outline-dark btn-sm" onClick={() => signOut()}>
-                  Sign out
+              <video controls src={workout.video} />
+            )}
+          </div>
+        )}
+
+        {/* Round Timer */}
+        <div className="card mb-3 border-dark">
+          <div className="card-body d-flex align-items-center justify-content-between">
+            <div className="display-6 mb-0">{mmss(seconds)}</div>
+            <div className="btn-group">
+              {!running ? (
+                <button className="btn btn-dark" onClick={start}>
+                  <i className="fa-solid fa-play me-1" /> Start
                 </button>
-              </>
+              ) : (
+                <button className="btn btn-outline-dark" onClick={pause}>
+                  <i className="fa-solid fa-pause me-1" /> Pause
+                </button>
+              )}
+              <button className="btn btn-outline-secondary" onClick={reset}>
+                <i className="fa-solid fa-rotate-left me-1" /> Reset (3:00)
+              </button>
+            </div>
+          </div>
+          <div className="card-footer">
+            <small className="text-muted">BXKR rounds are 3 minutes. Use Pause/Reset between rounds.</small>
+          </div>
+        </div>
+
+        {/* Exercise list */}
+        <div className="card border-dark">
+          <div className="card-header fw-bold">Exercises</div>
+          <div className="list-group list-group-flush">
+            {Array.isArray(workout.exercises) && workout.exercises.length > 0 ? (
+              workout.exercises.map((ex: any, i: number) => (
+                <div key={i} className="list-group-item">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <div>
+                      <div className="fw-semibold">{ex.name || "Exercise"}</div>
+                      <small className="text-muted">
+                        {ex.type ? `${ex.type} · ` : ""}
+                        {ex.durationSec ? `${ex.durationSec}s` : ""}
+                        {ex.reps ? ` · ${ex.reps} reps` : ""}
+                        {ex.restSec ? ` · rest ${ex.restSec}s` : ""}
+                        {ex.met ? ` · MET ${ex.met}` : ""}
+                      </small>
+                    </div>
+                    {ex.video && ex.video.startsWith("http") && (
+                      <a className="btn btn-sm btn-outline-dark" href={ex.video} target="_blank" rel="noreferrer">
+                        <i className="fa-solid fa-video me-1" /> Video
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="list-group-item text-muted">No exercises linked</div>
             )}
           </div>
         </div>
 
-        {/* Workout header */}
-        {error && <div className="alert alert-danger">Failed to load workout</div>}
-        {isLoading && <div className="alert alert-secondary">Loading…</div>}
+        {/* Complete workout (stub) */}
+        <div className="mt-3 d-flex gap-2">
+          <button
+            className="btn btn-success"
+            onClick={async () => {
+              try {
+                // Stub: compute calories client-side if you have METs and user weight available
+                // const calories = estimateCalories(workout.exercises, userWeightKg);
+                await fetch("/api/completions/create", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    workout_id: workout.id,
+                    user_email: "", // fill from session on the server for integrity
+                    calories_burned: "",
+                    notes: ""
+                  })
+                });
+                alert("Workout marked complete!");
+              } catch {
+                alert("Failed to mark complete");
+              }
+            }}
+          >
+            <i className="fa-solid fa-check me-1" /> Mark complete
+          </button>
 
-        {!isLoading && data?.workout && (
-          <>
-            <h2 className="mb-2">{data.workout.title}</h2>
-            <p className="text-muted mb-3">{data.workout.dayName} — Focus: {data.workout.focus || "General"}</p>
-
-            {/* Main video */}
-            <div className="mb-3">
-              {ytEmbed(data.workout.videoUrl) ? (
-                <div className="ratio ratio-16x9">
-                  <iframe
-                    src={ytEmbed(data.workout.videoUrl)!}
-                    title="Workout Video"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-              ) : data.workout.videoUrl ? (
-                <video controls width="100%">
-                  <source src={data.workout.videoUrl} />
-                </video>
-              ) : (
-                <div className="alert alert-warning">No workout video provided</div>
-              )}
-            </div>
-
-            {/* Timer + complete */}
-            <div className="d-flex align-items-center gap-2 mb-3">
-              <div className="display-6 mb-0">{mmss}</div>
-              {!running ? (
-                <button className="btn btn-dark" onClick={() => setRunning(true)}>Start</button>
-              ) : (
-                <button className="btn btn-outline-dark" onClick={() => setRunning(false)}>Pause</button>
-              )}
-              <button className="btn btn-secondary" onClick={() => setSeconds(0)}>Reset</button>
-              <button className="btn btn-success ms-auto" onClick={completeWorkout}>Complete workout</button>
-            </div>
-
-            {/* Exercise list */}
-            <div className="card border-dark">
-              <div className="card-header fw-bold">Exercises</div>
-              <ul className="list-group list-group-flush">
-                {data.workout.exercises.length === 0 && (
-                  <li className="list-group-item text-muted">No exercises linked</li>
-                )}
-                {data.workout.exercises.map((ex: any) => (
-                  <li key={`${ex.exercise_id}-${ex.order}`} className="list-group-item">
-                    <div className="d-flex justify-content-between align-items-start">
-                      <div>
-                        <div className="fw-semibold">
-                          {ex.order}. {ex.name} <span className="badge bg-dark ms-2">{ex.type || data.workout.focus || "Work"}</span>
-                        </div>
-                        <div className="text-muted small">
-                          {ex.description ? `${ex.description} • ` : ""}{ex.equipment || "Bodyweight"}
-                          {ex.met_value ? ` • MET ${ex.met_value}` : ""}
-                          {ex.reps ? ` • Reps ${ex.reps}` : ""}
-                        </div>
-                        {ex.video_url && (
-                          ytEmbed(ex.video_url) ? (
-                            <div className="ratio ratio-16x9 mt-2">
-                              <iframe
-                                src={ytEmbed(ex.video_url)!}
-                                title={`Exercise ${ex.name}`}
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                              />
-                            </div>
-                          ) : (
-                            <div className="mt-2">
-                              <a href={ex.video_url} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline-dark">
-                                Open exercise video
-                              </a>
-                            </div>
-                          )
-                        )}
-                      </div>
-                      {/* Optional per-exercise actions */}
-                      {/* <button className="btn btn-sm btn-outline-secondary">Done</button> */}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </>
-        )}
+          /
+            Back to week
+          </Link>
+        </div>
       </main>
     </>
   );
