@@ -50,7 +50,7 @@ export default function WorkoutPage() {
     return (
       <main className="container py-3">
         <div className="alert alert-warning">No workout found</div>
-        <Link>Back to week</Link>
+        <Link href="../">Back to week</Link>
       </main>
     );
   }
@@ -70,7 +70,7 @@ export default function WorkoutPage() {
             <h1 className="h3 mb-0">{workout.title}</h1>
             <small className="text-muted">{workout.day}</small>
           </div>
-          <Link>Back to week</Link>
+          <Link href="../">Back to week</Link>
         </div>
 
         {/* Notes */}
@@ -177,7 +177,7 @@ export default function WorkoutPage() {
           >
             <i className="fa-solid fa-check me-1" /> Mark complete
           </button>
-            <Link>Back to week</Link>
+            <Link href="../">Back to week</Link>
         </div>
       </main>
     </>
