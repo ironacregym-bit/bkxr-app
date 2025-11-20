@@ -53,8 +53,7 @@ export default function Home() {
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-          integrity="sha384-GtvQFJr7WqF6v1m6D8r1qI6S1lqJcMZpQ8fKQbTqYIhBfQn6kQqH3fWcH2lZs8"
-          crossap-2 align-items-center">
+          integrity="sha384-GtvQFJr7WqF6v1m6D8r1qI6S1lqJcMZpQ8fKQbTqYI        <div className="mb-3 d-flex gap-2 align-items-center">
           {status === "loading" ? (
             <span>Checking session…</span>
           ) : !session ? (
@@ -86,7 +85,7 @@ export default function Home() {
         {/* Weekly calendar: 3 workouts per week target */}
         <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
           {weekDays.map((d, i) => {
-            const dayName = d.toLocaleDateString(undefined, { weekday: "long" }); // "Monday"
+            const dayName = d.toLocaleDateString(undefined, { weekday: "long" });
             const workoutsForDay = (data?.workouts || []).filter(
               (w: any) => (w.day || "").toLowerCase() === dayName.toLowerCase()
             );
