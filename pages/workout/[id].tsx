@@ -56,9 +56,9 @@ export default function WorkoutPage() {
   }
 
   return (
-    <>
+     <>
       <Head>
-        <title>{workout.title} · BXKR</title>
+        <title>{workout.title} - BXKR</title>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
       </Head>
@@ -70,7 +70,7 @@ export default function WorkoutPage() {
             <h1 className="h3 mb-0">{workout.title}</h1>
             <small className="text-muted">{workout.day}</small>
           </div>
-          /Back to week</Link>
+          Back to week
         </div>
 
         {/* Notes */}
@@ -177,10 +177,7 @@ export default function WorkoutPage() {
           >
             <i className="fa-solid fa-check me-1" /> Mark complete
           </button>
-
-          /
             Back to week
-          </Link>
         </div>
       </main>
     </>
