@@ -6,11 +6,10 @@ import { signIn, signOut, useSession } from "next-auth/react";
 
 const fetcher = (u: string) => fetch(u).then(r => r.json());
 
-// Helpers: build Mon–Sun for current week
-function getWeek(startMonday = true) {
+function getWeek() {
   const today = new Date();
-  const day = today.getDay(); // 0=Sun..6=Sat
-  const diffToMon = ((day + 6) % 7); // Mon=0..Sun=6
+  const day = today.getDay();
+  const diffToMon = ((day + 6) % 7);
   const monday = new Date(today);
   monday.setDate(today.getDate() - diffToMon);
   return Array.from({ length: 7 }, (_, i) => {
@@ -20,9 +19,7 @@ function getWeek(startMonday = true) {
   });
 }
 
-function fmt(d: Date) {
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-}
+const dayLabels = ["M", "T", "W", "T", "F", "S", "S"];
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -49,84 +46,74 @@ export default function Home() {
     <>
       <Head>
         <title>BXKR</title>
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
       </Head>
-      <main>
+
+      <main className="container py-3">
+        <h1 className="mb-4 text-center">BXKR</h1>
+
+        {/* Auth bar */}
+        <div className="mb-4 d-flex justify-content-center gap-3">
           {status === "loading" ? (
             <span>Checking session…</span>
           ) : !session ? (
-            <button className="btn btn-dark" onClick={() => signIn("google")}>
-              Sign in with Google
-            </button>
-          ) : (
             <>
+              <button className="btn btn-dark" onClick={() => signIn("google")}>
+                Sign in with Google
+              </button>
+              <button className="btn btn-outline-secondary">
+                Sign in with Email
+              </button>
+            </>
+          ) : (
+            <div className="d-flex gap-3 align-items-center">
               <img
                 src={session.user?.image ?? ""}
                 alt=""
-                style={{ width: 28, height: 28, borderRadius: "50%" }}
+                style={{ width: 32, height: 32, borderRadius: "50%" }}
               />
               <span className="text-muted">{session.user?.email}</span>
               <button
-                className="btn btn-outline-dark ms-auto"
+                className="btn btn-outline-dark"
                 onClick={() => signOut()}
               >
                 Sign out
               </button>
-            </>
+            </div>
           )}
+        </div>
 
         {/* Errors/Loading */}
         {error && <div className="alert alert-danger">Failed to load workouts</div>}
         {isLoading && <div className="alert alert-secondary">Loading…</div>}
 
-        {/* Weekly calendar */}
-        <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+        {/* Weekly calendar row */}
+        <div className="d-flex justify-content-between text-center mb-4">
           {weekDays.map((d, i) => {
             const dayName = d.toLocaleDateString(undefined, { weekday: "long" });
             const workoutsForDay = (data?.workouts || []).filter(
               (w: any) => (w.day || "").toLowerCase() === dayName.toLowerCase()
             );
             return (
-              <div className="col" key={i}>
-                <div className="card h-100 border-dark">
-                  <div className="card-header fw-bold">{fmt(d)}</div>
-                  <div className="card-body">
-                    {workoutsForDay.length === 0 ? (
-                      <p className="text-muted mb-0">No workout planned</p>
-                    ) : (
-                      workoutsForDay.map((w: any) => (
-                        <div className="mb-2" key={w.id}>
-                          <div className="d-flex align-items-center justify-content-between">
-                            <div>
-                              <div className="fw-semibold">{w.title}</div>
-                              <small className="text-muted">
-                                {w.exercises?.length ?? 0} exercises
-                              </small>
-                            </div>
-                            <Link
-                              className="btn btn-sm btn-outline-dark"
-                              href={`/workout/${w.id}`}
-                            >
-                              Open
-                            </Link>
-                          </div>
-                        </div>
-                      ))
-                    )}
+              <div key={i} style={{ width: "14%" }}>
+                <div className="fw-bold">{dayLabels[i]}</div>
+                {workoutsForDay.length > 0 && (
+                  <div className="mt-2">
+                    {workoutsForDay.map((w: any) => (
+                      <Link key={w.id} href={`/workout/${w.id}`}>
+                        <i className="fas fa-dumbbell fa-2x text-primary" title={w.title}></i>
+                      </Link>
+                    ))}
                   </div>
-                  <div className="card-footer">
-                    <small className="text-muted">Target: 3 workouts this week</small>
-                  </div>
-                </div>
+                )}
               </div>
             );
           })}
         </div>
 
         {/* Speak to trainer */}
-        <div className="mt-3">
+        <div className="text-center mt-4">
           <a
             className="btn btn-success"
             href={`https://wa.me/${process.env.NEXT_PUBLIC_TRAINER_PHONE || process.env.TRAINER_PHONE}?text=Hi%20Coach%20I%27m%20doing%20BXKR`}
