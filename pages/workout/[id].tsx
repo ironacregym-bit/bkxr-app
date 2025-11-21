@@ -62,7 +62,7 @@ export default function WorkoutPage() {
     return (
       <main className="container py-3">
         <div className="alert alert-warning">No workout found</div>
-        ../Back to week</Link>
+        <Link href="../">Back to week</Link>
       </main>
     );
   }
@@ -122,7 +122,7 @@ export default function WorkoutPage() {
             <h1 className="h3 mb-0">{workout.title}</h1>
             <small className="text-muted">{workout.day}</small>
           </div>
-          <Link href="../"><div>Back to week</div></Link>
+          <Link href="../">Back to week</Link>
           
         </div>
 
