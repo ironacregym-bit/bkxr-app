@@ -9,16 +9,15 @@ import RoundTimer from "../../components/RoundTimer";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-function mmss(sec: number) {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
 export default function WorkoutPage() {
   const router = useRouter();
   const { id } = router.query;
   const { data: session } = useSession();
+  
+  const wid = useMemo(() => {
+    const q = router.query.id;
+    return Array.isArray(q) ? q[0] : q ?? "";
+  }, [router.query.id]);
 
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
   if (error)
