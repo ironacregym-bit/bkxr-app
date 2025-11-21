@@ -34,7 +34,7 @@ export default function WorkoutPage() {
     return (
       <main className="container py-3">
         <div className="alert alert-warning">No workout found</div>
-        ../Back to week</Link>
+        <Link href="../">Back to week</Link>
       </main>
     );
   }
