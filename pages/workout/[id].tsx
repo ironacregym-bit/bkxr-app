@@ -122,7 +122,10 @@ export default function WorkoutPage() {
             <h1 className="h3 mb-0">{workout.title}</h1>
             <small className="text-muted">{workout.day}</small>
           </div>
-          <Link href="../">Back to week  </div>
+          <Link href="../">Back to week
+          </Link>
+          
+        </div>
 
         {/* Notes */}
         {workout.notes && <div className="alert alert-info">{workout.notes}</div>}
