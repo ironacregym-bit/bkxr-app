@@ -9,6 +9,7 @@ import RoundTimer from "../../components/RoundTimer";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
+
 export default function WorkoutPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -33,7 +34,7 @@ export default function WorkoutPage() {
     return (
       <main className="container py-3">
         <div className="alert alert-warning">No workout found</div>
-        <Link href="../">Back to week</Link>
+        ../Back to week</Link>
       </main>
     );
   }
