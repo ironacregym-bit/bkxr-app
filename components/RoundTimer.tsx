@@ -24,7 +24,7 @@ export default function RoundTimer({
   // Preload audio
   useEffect(() => {
     if (typeof Audio !== "undefined") {
-      bell.current = new Audio("/beep.ogg"); // make sure this file exists
+      bell.current = new Audio("/beep.mp3"); // make sure this file exists
       bell.current.volume = 0.8;
     }
   }, []);
