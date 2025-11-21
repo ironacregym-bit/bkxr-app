@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import useSWR from "swr";
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import RoundTimer from "../../components/RoundTimer";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -21,28 +22,12 @@ export default function WorkoutPage() {
 
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
 
-  // Timer state
-  const [seconds, setSeconds] = useState(180);
-  const [running, setRunning] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    if (running) {
-      timerRef.current = setInterval(() => setSeconds((prev) => (prev > 0 ? prev - 1 : 0)), 1000);
-    } else if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [running]);
-
-  const start = () => setRunning(true);
-  const pause = () => setRunning(false);
-  const reset = () => {
-    setRunning(false);
-    setSeconds(180);
+  {/* Round Timer */}
+  <div className="card mb-3 border-dark">
+    <div className="card-body">
+      <RoundTimer rounds={10} boxRounds={5} work={180} rest={60} />
+    </div>
+  </div>
   };
 
   if (error)
