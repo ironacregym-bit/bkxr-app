@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 
-const fetcher = (u: string) => fetch(u).then(r => r.json());
+const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 function getWeek() {
   const today = new Date();
   const day = today.getDay();
-  const diffToMon = ((day + 6) % 7);
+  const diffToMon = (day + 6) % 7;
   const monday = new Date(today);
   monday.setDate(today.getDate() - diffToMon);
   return Array.from({ length: 7 }, (_, i) => {
@@ -25,6 +25,14 @@ export default function Home() {
   const { data: session, status } = useSession();
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
 
+  // Fetch completion history for logged-in user
+  const { data: completionData } = useSWR(
+    session?.user?.email ? `/api/completions/history?email=${encodeURIComponent(session.user.email)}` : null,
+    fetcher
+  );
+
+  const completedIds = completionData?.history?.map((h: any) => h.workout_id) || [];
+
   useEffect(() => {
     if (status === "authenticated" && session?.user?.email) {
       fetch("/api/users/upsert", {
@@ -33,8 +41,8 @@ export default function Home() {
         body: JSON.stringify({
           email: session.user.email,
           name: session.user.name || "",
-          image: session.user.image || ""
-        })
+          image: session.user.image || "",
+        }),
       }).catch(() => {});
     }
   }, [status, session?.user?.email]);
@@ -92,11 +100,17 @@ export default function Home() {
                 <div className="fw-bold">{dayLabels[i]}</div>
                 {workoutsForDay.length > 0 && (
                   <div className="mt-2">
-                    {workoutsForDay.map((w: any) => (
-                      <Link key={w.id} href={`/workout/${w.id}`}>
-                        <i className="fas fa-dumbbell fa-2x text-primary" title={w.title}></i>
-                      </Link>
-                    ))}
+                    {workoutsForDay.map((w: any) => {
+                      const isCompleted = completedIds.includes(w.id);
+                      return (
+                        <Link key={w.id} href={`/workout/${w.id}`}>
+                          <i
+                            className={`fas fa-dumbbell fa-2x ${isCompleted ? "text-success" : "text-primary"}`}
+                            title={isCompleted ? `${w.title} (Completed)` : w.title}
+                          ></i>
+                        </Link>
+                      );
+                    })}
                   </div>
                 )}
               </div>
