@@ -1,38 +1,26 @@
+// pages/api/profile.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { google } from "googleapis";
+import { readRange } from "../../lib/sheets";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { email } = req.query;
+  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
+
+  const email = req.query.email as string;
   if (!email) return res.status(400).json({ error: "Email required" });
 
   try {
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: process.env.GOOGLE_CLIENT_EMAIL!,
-        private_key: process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, "\n"),
-      },
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-    });
-
-    const sheets = google.sheets({ version: "v4", auth });
-    const spreadsheetId = process.env.SHEETS_SPREADSHEET_ID!;
-    const range = "Users!A:L";
-
-    const response = await sheets.spreadsheets.values.get({ spreadsheetId, range });
-    const rows = response.data.values || [];
+    const rows = await readRange("Users!A:L");
     const headers = rows[0];
-    const userRow = rows.find((r) => r[0] === email);
+    const row = rows.find((r) => r[0] === email);
 
-    if (!userRow) return res.status(404).json({ error: "Profile not found" });
+    if (!row) return res.status(404).json({ error: "Profile not found" });
 
-    const profileData = headers.reduce((obj, header, i) => {
-      obj[header] = userRow[i] || "";
-      return obj;
-    }, {} as Record<string, string>);
-
-    res.status(200).json(profileData);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch profile" });
+    // Convert row to object { header: value }
+    const profile: Record<string, string> = {};
+    headers.forEach((h, i) => (profile[h] = row[i] || ""));
+    return res.status(200).json(profile);
+  } catch (err: any) {
+    console.error("Read failed:", err.message);
+    return res.status(500).json({ error: "Failed to load profile" });
   }
 }
