@@ -46,8 +46,8 @@ export default function Home() {
     <>
       <Head>
         <title>BXKR</title>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+        <link rel="stylesheet" href="https://cdn.3.2/dist/css/bootstrap.min.css
+        <link rel="stylesheetare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css
       </Head>
 
       <main className="container py-3">
@@ -58,14 +58,9 @@ export default function Home() {
           {status === "loading" ? (
             <span>Checking session…</span>
           ) : !session ? (
-            <>
-              <button className="btn btn-dark" onClick={() => signIn("google")}>
-                Sign in with Google
-              </button>
-              <button className="btn btn-outline-secondary" onClick={() => signIn("email")}>
-                Sign in with Email
-              </button>
-            </>
+            <button className="btn btn-dark" onClick={() => signIn("google")}>
+              Sign in with Google
+            </button>
           ) : (
             <div className="d-flex gap-3 align-items-center">
               <img
@@ -80,7 +75,6 @@ export default function Home() {
             </div>
           )}
         </div>
-
 
         {/* Errors/Loading */}
         {error && <div className="alert alert-danger">Failed to load workouts</div>}
