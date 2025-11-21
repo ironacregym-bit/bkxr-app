@@ -85,13 +85,15 @@ export default function Profile() {
       {/* Bottom Navigation */}
       <nav className="navbar fixed-bottom bg-light border-top">
         <div className="container d-flex justify-content-around">
-          <Link href="/" className="texts fa-home fa-lg"></i>
+          <Link href="/">
+            <i className="fas fa-home fa-lg"></i>
             <div style={{ fontSize: "12px" }}>Home</div>
           </Link>
-          <Link href="/work          <i className="fas fa-dumbbell fa-lg"></i>
+          <Link href="/workout/today">
+            <i className="fas fa-dumbbell fa-lg"></i>
             <div style={{ fontSize: "12px" }}>WoD</div>
           </Link>
-          /profile
+          <Link href="/profile">
             <i className="fas fa-user fa-lg"></i>
             <div style={{ fontSize: "12px" }}>Profile</div>
           </Link>
