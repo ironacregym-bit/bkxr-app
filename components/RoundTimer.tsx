@@ -3,10 +3,10 @@ import React, { useEffect, useRef, useState } from "react";
 type Mode = "work" | "rest";
 
 export default function RoundTimer({
-  rounds = 10,        // total rounds
-  boxRounds = 5,      // first N rounds are "BOX", remaining are "BELL"
-  work = 180,         // 3 minutes work
-  rest = 60           // 1 minute rest
+  rounds = 10,
+  boxRounds = 5,
+  work = 180,
+  rest = 60
 }: {
   rounds?: number;
   boxRounds?: number;
@@ -24,15 +24,18 @@ export default function RoundTimer({
   // Preload audio
   useEffect(() => {
     if (typeof Audio !== "undefined") {
-      bell.current = new Audio("/beep.mp3"); // make sure this file exists
+      bell.current = new Audio("/beep.mp3"); // Ensure beep.mp3 is in /public or same folder served
       bell.current.volume = 0.8;
     }
   }, []);
 
-  // Minute interval alerts during WORK (at 2:00 and 1:00 left)
-  const playAlert = () => bell.current?.play();
+  const playAlert = () => {
+    if (bell.current) {
+      bell.current.currentTime = 0; // Reset to start
+      bell.current.play().catch(() => {});
+    }
+  };
 
-  // Main ticking effect
   useEffect(() => {
     if (!running) {
       if (intervalRef.current) {
@@ -46,42 +49,38 @@ export default function RoundTimer({
       setRemaining(prev => {
         const next = prev - 1;
 
-        // Fire 1-minute interval alerts (only in WORK mode)
+        // Alerts during WORK mode
         if (mode === "work") {
           if (next === 120 || next === 60) {
-            playAlert();
+            playAlert(); // Beep at 2:00 and 1:00
           }
         }
 
         // Phase end?
         if (next < 0) {
-          // Transition between modes
           if (mode === "work") {
-            // End of 3-minute work: go to REST 1 minute
-            playAlert();
+            // End of work → rest
+            playAlert(); // Beep at round end
             setMode("rest");
             return rest;
           } else {
-            // End of rest: advance round or finish
+            // End of rest → next round or finish
             const nextRound = round + 1;
-
             if (nextRound > rounds) {
-              // Completed all rounds
-              playAlert();
+              playAlert(); // Final beep
               setRunning(false);
               return 0;
             }
 
-            // Round switch (rest -> work)
             setRound(nextRound);
             setMode("work");
+            playAlert(); // Beep at round start
 
-            // Optional speech cue when switching from BOX to BELL
+            // Optional speech cue for BOX → BELL switch
             if (nextRound === boxRounds + 1 && typeof window !== "undefined" && "speechSynthesis" in window) {
               window.speechSynthesis.speak(new SpeechSynthesisUtterance("Switch to kettlebell"));
             }
 
-            playAlert();
             return work;
           }
         }
@@ -90,19 +89,20 @@ export default function RoundTimer({
       });
     }, 1000);
 
-    // Cleanup
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = null;
     };
   }, [running, mode, round, work, rest, rounds, boxRounds]);
 
-  // UI helpers
   const side = round <= boxRounds ? "BOX" : "BELL";
   const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
   const ss = String(Math.max(remaining % 60, 0)).padStart(2, "0");
 
-  const handleStart = () => setRunning(true);
+  const handleStart = () => {
+    setRunning(true);
+    playAlert(); // Beep immediately at start
+  };
   const handlePause = () => setRunning(false);
   const handleReset = () => {
     setRunning(false);
@@ -127,15 +127,13 @@ export default function RoundTimer({
         <button onClick={handleReset} style={btnStyle("outline")}>Reset</button>
       </div>
 
-      {/* Optional helper text */}
       <div style={{ marginTop: 8, color: "#6f8399", fontSize: 12 }}>
-        Work is 3:00 per round with alerts at 2:00 and 1:00. Rest is 1:00 between rounds.
+        Beeps at round start, round end, and at 2:00 & 1:00 marks.
       </div>
     </div>
   );
 }
 
-// Tiny button styling helper to keep inline styles consistent
 function btnStyle(variant: "primary" | "secondary" | "outline") {
   const base = {
     cursor: "pointer",
