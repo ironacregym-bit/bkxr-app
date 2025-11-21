@@ -1,3 +1,4 @@
+
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -67,20 +68,25 @@ export default function WorkoutPage() {
     );
   }
 
-  // Handle completion
+  // Check completion status
+  const { data: completionData, mutate } = useSWR(
+    session?.user?.email ? `/api/completions?email=${session.user.email}&workout_id=${id}` : null,
+    fetcher
+  );
+  const isCompleted = completionData?.completed === true;
+
   const handleComplete = async () => {
     if (!session?.user?.email) {
       alert("Please sign in to log your workout.");
       return;
     }
 
-    // Estimate calories burned
-    const userWeight = workout.userWeight || 70; // fallback if not in profile
+    const userWeight = workout.userWeight || 70;
     const totalMET =
       Array.isArray(workout.exercises) && workout.exercises.length > 0
         ? workout.exercises.reduce((sum: number, ex: any) => sum + (ex.met || 8), 0) / workout.exercises.length
-        : 8; // default MET
-    const durationHours = (workout.totalDurationSec || 1800) / 3600; // default 30 min
+        : 8;
+    const durationHours = (workout.totalDurationSec || 1800) / 3600;
     const calories = Math.round(totalMET * userWeight * durationHours * 1.05);
 
     try {
@@ -99,6 +105,7 @@ export default function WorkoutPage() {
 
       if (res.ok) {
         alert(`Workout logged! Calories burned: ${calories}`);
+        mutate(); // Refresh completion status
       } else {
         alert("Failed to log workout.");
       }
@@ -111,9 +118,10 @@ export default function WorkoutPage() {
     <>
       <Head>
         <title>{workout.title} - BXKR</title>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+        <link rel="stylesheet" href="https://cdn.jsdelivr/css/bootstrap.min.css"/>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/css/all.min.css"/>
       </Head>
+
 
       <main className="container py-3" style={{ paddingBottom: "70px" }}>
         {/* Header */}
@@ -123,13 +131,12 @@ export default function WorkoutPage() {
             <small className="text-muted">{workout.day}</small>
           </div>
           <Link href="../">Back to week</Link>
-          
         </div>
 
         {/* Notes */}
         {workout.notes && <div className="alert alert-info">{workout.notes}</div>}
 
-        {/* Full workout video */}
+        {/* Video */}
         {workout.video && workout.video.startsWith("http") && (
           <div className="ratio ratio-16x9 mb-3">
             {workout.video.includes("youtube") || workout.video.includes("youtu.be") || workout.video.includes("vimeo") ? (
@@ -145,7 +152,7 @@ export default function WorkoutPage() {
           </div>
         )}
 
-        {/* Round Timer */}
+        {/* Timer */}
         <div className="card mb-3 border-dark">
           <div className="card-body d-flex align-items-center justify-content-between">
             <div className="display-6 mb-0">{mmss(seconds)}</div>
@@ -164,12 +171,9 @@ export default function WorkoutPage() {
               </button>
             </div>
           </div>
-          <div className="card-footer">
-            <small className="text-muted">BXKR rounds are 3 minutes. Use Pause/Reset between rounds.</small>
-          </div>
         </div>
 
-        {/* Exercise list */}
+        {/* Exercises */}
         <div className="card border-dark">
           <div className="card-header fw-bold">Exercises</div>
           <div className="list-group list-group-flush">
@@ -201,10 +205,22 @@ export default function WorkoutPage() {
           </div>
         </div>
 
-        {/* Complete workout */}
+        {/* Complete Button */}
         <div className="mt-3 d-flex gap-2">
-          <button className="btn btn-success w-100" onClick={handleComplete}>
-            <i className="fa-solid fa-check me-1" /> Mark Complete
+          <button
+            className="btn btn-success w-100"
+            onClick={handleComplete}
+            disabled={isCompleted}
+          >
+            {isCompleted ? (
+              <>
+                <i className="fa-solid fa-check me-1" /> Completed
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-check me-1" /> Mark Complete
+              </>
+            )}
           </button>
         </div>
       </main>
