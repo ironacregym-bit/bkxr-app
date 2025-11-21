@@ -2,6 +2,7 @@ import Head from "next/head";
 import { useSession } from "next-auth/react";
 import useSWR from "swr";
 import { useState } from "react";
+import Link from "next/link";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -16,7 +17,6 @@ export default function Profile() {
 
   const [formData, setFormData] = useState<any>({});
 
-  // Populate form when data loads
   if (data && Object.keys(formData).length === 0) {
     setFormData(data);
   }
@@ -40,19 +40,20 @@ export default function Profile() {
       <Head>
         <title>Profile | BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
-        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+        <link rel="stylesheet"href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+        <link rel="stylesheet" href="ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
       </Head>
 
       <main className="container d-flex justify-content-center align-items-center" style={{ minHeight: "80vh", paddingBottom: "70px" }}>
-        <div className="card shadow-lg p-4" style={{ maxWidth: "500px", width: "100%" }}>
-          <div className="text-center mb-3">
+        <div className="card shadow-lg p-4 w-100" style={{ maxWidth: "500px" }}>
+          <div className="text-center mb-4">
             <img
               src={formData.Image || session?.user?.image || "/default-avatar.png"}
               alt="Profile"
-              style={{ width: 100, height: 100, borderRadius: "50%" }}
+              className="rounded-circle"
+              style={{ width: 100, height: 100 }}
             />
-            <h4 className="mt-2">{formData.Name || session?.user?.name}</h4>
+            <h4 className="mt-3">{formData.Name || session?.user?.name}</h4>
             <p className="text-muted">{email}</p>
           </div>
 
@@ -80,6 +81,31 @@ export default function Profile() {
           )}
         </div>
       </main>
+
+      {/* Bottom Navigation */}
+      <nav className="navbar fixed-bottom bg-light border-top">
+        <div className="container d-flex justify-content-around">
+          <Link href="/" className="texts fa-home fa-lg"></i>
+            <div style={{ fontSize: "12px" }}>Home</div>
+          </Link>
+          <Link href="/work          <i className="fas fa-dumbbell fa-lg"></i>
+            <div style={{ fontSize: "12px" }}>WoD</div>
+          </Link>
+          /profile
+            <i className="fas fa-user fa-lg"></i>
+            <div style={{ fontSize: "12px" }}>Profile</div>
+          </Link>
+          <a
+            href={`https://wa.me/${process.env.NEXT_PUBLIC_TRAINER_PHONE || process.env.TRAINER_PHONE}?text=Hi%20Coach%20I%27m%20doing%20BXKR`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-center text-dark"
+          >
+            <i className="fas fa-comments fa-lg"></i>
+            <div style={{ fontSize: "12px" }}>Chat</div>
+          </a>
+        </div>
+      </nav>
     </>
   );
 }
