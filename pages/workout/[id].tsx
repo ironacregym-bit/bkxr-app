@@ -112,7 +112,7 @@ export default function WorkoutPage() {
       <Head>
         <title>{workout.title} - BXKR</title>
         <link rel="stylesheet" href="https://cdn.jsdelivr/css/bootstrap.min.css"/>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/css/all.min.css"/>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
       </Head>
 
       <main className="container py-3" style={{ paddingBottom: "70px" }}>
