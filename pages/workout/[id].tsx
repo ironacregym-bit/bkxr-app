@@ -21,15 +21,6 @@ export default function WorkoutPage() {
   const { data: session } = useSession();
 
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
-
-  {/* Round Timer */}
-  <div className="card mb-3 border-dark">
-    <div className="card-body">
-      <RoundTimer rounds={10} boxRounds={5} work={180} rest={60} />
-    </div>
-  </div>
-  };
-
   if (error)
     return (
       <main className="container py-3">
@@ -138,24 +129,10 @@ export default function WorkoutPage() {
           </div>
         )}
 
-        {/* Timer */}
+        {/* Round Timer */}
         <div className="card mb-3 border-dark">
-          <div className="card-body d-flex align-items-center justify-content-between">
-            <div className="display-6 mb-0">{mmss(seconds)}</div>
-            <div className="btn-group">
-              {!running ? (
-                <button className="btn btn-dark" onClick={start}>
-                  <i className="fa-solid fa-play me-1" /> Start
-                </button>
-              ) : (
-                <button className="btn btn-outline-dark" onClick={pause}>
-                  <i className="fa-solid fa-pause me-1" /> Pause
-                </button>
-              )}
-              <button className="btn btn-outline-secondary" onClick={reset}>
-                <i className="fa-solid fa-rotate-left me-1" /> Reset (3:00)
-              </button>
-            </div>
+          <div className="card-body">
+            <RoundTimer rounds={10} boxRounds={5} work={180} rest={60} />
           </div>
         </div>
 
