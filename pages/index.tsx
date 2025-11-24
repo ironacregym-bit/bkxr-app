@@ -1,3 +1,4 @@
+
 import Head from "next/head";
 import useSWR from "swr";
 import Link from "next/link";
@@ -65,7 +66,6 @@ export default function Home() {
       <Head>
         <title>BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
       </Head>
 
@@ -129,10 +129,9 @@ export default function Home() {
 
         {/* Today's workout card */}
         {todaysWorkouts.length > 0 && (
-          <div className="p-3 rounded mb-3" style={{ background: "#fab1a0" }}>
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <span style={{ fontSize: "14px", fontWeight: "bold" }}>{todayName}</span>
-              <span style={{ fontSize: "14px" }}>{today.getDate()}</span>
+          <div className="p-3 mb-3" style={{ background: "#fab1a0", borderRadius: "16px" }}>
+            <div className="mb-2" style={{ fontSize: "14px", fontWeight: "bold" }}>
+              {todayName}
             </div>
             <h6>{todaysWorkouts[0].title}</h6>
             <p>{todaysWorkouts[0].notes || "Workout details"}</p>
