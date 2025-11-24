@@ -95,7 +95,7 @@ export default function RoundTimer({
   const side = round <= boxRounds ? "BOX" : "BELL";
 
   // Minute split tracker (only for work mode)
-  const minuteSplit = mode === "work" ? Math.ceil((work - remaining) / 60) + 1 : null;
+  const minuteSplit = mode === "work" ? Math.ceil((work - remaining) / 60) : null;
 
   const handleStart = () => {
     setRunning(true);
