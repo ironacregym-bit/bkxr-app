@@ -5,8 +5,8 @@ type Mode = "work" | "rest";
 export default function RoundTimer({
   rounds = 10,
   boxRounds = 5,
-  work = 180,
-  rest = 60
+  work = 180, // 3 minutes
+  rest = 60   // 1 minute
 }: {
   rounds?: number;
   boxRounds?: number;
@@ -19,29 +19,35 @@ export default function RoundTimer({
   const [running, setRunning] = useState<boolean>(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const bell = useRef<HTMLAudioElement | null>(null);
+  const beep = useRef<HTMLAudioElement | null>(null);
+  const tripleBell = useRef<HTMLAudioElement | null>(null);
 
-  // Preload audio
   useEffect(() => {
     if (typeof Audio !== "undefined") {
-      bell.current = new Audio("/beep.mp3"); // Ensure beep.mp3 is in /public or same folder served
-      bell.current.volume = 0.8;
+      beep.current = new Audio("/beep.mp3");
+      beep.current.volume = 0.8;
+      tripleBell.current = new Audio("/triple-bell.mp3");
+      tripleBell.current.volume = 0.9;
     }
   }, []);
 
-  const playAlert = () => {
-    if (bell.current) {
-      bell.current.currentTime = 0; // Reset to start
-      bell.current.play().catch(() => {});
+  const playBeep = () => {
+    if (beep.current) {
+      beep.current.currentTime = 0;
+      beep.current.play().catch(() => {});
+    }
+  };
+
+  const playTripleBell = () => {
+    if (tripleBell.current) {
+      tripleBell.current.currentTime = 0;
+      tripleBell.current.play().catch(() => {});
     }
   };
 
   useEffect(() => {
     if (!running) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      if (intervalRef.current) clearInterval(intervalRef.current);
       return;
     }
 
@@ -49,59 +55,51 @@ export default function RoundTimer({
       setRemaining(prev => {
         const next = prev - 1;
 
-        // Alerts during WORK mode
-        if (mode === "work") {
-          if (next === 120 || next === 60) {
-            playAlert(); // Beep at 2:00 and 1:00
-          }
+        // Alerts during WORK phase
+        if (mode === "work" && (next === 120 || next === 60)) {
+          playBeep();
         }
 
-        // Phase end?
         if (next < 0) {
           if (mode === "work") {
-            // End of work → rest
-            playAlert(); // Beep at round end
+            playTripleBell(); // End of work phase
             setMode("rest");
             return rest;
           } else {
-            // End of rest → next round or finish
             const nextRound = round + 1;
             if (nextRound > rounds) {
-              playAlert(); // Final beep
+              playTripleBell(); // Final completion
               setRunning(false);
               return 0;
             }
-
             setRound(nextRound);
             setMode("work");
-            playAlert(); // Beep at round start
-
-            // Optional speech cue for BOX → BELL switch
+            playBeep(); // Start next work
             if (nextRound === boxRounds + 1 && typeof window !== "undefined" && "speechSynthesis" in window) {
               window.speechSynthesis.speak(new SpeechSynthesisUtterance("Switch to kettlebell"));
             }
-
             return work;
           }
         }
-
         return next;
       });
     }, 1000);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = null;
     };
   }, [running, mode, round, work, rest, rounds, boxRounds]);
 
-  const side = round <= boxRounds ? "BOX" : "BELL";
   const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
   const ss = String(Math.max(remaining % 60, 0)).padStart(2, "0");
+  const side = round <= boxRounds ? "BOX" : "BELL";
+
+  // Minute split tracker (only for work mode)
+  const minuteSplit = mode === "work" ? Math.ceil((work - remaining) / 60) + 1 : null;
 
   const handleStart = () => {
     setRunning(true);
-    playAlert(); // Beep immediately at start
+    playBeep(); // Beep at start
   };
   const handlePause = () => setRunning(false);
   const handleReset = () => {
@@ -114,12 +112,18 @@ export default function RoundTimer({
   return (
     <div style={{ background: "#101522", border: "1px solid #243049", borderRadius: 12, padding: 12 }}>
       <div style={{ color: "#9fb3c8", textTransform: "uppercase", letterSpacing: ".1em" }}>
-        Round {round}/{rounds} • {side} • {mode.toUpperCase()}
+        Round {round}/{rounds} • {side} • {mode === "work" ? "WORK (3:00)" : "REST (1:00)"}
       </div>
 
       <div style={{ fontSize: 56, fontWeight: 800, margin: "8px 0" }}>
         {mm}:{ss}
       </div>
+
+      {mode === "work" && (
+        <div style={{ color: "#6f8399", fontSize: 14, marginBottom: 8 }}>
+          Minute Split: {minuteSplit}/3
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 8 }}>
         <button onClick={handleStart} disabled={running} style={btnStyle("primary")}>Start</button>
@@ -128,7 +132,7 @@ export default function RoundTimer({
       </div>
 
       <div style={{ marginTop: 8, color: "#6f8399", fontSize: 12 }}>
-        Beeps at round start, round end, and at 2:00 & 1:00 marks.
+        Beeps at start, 2:00 & 1:00 marks. Triple bell at round end.
       </div>
     </div>
   );
