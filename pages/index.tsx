@@ -1,4 +1,3 @@
-
 import Head from "next/head";
 import useSWR from "swr";
 import Link from "next/link";
@@ -86,7 +85,8 @@ export default function Home() {
               <img
                 src={session.user?.image ?? ""}
                 alt=""
-                style={{ width: 32, height: 32, borderRadius: "50%" }}
+                className="rounded-circle"
+                style={{ width: 32, height: 32 }}
               />
               <span className="text-muted">{session.user?.email}</span>
               <button className="btn btn-outline-dark" onClick={() => signOut()}>
@@ -106,19 +106,10 @@ export default function Home() {
             const isToday = d.toDateString() === today.toDateString();
             return (
               <div key={i} style={{ width: "40px" }}>
-                <div style={{ fontSize: "14px" }}>{dayLabels[i]}</div>
+                <div className="fw-bold">{dayLabels[i]}</div>
                 <div
-                  style={{
-                    fontSize: "14px",
-                    marginTop: "4px",
-                    width: "28px",
-                    height: "28px",
-                    lineHeight: "28px",
-                    borderRadius: "50%",
-                    background: isToday ? "#f9d923" : "transparent",
-                    color: isToday ? "#101522" : "#fff",
-                    margin: "0 auto"
-                  }}
+                  className={`rounded-circle d-flex justify-content-center align-items-center ${isToday ? "bg-warning text-dark" : ""}`}
+                  style={{ width: "28px", height: "28px", margin: "4px auto" }}
                 >
                   {d.getDate()}
                 </div>
@@ -129,13 +120,11 @@ export default function Home() {
 
         {/* Today's workout card */}
         {todaysWorkouts.length > 0 && (
-          <div className="p-3 mb-3" style={{ background: "#fab1a0", borderRadius: "16px" }}>
-            <div className="mb-2" style={{ fontSize: "14px", fontWeight: "bold" }}>
-              {todayName}
-            </div>
+          <div className="p-3 mb-3 rounded shadow-sm bg-light">
+            <div className="mb-2 fw-bold">{todayName}</div>
             <h6>{todaysWorkouts[0].title}</h6>
             <p>{todaysWorkouts[0].notes || "Workout details"}</p>
-            <Link href={`/workout/${todaysWorkouts[0].id}`} className="btn btn-dark btn-sm mt-2">
+            <Link href={`/workout/${todaysWorkouts[0].id}`} className="btn btn-primary btn-sm mt-2">
               Start Workout
             </Link>
           </div>
