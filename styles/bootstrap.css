@@ -13,6 +13,23 @@
  */
 :root,
 [data-bs-theme=light] {
+  /* BXKR Brand Palette */
+  --bs-primary: #66A6F2;      /* Blue Jeans */
+  --bs-secondary: #4165CD;    /* God of Rain */
+  --bs-info: #5F6275;         /* Presumption */
+  --bs-dark: #1F1E23;         /* Inkwell Inception */
+  --bs-body-bg: #0E0D10;      /* Chaos Black */
+  --bs-body-color: #fff;
+  --bs-card-bg: #33343F;      /* Witches Cauldron */
+  --bs-card-color: #fff;
+  --bs-card-border-color: #5F6275;
+  --bs-link-color: #66A6F2;
+  --bs-link-hover-color: #4165CD;
+  --bs-btn-bg: #66A6F2;
+  --bs-btn-color: #fff;
+  --bs-btn-hover-bg: #4165CD;
+
+  /* Keep the rest of your Bootstrap variables as they are */
   --bs-blue: #007bff;
   --bs-indigo: #6610f2;
   --bs-purple: #6f42c1;
@@ -36,22 +53,10 @@
   --bs-gray-700: #52575c;
   --bs-gray-800: #3a3f44;
   --bs-gray-900: #272b30;
-  --bs-primary: #3a3f44;
-  --bs-secondary: #7a8288;
-  --bs-success: #62c462;
-  --bs-info: #5bc0de;
-  --bs-warning: #f89406;
-  --bs-danger: #ee5f5b;
-  --bs-light: #e9ecef;
-  --bs-dark: #272b30;
-  --bs-primary-rgb: 58, 63, 68;
-  --bs-secondary-rgb: 122, 130, 136;
-  --bs-success-rgb: 98, 196, 98;
-  --bs-info-rgb: 91, 192, 222;
-  --bs-warning-rgb: 248, 148, 6;
-  --bs-danger-rgb: 238, 95, 91;
-  --bs-light-rgb: 233, 236, 239;
-  --bs-dark-rgb: 39, 43, 48;
+  --bs-primary-rgb: 102, 166, 242;
+  --bs-secondary-rgb: 65, 101, 205;
+  --bs-info-rgb: 95, 98, 117;
+  --bs-dark-rgb: 31, 30, 35;
   --bs-primary-text-emphasis: #17191b;
   --bs-secondary-text-emphasis: #313436;
   --bs-success-text-emphasis: #274e27;
