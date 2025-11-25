@@ -11,6 +11,38 @@
  * Copyright 2011-2025 The Bootstrap Authors
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/main/LICENSE)
  */
+
+/* Base pill for the date circle */
+.bxkr-day-pill {
+  width: 28px;
+  height: 28px;
+  margin: 4px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  box-sizing: border-box;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s, border 0.2s;
+}
+
+/* Ring shown when a workout is scheduled */
+.bxkr-has-workout {
+  box-shadow: 0 0 0 2px var(--bxkr-ring);
+}
+
+/* Selected day style: filled with ring colour and white text */
+.bxkr-selected {
+  background-color: var(--bxkr-ring);
+  color: #fff;
+}
+
+/* Today (if not selected): keep your warning highlight */
+.bxkr-today {
+  background-color: var(--bs-warning);
+  color: var(--bs-dark);
+}
+
+
 :root,
 [data-bs-theme=light] {
   --bxkr-ring: #4165cd;
