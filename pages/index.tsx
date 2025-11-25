@@ -61,37 +61,29 @@ export default function Home() {
   const weekDays = getWeek();
   const today = new Date();
 
-  // Add state for selected day (default: today)
+  // Selected day state (default: today)
   const [selectedDay, setSelectedDay] = useState<Date>(today);
 
   // Greeting
   const hour = today.getHours();
   const greeting =
-    hour < 12
-      ? "Good Morning"
-      : hour < 18
-      ? "Good Afternoon"
-      : "Good Evening";
+    hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
 
-  // Helper: get day name for a date
-  function getDayName(date: Date) {
-    return date.toLocaleDateString(undefined, { weekday: "long" });
-  }
+  // Helpers
+  const getDayName = (date: Date) =>
+    date.toLocaleDateString(undefined, { weekday: "long" });
 
   // Workouts for the selected day
   const selectedDayName = getDayName(selectedDay);
   const selectedWorkouts = (data?.workouts || []).filter(
-    (w: any) =>
-      (w.day || "").toLowerCase() === selectedDayName.toLowerCase()
+    (w: any) => (w.day || "").toLowerCase() === selectedDayName.toLowerCase()
   );
 
   // --- Week Overview Calculations ---
-  // Get Monday of this week
   const monday = new Date(today);
   monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
   monday.setHours(0, 0, 0, 0);
 
-  // Filter completions for this week
   const completionsThisWeek = (completionData?.history || []).filter(
     (c: any) => {
       const completedAt = new Date(c.completed_at);
@@ -99,16 +91,13 @@ export default function Home() {
     }
   );
 
-  // Workouts completed
   const workoutsCompleted = completionsThisWeek.length;
 
-  // Calories burned
   const caloriesBurned = completionsThisWeek.reduce(
     (sum: number, c: any) => sum + (c.calories_burned || 0),
     0
   );
 
-  // Weight lifted (if available in your workout data as total_weight_kg)
   let weightLifted = 0;
   completionsThisWeek.forEach((c: any) => {
     const workout = (data?.workouts || []).find(
@@ -119,8 +108,7 @@ export default function Home() {
     }
   });
 
-  // --- Find which days have a workout scheduled ---
-  // Map: day index (0-6) => true if workout exists
+  // --- Determine which days have a workout scheduled ---
   const daysWithWorkout = weekDays.map((d) => {
     const dayName = getDayName(d);
     return (data?.workouts || []).some(
@@ -135,7 +123,6 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
       </Head>
-
       <main className="container py-3" style={{ paddingBottom: "70px" }}>
         {/* Greeting */}
         <h2 className="mb-4 text-center">
@@ -147,7 +134,7 @@ export default function Home() {
           <div className="col">
             <div className="bxkr-card py-2">
               <div style={{ fontSize: 14, opacity: 0.7 }}>
-                <i className="fas fa-dumbbell me-1"></i>Workouts
+                <i className="fas fa-dumbbell me-1" />Workouts
               </div>
               <div style={{ fontSize: 22, fontWeight: 700 }}>
                 {workoutsCompleted}
@@ -158,7 +145,7 @@ export default function Home() {
           <div className="col">
             <div className="bxkr-card py-2">
               <div style={{ fontSize: 14, opacity: 0.7 }}>
-                <i className="fas fa-fire me-1"></i>Calories
+                <i className="fas fa-fire me-1" />Calories
               </div>
               <div style={{ fontSize: 22, fontWeight: 700 }}>
                 {caloriesBurned}
@@ -169,7 +156,7 @@ export default function Home() {
           <div className="col">
             <div className="bxkr-card py-2">
               <div style={{ fontSize: 14, opacity: 0.7 }}>
-                <i className="fas fa-weight-hanging me-1"></i>Weight
+                <i className="fas fa-weight-hanging me-1" />Weight
               </div>
               <div style={{ fontSize: 22, fontWeight: 700 }}>
                 {weightLifted}
@@ -196,10 +183,7 @@ export default function Home() {
                 style={{ width: 32, height: 32 }}
               />
               <span className="text-muted">{session.user?.email}</span>
-              <button
-                className="btn btn-outline-dark"
-                onClick={() => signOut()}
-              >
+              <button className="btn btn-outline-dark" onClick={() => signOut()}>
                 Sign out
               </button>
             </div>
@@ -207,12 +191,8 @@ export default function Home() {
         </div>
 
         {/* Errors/Loading */}
-        {error && (
-          <div className="alert alert-danger">Failed to load workouts</div>
-        )}
-        {isLoading && (
-          <div className="alert alert-secondary">Loading…</div>
-        )}
+        {error && <div className="alert alert-danger">Failed to load workouts</div>}
+        {isLoading && <div className="alert alert-secondary">Loading…</div>}
 
         {/* Weekly strip */}
         <div className="d-flex justify-content-between text-center mb-4">
@@ -221,42 +201,25 @@ export default function Home() {
             const isSelected = isSameDay(d, selectedDay);
             const hasWorkout = daysWithWorkout[i];
 
-            // Ring logic: blue ring if workout, thicker ring if selected
-            let borderStyle = "";
-            if (hasWorkout && isSelected) {
-              borderStyle = "3px solid #0d6efd"; // Bootstrap primary, thicker
-            } else if (hasWorkout) {
-              borderStyle = "2px solid #0d6efd";
-            } else if (isSelected) {
-              borderStyle = "2px solid #fff";
-            }
+            // Compose class names for the pill
+            const pillClasses = [
+              "bxkr-day-pill",
+              isSelected ? "bxkr-selected" : "",
+              !isSelected && isToday ? "bxkr-today" : "",
+              hasWorkout ? "bxkr-has-workout" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
 
             return (
               <div
                 key={i}
                 style={{ width: "40px", cursor: "pointer" }}
                 onClick={() => setSelectedDay(d)}
+                aria-label={`Select ${dayLabels[i]} ${d.getDate()}`}
               >
                 <div className="fw-bold">{dayLabels[i]}</div>
-                <div
-                  className={`rounded-circle d-flex justify-content-center align-items-center ${
-                    isSelected
-                      ? "bg-primary text-white"
-                      : isToday
-                      ? "bg-warning text-dark"
-                      : ""
-                  }`}
-                  style={{
-                    width: "28px",
-                    height: "28px",
-                    margin: "4px auto",
-                    border: borderStyle,
-                    boxSizing: "border-box",
-                    transition: "background 0.2s, color 0.2s, border 0.2s",
-                  }}
-                >
-                  {d.getDate()}
-                </div>
+                <div className={pillClasses}>{d.getDate()}</div>
               </div>
             );
           })}
