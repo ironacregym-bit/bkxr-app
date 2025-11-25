@@ -46,6 +46,18 @@ body {
   background: linear-gradient(180deg, #0E0D10 0%, #1f1e23 100%);
   min-height: 100vh;
 }
+.bxkr-bottomnav-link,
+.bxkr-bottomnav-link:visited,
+.bxkr-bottomnav-link:active,
+.bxkr-bottomnav-link:hover,
+.bxkr-bottomnav-link:focus {
+  color: #fff !important;
+  text-decoration: none !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
 
 
 :root,
