@@ -43,7 +43,7 @@
 }
 body {
   /* Two-tone vertical gradient: Chaos Black to #1f1e23 */
-  background: linear-gradient(180deg, #0E0D10 0%, #1f1e23 100%);
+  background: linear-gradient(360deg, #33343f 0%, #1f1e23 100%);
   min-height: 100vh;
 }
 .bxkr-bottomnav-link,
