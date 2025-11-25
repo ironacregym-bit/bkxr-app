@@ -135,7 +135,6 @@ export default function Home() {
             <div className="bxkr-card py-2">
               <div className="bxkr-stat-label">
                   <i className="fas fa-dumbbell bxkr-icon bxkr-icon-blue me-1" />Workouts
-                </div>
               </div>
               <div className="bxkr-stat-value">
                 {workoutsCompleted}
