@@ -133,35 +133,36 @@ export default function Home() {
         <div className="row text-center mb-4 gx-3">
           <div className="col">
             <div className="bxkr-card py-2">
-              <div style={{ fontSize: 14, opacity: 0.7 }}>
-                <i className="fas fa-dumbbell me-1" />Workouts
+              <div className="bxkr-stat-label">
+                  <i className="fas fa-dumbbell bxkr-icon bxkr-icon-blue me-1" />Workouts
+                </div>
               </div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>
+              <div className="bxkr-stat-value">
                 {workoutsCompleted}
               </div>
-              <div style={{ fontSize: 12, opacity: 0.6 }}>Completed</div>
+              <div className="bxkr-stat-sub">Completed</div>
             </div>
           </div>
           <div className="col">
             <div className="bxkr-card py-2">
-              <div style={{ fontSize: 14, opacity: 0.7 }}>
-                <i className="fas fa-fire me-1" />Calories
+              <div className="bxkr-stat-label">
+                <i className="fas fa-fire bxkr-icon bxkr-icon-orange-gradient me-1" />Calories
               </div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>
+              <div className="bxkr-stat-value">
                 {caloriesBurned}
               </div>
-              <div style={{ fontSize: 12, opacity: 0.6 }}>Burned</div>
+              <div className="bxkr-stat-sub">Burned</div>
             </div>
           </div>
           <div className="col">
             <div className="bxkr-card py-2">
-              <div style={{ fontSize: 14, opacity: 0.7 }}>
-                <i className="fas fa-weight-hanging me-1" />Weight
+              <div className="bxkr-stat-label">
+                <i className="fas fa-weight-hanging me-1 bxkr-icon bxkr-icon-green" />Weight
               </div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>
+              <div className="bxkr-stat-value">
                 {weightLifted}
               </div>
-              <div style={{ fontSize: 12, opacity: 0.6 }}>kg Lifted</div>
+              <div className="bxkr-stat-sub">kg Lifted</div>
             </div>
           </div>
         </div>
