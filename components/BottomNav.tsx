@@ -2,7 +2,15 @@ import Link from "next/link";
 
 export default function BottomNav() {
   return (
-      <nav className="navbar fixed-bottom border-top" style={{ background: "rgba(14,13,16,0.95)" }}>
+    <nav
+      className="navbar fixed-bottom border-top"
+      style={{
+        background: "rgba(31,30,35,0.92)", // #1f1e23 with slight transparency
+        backdropFilter: "blur(2px)",
+        WebkitBackdropFilter: "blur(2px)",
+        minHeight: 60,
+      }}
+    >
         <div className="container d-flex justify-content-around">
           <Link href="/" className="bxkr-bottomnav-link">
             <i className="fas fa-home fa-lg"></i>
