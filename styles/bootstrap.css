@@ -13,6 +13,7 @@
  */
 :root,
 [data-bs-theme=light] {
+  --bxkr-ring: #4165cd;
   --bs-blue: #007bff;
   --bs-indigo: #6610f2;
   --bs-purple: #6f42c1;
