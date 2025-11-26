@@ -29,3 +29,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error("Firestore read failed:", err.message);
     return res.status(500).json({ error: "Failed to load settings" });
   }
+}
