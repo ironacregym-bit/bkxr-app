@@ -74,9 +74,18 @@ export default function Home() {
     date.toLocaleDateString(undefined, { weekday: "long" });
 
   const selectedDayName = getDayName(selectedDay);
-  const selectedWorkouts = (data?.workouts || []).filter(
-    (w: any) => (w.day || "").toLowerCase() === selectedDayName.toLowerCase()
-  );
+  const selectedWorkouts = (data?.workouts || []).filter((w: any) => {
+    // If Firestore stores week_start as Timestamp
+    const workoutDate = w.week_start?.seconds
+      ? new Date(w.week_start.seconds * 1000)
+      : new Date(w.week_start); // fallback if it's a string
+  
+    const workoutDayName = workoutDate.toLocaleDateString(undefined, {
+      weekday: "long",
+    });
+  
+    return workoutDayName.toLowerCase() === selectedDayName.toLowerCase();
+  });
 
   // Week overview calculations
   const monday = new Date(today);
