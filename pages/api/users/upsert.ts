@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]";
-import { readRange, appendRow, updateRowByKey } from "../../../lib/sheets";
+import firestore from "../../../lib/firestoreClient"; // Firestore client
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
@@ -15,29 +15,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const range = "Users!A:L"; // 12 columns
-    const rows = await readRange(range);
-    const idx = rows.findIndex(r => (r[0] || "").toLowerCase() === email.toLowerCase());
+    const docRef = firestore.collection("users").doc(email);
+    const docSnap = await docRef.get();
 
     const nowIso = new Date().toISOString();
 
-    if (idx === -1) {
-      // New user → append row with placeholders
-      await appendRow(range, [
-        email, name, image, nowIso, nowIso, "", "", "", "", "", "", ""
-      ]);
+    if (!docSnap.exists) {
+      // New user → create document with placeholders
+      await docRef.set({
+        email,
+        name,
+        image,
+        created_at: nowIso,
+        last_login_at: nowIso,
+        DOB: "",
+        sex: "",
+        height_cm: null,
+        weight_kg: null,
+        bodyfat_pct: null,
+        activity_factor: null,
+        caloric_target: null
+      });
     } else {
       // Existing user → update name, image, last_login_at
-      const rowNumber = idx + 1; // 1-based index
-      await updateRowByKey("Users", rowNumber, {
-        1: name,       // column B
-        2: image,      // column C
-        4: nowIso      // column E (last_login_at)
+      await docRef.update({
+        name,
+        image,
+        last_login_at: nowIso
       });
     }
 
     return res.json({ ok: true });
   } catch (e: any) {
+    console.error("USER_UPSERT_FAILED:", e.message);
     return res.status(500).json({
       ok: false,
       error: "USER_UPSERT_FAILED",
