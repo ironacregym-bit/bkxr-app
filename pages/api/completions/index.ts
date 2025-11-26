@@ -1,16 +1,24 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { readRange } from "../../../lib/sheets";
+import firestore from "../../../lib/firestoreClient"; // Firestore client
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { email, workout_id } = req.query;
-  if (!email || !workout_id) return res.status(400).json({ error: "Missing params" });
+
+  if (!email || !workout_id || typeof email !== "string" || typeof workout_id !== "string") {
+    return res.status(400).json({ error: "Missing params" });
+  }
 
   try {
-    const rows = await readRange("Completions!A:F");
-    const exists = rows.some((r) => r[0] === email && r[1] === workout_id);
+    // Composite ID for uniqueness
+    const docId = `${email}_${workout_id}`;
+    const docRef = firestore.collection("workoutCompletions").doc(docId);
+    const docSnap = await docRef.get();
+
+    const exists = docSnap.exists;
+
     return res.status(200).json({ completed: exists });
-  } catch (err) {
-    console.error("Completion check failed:", err);
+  } catch (err: any) {
+    console.error("Completion check failed:", err.message);
     return res.status(500).json({ error: "Failed to check completion" });
   }
 }
