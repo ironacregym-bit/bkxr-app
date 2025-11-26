@@ -1,14 +1,21 @@
-// pages/api/workouts.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { batchGet } from "../../lib/sheets";
 import { startOfWeek, formatISO } from "date-fns";
+import { db } from "../../lib/firebaseConfig"; // Your Firestore config
+import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 
-type Matrix = string[][];
-type WorkoutRow = { id: string; day: string; title: string; video?: string; notes?: string };
-type ExerciseRow = { type?: string; name?: string; video?: string };
+type WorkoutRow = {
+  id: string;
+  day: string;
+  title: string;
+  video?: string;
+  notes?: string;
+};
 
-const headerIndex = (headerRow: string[] | undefined) =>
-  headerRow ? (Object.fromEntries(headerRow.map((h, i) => [h, i])) as Record<string, number>) : {};
+type ExerciseRow = {
+  type?: string;
+  name?: string;
+  video?: string;
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -16,79 +23,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const monday = startOfWeek(new Date(), { weekStartsOn: 1 });
     const weekISO = formatISO(monday, { representation: "date" });
 
-    // Expect batchGet to return each range as a string matrix (string[][])
-    const [workoutsMat, exercisesMat] = await batchGet([
-      "Workouts!A:G",   // WorkoutID | WeekStart | DayName | Title | VideoURL | Focus | Notes
-      "Exercises!A:G",  // ExerciseID | WorkoutID | Seq | Type | Name | VideoURL
-    ]);
+    // Fetch workouts for this week
+    const workoutsRef = collection(db, "workouts");
+    const workoutsQuery = query(workoutsRef, where("week_start", "==", weekISO));
+    const workoutSnap = await getDocs(workoutsQuery);
 
-    // Guard: missing/empty sheets → no workouts
-    if (!Array.isArray(workoutsMat) || workoutsMat.length === 0) {
+    if (workoutSnap.empty) {
       return res.json({ weekStart: weekISO, workouts: [] });
     }
-    // Exercises can be empty; still return workouts without items
-    const safeExercisesMat: Matrix = Array.isArray(exercisesMat) ? exercisesMat : [];
 
-    // Build header indices safely
-    const wHdr = headerIndex(workoutsMat[0]);
-    const eHdr = safeExercisesMat.length ? headerIndex(safeExercisesMat[0]) : {};
+    // Map workouts
+    const Ws: WorkoutRow[] = workoutSnap.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: data.workout_id,
+        day: data.day_name,
+        title: data.title,
+        video: data.video_url,
+        notes: data.notes,
+      };
+    });
 
-    // Verify required columns exist in Workouts
-    const requiredW = ["WorkoutID", "WeekStart", "DayName", "Title", "VideoURL", "Notes"];
-    const missingW = requiredW.filter((k) => wHdr[k] === undefined);
-    if (missingW.length) {
-      console.error("Workouts header missing:", missingW.join(", "));
-      return res.status(500).json({ error: "WORKOUTS_HEADERS_MISSING", missing: missingW });
-    }
+    // Fetch all exercises (we'll filter by workout_id later)
+    const exercisesRef = collection(db, "workoutExercises");
+    const exercisesQuery = query(exercisesRef, orderBy("order"));
+    const exerciseSnap = await getDocs(exercisesQuery);
 
-    // Slice to data rows
-    const wRows = (workoutsMat as Matrix).slice(1);
-    const eRows = (safeExercisesMat as Matrix).slice(1);
-
-    // Filter workouts for this week
-    const Ws: WorkoutRow[] = wRows
-      .filter((r) => r[wHdr["WeekStart"]] === weekISO)
-      .map((r) => ({
-        id: r[wHdr["WorkoutID"]],
-        day: r[wHdr["DayName"]],
-        title: r[wHdr["Title"]],
-        video: r[wHdr["VideoURL"]],
-        notes: r[wHdr["Notes"]],
-      }))
-      // guard against malformed rows
-      .filter((w) => !!w.id && !!w.day && !!w.title);
-
-    // If no exercises header, return workouts without exercises
-    if (!safeExercisesMat.length || Object.keys(eHdr).length === 0) {
-      return res.json({ weekStart: weekISO, workouts: Ws.map((w) => ({ ...w, exercises: [] })) });
-    }
-
-    // Verify required exercise columns exist
-    const requiredE = ["WorkoutID", "Seq", "Type", "Name", "VideoURL"];
-    const missingE = requiredE.filter((k) => eHdr[k] === undefined);
-    if (missingE.length) {
-      console.warn("Exercises header missing:", missingE.join(", "));
-      // Still return workouts without exercises rather than 500
-      return res.json({ weekStart: weekISO, workouts: Ws.map((w) => ({ ...w, exercises: [] })) });
-    }
+    const eRows = exerciseSnap.docs.map((doc) => doc.data());
 
     // Attach exercises to each workout
     const workouts = Ws.map((w) => {
       const items: ExerciseRow[] = eRows
-        .filter((e) => e[eHdr["WorkoutID"]] === w.id)
-        .sort((a, b) => Number(a[eHdr["Seq"]] ?? 0) - Number(b[eHdr["Seq"]] ?? 0))
+        .filter((e) => e.workout_id === w.id)
         .map((e) => ({
-          type: e[eHdr["Type"]],
-          name: e[eHdr["Name"]],
-          video: e[eHdr["VideoURL"]],
+          type: e.type,
+          name: e.name,
+          video: e.video_url,
         }));
       return { ...w, exercises: items };
     });
 
     return res.json({ weekStart: weekISO, workouts });
   } catch (err: any) {
-  console.error("API /workouts failed:", err?.message || err);
-  return res.status(200).json({ weekStart: "", workouts: [] }); // Always return workouts array
-}
-
+    console.error("API /workouts failed:", err?.message || err);
+    return res.status(200).json({ weekStart: "", workouts: [] });
+  }
 }
