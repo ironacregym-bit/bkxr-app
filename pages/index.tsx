@@ -32,8 +32,11 @@ function isSameDay(a: Date, b: Date) {
 
 export default function Home() {
   const { data: session, status } = useSession();
+
+  // Fetch workouts from Firestore via API
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
 
+  // Fetch completion history for logged-in user
   const { data: completionData } = useSWR(
     session?.user?.email
       ? `/api/completions/history?email=${encodeURIComponent(session.user.email)}`
@@ -61,25 +64,21 @@ export default function Home() {
   const weekDays = getWeek();
   const today = new Date();
 
-  // Selected day state (default: today)
   const [selectedDay, setSelectedDay] = useState<Date>(today);
 
-  // Greeting
   const hour = today.getHours();
   const greeting =
     hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
 
-  // Helpers
   const getDayName = (date: Date) =>
     date.toLocaleDateString(undefined, { weekday: "long" });
 
-  // Workouts for the selected day
   const selectedDayName = getDayName(selectedDay);
   const selectedWorkouts = (data?.workouts || []).filter(
     (w: any) => (w.day || "").toLowerCase() === selectedDayName.toLowerCase()
   );
 
-  // --- Week Overview Calculations ---
+  // Week overview calculations
   const monday = new Date(today);
   monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
   monday.setHours(0, 0, 0, 0);
@@ -92,7 +91,6 @@ export default function Home() {
   );
 
   const workoutsCompleted = completionsThisWeek.length;
-
   const caloriesBurned = completionsThisWeek.reduce(
     (sum: number, c: any) => sum + (c.calories_burned || 0),
     0
@@ -108,7 +106,6 @@ export default function Home() {
     }
   });
 
-  // --- Determine which days have a workout scheduled ---
   const daysWithWorkout = weekDays.map((d) => {
     const dayName = getDayName(d);
     return (data?.workouts || []).some(
@@ -124,7 +121,6 @@ export default function Home() {
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
       </Head>
       <main className="container py-3" style={{ paddingBottom: "70px" }}>
-        {/* Greeting */}
         <h2 className="mb-4 text-center">
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
@@ -134,39 +130,36 @@ export default function Home() {
           <div className="col">
             <div className="bxkr-card py-2">
               <div className="bxkr-stat-label">
-                  <i className="fas fa-dumbbell bxkr-icon bxkr-icon-blue me-1" />Workouts
+                <i className="fas fa-dumbbell bxkr-icon bxkr-icon-blue me-1" />
+                Workouts
               </div>
-              <div className="bxkr-stat-value">
-                {workoutsCompleted}
-              </div>
+              <div className="bxkr-stat-value">{workoutsCompleted}</div>
               <div className="bxkr-stat-sub">Completed</div>
             </div>
           </div>
           <div className="col">
             <div className="bxkr-card py-2">
               <div className="bxkr-stat-label">
-                <i className="fas fa-fire bxkr-icon bxkr-icon-orange-gradient me-1" />Calories
+                <i className="fas fa-fire bxkr-icon bxkr-icon-orange-gradient me-1" />
+                Calories
               </div>
-              <div className="bxkr-stat-value">
-                {caloriesBurned}
-              </div>
+              <div className="bxkr-stat-value">{caloriesBurned}</div>
               <div className="bxkr-stat-sub">Burned</div>
             </div>
           </div>
           <div className="col">
             <div className="bxkr-card py-2">
               <div className="bxkr-stat-label">
-                <i className="fas fa-weight-hanging me-1 bxkr-icon bxkr-icon-green" />Weight
+                <i className="fas fa-weight-hanging me-1 bxkr-icon bxkr-icon-green" />
+                Weight
               </div>
-              <div className="bxkr-stat-value">
-                {weightLifted}
-              </div>
+              <div className="bxkr-stat-value">{weightLifted}</div>
               <div className="bxkr-stat-sub">kg Lifted</div>
             </div>
           </div>
         </div>
 
-        {/* Auth bar */}
+        {/* Auth */}
         <div className="mb-4 d-flex justify-content-center gap-3 flex-wrap">
           {status === "loading" ? (
             <span>Checking session…</span>
@@ -183,14 +176,16 @@ export default function Home() {
                 style={{ width: 32, height: 32 }}
               />
               <span className="text-muted">{session.user?.email}</span>
-              <button className="btn btn-outline-dark" onClick={() => signOut()}>
+              <button
+                className="btn btn-outline-dark"
+                onClick={() => signOut()}
+              >
                 Sign out
               </button>
             </div>
           )}
         </div>
 
-        {/* Errors/Loading */}
         {error && <div className="alert alert-danger">Failed to load workouts</div>}
         {isLoading && <div className="alert alert-secondary">Loading…</div>}
 
@@ -201,7 +196,6 @@ export default function Home() {
             const isSelected = isSameDay(d, selectedDay);
             const hasWorkout = daysWithWorkout[i];
 
-            // Compose class names for the pill
             const pillClasses = [
               "bxkr-day-pill",
               isSelected ? "bxkr-selected" : "",
@@ -225,7 +219,7 @@ export default function Home() {
           })}
         </div>
 
-        {/* Selected day's workout card */}
+        {/* Selected day's workout */}
         {selectedWorkouts.length > 0 && (
           <div className="p-3 mb-3 bxkr-card">
             <div className="mb-2 fw-bold">{selectedDayName}</div>
