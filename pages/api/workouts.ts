@@ -1,5 +1,7 @@
+
 import type { NextApiRequest, NextApiResponse } from "next";
-import { startOfWeek, formatISO } from "date-fns";
+import { startOfWeek } from "date-fns";
+import { Timestamp } from "@google-cloud/firestore";
 import firestore from "../../lib/firestoreClient";
 
 interface Workout {
@@ -20,15 +22,20 @@ interface Exercise {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const monday = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const weekISO = formatISO(monday, { representation: "date" });
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+
+    const mondayTS = Timestamp.fromDate(monday);
+    const sundayTS = Timestamp.fromDate(sunday);
 
     // Fetch workouts for this week
     const workoutsSnap = await firestore.collection("workouts")
-      .where("week_start", "==", weekISO)
+      .where("week_start", ">=", mondayTS)
+      .where("week_start", "<=", sundayTS)
       .get();
 
     if (workoutsSnap.empty) {
-      return res.json({ weekStart: weekISO, workouts: [] });
+      return res.json({ weekStart: monday.toISOString(), workouts: [] });
     }
 
     const Ws: Workout[] = workoutsSnap.docs.map(doc => {
@@ -61,7 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         })),
     }));
 
-    return res.status(200).json({ weekStart: weekISO, workouts });
+    return res.status(200).json({ weekStart: monday.toISOString(), workouts });
   } catch (err: any) {
     console.error("API /workouts failed:", err.message || err);
     return res.status(500).json({ error: "Failed to load workouts" });
