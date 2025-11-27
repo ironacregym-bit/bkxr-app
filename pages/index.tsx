@@ -136,6 +136,7 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
       </Head>
+      <main className="container py-3" style={{ paddingBottom: "70px" }}>
       <h2 className="mb-4 text-center">
           {greeting}, {session?.user?.name || "Athlete"}
       </h2>
