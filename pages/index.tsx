@@ -1,3 +1,4 @@
+
 import Head from "next/head";
 import useSWR from "swr";
 import Link from "next/link";
@@ -74,16 +75,15 @@ export default function Home() {
     date.toLocaleDateString(undefined, { weekday: "long" });
 
   const selectedDayName = getDayName(selectedDay);
+
+  // Filter workouts for selected day using week_start
   const selectedWorkouts = (data?.workouts || []).filter((w: any) => {
-    // If Firestore stores week_start as Timestamp
     const workoutDate = w.week_start?.seconds
       ? new Date(w.week_start.seconds * 1000)
-      : new Date(w.week_start); // fallback if it's a string
-  
+      : new Date(w.week_start);
     const workoutDayName = workoutDate.toLocaleDateString(undefined, {
       weekday: "long",
     });
-  
     return workoutDayName.toLowerCase() === selectedDayName.toLowerCase();
   });
 
@@ -115,11 +115,18 @@ export default function Home() {
     }
   });
 
+  // Determine which days have workouts using week_start
   const daysWithWorkout = weekDays.map((d) => {
     const dayName = getDayName(d);
-    return (data?.workouts || []).some(
-      (w: any) => (w.day || "").toLowerCase() === dayName.toLowerCase()
-    );
+    return (data?.workouts || []).some((w: any) => {
+      const workoutDate = w.week_start?.seconds
+        ? new Date(w.week_start.seconds * 1000)
+        : new Date(w.week_start);
+      const workoutDayName = workoutDate.toLocaleDateString(undefined, {
+        weekday: "long",
+      });
+      return workoutDayName.toLowerCase() === dayName.toLowerCase();
+    });
   });
 
   return (
@@ -129,10 +136,9 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
       </Head>
-      <main className="container py-3" style={{ paddingBottom: "70px" }}>
-        <h2 className="mb-4 text-center">
+      <h2 className="mb-4 text-center">
           {greeting}, {session?.user?.name || "Athlete"}
-        </h2>
+      </h2>
 
         {/* Week Overview */}
         <div className="row text-center mb-4 gx-3">
@@ -228,23 +234,23 @@ export default function Home() {
           })}
         </div>
 
-        {/* Selected day's workout */}
-        {selectedWorkouts.length > 0 && (
-          <div className="p-3 mb-3 bxkr-card">
-            <div className="mb-2 fw-bold">{selectedDayName}</div>
-            <h6>{selectedWorkouts[0].title}</h6>
-            <p>{selectedWorkouts[0].notes || "Workout details"}</p>
-            <Link
-              href={`/workout/${selectedWorkouts[0].id}`}
-              className="btn btn-primary btn-sm mt-2"
-            >
-              Start Workout
-            </Link>
-          </div>
-        )}
+        {/* Selected day's workouts */}
+        {selectedWorkouts.length > 0 &&
+          selectedWorkouts.map((w: any) => (
+            <div key={w.id} className="p-3 mb-3 bxkr-card">
+              <div className="mb-2 fw-bold">{selectedDayName}</div>
+              <h6>{w.title}</h6>
+              <p>{w.notes || "Workout details"}</p>
+              <Link
+                href={`/workout/${w.id}`}
+                className="btn btn-primary btn-sm mt-2"
+              >
+                Start Workout
+              </Link>
+            </div>
+          ))}
       </main>
 
       <BottomNav />
     </>
   );
-}
