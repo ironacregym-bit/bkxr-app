@@ -6,9 +6,9 @@ import firestore from "../../lib/firestoreClient";
 
 interface Workout {
   id: string;
-  day: string;
-  title: string;
-  video?: string;
+  day_name: string;
+  workout_name: string;
+  video_url?: string;
   notes?: string;
   exercises?: Exercise[];
 }
@@ -16,11 +16,12 @@ interface Workout {
 interface Exercise {
   type?: string;
   name?: string;
-  video?: string;
+  video_url?: string;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
+    // Calculate current week range (Mon-Sun)
     const monday = startOfWeek(new Date(), { weekStartsOn: 1 });
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
@@ -42,9 +43,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const data = doc.data();
       return {
         id: data.workout_id,
-        day: data.day_name,
-        title: data.title,
-        video: data.video_url || "",
+        day_name: data.day_name,
+        workout_name: data.workout_name,
+        video_url: data.video_url || "",
         notes: data.notes || "",
       };
     });
@@ -64,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .map(e => ({
           type: e.type,
           name: e.name,
-          video: e.video_url || "",
+          video_url: e.video_url || "",
         })),
     }));
 
