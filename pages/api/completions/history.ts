@@ -1,3 +1,4 @@
+
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient"; // Firestore client
 
@@ -23,11 +24,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const data = doc.data();
       return {
         workout_id: data.workout_id,
-        completed_at: data.completed_date.toDate().toISOString(),
-        calories_burned: data.calories_burned,
+        completed_at: data.completed_date?.toDate().toISOString() || null,
+        calories_burned: data.calories_burned || 0,
+        sets_completed: data.sets_completed || 0,
+        weight_completed_with: data.weight_completed_with || 0,
+        duration: data.duration || 0, // optional for future use
         rating: data.rating || null,
-        sets_completed: data.sets_completed || null,
-        weight_completed_with: data.weight_completed_with || null,
         notes: data.notes || ""
       };
     });
