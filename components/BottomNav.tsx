@@ -10,9 +10,8 @@ export default function BottomNav() {
         bottom: 20,
         left: "50%",
         transform: "translateX(-50%)",
-        background: "rgba(31,30,35,0.85)", // dark glass
+        background: "rgba(31,30,35,0.85)",
         backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
         borderRadius: "30px",
         padding: "10px 20px",
         display: "flex",
@@ -26,8 +25,9 @@ export default function BottomNav() {
     >
       {[
         { href: "/", icon: "fa-home", label: "Home" },
-        { href: "/workout/today", icon: "fa-dumbbell", label: "WoD" },
-        { href: "/profile", icon: "fa-user", label: "Profile" },
+        { href: "/workout/today", icon: "fa-dumbbell", label: "Workout" },
+        { href: "/nutrition", icon: "fa-utensils", label: "Nutrition" },
+        { href: "/more", icon: "fa-ellipsis-h", label: "More" },
       ].map((item) => (
         <Link
           key={item.href}
@@ -59,38 +59,6 @@ export default function BottomNav() {
           <div style={{ fontSize: "11px", marginTop: 4 }}>{item.label}</div>
         </Link>
       ))}
-
-      {/* WhatsApp Chat */}
-      <a
-        href={`https://wa.me/${process.env.NEXT_PUBLIC_TRAINER_PHONE || process.env.TRAINER_PHONE}?text=Hi%20Coach%20I%27m%20doing%20BXKR`}
-        target="_blank"
-        rel="noreferrer"
-        className="bxkr-bottomnav-link"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          textDecoration: "none",
-          color: "#fff",
-        }}
-      >
-        <div
-          style={{
-            width: 50,
-            height: 50,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.08)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            transition: "all 0.3s ease",
-          }}
-          className="nav-icon"
-        >
-          <i className="fas fa-comments" style={{ fontSize: "20px" }}></i>
-        </div>
-        <div style={{ fontSize: "11px", marginTop: 4 }}>Chat</div>
-      </a>
     </nav>
   );
 }
