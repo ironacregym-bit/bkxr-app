@@ -9,11 +9,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const fromDate = new Date(from as string);
+    const toDate = new Date(to as string);
+
     const snap = await firestore
       .collection("bookings")
-      .where("location", "==", location)
-      .where("start_time", ">=", new Date(from as string))
-      .where("start_time", "<=", new Date(to as string))
+      .where("location", ">=", location) // allows partial match
+      .where("location", "<=", location + "\uf8ff")
+      .where("start_time", ">=", fromDate)
+      .where("start_time", "<=", toDate)
+      .orderBy("location")
       .orderBy("start_time", "asc")
       .get();
 
