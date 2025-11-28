@@ -1,3 +1,4 @@
+
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient"; // Firestore client
 
@@ -14,9 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const docRef = firestore.collection("workoutCompletions").doc(docId);
     const docSnap = await docRef.get();
 
-    const exists = docSnap.exists;
-
-    return res.status(200).json({ completed: exists });
+    return res.status(200).json({ completed: docSnap.exists });
   } catch (err: any) {
     console.error("Completion check failed:", err.message);
     return res.status(500).json({ error: "Failed to check completion" });
