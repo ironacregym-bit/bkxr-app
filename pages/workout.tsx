@@ -142,6 +142,7 @@ export default function WorkoutPage() {
               )}
             </div>
           </div>
+        </div>
 
           {todaysWorkout && (
             <div className="mt-2">
