@@ -25,7 +25,7 @@ export default function BottomNav() {
     >
       {[
         { href: "/", icon: "fa-home", label: "Home" },
-        { href: "/workout/today", icon: "fa-dumbbell", label: "Workout" },
+        { href: "/workout", icon: "fa-dumbbell", label: "Workout" },
         { href: "/nutrition", icon: "fa-utensils", label: "Nutrition" },
         { href: "/more", icon: "fa-ellipsis-h", label: "More" },
       ].map((item) => (
