@@ -66,6 +66,7 @@ export default function Home() {
   const today = new Date();
 
   const [selectedDay, setSelectedDay] = useState<Date>(today);
+  const [range, setRange] = useState<"week" | "month" | "all">("week");
 
   const hour = today.getHours();
   const greeting =
@@ -81,33 +82,32 @@ export default function Home() {
     (w: any) => (w.day_name || "").toLowerCase() === selectedDayName.toLowerCase()
   );
 
-  // Week overview calculations
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-  monday.setHours(0, 0, 0, 0);
+  // Range filter logic for stats
+  const now = new Date();
+  let startDate: Date;
+  if (range === "week") {
+    startDate = new Date();
+    startDate.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // Monday
+  } else if (range === "month") {
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else {
+    startDate = new Date(2000, 0, 1); // all time
+  }
 
-  const completionsThisWeek = (completionData?.history || []).filter(
-    (c: any) => {
-      const completedAt = new Date(c.completed_at);
-      return completedAt >= monday && completedAt <= today;
-    }
-  );
+  const filteredCompletions = (completionData?.history || []).filter((c: any) => {
+    const completedAt = new Date(c.completed_at);
+    return completedAt >= startDate && completedAt <= now;
+  });
 
-  const workoutsCompleted = completionsThisWeek.length;
-  const caloriesBurned = completionsThisWeek.reduce(
+  const workoutsCompleted = filteredCompletions.length;
+  const caloriesBurned = filteredCompletions.reduce(
     (sum: number, c: any) => sum + (c.calories_burned || 0),
     0
   );
-
-  let weightLifted = 0;
-  completionsThisWeek.forEach((c: any) => {
-    const workout = (data?.workouts || []).find(
-      (w: any) => w.id === c.workout_id
-    );
-    if (workout && workout.total_weight_kg) {
-      weightLifted += workout.total_weight_kg;
-    }
-  });
+  const setsCompleted = filteredCompletions.reduce(
+    (sum: number, c: any) => sum + (c.sets_completed || 0),
+    0
+  );
 
   // Determine which days have workouts using day_name
   const daysWithWorkout = weekDays.map((d) => {
@@ -129,36 +129,52 @@ export default function Home() {
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
 
-        {/* Week Overview */}
+        {/* Range Filter Buttons */}
+        <div className="d-flex justify-content-center gap-2 mb-3">
+          {["week", "month", "all"].map((r) => (
+            <button
+              key={r}
+              className={`btn btn-sm ${range === r ? "btn-primary" : "btn-outline-primary"}`}
+              onClick={() => setRange(r as "week" | "month" | "all")}
+            >
+              {r.charAt(0).toUpperCase() + r.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Stats Overview */}
         <div className="row text-center mb-4 gx-3">
           <div className="col">
             <div className="bxkr-card py-2">
               <div className="bxkr-stat-label">
-                <i className="fas fa-dumbbell bxkr-icon bxkr-icon-blue me-1" />
-                Workouts
+                <i className="fas fa-dumbbell bxkr-icon bxkr-icon-blue me-1" />Workouts
               </div>
               <div className="bxkr-stat-value">{workoutsCompleted}</div>
-              <div className="bxkr-stat-sub">Completed</div>
+              <div className="bxkr-stat-sub">
+                {range === "week" ? "This Week" : range === "month" ? "This Month" : "All Time"}
+              </div>
             </div>
           </div>
           <div className="col">
             <div className="bxkr-card py-2">
               <div className="bxkr-stat-label">
-                <i className="fas fa-fire bxkr-icon bxkr-icon-orange-gradient me-1" />
-                Calories
+                <i className="fas fa-fire bxkr-icon bxkr-icon-orange-gradient me-1" />Calories
               </div>
               <div className="bxkr-stat-value">{caloriesBurned}</div>
-              <div className="bxkr-stat-sub">Burned</div>
+              <div className="bxkr-stat-sub">
+                {range === "week" ? "This Week" : range === "month" ? "This Month" : "All Time"}
+              </div>
             </div>
           </div>
           <div className="col">
             <div className="bxkr-card py-2">
               <div className="bxkr-stat-label">
-                <i className="fas fa-weight-hanging me-1 bxkr-icon bxkr-icon-green" />
-                Weight
+                <i className="fas fa-layer-group bxkr-icon bxkr-icon-green me-1" />Sets
               </div>
-              <div className="bxkr-stat-value">{weightLifted}</div>
-              <div className="bxkr-stat-sub">kg Lifted</div>
+              <div className="bxkr-stat-value">{setsCompleted}</div>
+              <div className="bxkr-stat-sub">
+                {range === "week" ? "This Week" : range === "month" ? "This Month" : "All Time"}
+              </div>
             </div>
           </div>
         </div>
