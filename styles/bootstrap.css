@@ -16,6 +16,7 @@
   background: rgba(65,101,205,0.3); /* Accent color glow */
   box-shadow: 0 0 10px rgba(65,101,205,0.6);
   transform: scale(1.05);
+}
 
 /* Base pill for the date circle */
 .bxkr-day-pill {
