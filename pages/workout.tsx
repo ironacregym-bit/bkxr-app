@@ -102,3 +102,94 @@ export default function WorkoutPage() {
               <Link
                 href={`/workout/${todaysWorkout.id}`}
                 className="btn btn-primary mt-2"
+              >
+                Start Workout
+              </Link>
+            </div>
+          ) : (
+            <div className="bxkr-card p-3 text-center">
+              <h5>Rest Day</h5>
+              <p>No workout scheduled for today.</p>
+              <a
+                href={`https://wa.me/${process.env.NEXT_PUBLIC_TRAINER_PHONE}?text=Hi%20Coach%20I%27d%20like%20to%20book%20a%20session`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-outline-primary mt-2"
+              >
+                Book Gym Session
+              </a>
+            </div>
+          )}
+        </div>
+
+        {/* Weekly Plan */}
+        <h4 className="mb-3 text-center">Weekly Plan</h4>
+        <div className="d-flex justify-content-between text-center mb-4">
+          {weekDays.map((d, i) => {
+            const isToday = isSameDay(d, today);
+            const isSelected = isSameDay(d, selectedDay);
+            const hasWorkout = daysWithWorkout[i];
+
+            const pillClasses = [
+              "bxkr-day-pill",
+              isSelected ? "bxkr-selected" : "",
+              !isSelected && isToday ? "bxkr-today" : "",
+              hasWorkout ? "bxkr-has-workout" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+
+            return (
+              <div
+                key={i}
+                style={{ width: "40px", cursor: "pointer" }}
+                onClick={() => setSelectedDay(d)}
+              >
+                <div className="fw-bold">{dayLabels[i]}</div>
+                <div className={pillClasses}>{d.getDate()}</div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="text-center mb-4">
+          <button className="btn btn-outline-primary" onClick={recommendWorkout}>
+            Recommend Me
+          </button>
+        </div>
+
+        {/* Tiles Section */}
+        <div className="row gx-3 mb-4">
+          {/* Workout History Tile */}
+          <div className="col-6">
+            <div className="bxkr-card p-3 text-center">
+              <h6 className="mb-3">Workout History</h6>
+              {completionData?.history?.length > 0 ? (
+                completionData.history.slice(0, 3).map((c: any, idx: number) => (
+                  <div key={idx} className="mb-2">
+                    <small>{new Date(c.completed_date).toLocaleDateString()}</small>
+                    <div>{c.calories_burned} cal | {c.sets_completed} sets</div>
+                  </div>
+                ))
+              ) : (
+                <p>No history yet.</p>
+              )}
+              <button className="btn btn-outline-primary btn-sm mt-2">View More</button>
+            </div>
+          </div>
+
+          {/* Benchmark Results Tile */}
+          <div className="col-6">
+            <div className="bxkr-card p-3 text-center">
+              <h6 className="mb-3">Benchmarks</h6>
+              {/* Placeholder for benchmark data */}
+              <p>No benchmarks yet.</p>
+              <button className="btn btn-outline-primary btn-sm mt-2">Add Result</button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <BottomNav />
+    </>
+  );
+}
