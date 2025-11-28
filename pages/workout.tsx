@@ -120,8 +120,9 @@ export default function WorkoutPage() {
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
       </Head>
 
+
       <main className="container py-3" style={{ paddingBottom: "70px" }}>
-        {/* Header: Today’s Workout card + Location */}
+        {/* Header: Today’s Workout + Location */}
         <div className="bxkr-card p-3 mb-4">
           <div className="d-flex justify-content-between align-items-center flex-wrap">
             <div className="mb-2">
@@ -137,12 +138,12 @@ export default function WorkoutPage() {
               {userLocation ? (
                 <div className="fw-semibold">{userLocation}</div>
               ) : (
-                <Link href="/profile" className=" Profile
+                <Link href="/profile" className="btn btn-primary btn-sm">
+                  Set your location in Profile
                 </Link>
               )}
             </div>
           </div>
-        </div>
 
           {todaysWorkout && (
             <div className="mt-2">
@@ -172,7 +173,7 @@ export default function WorkoutPage() {
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
 
-        {/* Calendar Navigation (click a day to see sessions) */}
+        {/* Calendar Navigation */}
         <h4 className="mb-3 text-center">Select a Day</h4>
         <div className="d-flex justify-content-between text-center mb-4">
           {weekDays.map((d, i) => {
@@ -185,7 +186,6 @@ export default function WorkoutPage() {
                 key={i}
                 style={{ width: "40px", cursor: "pointer" }}
                 onClick={() => setSelectedDay(d)}
-                aria-label={`Select ${d.toLocaleDateString(undefined, { weekday: "short" })} ${d.getDate()}`}
               >
                 <div className="fw-bold">
                   {d.toLocaleDateString(undefined, { weekday: "short" })}
@@ -258,7 +258,7 @@ export default function WorkoutPage() {
           )}
         </div>
 
-        {/* Tiles: History & Benchmarks */}
+        {/* Tiles Section */}
         <div className="row gx-3 mb-4">
           {/* Workout History Tile */}
           <div className="col-6">
@@ -278,7 +278,7 @@ export default function WorkoutPage() {
             </div>
           </div>
 
-          {/* Benchmarks Tile (placeholder to wire to Firestore later) */}
+          {/* Benchmarks Tile */}
           <div className="col-6">
             <div className="bxkr-card p-3 text-center">
               <h6 className="mb-3">Benchmarks</h6>
@@ -293,3 +293,4 @@ export default function WorkoutPage() {
     </>
   );
 }
+
