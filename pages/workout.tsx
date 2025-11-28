@@ -60,7 +60,8 @@ export default function WorkoutPage() {
     fetcher
   );
 
-  // Calculate Monday and Sunday of current week
+
+ // Calculate Monday and Sunday of current week
   const dayOfWeek = today.getDay(); // 0 = Sunday
   const monday = new Date(today);
   monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
@@ -81,15 +82,21 @@ export default function WorkoutPage() {
     fetcher
   );
 
+  // Debug log to verify API response
+  console.log("Sessions from API:", calendarData?.sessions);
+
+  // Normalize date comparison
+  const normalizeDate = (d: Date) => {
+    const n = new Date(d);
+    n.setHours(0, 0, 0, 0);
+    return n.getTime();
+  };
+
   // Filter sessions for selected day
   const sessionsForDay =
     calendarData?.sessions?.filter((s: any) => {
       const start = new Date(s.start_time);
-      return (
-        start.getFullYear() === selectedDay.getFullYear() &&
-        start.getMonth() === selectedDay.getMonth() &&
-        start.getDate() === selectedDay.getDate()
-      );
+      return normalizeDate(start) === normalizeDate(selectedDay);
     }) || [];
 
   // Disable past days
@@ -98,6 +105,7 @@ export default function WorkoutPage() {
     todayMidnight.setHours(0, 0, 0, 0);
     return date < todayMidnight;
   };
+
 
   async function handleBook(sessionId: string) {
     if (!session?.user?.email) {
