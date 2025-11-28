@@ -19,6 +19,7 @@ type Profile = {
   name: string;
   sex: string;
   weight_kg: number | null;
+  location: string;
 };
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -59,6 +60,7 @@ export default function Profile() {
         name: data.name ?? "",
         sex: data.sex ?? "",
         weight_kg: data.weight_kg ?? null,
+        location: data.location ?? ""
       });
     }
   }, [data, email]);
@@ -102,6 +104,7 @@ export default function Profile() {
           name: formData.name ?? "",
           sex: formData.sex ?? "",
           weight_kg: formData.weight_kg ?? null,
+          location: formData.location ?? "",
         }),
       });
 
@@ -180,7 +183,17 @@ export default function Profile() {
                   onChange={handleTextChange}
                 />
               </div>
-
+              
+              <div className="mb-3">
+                <label className="form-label">Location</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  name="location"
+                  value={formData.location ?? ""}
+                  onChange={handleTextChange}
+                />
+              </div>
               <div className="mb-3">
                 <label className="form-label">Image URL</label>
                 <input
