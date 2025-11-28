@@ -202,3 +202,4 @@ export default function WorkoutPage() {
       <BottomNav />
     </>
   );
+}
