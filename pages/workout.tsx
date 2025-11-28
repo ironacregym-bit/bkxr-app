@@ -14,6 +14,7 @@ function getWeekDays() {
   const diffToMon = (day + 6) % 7;
   const monday = new Date(today);
   monday.setDate(today.getDate() - diffToMon);
+  monday.setHours(0, 0, 0, 0);
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
@@ -36,7 +37,7 @@ export default function WorkoutPage() {
   const getDayName = (date: Date) =>
     date.toLocaleDateString(undefined, { weekday: "long" });
 
-  // Profile for location (expects 'location' field in profile doc)
+  // Profile for location
   const { data: profileData } = useSWR(
     session?.user?.email
       ? `/api/profile?email=${encodeURIComponent(session.user.email)}`
@@ -45,13 +46,13 @@ export default function WorkoutPage() {
   );
   const userLocation: string | undefined = profileData?.location || undefined;
 
-  // Workouts (for "Today’s Workout" card)
+  // Workouts for Today
   const { data: workoutsData } = useSWR("/api/workouts", fetcher);
   const todaysWorkout = (workoutsData?.workouts || []).find(
     (w: any) => (w.day_name || "").toLowerCase() === getDayName(today).toLowerCase()
   );
 
-  // History (for tile) from workouts_completed
+  // History from workouts_completed
   const { data: completionData } = useSWR(
     session?.user?.email
       ? `/api/completions/history?email=${encodeURIComponent(session.user.email)}`
@@ -59,17 +60,23 @@ export default function WorkoutPage() {
     fetcher
   );
 
-  // Sessions for the next 14 days
-  const fromISO = new Date().toISOString();
-  const toDate = new Date();
-  toDate.setDate(toDate.getDate() + 14);
-  const toISO = toDate.toISOString();
+  // Calculate Monday and Sunday of current week
+  const dayOfWeek = today.getDay(); // 0 = Sunday
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  monday.setHours(0, 0, 0, 0);
 
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+
+  const fromISO = monday.toISOString();
+  const toISO = sunday.toISOString();
+
+  // Fetch sessions for this week
   const { data: calendarData, isLoading: calendarLoading, error: calendarError } = useSWR(
     userLocation
-      ? `/api/schedule/upcoming?location=${encodeURIComponent(userLocation)}&from=${encodeURIComponent(
-          fromISO
-        )}&to=${encodeURIComponent(toISO)}`
+      ? `/api/schedule/upcoming?location=${encodeURIComponent(userLocation)}&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`
       : null,
     fetcher
   );
@@ -84,6 +91,13 @@ export default function WorkoutPage() {
         start.getDate() === selectedDay.getDate()
       );
     }) || [];
+
+  // Disable past days
+  const isPastDay = (date: Date) => {
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+    return date < todayMidnight;
+  };
 
   async function handleBook(sessionId: string) {
     if (!session?.user?.email) {
@@ -119,10 +133,7 @@ export default function WorkoutPage() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
       </Head>
-
-
-      <main className="container py-3" style={{ paddingBottom: "70px" }}>
-        {/* Header: Today’s Workout + Location */}
+        <main className="container py-3" style={{ paddingBottom: "70px" }}>
         <div className="bxkr-card p-3 mb-4">
           <div className="d-flex justify-content-between align-items-center flex-wrap">
             <div className="mb-2">
@@ -167,12 +178,6 @@ export default function WorkoutPage() {
             </div>
           )}
         </div>
-
-        {/* Greeting */}
-        <h2 className="mb-4 text-center">
-          {greeting}, {session?.user?.name || "Athlete"}
-        </h2>
-
         {/* Calendar Navigation */}
         <h4 className="mb-3 text-center">Select a Day</h4>
         <div className="d-flex justify-content-between text-center mb-4">
@@ -212,6 +217,7 @@ export default function WorkoutPage() {
                 s.max_attendance && s.current_attendance
                   ? s.current_attendance >= s.max_attendance
                   : false;
+              const disabled = full || isPastDay(start);
 
               return (
                 <div
@@ -243,11 +249,11 @@ export default function WorkoutPage() {
                       </div>
                     )}
                     <button
-                      className={`btn btn-sm mt-2 ${full ? "btn-secondary" : "btn-primary"}`}
-                      disabled={full}
+                      className={`btn btn-sm mt-2 ${disabled ? "btn-secondary" : "btn-primary"}`}
+                      disabled={disabled}
                       onClick={() => handleBook(s.id)}
                     >
-                      {full ? "Full" : "Book"}
+                      {disabled ? (full ? "Full" : "Past") : "Book"}
                     </button>
                   </div>
                 </div>
@@ -293,4 +299,3 @@ export default function WorkoutPage() {
     </>
   );
 }
-
