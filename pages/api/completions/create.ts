@@ -1,3 +1,4 @@
+
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient"; // Firestore client
 
@@ -6,7 +7,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { user_email, workout_id, completed_at, calories_burned, Rating, notes } = req.body;
+  const {
+    user_email,
+    workout_id,
+    completed_at,
+    calories_burned,
+    rating,
+    notes,
+    sets_completed,
+    weight_completed_with
+  } = req.body;
 
   if (!user_email || !workout_id) {
     return res.status(400).json({ error: "Missing required fields" });
@@ -18,13 +28,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const completedDate = completed_at ? new Date(completed_at) : new Date();
 
     await firestore.collection("workoutCompletions").doc(id).set({
-      id: id,
-      user_email: user_email,
-      workout_id: workout_id,
+      id,
+      user_email,
+      workout_id,
       completed_date: completedDate,
       calories_burned: Number(calories_burned) || 0,
-      rating: Number(Rating) || 0,
-      notes: notes || ""
+      rating: Number(rating) || 0,
+      notes: notes || "",
+      sets_completed: Number(sets_completed) || 0,
+      weight_completed_with: Number(weight_completed_with) || 0
     });
 
     return res.status(200).json({ ok: true, id });
