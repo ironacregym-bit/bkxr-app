@@ -16,6 +16,7 @@ const ALLOWED_KEYS = new Set([
   "name",
   "sex",
   "weight_kg",
+  "location"
 ]);
 
 // Response shape (all fields you specified)
@@ -32,6 +33,7 @@ interface ProfileResponse {
   name: string;                // "" when unknown
   sex: string;                 // "" when unknown
   weight_kg: number | null;
+  location: string;
 }
 
 /**
@@ -76,6 +78,7 @@ function buildProfileResponse(email: string, data: Record<string, any> = {}): Pr
     caloric_target: typeof data.caloric_target === "number" ? data.caloric_target : null,
     created_at: toIsoStringOrEmpty(data.created_at),
     last_login_at: toIsoStringOrEmpty(data.last_login_at),
+    location: (typeof data.location === "string" && data.location.trim()) || "",
   };
 }
 
@@ -147,6 +150,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             caloric_target: null,
             created_at: "",
             last_login_at: "",
+            location: "",
           })
         );
       }
