@@ -34,7 +34,7 @@ function isSameDay(a: Date, b: Date) {
 export default function Home() {
   const { data: session, status } = useSession();
 
-  // Fetch workouts from Firestore via API
+  // Fetch workouts for current week
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
 
   // Fetch completion history for logged-in user
@@ -76,16 +76,10 @@ export default function Home() {
 
   const selectedDayName = getDayName(selectedDay);
 
-  // Filter workouts for selected day using week_start
-  const selectedWorkouts = (data?.workouts || []).filter((w: any) => {
-    const workoutDate = w.week_start?.seconds
-      ? new Date(w.week_start.seconds * 1000)
-      : new Date(w.week_start);
-    const workoutDayName = workoutDate.toLocaleDateString(undefined, {
-      weekday: "long",
-    });
-    return workoutDayName.toLowerCase() === selectedDayName.toLowerCase();
-  });
+  // Filter workouts for selected day using day_name
+  const selectedWorkouts = (data?.workouts || []).filter(
+    (w: any) => (w.day_name || "").toLowerCase() === selectedDayName.toLowerCase()
+  );
 
   // Week overview calculations
   const monday = new Date(today);
@@ -115,18 +109,12 @@ export default function Home() {
     }
   });
 
-  // Determine which days have workouts using week_start
+  // Determine which days have workouts using day_name
   const daysWithWorkout = weekDays.map((d) => {
     const dayName = getDayName(d);
-    return (data?.workouts || []).some((w: any) => {
-      const workoutDate = w.week_start?.seconds
-        ? new Date(w.week_start.seconds * 1000)
-        : new Date(w.week_start);
-      const workoutDayName = workoutDate.toLocaleDateString(undefined, {
-        weekday: "long",
-      });
-      return workoutDayName.toLowerCase() === dayName.toLowerCase();
-    });
+    return (data?.workouts || []).some(
+      (w: any) => (w.day_name || "").toLowerCase() === dayName.toLowerCase()
+    );
   });
 
   return (
@@ -137,9 +125,9 @@ export default function Home() {
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
       </Head>
       <main className="container py-3" style={{ paddingBottom: "70px" }}>
-      <h2 className="mb-4 text-center">
+        <h2 className="mb-4 text-center">
           {greeting}, {session?.user?.name || "Athlete"}
-      </h2>
+        </h2>
 
         {/* Week Overview */}
         <div className="row text-center mb-4 gx-3">
@@ -240,7 +228,7 @@ export default function Home() {
           selectedWorkouts.map((w: any) => (
             <div key={w.id} className="p-3 mb-3 bxkr-card">
               <div className="mb-2 fw-bold">{selectedDayName}</div>
-              <h6>{w.title}</h6>
+              <h6>{w.workout_name}</h6>
               <p>{w.notes || "Workout details"}</p>
               <Link
                 href={`/workout/${w.id}`}
