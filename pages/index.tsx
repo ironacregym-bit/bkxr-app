@@ -1,5 +1,4 @@
 
-
 import Head from "next/head";
 import useSWR from "swr";
 import Link from "next/link";
@@ -252,7 +251,7 @@ export default function Home() {
       </main>
 
       <BottomNav />
-      <addtohomescreen />
+      <AddToHomeScreen />
     </>
   );
 }
