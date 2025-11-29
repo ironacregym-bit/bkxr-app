@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { SessionProvider } from "next-auth/react";
 import type { AppProps } from "next/app";
 import "../styles/bootstrap.css";
-import AddToHomeScreen from "@/components/AddToHomeScreen";
+import AddToHomeScreen from "../components/AddToHomeScreen";
 export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
