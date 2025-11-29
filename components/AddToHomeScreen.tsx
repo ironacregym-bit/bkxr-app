@@ -1,31 +1,59 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 
 export default function AddToHomeScreen() {
-  const pathname = usePathname();
-  const [showPrompt, setShowPrompt] = useState(false);
+  const [show, setShow] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+
+  // Detect iOS
+  const isIOS =
+    typeof window !== "undefined" &&
+    /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+
+  // Detect installed PWA mode
+  const isInStandalone =
+    typeof window !== "undefined" &&
+    (window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as any).standalone === true);
 
   useEffect(() => {
-    // Only show on home page
-    if (pathname !== "/") return;
+    // Don’t show again if dismissed
+    if (localStorage.getItem("A2HS-dismissed") === "true") return;
 
-    const isIos =
-      /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+    // Don’t show if already installed
+    if (isInStandalone) return;
 
-    // Detect if PWA is already installed
-    const isInStandalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      // Legacy iOS
-      (window.navigator as any).standalone === true;
+    // ANDROID HANDLING
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShow(true);
+    };
 
-    if (isIos && !isInStandalone) {
-      setShowPrompt(true);
+    window.addEventListener("beforeinstallprompt", handler);
+
+    // iOS has no event → show manually
+    if (isIOS) {
+      setShow(true);
     }
-  }, [pathname]);
 
-  if (!showPrompt) return null;
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const dismiss = () => {
+    setShow(false);
+    localStorage.setItem("A2HS-dismissed", "true");
+  };
+
+  const install = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const choice = await deferredPrompt.userChoice;
+    if (choice.outcome === "accepted") {
+      setShow(false);
+    }
+  };
+
+  if (!show) return null;
 
   return (
     <div
@@ -34,22 +62,52 @@ export default function AddToHomeScreen() {
         bottom: "20px",
         left: "50%",
         transform: "translateX(-50%)",
-        background: "white",
-        padding: "16px",
-        borderRadius: "12px",
-        boxShadow: "0 4px 18px rgba(0,0,0,0.15)",
-        maxWidth: "90%",
         zIndex: 9999,
-        textAlign: "center",
+        maxWidth: "90%",
+        animation: "slideUp 0.4s ease-out",
       }}
     >
-      <p style={{ margin: 0, fontSize: "15px", fontWeight: 600 }}>
-        Add this app to your Home Screen
-      </p>
-      <p style={{ margin: "6px 0 0", fontSize: "13px" }}>
-        Tap the <span style={{ fontWeight: 700 }}>Share</span> icon →  
-        <span style={{ fontWeight: 700 }}>“Add to Home Screen”</span>
-      </p>
+      <div
+        className="card shadow-lg p-3"
+        style={{
+          borderRadius: "16px",
+          background: "white",
+        }}
+      >
+        {!isIOS && (
+          <>
+            <h6 className="mb-2">Add this app to your home screen</h6>
+            <p className="mb-3 small text-muted">
+              Get faster access next time, no browser needed.
+            </p>
+            <button className="btn btn-primary w-100 mb-2" onClick={install}>
+              Add to Home Screen
+            </button>
+          </>
+        )}
+
+        {isIOS && (
+          <>
+            <h6 className="mb-2">Install this app</h6>
+            <p className="small text-muted mb-2">
+              Tap the <strong>Share</strong> icon → <strong>“Add to Home Screen”</strong>.
+            </p>
+          </>
+        )}
+
+        <button className="btn btn-light w-100" onClick={dismiss}>
+          Dismiss
+        </button>
+      </div>
+
+      <style>
+        {`
+        @keyframes slideUp {
+            from { transform: translate(-50%, 40px); opacity: 0; }
+            to   { transform: translate(-50%, 0px);  opacity: 1; }
+        }
+        `}
+      </style>
     </div>
   );
 }
