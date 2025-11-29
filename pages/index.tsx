@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
-
+import AddToHomeScreen from "../components/AddToHomeScreen";
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 function getWeek() {
