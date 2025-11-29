@@ -1,37 +1,35 @@
 import { useEffect, useState } from "react";
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+}
+
 export default function AddToHomeScreen() {
   const [show, setShow] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
-  // Detect iOS
   const isIOS =
     typeof window !== "undefined" &&
     /iphone|ipad|ipod/i.test(window.navigator.userAgent);
 
-  // Detect installed PWA mode
   const isInStandalone =
     typeof window !== "undefined" &&
     (window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as any).standalone === true);
 
   useEffect(() => {
-    // Don’t show again if dismissed
     if (localStorage.getItem("A2HS-dismissed") === "true") return;
-
-    // Don’t show if already installed
     if (isInStandalone) return;
 
-    // ANDROID HANDLING
-    const handler = (e: any) => {
+    const handler = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
       setShow(true);
     };
 
     window.addEventListener("beforeinstallprompt", handler);
 
-    // iOS has no event → show manually
     if (isIOS) {
       setShow(true);
     }
@@ -46,11 +44,10 @@ export default function AddToHomeScreen() {
 
   const install = async () => {
     if (!deferredPrompt) return;
-    deferredPrompt.prompt();
+    await deferredPrompt.prompt();
     const choice = await deferredPrompt.userChoice;
-    if (choice.outcome === "accepted") {
-      setShow(false);
-    }
+
+    if (choice.outcome === "accepted") setShow(false);
   };
 
   if (!show) return null;
@@ -67,13 +64,7 @@ export default function AddToHomeScreen() {
         animation: "slideUp 0.4s ease-out",
       }}
     >
-      <div
-        className="card shadow-lg p-3"
-        style={{
-          borderRadius: "16px",
-          background: "white",
-        }}
-      >
+      <div className="card shadow-lg p-3" style={{ borderRadius: "16px", background: "white" }}>
         {!isIOS && (
           <>
             <h6 className="mb-2">Add this app to your home screen</h6>
@@ -90,7 +81,7 @@ export default function AddToHomeScreen() {
           <>
             <h6 className="mb-2">Install this app</h6>
             <p className="small text-muted mb-2">
-              Tap the <strong>Share</strong> icon → <strong>“Add to Home Screen”</strong>.
+              Tap the <strong>Share</strong> icon → <strong>Add to Home Screen</strong>.
             </p>
           </>
         )}
@@ -102,10 +93,10 @@ export default function AddToHomeScreen() {
 
       <style>
         {`
-        @keyframes slideUp {
+          @keyframes slideUp {
             from { transform: translate(-50%, 40px); opacity: 0; }
-            to   { transform: translate(-50%, 0px);  opacity: 1; }
-        }
+            to   { transform: translate(-50%, 0); opacity: 1; }
+          }
         `}
       </style>
     </div>
