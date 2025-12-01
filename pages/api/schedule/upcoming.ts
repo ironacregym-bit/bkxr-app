@@ -14,15 +14,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const snap = await firestore
       .collection("bookings")
-      .where("location", ">=", location) // allows partial match
-      .where("location", "<=", location + "\uf8ff")
+      .where("location", "==", location)
       .where("start_time", ">=", fromDate)
       .where("start_time", "<=", toDate)
-      .orderBy("location")
       .orderBy("start_time", "asc")
       .get();
 
-    const sessions = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const sessions = snap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        start_time: data.start_time?.toDate().toISOString() || null,
+        end_time: data.end_time ? data.end_time.toDate().toISOString() : null
+      };
+    });
+
     return res.status(200).json({ sessions });
   } catch (err: any) {
     console.error("Schedule API error:", err.message);
