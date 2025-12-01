@@ -32,7 +32,8 @@
 }
 
 /* Ring shown when a workout is scheduled */
-.bxkr-has-workout {
+.bxkr-has-workout, 
+.bxkr-has-session {
   box-shadow: 0 0 0 2px var(--bxkr-ring);
 }
 
