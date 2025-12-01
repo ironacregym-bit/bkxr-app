@@ -188,7 +188,6 @@ export default function WorkoutPage() {
           {!todaysWorkout && (
             <div className="mt-2">
               <p className="mb-2">No programmed workout today</p>
-              </a>
             </div>
           )}
         </div>
