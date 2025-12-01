@@ -60,8 +60,7 @@ export default function WorkoutPage() {
     fetcher
   );
 
-
- // Calculate Monday and Sunday of current week
+  // Calculate Monday and Sunday of current week
   const dayOfWeek = today.getDay(); // 0 = Sunday
   const monday = new Date(today);
   monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
@@ -92,14 +91,13 @@ export default function WorkoutPage() {
     return n.getTime();
   };
 
-// Filter sessions for selected day
-const sessionsForDay =
-  calendarData?.sessions?.filter((s: any) => {
-    if (!s.start_time) return false;
-    const start = new Date(s.start_time);
-    return normalizeDate(start) === normalizeDate(selectedDay);
-  }) || [];
-
+  // Filter sessions for selected day
+  const sessionsForDay =
+    calendarData?.sessions?.filter((s: any) => {
+      if (!s.start_time) return false;
+      const start = new Date(s.start_time);
+      return normalizeDate(start) === normalizeDate(selectedDay);
+    }) || [];
 
   // Disable past days
   const isPastDay = (date: Date) => {
@@ -108,6 +106,20 @@ const sessionsForDay =
     return date < todayMidnight;
   };
 
+  const weekDays = getWeekDays();
+
+  // Determine which days have sessions
+  const daysWithSession = weekDays.map((d) => {
+    return (calendarData?.sessions || []).some((s: any) => {
+      if (!s.start_time) return false;
+      const start = new Date(s.start_time);
+      return (
+        start.getFullYear() === d.getFullYear() &&
+        start.getMonth() === d.getMonth() &&
+        start.getDate() === d.getDate()
+      );
+    });
+  });
 
   async function handleBook(sessionId: string) {
     if (!session?.user?.email) {
@@ -134,8 +146,6 @@ const sessionsForDay =
     }
   }
 
-  const weekDays = getWeekDays();
-
   return (
     <>
       <Head>
@@ -143,7 +153,8 @@ const sessionsForDay =
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
       </Head>
-        <main className="container py-3" style={{ paddingBottom: "70px" }}>
+      <main className="container py-3" style={{ paddingBottom: "70px" }}>
+        {/* Today’s Workout */}
         <div className="bxkr-card p-3 mb-4">
           <div className="d-flex justify-content-between align-items-center flex-wrap">
             <div className="mb-2">
@@ -159,7 +170,7 @@ const sessionsForDay =
               {userLocation ? (
                 <div className="fw-semibold">{userLocation}</div>
               ) : (
-                <Link href="/profile" className="btn btn-primary btn-sm">
+                <Link href="/profile">
                   Set your location in Profile
                 </Link>
               )}
@@ -188,6 +199,7 @@ const sessionsForDay =
             </div>
           )}
         </div>
+
         {/* Calendar Navigation */}
         <h4 className="mb-3 text-center">Select a Day</h4>
         <div className="d-flex justify-content-between text-center mb-4">
@@ -196,6 +208,21 @@ const sessionsForDay =
               d.getDate() === selectedDay.getDate() &&
               d.getMonth() === selectedDay.getMonth() &&
               d.getFullYear() === selectedDay.getFullYear();
+            const isToday =
+              d.getDate() === today.getDate() &&
+              d.getMonth() === today.getMonth() &&
+              d.getFullYear() === today.getFullYear();
+            const hasSession = daysWithSession[i];
+
+            const pillClasses = [
+              "bxkr-day-pill",
+              isSelected ? "bxkr-selected" : "",
+              !isSelected && isToday ? "bxkr-today" : "",
+              hasSession ? "bxkr-has-session" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+
             return (
               <div
                 key={i}
@@ -205,9 +232,7 @@ const sessionsForDay =
                 <div className="fw-bold">
                   {d.toLocaleDateString(undefined, { weekday: "short" })}
                 </div>
-                <div className={`bxkr-day-pill ${isSelected ? "bxkr-selected" : ""}`}>
-                  {d.getDate()}
-                </div>
+                <div className={pillClasses}>{d.getDate()}</div>
               </div>
             );
           })}
