@@ -8,16 +8,10 @@ import { useState } from "react";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-function getWeekDays() {
-  const today = new Date();
-  const day = today.getDay();
-  const diffToMon = (day + 6) % 7;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - diffToMon);
-  monday.setHours(0, 0, 0, 0);
+function getWeekDays(start: Date) {
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
     return d;
   });
 }
@@ -25,6 +19,14 @@ function getWeekDays() {
 export default function WorkoutPage() {
   const { data: session } = useSession();
   const today = new Date();
+
+  // Week navigation state
+  const initialMonday = new Date(today);
+  const dayOfWeek = today.getDay();
+  initialMonday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  initialMonday.setHours(0, 0, 0, 0);
+
+  const [weekStart, setWeekStart] = useState<Date>(initialMonday);
   const [selectedDay, setSelectedDay] = useState<Date>(today);
 
   const greeting =
@@ -60,18 +62,13 @@ export default function WorkoutPage() {
     fetcher
   );
 
-  // Calculate Monday and Sunday of current week
-  const dayOfWeek = today.getDay(); // 0 = Sunday
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-  monday.setHours(0, 0, 0, 0);
+  // Calculate week range for API
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
 
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
-
-  const fromISO = monday.toISOString();
-  const toISO = sunday.toISOString();
+  const fromISO = weekStart.toISOString();
+  const toISO = weekEnd.toISOString();
 
   // Fetch sessions for this week
   const { data: calendarData, isLoading: calendarLoading, error: calendarError } = useSWR(
@@ -80,9 +77,6 @@ export default function WorkoutPage() {
       : null,
     fetcher
   );
-
-  // Debug log to verify API response
-  console.log("Sessions from API:", calendarData?.sessions);
 
   // Normalize date comparison
   const normalizeDate = (d: Date) => {
@@ -106,7 +100,7 @@ export default function WorkoutPage() {
     return date < todayMidnight;
   };
 
-  const weekDays = getWeekDays();
+  const weekDays = getWeekDays(weekStart);
 
   // Determine which days have sessions
   const daysWithSession = weekDays.map((d) => {
@@ -144,6 +138,13 @@ export default function WorkoutPage() {
       console.error("Booking error:", e?.message || e);
       alert("❌ Failed to book session.");
     }
+  }
+
+  function shiftWeek(days: number) {
+    const newStart = new Date(weekStart);
+    newStart.setDate(newStart.getDate() + days);
+    setWeekStart(newStart);
+    setSelectedDay(newStart); // optional: reset selected day to Monday
   }
 
   return (
@@ -187,9 +188,26 @@ export default function WorkoutPage() {
           )}
           {!todaysWorkout && (
             <div className="mt-2">
-              <p className="mb-2">No programmed workout today</p>
+              <p className="mb-2">No programmed workout today. Book a gym session instead:</p>
+              <a
+                href={`https://wa.me/${process.env.NEXT_PUBLIC_TRAINER_PHONE || process.env.TRAINER_PHONE}?text=Hi%20Coach%2C%20I%27d%20like%20to%20book%20a%20session`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-outline-primary btn-sm"
+              >
+                Book Gym Session
+              </a>
             </div>
           )}
+        </div>
+
+        {/* Week Navigation */}
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <button className="btn btn-outline-primary btn-sm" onClick={() => shiftWeek(-7)}>← Previous</button>
+          <div className="fw-bold">
+            {weekStart.toLocaleDateString()} – {weekEnd.toLocaleDateString()}
+          </div>
+          <button className="btn btn-outline-primary btn-sm" onClick={() => shiftWeek(7)}>Next →</button>
         </div>
 
         {/* Calendar Navigation */}
