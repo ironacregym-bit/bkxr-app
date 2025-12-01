@@ -187,14 +187,7 @@ export default function WorkoutPage() {
           )}
           {!todaysWorkout && (
             <div className="mt-2">
-              <p className="mb-2">No programmed workout today. Book a gym session instead:</p>
-              <a
-                href={`https://wa.me/${process.env.NEXT_PUBLIC_TRAINER_PHONE || process.env.TRAINER_PHONE}?text=Hi%20Coach%2C%20I%27d%20like%20to%20book%20a%20session`}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-outline-primary btn-sm"
-              >
-                Book Gym Session
+              <p className="mb-2">No programmed workout today</p>
               </a>
             </div>
           )}
