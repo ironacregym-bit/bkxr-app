@@ -92,12 +92,14 @@ export default function WorkoutPage() {
     return n.getTime();
   };
 
-  // Filter sessions for selected day
-  const sessionsForDay =
-    calendarData?.sessions?.filter((s: any) => {
-      const start = new Date(s.start_time);
-      return normalizeDate(start) === normalizeDate(selectedDay);
-    }) || [];
+// Filter sessions for selected day
+const sessionsForDay =
+  calendarData?.sessions?.filter((s: any) => {
+    if (!s.start_time) return false;
+    const start = new Date(s.start_time);
+    return normalizeDate(start) === normalizeDate(selectedDay);
+  }) || [];
+
 
   // Disable past days
   const isPastDay = (date: Date) => {
