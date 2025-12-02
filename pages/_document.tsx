@@ -7,6 +7,9 @@ export default function Document() {
         {/* PWA Manifest */}
         <link rel="manifest" href="/manifest.json" />
 
+        {/* Font Awesome */}
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+
         {/* App Icons */}
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
         <link rel="icon" href="/icons/icon-192.png" />
