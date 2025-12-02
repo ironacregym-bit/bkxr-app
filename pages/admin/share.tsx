@@ -52,6 +52,22 @@ export default function AdminSharePage() {
     window.open(waUrl, "_blank");
   };
 
+  const nativeShare = async () => {
+    if (navigator.share && result?.whatsappMessage && result?.link) {
+      try {
+        await navigator.share({
+          title: "BXKR Session",
+          text: result.whatsappMessage,
+          url: result.link,
+        });
+      } catch {
+        setStatusMsg("Native share canceled or failed.");
+      }
+    } else {
+      shareWhatsApp(); // fallback
+    }
+  };
+
   const copyMessage = async () => {
     if (!result?.whatsappMessage) return;
     try {
@@ -105,11 +121,14 @@ export default function AdminSharePage() {
               <br />
               <small style={{ whiteSpace: "pre-wrap" }}>{result.whatsappMessage}</small>
             </div>
-            <div className="d-flex gap-2">
-              <button className="btn btn-success flex-fill" onClick={shareWhatsApp}>
+            <div className="d-flex flex-column gap-2">
+              <button className="btn btn-success w-100" onClick={shareWhatsApp}>
                 Share on WhatsApp
               </button>
-              <button className="btn btn-outline-secondary flex-fill" onClick={copyMessage}>
+              <button className="btn btn-primary w-100" onClick={nativeShare}>
+                Share via Device
+              </button>
+              <button className="btn btn-outline-secondary w-100" onClick={copyMessage}>
                 Copy Message
               </button>
             </div>
