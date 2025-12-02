@@ -1,24 +1,18 @@
 // pages/api/foods/search.ts
-import { NextRequest, NextResponse } from "next/server";
+import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 
-export async function GET(req: Request) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    const url = new URL(req.url);
-    const query =
-      (url.searchParams.get("q") ||
-      url.searchParams.get("query") ||
-      "").trim().toLowerCase();
-
-    if (!query) return NextResponse.json({ foods: [] });
+    const query = (req.query.query as string || "").trim().toLowerCase();
+    if (!query) return res.status(200).json({ foods: [] });
 
     const docId = query.replace(/\s+/g, "_");
 
     // 1. Check cache
     const doc = await firestore.collection("food_cache").doc(docId).get();
     if (doc.exists) {
-      const cached = doc.data();
-      return NextResponse.json(cached);
+      return res.status(200).json(doc.data());
     }
 
     // 2. Query OpenFoodFacts
@@ -26,12 +20,10 @@ export async function GET(req: Request) {
       query
     )}&search_simple=1&action=process&json=1&page_size=30`;
 
-    const res = await fetch(offUrl);
-    if (!res.ok) {
-      return NextResponse.json({ foods: [] }, { status: 502 });
-    }
+    const offRes = await fetch(offUrl);
+    if (!offRes.ok) return res.status(502).json({ foods: [] });
 
-    const data = await res.json();
+    const data = await offRes.json();
 
     const foods = (data.products || [])
       .filter((p: any) => p.nutriments && (p.nutriments["energy-kcal_100g"] || p.nutriments["energy-kcal"]))
@@ -51,12 +43,12 @@ export async function GET(req: Request) {
         };
       });
 
-    // 3. Cache result (save a small subset)
+    // 3. Cache result
     await firestore.collection("food_cache").doc(docId).set({ foods, updated_at: Date.now() });
 
-    return NextResponse.json({ foods });
+    return res.status(200).json({ foods });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ foods: [] }, { status: 500 });
+    return res.status(500).json({ foods: [] });
   }
 }
