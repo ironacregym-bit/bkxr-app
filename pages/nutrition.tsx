@@ -1,45 +1,35 @@
 "use client";
 
 import Head from "next/head";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import useSWR, { mutate } from "swr";
 import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 
-const meals = ["Breakfast", "Lunch", "Dinner", "Snack"] as const;
-const fetcher = (u: string) => fetch(u).then((r) => r.json());
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
+// Helpers
 function gramsToFactor(g: number) {
   return g / 100;
 }
 
-// Simple debounce hook
-function useDebounce(fn: (...args: any[]) => void, delay: number) {
-  const timeout = useRef<NodeJS.Timeout>();
-  return (...args: any[]) => {
-    if (timeout.current) clearTimeout(timeout.current);
-    timeout.current = setTimeout(() => fn(...args), delay);
-  };
-}
-
 export default function NutritionPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const [loadingSearch, setLoadingSearch] = useState(false);
+  const [selectedFood, setSelectedFood] = useState<any | null>(null);
+  const [grams, setGrams] = useState<number>(100);
+  const [adding, setAdding] = useState(false);
+  const [addingMeal, setAddingMeal] = useState<string | null>(null);
+  const [portionLabel, setPortionLabel] = useState<string>("");
+
   const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  // Today's logs
-  const { data: logsData, error: logsError } = useSWR(
+  const { data: logsData } = useSWR(
     session?.user?.email ? `/api/nutrition/logs?date=${todayKey}` : null,
     fetcher
   );
-
-  const [activeMeal, setActiveMeal] = useState<typeof meals[number] | null>(null);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<any[]>([]);
-  const [selectedFood, setSelectedFood] = useState<any | null>(null);
-  const [grams, setGrams] = useState(100);
-  const [portionLabel, setPortionLabel] = useState("");
-  const [adding, setAdding] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
 
   // Totals
   const totals = useMemo(() => {
@@ -56,62 +46,39 @@ export default function NutritionPage() {
     );
   }, [logsData]);
 
-  // Scaled nutrition
-  const scaledSelected = useMemo(() => {
-    if (!selectedFood) return null;
-    const factor = gramsToFactor(grams);
-    return {
-      ...selectedFood,
-      calories: Math.round((selectedFood.calories || 0) * factor),
-      protein: +((selectedFood.protein || 0) * factor).toFixed(1),
-      carbs: +((selectedFood.carbs || 0) * factor).toFixed(1),
-      fat: +((selectedFood.fat || 0) * factor).toFixed(1),
-    };
-  }, [selectedFood, grams]);
+  const meals = ["Breakfast", "Lunch", "Dinner", "Snack"];
 
-  // Debounced search
-  const doSearch = useDebounce(async (q: string) => {
-    if (!q || q.trim().length < 2) return setResults([]);
-    try {
-      const res = await fetch(`/api/foods/search?query=${encodeURIComponent(q)}`);
-      const json = await res.json();
-      setResults(json.foods || []);
-    } catch {
-      setResults([]);
-    }
-  }, 300);
-
-  useEffect(() => {
-    doSearch(query);
-  }, [query, doSearch]);
-
-  // Scroll into view when card opens
-  useEffect(() => {
-    if (cardRef.current) cardRef.current.scrollIntoView({ behavior: "smooth" });
-  }, [activeMeal]);
-
+  // --- Add Entry ---
   const addEntry = async () => {
-    if (!session?.user?.email) return signIn("google");
-    if (!selectedFood && !portionLabel) return alert("Please select a food or enter manually.");
-
+    if (!session?.user?.email || !selectedFood || !addingMeal) return signIn("google");
     setAdding(true);
+
+    const factor = gramsToFactor(grams);
     const payload = {
       date: todayKey,
-      meal: activeMeal,
-      food: selectedFood || { name: portionLabel },
+      meal: addingMeal,
+      food: selectedFood,
       grams,
-      portionLabel: portionLabel || "",
-      calories: scaledSelected?.calories ?? 0,
-      protein: scaledSelected?.protein ?? 0,
-      carbs: scaledSelected?.carbs ?? 0,
-      fat: scaledSelected?.fat ?? 0,
+      portionLabel: portionLabel || null,
+      calories: Math.round((selectedFood.calories || 0) * factor),
+      protein: +( (selectedFood.protein || 0) * factor ).toFixed(1),
+      carbs: +( (selectedFood.carbs || 0) * factor ).toFixed(1),
+      fat: +( (selectedFood.fat || 0) * factor ).toFixed(1),
     };
 
-    // Optimistic update
-    const tempEntry = { id: `temp-${Date.now()}`, created_at: new Date().toISOString(), ...payload };
-    mutate(`/api/nutrition/logs?date=${todayKey}`, (data: any) => ({
-      entries: [tempEntry, ...(data?.entries || [])],
-    }), false);
+    const optimisticEntry = {
+      id: `temp-${Date.now()}`,
+      created_at: new Date().toISOString(),
+      ...payload,
+    };
+
+    mutate(
+      `/api/nutrition/logs?date=${todayKey}`,
+      (data: any) => ({
+        entries: [optimisticEntry, ...(data?.entries || [])],
+      }),
+      false
+    );
 
     try {
       const res = await fetch("/api/nutrition/logs", {
@@ -120,15 +87,17 @@ export default function NutritionPage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Failed to save");
-    } catch (err) {
-      console.error(err);
-    } finally {
       mutate(`/api/nutrition/logs?date=${todayKey}`);
       setSelectedFood(null);
       setQuery("");
+      setResults([]);
       setGrams(100);
       setPortionLabel("");
-      setActiveMeal(null);
+      setAddingMeal(null);
+    } catch (err) {
+      console.error(err);
+      mutate(`/api/nutrition/logs?date=${todayKey}`);
+    } finally {
       setAdding(false);
     }
   };
@@ -149,105 +118,105 @@ export default function NutritionPage() {
       <main className="container py-3" style={{ paddingBottom: "90px" }}>
         <h2 className="mb-3 text-center">Nutrition</h2>
 
-        {/* Totals */}
+        {/* Macro Tiles */}
         <div className="d-flex justify-content-around mb-3">
-          <div>Calories: {totals.calories}</div>
-          <div>Protein: {totals.protein}g</div>
-          <div>Carbs: {totals.carbs}g</div>
-          <div>Fat: {totals.fat}g</div>
+          <div className="bxkr-tile">
+            <div>🔥</div>
+            <div>Calories</div>
+            <div className="fw-bold">{totals.calories}</div>
+          </div>
+          <div className="bxkr-tile">
+            <div>🍗</div>
+            <div>Protein</div>
+            <div className="fw-bold">{totals.protein}g</div>
+          </div>
+          <div className="bxkr-tile">
+            <div>🍞</div>
+            <div>Carbs</div>
+            <div className="fw-bold">{totals.carbs}g</div>
+          </div>
+          <div className="bxkr-tile">
+            <div>🥑</div>
+            <div>Fat</div>
+            <div className="fw-bold">{totals.fat}g</div>
+          </div>
         </div>
 
-        {/* Meals */}
-        {meals.map((m) => {
-          const entries = (logsData?.entries || []).filter((e: any) => e.meal === m);
-          const mealTotals = entries.reduce(
-            (acc: any, e: any) => {
-              acc.calories += e.calories;
-              acc.protein += e.protein;
-              acc.carbs += e.carbs;
-              acc.fat += e.fat;
-              return acc;
-            },
-            { calories: 0, protein: 0, carbs: 0, fat: 0 }
-          );
-
+        {meals.map((meal) => {
+          const mealEntries = logsData?.entries?.filter((e: any) => e.meal === meal) || [];
           return (
-            <div key={m} className="mb-4">
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <h5>{m} ({mealTotals.calories} kcal)</h5>
-                <button className="btn btn-sm btn-outline-primary" onClick={() => setActiveMeal(activeMeal === m ? null : m)}>
-                  Add Food
-                </button>
-              </div>
+            <div key={meal} className="mb-4">
+              <h5>{meal}</h5>
+              {mealEntries.length === 0 && <div className="text-muted mb-2">No entries yet.</div>}
 
-              {/* Entries */}
-              {entries.length === 0 && <div className="text-muted mb-2">No items</div>}
-              {entries.map((e: any) => (
-                <div key={e.id} className="d-flex justify-content-between mb-1 bxkr-card p-2 align-items-center">
-                  <div>{e.portionLabel || e.grams + "g"} {e.food.name}</div>
+              {mealEntries.map((e: any) => (
+                <div key={e.id} className="d-flex align-items-center justify-content-between mb-2 bxkr-card p-2">
+                  <div className="d-flex align-items-center gap-2">
+                    {e.food.image && <img src={e.food.image} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6 }} />}
+                    <div>
+                      <div className="fw-bold">{e.food.name}</div>
+                      <div className="small text-muted">{e.grams}g {e.portionLabel || ""}</div>
+                    </div>
+                  </div>
                   <div className="text-end">
-                    {e.calories} kcal • {e.protein}p • {e.carbs}c • {e.fat}f
-                    <button className="btn btn-link btn-sm text-danger ms-2" onClick={() => removeEntry(e.id)}>Remove</button>
+                    <div className="fw-bold">{e.calories} kcal</div>
+                    <div className="small text-muted">{e.protein}p • {e.carbs}c • {e.fat}f</div>
+                    <button className="btn btn-link btn-sm text-danger mt-1" onClick={() => removeEntry(e.id)}>Remove</button>
                   </div>
                 </div>
               ))}
 
-              {/* Add Food Card */}
-              {activeMeal === m && (
-                <div ref={cardRef} className="bxkr-card p-2 mt-2">
-                  <input
-                    className="form-control mb-1"
-                    placeholder="Search foods or enter manually"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-
-                  {results.length > 0 && (
-                    <div className="list-group mb-1">
-                      {results.slice(0, 10).map((f: any) => (
-                        <button key={f.id} className="list-group-item list-group-item-action" onClick={() => setSelectedFood(f)}>
-                          {f.name} - {f.brand} ({f.calories} kcal /100g)
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {(selectedFood || query) && (
-                    <>
-                      <input
-                        type="number"
-                        className="form-control mb-1"
-                        value={grams}
-                        onChange={(e) => setGrams(Number(e.target.value))}
-                        placeholder="grams"
-                      />
-                      <input
-                        type="text"
-                        className="form-control mb-1"
-                        value={portionLabel}
-                        onChange={(e) => setPortionLabel(e.target.value)}
-                        placeholder="e.g. 1 medium banana"
-                      />
-
-                      <div className="d-flex justify-content-between mb-1">
-                        <div>Calories: {scaledSelected?.calories ?? 0}</div>
-                        <div>Protein: {scaledSelected?.protein ?? 0}g</div>
-                        <div>Carbs: {scaledSelected?.carbs ?? 0}g</div>
-                        <div>Fat: {scaledSelected?.fat ?? 0}g</div>
-                      </div>
-
-                      <button className="btn btn-primary w-100" onClick={addEntry} disabled={adding}>
-                        {adding ? "Adding…" : "Add to {m}"}
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
+              <button className="btn btn-outline-primary btn-sm mt-2" onClick={() => setAddingMeal(meal)}>
+                + Add Food
+              </button>
             </div>
           );
         })}
 
-        {logsError && <div className="alert alert-danger">Failed to load logs</div>}
+        {/* Food search / manual entry */}
+        {addingMeal && (
+          <div className="bxkr-card p-3 mb-4">
+            <h6>Add Food to {addingMeal}</h6>
+            <input
+              className="form-control mb-2"
+              placeholder="Search foods..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {loadingSearch && <div className="text-muted mb-2">Searching…</div>}
+            {results.length > 0 && (
+              <div className="list-group mb-2">
+                {results.slice(0, 10).map((f: any) => (
+                  <button key={f.id} className="list-group-item list-group-item-action" onClick={() => setSelectedFood(f)}>
+                    <div className="d-flex align-items-center">
+                      {f.image && <img src={f.image} alt="" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, marginRight: 8 }} />}
+                      <div>
+                        <div className="fw-bold">{f.name}</div>
+                        <div className="small text-muted">{f.brand || ""}</div>
+                      </div>
+                      <div className="ms-auto small">{f.calories ? `${Math.round(f.calories)} kcal /100g` : "-"}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Selected food card */}
+            {selectedFood && (
+              <div className="bxkr-card p-3 mb-2">
+                <div className="mb-2 fw-bold">{selectedFood.name}</div>
+                <div className="mb-2 small text-muted">{selectedFood.brand || ""}</div>
+                <div className="mb-2">
+                  <label className="form-label small">Portion / Quantity</label>
+                  <input className="form-control mb-1" placeholder="e.g., 100g or 1 medium" value={portionLabel} onChange={(e) => setPortionLabel(e.target.value)} />
+                  <input type="number" className="form-control" value={grams} onChange={(e) => setGrams(Number(e.target.value || 0))} />
+                </div>
+                <button className="btn btn-primary me-2" onClick={addEntry} disabled={adding}>{adding ? "Adding…" : "Add"}</button>
+                <button className="btn btn-outline-secondary" onClick={() => { setAddingMeal(null); setSelectedFood(null); }}>Cancel</button>
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       <BottomNav />
