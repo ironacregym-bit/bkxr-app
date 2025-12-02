@@ -6,7 +6,7 @@ import useSWR, { mutate } from "swr";
 import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 
-// Inline debounce to avoid dependency errors
+// Inline debounce
 function debounce<T extends (...args: any[]) => void>(fn: T, delay: number) {
   let timeout: NodeJS.Timeout;
   return (...args: Parameters<T>) => {
@@ -15,7 +15,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, delay: number) {
   };
 }
 
-const fetcher = (u: string) => fetch(u).then((r) => r.json());
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // Helpers
 function gramsToFactor(g: number) {
@@ -28,14 +28,10 @@ export default function NutritionPage() {
   const [results, setResults] = useState<any[]>([]);
   const [loadingSearch, setLoadingSearch] = useState(false);
   const [selectedFood, setSelectedFood] = useState<any | null>(null);
-  const [grams, setGrams] = useState<number>(100);
+  const [grams, setGrams] = useState(100);
   const [adding, setAdding] = useState(false);
 
-  // Today's date key
-  const todayKey = useMemo(() => {
-    const d = new Date();
-    return d.toISOString().slice(0, 10); // YYYY-MM-DD
-  }, []);
+  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   // Fetch today's logs
   const { data: logsData, error: logsError } = useSWR(
@@ -86,24 +82,22 @@ export default function NutritionPage() {
     doSearch(query);
   }, [query, doSearch]);
 
-  // Compute scaled nutrition for selected grams
+  // Scaled nutrition
   const scaledSelected = useMemo(() => {
     if (!selectedFood) return null;
     const factor = gramsToFactor(grams);
     return {
       ...selectedFood,
       calories: Math.round((selectedFood.calories || 0) * factor),
-      protein: +( (selectedFood.protein || 0) * factor ).toFixed(1),
-      carbs: +( (selectedFood.carbs || 0) * factor ).toFixed(1),
-      fat: +( (selectedFood.fat || 0) * factor ).toFixed(1),
+      protein: +((selectedFood.protein || 0) * factor).toFixed(1),
+      carbs: +((selectedFood.carbs || 0) * factor).toFixed(1),
+      fat: +((selectedFood.fat || 0) * factor).toFixed(1),
     };
   }, [selectedFood, grams]);
 
   // Add entry
   const addEntry = async () => {
-    if (!session?.user?.email || !selectedFood) {
-      return signIn("google");
-    }
+    if (!session?.user?.email || !selectedFood) return signIn("google");
     setAdding(true);
     try {
       const payload = {
@@ -115,17 +109,11 @@ export default function NutritionPage() {
         carbs: scaledSelected.carbs,
         fat: scaledSelected.fat,
       };
-      // Optimistic update
-      const optimisticEntry = {
-        id: `temp-${Date.now()}`,
-        created_at: new Date().toISOString(),
-        ...payload,
-      };
+
+      const optimistic = { id: `temp-${Date.now()}`, created_at: new Date().toISOString(), ...payload };
       mutate(
         `/api/nutrition/logs?date=${todayKey}`,
-        (data: any) => ({
-          entries: [optimisticEntry, ...(data?.entries || [])],
-        }),
+        (data: any) => ({ entries: [optimistic, ...(data?.entries || [])] }),
         false
       );
 
@@ -135,11 +123,8 @@ export default function NutritionPage() {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        throw new Error("Failed to save");
-      }
+      if (!res.ok) throw new Error("Failed to save");
 
-      // Revalidate
       mutate(`/api/nutrition/logs?date=${todayKey}`);
       setSelectedFood(null);
       setQuery("");
@@ -147,7 +132,6 @@ export default function NutritionPage() {
       setGrams(100);
     } catch (err) {
       console.error(err);
-      // revalidate to correct optimistic failure
       mutate(`/api/nutrition/logs?date=${todayKey}`);
     } finally {
       setAdding(false);
@@ -165,12 +149,13 @@ export default function NutritionPage() {
       <Head>
         <title>Nutrition — BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link relName="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
       </Head>
 
       <main className="container py-3" style={{ paddingBottom: "90px" }}>
         <h2 className="mb-3 text-center">Nutrition</h2>
 
-        {/* Totals quick view */}
+        {/* Totals */}
         <div className="row text-center mb-3 gx-2">
           <div className="col">
             <div className="bxkr-card py-2">
@@ -200,12 +185,10 @@ export default function NutritionPage() {
           <label className="form-label">Search foods (OpenFoodFacts)</label>
           <input
             className="form-control"
-            placeholder="e.g. Tesco chicken sandwich, banana, chicken breast"
+            placeholder="e.g. chicken breast, banana"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <div className="mt-2 small text-muted">Tip: search brand + product for packaged foods (barcodes returned when available)</div>
-
           {loadingSearch && <div className="mt-2">Searching…</div>}
 
           {results.length > 0 && (
@@ -214,20 +197,15 @@ export default function NutritionPage() {
                 <button
                   key={f.id ?? f.code ?? f.name}
                   className="list-group-item list-group-item-action"
-                  onClick={() => {
-                    setSelectedFood(f);
-                    setGrams(100);
-                  }}
+                  onClick={() => { setSelectedFood(f); setGrams(100); }}
                 >
                   <div className="d-flex align-items-center">
                     {f.image && <img src={f.image} alt="" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, marginRight: 12 }} />}
                     <div style={{ flex: 1 }}>
                       <div className="fw-bold">{f.name}</div>
-                      <div className="small text-muted">{f.brand || f.brands || ""}</div>
+                      <div className="small text-muted">{f.brand || ""}</div>
                     </div>
-                    <div className="text-end small">
-                      <div>{f.calories ? `${Math.round(f.calories)} kcal /100g` : "-"}</div>
-                    </div>
+                    <div className="text-end small">{f.calories ? `${Math.round(f.calories)} kcal /100g` : "-"}</div>
                   </div>
                 </button>
               ))}
@@ -247,8 +225,7 @@ export default function NutritionPage() {
                     <div className="small text-muted">{selectedFood.brand}</div>
                   </div>
                   <div className="text-end">
-                    <div className="fw-bold">{selectedFood.calories ? `${selectedFood.calories} kcal /100g` : "-"}</div>
-                    <div className="small text-muted">per 100g</div>
+                    <div className="fw-bold">{selectedFood.calories} kcal /100g</div>
                   </div>
                 </div>
 
@@ -280,9 +257,7 @@ export default function NutritionPage() {
                   <button className="btn btn-primary" onClick={addEntry} disabled={adding}>
                     {adding ? "Adding…" : "Add to Today"}
                   </button>
-                  <button className="btn btn-outline-secondary" onClick={() => setSelectedFood(null)}>
-                    Cancel
-                  </button>
+                  <button className="btn btn-outline-secondary" onClick={() => setSelectedFood(null)}>Cancel</button>
                 </div>
               </div>
             </div>
@@ -307,7 +282,6 @@ export default function NutritionPage() {
                     <div className="small text-muted">{e.grams} g • {e.food.brand || ""}</div>
                   </div>
                 </div>
-
                 <div className="text-end">
                   <div className="fw-bold">{e.calories} kcal</div>
                   <div className="small text-muted">{e.protein}p • {e.carbs}c • {e.fat}f</div>
