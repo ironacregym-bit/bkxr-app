@@ -4,7 +4,8 @@ import firestore from "../../../lib/firestoreClient";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]";
 import { hasRole, isGymOwner } from "../../../lib/rbac";
-import { generateToken, minutesFromNow } from "../../../lib/token";
+import { generateToken } from "../../../lib/token";
+import { toMillis } from "../../../lib/time";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -35,7 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const token = generateToken();
-    const expires_at = Date.now() + Math.max(1, Math.min(1440, Number(expires_in_minutes))) * 60 * 1000;
+    const expiresMs = Math.max(1, Math.min(1440, Number(expires_in_minutes))) * 60 * 1000;
+    const expires_at = Date.now() + expiresMs;
 
     await firestore.collection("bookingTokens").doc(token).set({
       token,
@@ -43,7 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       gym_id: gymId,
       created_by: user?.email || null,
       created_at: new Date(),
-      expires_at,
+      expires_at, // numeric ms since epoch
       used: false,
       max_use: 1,
     });
@@ -54,13 +56,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const link = `${safeBase}/book/${encodeURIComponent(token)}`;
 
-    const whatsappMessage = `Join our BXKR session at ${sessData?.gym_name || "the gym"} on ${new Date(
-      sessData?.start_time * 1000
-    ).toLocaleString()}! Click to book: ${link}`;
+    // ✅ Normalise start_time to milliseconds before formatting
+    const startMs = toMillis(sessData?.start_time);
+    const whenStr = startMs ? new Date(startMs).toLocaleString() : "soon";
+
+    const whatsappMessage = `Join our BXKR session at ${sessData?.gym_name || "the gym"} on ${whenStr}! Click to book: ${link}`;
 
     return res.status(200).json({ ok: true, token, link, expires_at, whatsappMessage });
   } catch (err: any) {
-    console.error("Generate link error:", err.message);
+    console.error("Generate link error:", err?.message || err);
     return res.status(500).json({ error: "Failed to generate link" });
   }
-}
