@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import useSWR, { mutate } from "swr";
-import debounce from "just-debounce-it";
 import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 
@@ -12,6 +11,18 @@ const meals = ["Breakfast", "Lunch", "Dinner", "Snack"];
 
 function gramsToFactor(g: number) {
   return g / 100;
+}
+
+// Custom debounce hook
+function useDebounce(callback: (...args: any[]) => void, delay: number) {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const debouncedFn = (...args: any[]) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => callback(...args), delay);
+  };
+
+  return debouncedFn;
 }
 
 export default function NutritionPage() {
@@ -47,32 +58,28 @@ export default function NutritionPage() {
     );
   }, [logsData]);
 
-  const doSearch = useMemo(
-    () =>
-      debounce(async (q: string) => {
-        if (!q || q.trim().length < 2) {
-          setResults([]);
-          setLoadingSearch(false);
-          return;
-        }
-        setLoadingSearch(true);
-        try {
-          const res = await fetch(`/api/foods/search?query=${encodeURIComponent(q)}`);
-          const json = await res.json();
-          setResults(json.foods || []);
-        } catch (err) {
-          console.error(err);
-          setResults([]);
-        } finally {
-          setLoadingSearch(false);
-        }
-      }, 300),
-    []
-  );
+  const debouncedSearch = useDebounce(async (q: string) => {
+    if (!q || q.trim().length < 2) {
+      setResults([]);
+      setLoadingSearch(false);
+      return;
+    }
+    setLoadingSearch(true);
+    try {
+      const res = await fetch(`/api/foods/search?query=${encodeURIComponent(q)}`);
+      const json = await res.json();
+      setResults(json.foods || []);
+    } catch (err) {
+      console.error(err);
+      setResults([]);
+    } finally {
+      setLoadingSearch(false);
+    }
+  }, 300);
 
   useEffect(() => {
-    if (activeMeal && query) doSearch(query);
-  }, [query, activeMeal, doSearch]);
+    if (activeMeal && query) debouncedSearch(query);
+  }, [query, activeMeal, debouncedSearch]);
 
   const scaledSelected = useMemo(() => {
     if (!selectedFood) return null;
@@ -240,7 +247,7 @@ export default function NutritionPage() {
           )}
         </div>
       ))}
-      </main>
+  </main>
       <BottomNav />
   );
 }
