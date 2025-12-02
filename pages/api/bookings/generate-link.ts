@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../../lib/authOptions";
+import { authOptions } from "../auth/[...nextauth]";
 import { hasRole, isGymOwner } from "../../../lib/rbac";
 import { generateToken, minutesFromNow } from "../../../lib/token";
 
