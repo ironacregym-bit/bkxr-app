@@ -5,12 +5,10 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import BottomNav from "../../../components/BottomNav";
 
-type Round = {
-  type: "boxing" | "kettlebell";
-  combos?: string[]; // For boxing rounds
-  style?: "amrap" | "emom" | "ladder"; // For kettlebell rounds
-  details?: string; // Description for kettlebell
-};
+const roundLabels = [
+  "Basics", "Speed", "Power", "Defensive", "Engine", // Boxing
+  "Engine", "Power", "Ladder", "Core", "Load"       // Kettlebell
+];
 
 export default function CreateWorkoutPage() {
   const { data: session, status } = useSession();
@@ -19,9 +17,10 @@ export default function CreateWorkoutPage() {
 
   const [workoutName, setWorkoutName] = useState("");
   const [notes, setNotes] = useState("");
-  const [rounds, setRounds] = useState<Round[]>(
+  const [rounds, setRounds] = useState(
     Array.from({ length: 10 }, (_, i) => ({
       type: i < 5 ? "boxing" : "kettlebell",
+      label: roundLabels[i],
       combos: i < 5 ? ["", "", ""] : undefined,
       style: i >= 5 ? "amrap" : undefined,
       details: i >= 5 ? "" : undefined,
@@ -123,7 +122,7 @@ export default function CreateWorkoutPage() {
         {rounds.map((round, i) => (
           <div key={i} className="card p-3 mb-3">
             <h6 className="fw-bold mb-2">
-              Round {i + 1} ({round.type === "boxing" ? "Boxing" : "Kettlebell"})
+              Round {i + 1} – {round.label} ({round.type === "boxing" ? "Boxing" : "Kettlebell"})
             </h6>
             {round.type === "boxing" ? (
               <div>
