@@ -24,20 +24,22 @@ function useDebounce(fn: (...args: any[]) => void, delay: number) {
 
 export default function NutritionPage() {
   const { data: session } = useSession();
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<any[]>([]);
-  const [selectedFood, setSelectedFood] = useState<any | null>(null);
-  const [grams, setGrams] = useState<number>(100);
-  const [portionLabel, setPortionLabel] = useState("");
-  const [meal, setMeal] = useState<typeof meals[number]>("Breakfast");
-  const [adding, setAdding] = useState(false);
   const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  // Fetch today's logs
+  // Today's logs
   const { data: logsData, error: logsError } = useSWR(
     session?.user?.email ? `/api/nutrition/logs?date=${todayKey}` : null,
     fetcher
   );
+
+  const [activeMeal, setActiveMeal] = useState<typeof meals[number] | null>(null);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const [selectedFood, setSelectedFood] = useState<any | null>(null);
+  const [grams, setGrams] = useState(100);
+  const [portionLabel, setPortionLabel] = useState("");
+  const [adding, setAdding] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   // Totals
   const totals = useMemo(() => {
@@ -54,12 +56,22 @@ export default function NutritionPage() {
     );
   }, [logsData]);
 
+  // Scaled nutrition
+  const scaledSelected = useMemo(() => {
+    if (!selectedFood) return null;
+    const factor = gramsToFactor(grams);
+    return {
+      ...selectedFood,
+      calories: Math.round((selectedFood.calories || 0) * factor),
+      protein: +((selectedFood.protein || 0) * factor).toFixed(1),
+      carbs: +((selectedFood.carbs || 0) * factor).toFixed(1),
+      fat: +((selectedFood.fat || 0) * factor).toFixed(1),
+    };
+  }, [selectedFood, grams]);
+
   // Debounced search
   const doSearch = useDebounce(async (q: string) => {
-    if (!q || q.trim().length < 2) {
-      setResults([]);
-      return;
-    }
+    if (!q || q.trim().length < 2) return setResults([]);
     try {
       const res = await fetch(`/api/foods/search?query=${encodeURIComponent(q)}`);
       const json = await res.json();
@@ -73,36 +85,29 @@ export default function NutritionPage() {
     doSearch(query);
   }, [query, doSearch]);
 
-  // Compute scaled nutrition for selected grams
-  const scaledSelected = useMemo(() => {
-    if (!selectedFood) return null;
-    const factor = gramsToFactor(grams);
-    return {
-      ...selectedFood,
-      calories: Math.round((selectedFood.calories || 0) * factor),
-      protein: +((selectedFood.protein || 0) * factor).toFixed(1),
-      carbs: +((selectedFood.carbs || 0) * factor).toFixed(1),
-      fat: +((selectedFood.fat || 0) * factor).toFixed(1),
-    };
-  }, [selectedFood, grams]);
+  // Scroll into view when card opens
+  useEffect(() => {
+    if (cardRef.current) cardRef.current.scrollIntoView({ behavior: "smooth" });
+  }, [activeMeal]);
 
-  // Add entry
   const addEntry = async () => {
-    if (!session?.user?.email || !selectedFood) return signIn("google");
-    setAdding(true);
+    if (!session?.user?.email) return signIn("google");
+    if (!selectedFood && !portionLabel) return alert("Please select a food or enter manually.");
 
+    setAdding(true);
     const payload = {
       date: todayKey,
-      food: selectedFood,
+      meal: activeMeal,
+      food: selectedFood || { name: portionLabel },
       grams,
-      portionLabel,
-      meal,
-      calories: scaledSelected?.calories,
-      protein: scaledSelected?.protein,
-      carbs: scaledSelected?.carbs,
-      fat: scaledSelected?.fat,
+      portionLabel: portionLabel || "",
+      calories: scaledSelected?.calories ?? 0,
+      protein: scaledSelected?.protein ?? 0,
+      carbs: scaledSelected?.carbs ?? 0,
+      fat: scaledSelected?.fat ?? 0,
     };
 
+    // Optimistic update
     const tempEntry = { id: `temp-${Date.now()}`, created_at: new Date().toISOString(), ...payload };
     mutate(`/api/nutrition/logs?date=${todayKey}`, (data: any) => ({
       entries: [tempEntry, ...(data?.entries || [])],
@@ -123,6 +128,7 @@ export default function NutritionPage() {
       setQuery("");
       setGrams(100);
       setPortionLabel("");
+      setActiveMeal(null);
       setAdding(false);
     }
   };
@@ -151,62 +157,7 @@ export default function NutritionPage() {
           <div>Fat: {totals.fat}g</div>
         </div>
 
-        {/* Search and add food */}
-        <div className="mb-3">
-          <input
-            className="form-control mb-2"
-            placeholder="Search foods (OpenFoodFacts)"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {results.length > 0 && (
-            <div className="list-group mb-2">
-              {results.slice(0, 10).map((f: any) => (
-                <button
-                  key={f.id}
-                  className="list-group-item list-group-item-action"
-                  onClick={() => setSelectedFood(f)}
-                >
-                  {f.name} - {f.brand} ({f.calories} kcal /100g)
-                </button>
-              ))}
-            </div>
-          )}
-
-          {selectedFood && (
-            <div className="bxkr-card p-2 mb-3">
-              <div>{selectedFood.name} ({selectedFood.brand})</div>
-              <input
-                type="number"
-                className="form-control mb-1"
-                value={grams}
-                onChange={(e) => setGrams(Number(e.target.value))}
-                placeholder="grams"
-              />
-              <input
-                type="text"
-                className="form-control mb-1"
-                value={portionLabel}
-                onChange={(e) => setPortionLabel(e.target.value)}
-                placeholder="e.g. 1 medium banana"
-              />
-              <select className="form-select mb-1" value={meal} onChange={(e) => setMeal(e.target.value as any)}>
-                {meals.map((m) => <option key={m}>{m}</option>)}
-              </select>
-              <div className="d-flex justify-content-between">
-                <div>Calories: {scaledSelected?.calories}</div>
-                <div>Protein: {scaledSelected?.protein}g</div>
-                <div>Carbs: {scaledSelected?.carbs}g</div>
-                <div>Fat: {scaledSelected?.fat}g</div>
-              </div>
-              <button className="btn btn-primary w-100 mt-2" onClick={addEntry} disabled={adding}>
-                {adding ? "Adding…" : "Add to Today"}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Meal logs */}
+        {/* Meals */}
         {meals.map((m) => {
           const entries = (logsData?.entries || []).filter((e: any) => e.meal === m);
           const mealTotals = entries.reduce(
@@ -219,10 +170,18 @@ export default function NutritionPage() {
             },
             { calories: 0, protein: 0, carbs: 0, fat: 0 }
           );
+
           return (
-            <div key={m} className="mb-3">
-              <h5>{m} ({mealTotals.calories} kcal)</h5>
-              {entries.length === 0 && <div className="text-muted">No items</div>}
+            <div key={m} className="mb-4">
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <h5>{m} ({mealTotals.calories} kcal)</h5>
+                <button className="btn btn-sm btn-outline-primary" onClick={() => setActiveMeal(activeMeal === m ? null : m)}>
+                  Add Food
+                </button>
+              </div>
+
+              {/* Entries */}
+              {entries.length === 0 && <div className="text-muted mb-2">No items</div>}
               {entries.map((e: any) => (
                 <div key={e.id} className="d-flex justify-content-between mb-1 bxkr-card p-2 align-items-center">
                   <div>{e.portionLabel || e.grams + "g"} {e.food.name}</div>
@@ -232,11 +191,65 @@ export default function NutritionPage() {
                   </div>
                 </div>
               ))}
+
+              {/* Add Food Card */}
+              {activeMeal === m && (
+                <div ref={cardRef} className="bxkr-card p-2 mt-2">
+                  <input
+                    className="form-control mb-1"
+                    placeholder="Search foods or enter manually"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+
+                  {results.length > 0 && (
+                    <div className="list-group mb-1">
+                      {results.slice(0, 10).map((f: any) => (
+                        <button key={f.id} className="list-group-item list-group-item-action" onClick={() => setSelectedFood(f)}>
+                          {f.name} - {f.brand} ({f.calories} kcal /100g)
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {(selectedFood || query) && (
+                    <>
+                      <input
+                        type="number"
+                        className="form-control mb-1"
+                        value={grams}
+                        onChange={(e) => setGrams(Number(e.target.value))}
+                        placeholder="grams"
+                      />
+                      <input
+                        type="text"
+                        className="form-control mb-1"
+                        value={portionLabel}
+                        onChange={(e) => setPortionLabel(e.target.value)}
+                        placeholder="e.g. 1 medium banana"
+                      />
+
+                      <div className="d-flex justify-content-between mb-1">
+                        <div>Calories: {scaledSelected?.calories ?? 0}</div>
+                        <div>Protein: {scaledSelected?.protein ?? 0}g</div>
+                        <div>Carbs: {scaledSelected?.carbs ?? 0}g</div>
+                        <div>Fat: {scaledSelected?.fat ?? 0}g</div>
+                      </div>
+
+                      <button className="btn btn-primary w-100" onClick={addEntry} disabled={adding}>
+                        {adding ? "Adding…" : "Add to {m}"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
 
+        {logsError && <div className="alert alert-danger">Failed to load logs</div>}
       </main>
+
       <BottomNav />
     </>
   );
