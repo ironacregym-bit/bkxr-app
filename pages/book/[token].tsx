@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/router";
-import "bootstrap/dist/css/bootstrap.min.css";
 
 export default function BookTokenPage() {
   const { data: session } = useSession();
