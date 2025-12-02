@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../../lib/authOptions"; // adjust path
+import { authOptions } from "../auth/[...nextauth]";
 import { hasRole } from "../../../lib/rbac";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
