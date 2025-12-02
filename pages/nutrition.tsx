@@ -247,7 +247,7 @@ export default function NutritionPage() {
           )}
         </div>
       ))}
-  </main>
+    </main>
       <BottomNav />
   );
 }
