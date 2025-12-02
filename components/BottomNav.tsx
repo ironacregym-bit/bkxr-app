@@ -16,7 +16,7 @@ export default function BottomNav() {
   ];
 
   // Add Admin button only if role === "admin"
-  if (role === "admin") {
+  if (role === "admin" || role === "gym") {
     navItems.push({
       href: "/admin",
       icon: "fa-user-shield",
