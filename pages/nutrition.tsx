@@ -3,9 +3,17 @@
 import Head from "next/head";
 import { useState, useEffect, useMemo } from "react";
 import useSWR, { mutate } from "swr";
-import debounce from "just-debounce-it";
 import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
+
+// Inline debounce to avoid dependency errors
+function debounce<T extends (...args: any[]) => void>(fn: T, delay: number) {
+  let timeout: NodeJS.Timeout;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), delay);
+  };
+}
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
