@@ -1,7 +1,29 @@
 
+"use client";
+
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 
 export default function BottomNav() {
+  const { data: session } = useSession();
+  const role = session?.user?.role;
+
+  const navItems = [
+    { href: "/", icon: "fa-home", label: "Home" },
+    { href: "/workout", icon: "fa-dumbbell", label: "Workout" },
+    { href: "/nutrition", icon: "fa-utensils", label: "Nutrition" },
+    { href: "/more", icon: "fa-ellipsis-h", label: "More" },
+  ];
+
+  // Add Admin button only if role === "admin"
+  if (role === "admin") {
+    navItems.push({
+      href: "/admin",
+      icon: "fa-user-shield",
+      label: "Admin",
+    });
+  }
+
   return (
     <nav
       className="bxkr-bottomnav"
@@ -23,12 +45,7 @@ export default function BottomNav() {
         zIndex: 1000,
       }}
     >
-      {[
-        { href: "/", icon: "fa-home", label: "Home" },
-        { href: "/workout", icon: "fa-dumbbell", label: "Workout" },
-        { href: "/nutrition", icon: "fa-utensils", label: "Nutrition" },
-        { href: "/more", icon: "fa-ellipsis-h", label: "More" },
-      ].map((item) => (
+      {navItems.map((item) => (
         <Link
           key={item.href}
           href={item.href}
