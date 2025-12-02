@@ -1,6 +1,6 @@
 // pages/api/foods/search.ts
 import { NextRequest, NextResponse } from "next/server";
-import firestore from "@/lib/firestoreClient";
+import firestore from "../../../lib/firestoreClient";
 
 export async function GET(req: Request) {
   try {
