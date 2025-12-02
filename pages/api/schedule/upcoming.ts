@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Fetch sessions within date range
     const sessionsSnap = await firestore
-      .collection("session")
+      .collection("session") // ✅ corrected collection name
       .where("start_time", ">=", fromDate)
       .where("start_time", "<=", toDate)
       .orderBy("start_time", "asc")
@@ -42,13 +42,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         return {
           id: doc.id,
-          ...data,
+          class_id: data.class_id,
+          coach_name: data.coach_name,
           start_time: data.start_time?.toDate().toISOString() || null,
           end_time: data.end_time ? data.end_time.toDate().toISOString() : null,
-          gym_name: gymData.name,
-          location: gymData.location,
+          price: data.price || 0,
+          max_attendance: data.max_attendance || 0,
           current_attendance: bookingsSnap.size,
-          max_attendance: data.max_attendance || 0
+          gym_name: gymData.name,
+          location: gymData.location
         };
       })
     );
