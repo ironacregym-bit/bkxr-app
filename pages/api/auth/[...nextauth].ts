@@ -21,24 +21,21 @@ export const authOptions: NextAuthOptions = {
 
       if (token.email) {
         const userSnap = await firestore.collection("users").doc(token.email).get();
-
-        if (userSnap.exists) {
-          const userData = userSnap.data() ?? {}; // ✅ Safe fallback
-          token.role = (userData.role as string) || "user";
-          token.gym_id = (userData.gym_id as string) || null;
-        } else {
-          token.role = "user";
-          token.gym_id = null;
-        }
+        const userData = userSnap.exists ? userSnap.data() ?? {} : {};
+        token.role = (userData.role as string) || "user";
+        token.gym_id = (userData.gym_id as string) || null;
       }
 
       return token;
     },
 
     async session({ session, token }) {
-      session.accessToken = token.accessToken as string;
-      session.user.role = (token.role as string) || "user";
-      session.user.gym_id = (token.gym_id as string) || null;
+      // Ensure session.user exists before assigning
+      if (session.user) {
+        (session.user as any).role = (token.role as string) || "user";
+        (session.user as any).gym_id = (token.gym_id as string) || null;
+      }
+      (session as any).accessToken = token.accessToken as string;
       return session;
     },
   },
