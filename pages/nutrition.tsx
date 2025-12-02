@@ -3,34 +3,26 @@
 import Head from "next/head";
 import { useState, useEffect, useMemo } from "react";
 import useSWR, { mutate } from "swr";
+import debounce from "just-debounce-it";
 import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 
-// Inline debounce
-function debounce<T extends (...args: any[]) => void>(fn: T, delay: number) {
-  let timeout: NodeJS.Timeout;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => fn(...args), delay);
-  };
-}
+const meals = ["Breakfast", "Lunch", "Dinner", "Snack"] as const;
+const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
-// Helpers
 function gramsToFactor(g: number) {
   return g / 100;
 }
 
 export default function NutritionPage() {
-  const { data: session, status } = useSession();
+  const { data: session } = useSession();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
-  const [loadingSearch, setLoadingSearch] = useState(false);
   const [selectedFood, setSelectedFood] = useState<any | null>(null);
-  const [grams, setGrams] = useState(100);
+  const [grams, setGrams] = useState<number>(100);
+  const [portionLabel, setPortionLabel] = useState("");
+  const [meal, setMeal] = useState<typeof meals[number]>("Breakfast");
   const [adding, setAdding] = useState(false);
-
   const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   // Fetch today's logs
@@ -60,19 +52,14 @@ export default function NutritionPage() {
       debounce(async (q: string) => {
         if (!q || q.trim().length < 2) {
           setResults([]);
-          setLoadingSearch(false);
           return;
         }
-        setLoadingSearch(true);
         try {
           const res = await fetch(`/api/foods/search?query=${encodeURIComponent(q)}`);
           const json = await res.json();
           setResults(json.foods || []);
-        } catch (err) {
-          console.error(err);
+        } catch {
           setResults([]);
-        } finally {
-          setLoadingSearch(false);
         }
       }, 300),
     []
@@ -82,7 +69,6 @@ export default function NutritionPage() {
     doSearch(query);
   }, [query, doSearch]);
 
-  // Scaled nutrition
   const scaledSelected = useMemo(() => {
     if (!selectedFood) return null;
     const factor = gramsToFactor(grams);
@@ -95,45 +81,42 @@ export default function NutritionPage() {
     };
   }, [selectedFood, grams]);
 
-  // Add entry
   const addEntry = async () => {
     if (!session?.user?.email || !selectedFood) return signIn("google");
     setAdding(true);
+
+    const payload = {
+      date: todayKey,
+      food: selectedFood,
+      grams,
+      portionLabel,
+      meal,
+      calories: scaledSelected?.calories,
+      protein: scaledSelected?.protein,
+      carbs: scaledSelected?.carbs,
+      fat: scaledSelected?.fat,
+    };
+
+    const tempEntry = { id: `temp-${Date.now()}`, created_at: new Date().toISOString(), ...payload };
+    mutate(`/api/nutrition/logs?date=${todayKey}`, (data: any) => ({
+      entries: [tempEntry, ...(data?.entries || [])],
+    }), false);
+
     try {
-      const payload = {
-        date: todayKey,
-        food: selectedFood,
-        grams,
-        calories: scaledSelected.calories,
-        protein: scaledSelected.protein,
-        carbs: scaledSelected.carbs,
-        fat: scaledSelected.fat,
-      };
-
-      const optimistic = { id: `temp-${Date.now()}`, created_at: new Date().toISOString(), ...payload };
-      mutate(
-        `/api/nutrition/logs?date=${todayKey}`,
-        (data: any) => ({ entries: [optimistic, ...(data?.entries || [])] }),
-        false
-      );
-
       const res = await fetch("/api/nutrition/logs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
       if (!res.ok) throw new Error("Failed to save");
-
+    } catch (err) {
+      console.error(err);
+    } finally {
       mutate(`/api/nutrition/logs?date=${todayKey}`);
       setSelectedFood(null);
       setQuery("");
-      setResults([]);
       setGrams(100);
-    } catch (err) {
-      console.error(err);
-      mutate(`/api/nutrition/logs?date=${todayKey}`);
-    } finally {
+      setPortionLabel("");
       setAdding(false);
     }
   };
@@ -155,145 +138,99 @@ export default function NutritionPage() {
         <h2 className="mb-3 text-center">Nutrition</h2>
 
         {/* Totals */}
-        <div className="row text-center mb-3 gx-2">
-          <div className="col">
-            <div className="bxkr-card py-2">
-              <div className="bxkr-stat-label"><i className="fas fa-fire bxkr-icon bxkr-icon-orange-gradient me-1" />Calories</div>
-              <div className="bxkr-stat-value">{totals.calories}</div>
-              <div className="small text-muted">Today</div>
-            </div>
-          </div>
-          <div className="col">
-            <div className="bxkr-card py-2">
-              <div className="bxkr-stat-label"><i className="fas fa-drumstick-bite bxkr-icon me-1" />Protein</div>
-              <div className="bxkr-stat-value">{totals.protein}g</div>
-              <div className="small text-muted">Today</div>
-            </div>
-          </div>
-          <div className="col">
-            <div className="bxkr-card py-2">
-              <div className="bxkr-stat-label"><i className="fas fa-bread-slice bxkr-icon me-1" />Carbs</div>
-              <div className="bxkr-stat-value">{totals.carbs}g</div>
-              <div className="small text-muted">Today</div>
-            </div>
-          </div>
+        <div className="d-flex justify-content-around mb-3">
+          <div>Calories: {totals.calories}</div>
+          <div>Protein: {totals.protein}g</div>
+          <div>Carbs: {totals.carbs}g</div>
+          <div>Fat: {totals.fat}g</div>
         </div>
 
-        {/* Search */}
+        {/* Search and add food */}
         <div className="mb-3">
-          <label className="form-label">Search foods (OpenFoodFacts)</label>
           <input
-            className="form-control"
-            placeholder="e.g. chicken breast, banana"
+            className="form-control mb-2"
+            placeholder="Search foods (OpenFoodFacts)"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {loadingSearch && <div className="mt-2">Searching…</div>}
-
           {results.length > 0 && (
-            <div className="list-group mt-2">
+            <div className="list-group mb-2">
               {results.slice(0, 10).map((f: any) => (
                 <button
-                  key={f.id ?? f.code ?? f.name}
+                  key={f.id}
                   className="list-group-item list-group-item-action"
-                  onClick={() => { setSelectedFood(f); setGrams(100); }}
+                  onClick={() => setSelectedFood(f)}
                 >
-                  <div className="d-flex align-items-center">
-                    {f.image && <img src={f.image} alt="" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, marginRight: 12 }} />}
-                    <div style={{ flex: 1 }}>
-                      <div className="fw-bold">{f.name}</div>
-                      <div className="small text-muted">{f.brand || ""}</div>
-                    </div>
-                    <div className="text-end small">{f.calories ? `${Math.round(f.calories)} kcal /100g` : "-"}</div>
-                  </div>
+                  {f.name} - {f.brand} ({f.calories} kcal /100g)
                 </button>
               ))}
             </div>
           )}
-        </div>
 
-        {/* Selected food card */}
-        {selectedFood && (
-          <div className="bxkr-card p-3 mb-3">
-            <div className="d-flex align-items-start gap-3">
-              {selectedFood.image && <img src={selectedFood.image} alt="" style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8 }} />}
-              <div style={{ flex: 1 }}>
-                <div className="d-flex justify-content-between align-items-start">
-                  <div>
-                    <h5 className="mb-1">{selectedFood.name}</h5>
-                    <div className="small text-muted">{selectedFood.brand}</div>
-                  </div>
-                  <div className="text-end">
-                    <div className="fw-bold">{selectedFood.calories} kcal /100g</div>
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <label className="form-label small">Quantity (grams)</label>
-                  <input type="number" className="form-control" value={grams} onChange={(e) => setGrams(Number(e.target.value || 0))} />
-                </div>
-
-                <div className="mt-3 d-flex justify-content-between">
-                  <div>
-                    <div className="small text-muted">Calories</div>
-                    <div className="fw-bold">{scaledSelected?.calories ?? "-"} kcal</div>
-                  </div>
-                  <div>
-                    <div className="small text-muted">Protein</div>
-                    <div className="fw-bold">{scaledSelected?.protein ?? "-"} g</div>
-                  </div>
-                  <div>
-                    <div className="small text-muted">Carbs</div>
-                    <div className="fw-bold">{scaledSelected?.carbs ?? "-"} g</div>
-                  </div>
-                  <div>
-                    <div className="small text-muted">Fat</div>
-                    <div className="fw-bold">{scaledSelected?.fat ?? "-"} g</div>
-                  </div>
-                </div>
-
-                <div className="mt-3 d-flex gap-2">
-                  <button className="btn btn-primary" onClick={addEntry} disabled={adding}>
-                    {adding ? "Adding…" : "Add to Today"}
-                  </button>
-                  <button className="btn btn-outline-secondary" onClick={() => setSelectedFood(null)}>Cancel</button>
-                </div>
+          {selectedFood && (
+            <div className="bxkr-card p-2 mb-3">
+              <div>{selectedFood.name} ({selectedFood.brand})</div>
+              <input
+                type="number"
+                className="form-control mb-1"
+                value={grams}
+                onChange={(e) => setGrams(Number(e.target.value))}
+                placeholder="grams"
+              />
+              <input
+                type="text"
+                className="form-control mb-1"
+                value={portionLabel}
+                onChange={(e) => setPortionLabel(e.target.value)}
+                placeholder="e.g. 1 medium banana"
+              />
+              <select className="form-select mb-1" value={meal} onChange={(e) => setMeal(e.target.value as any)}>
+                {meals.map((m) => <option key={m}>{m}</option>)}
+              </select>
+              <div className="d-flex justify-content-between">
+                <div>Calories: {scaledSelected?.calories}</div>
+                <div>Protein: {scaledSelected?.protein}g</div>
+                <div>Carbs: {scaledSelected?.carbs}g</div>
+                <div>Fat: {scaledSelected?.fat}g</div>
               </div>
+              <button className="btn btn-primary w-100 mt-2" onClick={addEntry} disabled={adding}>
+                {adding ? "Adding…" : "Add to Today"}
+              </button>
             </div>
-          </div>
-        )}
-
-        {/* Today's log */}
-        <div className="mb-5">
-          <h5>Today&apos;s Log</h5>
-          {logsError && <div className="alert alert-danger">Failed to load logs</div>}
-          {!logsData ? (
-            <div className="text-muted">Loading…</div>
-          ) : logsData.entries.length === 0 ? (
-            <div className="text-muted">No entries yet — add something above.</div>
-          ) : (
-            logsData.entries.map((e: any) => (
-              <div key={e.id} className="d-flex align-items-center justify-content-between mb-2 bxkr-card p-2">
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  {e.food.image && <img src={e.food.image} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6 }} />}
-                  <div>
-                    <div className="fw-bold">{e.food.name}</div>
-                    <div className="small text-muted">{e.grams} g • {e.food.brand || ""}</div>
-                  </div>
-                </div>
-                <div className="text-end">
-                  <div className="fw-bold">{e.calories} kcal</div>
-                  <div className="small text-muted">{e.protein}p • {e.carbs}c • {e.fat}f</div>
-                  <div className="mt-1">
-                    <button className="btn btn-link btn-sm text-danger" onClick={() => removeEntry(e.id)}>Remove</button>
-                  </div>
-                </div>
-              </div>
-            ))
           )}
         </div>
-      </main>
 
+        {/* Meal logs */}
+        {meals.map((m) => {
+          const entries = (logsData?.entries || []).filter((e: any) => e.meal === m);
+          const mealTotals = entries.reduce(
+            (acc: any, e: any) => {
+              acc.calories += e.calories;
+              acc.protein += e.protein;
+              acc.carbs += e.carbs;
+              acc.fat += e.fat;
+              return acc;
+            },
+            { calories: 0, protein: 0, carbs: 0, fat: 0 }
+          );
+          return (
+            <div key={m} className="mb-3">
+              <h5>{m} ({mealTotals.calories} kcal)</h5>
+              {entries.length === 0 && <div className="text-muted">No items</div>}
+              {entries.map((e: any) => (
+                <div key={e.id} className="d-flex justify-content-between mb-1 bxkr-card p-2 align-items-center">
+                  <div>{e.portionLabel || e.grams + "g"} {e.food.name}</div>
+                  <div className="text-end">
+                    {e.calories} kcal • {e.protein}p • {e.carbs}c • {e.fat}f
+                    <button className="btn btn-link btn-sm text-danger ms-2" onClick={() => removeEntry(e.id)}>Remove</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+
+      </main>
       <BottomNav />
     </>
   );
