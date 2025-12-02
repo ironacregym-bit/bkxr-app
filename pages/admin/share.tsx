@@ -2,10 +2,12 @@
 import Head from "next/head";
 import { useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/router";
 import BottomNav from "../../components/BottomNav";
 
 export default function AdminSharePage() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const role = (session?.user as any)?.role || "user";
 
   const [sessionId, setSessionId] = useState("");
@@ -85,6 +87,16 @@ export default function AdminSharePage() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
       <main className="container py-3" style={{ paddingBottom: "70px" }}>
+        {/* Back Button */}
+        <div className="mb-3">
+          <button
+            className="btn btn-outline-secondary mb-3"
+            onClick={() => router.push("/admin")}
+          >
+            ← Back to Admin Dashboard
+          </button>
+        </div>
+
         <h2 className="mb-4 text-center">Generate WhatsApp Booking Link</h2>
 
         {statusMsg && (
