@@ -1,14 +1,21 @@
 
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../auth/[...nextauth]";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { token, name, phone } = req.query as { token?: string; name?: string; phone?: string };
-  if (!token || typeof token !== "string") return res.status(400).json({ error: "Missing token" });
+  const { token } = req.query as { token?: string };
+  if (!token) return res.status(400).json({ error: "Missing token" });
+
+  const session = await getServerSession(req, res, authOptions);
+  const { name, email } = req.body || {};
 
   try {
     const tokenRef = firestore.collection("bookingTokens").doc(token);
     const bookingsCol = firestore.collection("bookings");
+
+    let sessData: any;
 
     await firestore.runTransaction(async (tx) => {
       const tSnap = await tx.get(tokenRef);
@@ -21,8 +28,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const sessRef = firestore.collection("session").doc(sessionId);
       const sSnap = await tx.get(sessRef);
       if (!sSnap.exists) throw new Error("Session not found");
-      const sData = sSnap.data() as any;
-      const max = Number(sData?.max_attendance) || 0;
+      sessData = sSnap.data();
+      const max = Number(sessData?.max_attendance) || 0;
 
       const confirmedSnap = await bookingsCol
         .where("session_id", "==", sessionId)
@@ -30,21 +37,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .get();
       if (max > 0 && confirmedSnap.size >= max) throw new Error("Session is full");
 
-      const bookingId = `${sessionId}_guest_${token}`;
+      const bookingId = `${sessionId}_${session ? "user" : "guest"}_${token}`;
       tx.set(bookingsCol.doc(bookingId), {
         booking_id: bookingId,
         session_id: sessionId,
-        user_id: null,
+        user_id: session ? session.user?.email : null,
+        guest_name: session ? null : name || null,
+        guest_email: session ? null : email || null,
         status: "confirmed",
+        source: "whatsapp",
         created_at: new Date(),
-        guest_name: name || null,
-        guest_phone: phone || null,
       });
 
       tx.update(tokenRef, { used: true, used_at: new Date() });
     });
 
-    return res.status(200).json({ ok: true, message: "Booking confirmed" });
+    return res.status(200).json({
+      ok: true,
+      message: "Booking confirmed",
+      session: {
+        class_name: sessData?.class_name,
+        gym_name: sessData?.gym_name,
+        start_time: sessData?.start_time,
+      },
+    });
   } catch (err: any) {
     const msg = err.message || "Failed to confirm booking";
     const code = ["Invalid token", "Token already used", "Token expired", "Session is full"].includes(msg) ? 400 : 500;
