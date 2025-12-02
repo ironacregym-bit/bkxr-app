@@ -150,6 +150,7 @@ export default function NutritionPage() {
   };
 
   return (
+  <>
     <main className="container py-3" style={{ paddingBottom: "90px" }}>
       <h2 className="mb-3 text-center">Nutrition</h2>
 
@@ -249,5 +250,6 @@ export default function NutritionPage() {
       ))}
     </main>
       <BottomNav />
+    </>
   );
 }
