@@ -1,9 +1,8 @@
 "use client";
 
 import Head from "next/head";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import useSWR, { mutate } from "swr";
-import debounce from "just-debounce-it";
 import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 
@@ -12,6 +11,15 @@ const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 function gramsToFactor(g: number) {
   return g / 100;
+}
+
+// Simple debounce hook
+function useDebounce(fn: (...args: any[]) => void, delay: number) {
+  const timeout = useRef<NodeJS.Timeout>();
+  return (...args: any[]) => {
+    if (timeout.current) clearTimeout(timeout.current);
+    timeout.current = setTimeout(() => fn(...args), delay);
+  };
 }
 
 export default function NutritionPage() {
@@ -47,28 +55,25 @@ export default function NutritionPage() {
   }, [logsData]);
 
   // Debounced search
-  const doSearch = useMemo(
-    () =>
-      debounce(async (q: string) => {
-        if (!q || q.trim().length < 2) {
-          setResults([]);
-          return;
-        }
-        try {
-          const res = await fetch(`/api/foods/search?query=${encodeURIComponent(q)}`);
-          const json = await res.json();
-          setResults(json.foods || []);
-        } catch {
-          setResults([]);
-        }
-      }, 300),
-    []
-  );
+  const doSearch = useDebounce(async (q: string) => {
+    if (!q || q.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/foods/search?query=${encodeURIComponent(q)}`);
+      const json = await res.json();
+      setResults(json.foods || []);
+    } catch {
+      setResults([]);
+    }
+  }, 300);
 
   useEffect(() => {
     doSearch(query);
   }, [query, doSearch]);
 
+  // Compute scaled nutrition for selected grams
   const scaledSelected = useMemo(() => {
     if (!selectedFood) return null;
     const factor = gramsToFactor(grams);
@@ -81,6 +86,7 @@ export default function NutritionPage() {
     };
   }, [selectedFood, grams]);
 
+  // Add entry
   const addEntry = async () => {
     if (!session?.user?.email || !selectedFood) return signIn("google");
     setAdding(true);
