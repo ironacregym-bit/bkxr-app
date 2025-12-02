@@ -1,7 +1,7 @@
 
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import firestore from "../../../lib/firestoreClient"; // Firestore client for role lookup
+import firestore from "../../../lib/firestoreClient";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -14,21 +14,19 @@ export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
 
   callbacks: {
-    // Enrich JWT with role and gym_id from Firestore
     async jwt({ token, account }) {
       if (account) {
         token.accessToken = account.access_token;
       }
 
-      // Lookup user in Firestore to get role and gym_id
       if (token.email) {
         const userSnap = await firestore.collection("users").doc(token.email).get();
+
         if (userSnap.exists) {
-          const userData = userSnap.data();
-          token.role = userData.role || "user";
-          token.gym_id = userData.gym_id || null;
+          const userData = userSnap.data() ?? {}; // ✅ Safe fallback
+          token.role = (userData.role as string) || "user";
+          token.gym_id = (userData.gym_id as string) || null;
         } else {
-          // Default role if user not found
           token.role = "user";
           token.gym_id = null;
         }
@@ -37,11 +35,10 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
 
-    // Add role and gym_id to session object
     async session({ session, token }) {
       session.accessToken = token.accessToken as string;
-      session.user.role = token.role as string;
-      session.user.gym_id = token.gym_id as string | null;
+      session.user.role = (token.role as string) || "user";
+      session.user.gym_id = (token.gym_id as string) || null;
       return session;
     },
   },
