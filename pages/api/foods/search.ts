@@ -5,7 +5,11 @@ import firestore from "../../../lib/firestoreClient";
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const query = (url.searchParams.get("query") || "").trim().toLowerCase();
+    const query =
+      (url.searchParams.get("q") ||
+      url.searchParams.get("query") ||
+      "").trim().toLowerCase();
+
     if (!query) return NextResponse.json({ foods: [] });
 
     const docId = query.replace(/\s+/g, "_");
