@@ -2,11 +2,13 @@
 import { useEffect, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/router";
+import { toMillis } from "../../lib/time";
 
 type SessionInfo = {
   class_name?: string;
   gym_name?: string;
-  start_time?: number; // seconds since epoch
+  // `start_time` may be Firestore Timestamp, seconds, milliseconds, or ISO string
+  start_time?: any;
 };
 
 export default function BookTokenPage() {
@@ -58,18 +60,19 @@ export default function BookTokenPage() {
   };
 
   const buildCalendarLink = () => {
-    if (!sessionInfo?.start_time) return "#";
-    const start = new Date((sessionInfo.start_time as number) * 1000); // seconds → ms
-    const end = new Date(start.getTime() + 60 * 60 * 1000); // +1 hour default
+    const ms = toMillis(sessionInfo?.start_time);
+    if (!ms) return "#";
+    const start = new Date(ms);
+    const end = new Date(start.getTime() + 60 * 60 * 1000); // default +1 hour
     const formatDate = (d: Date) =>
       d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
     const startStr = formatDate(start);
     const endStr = formatDate(end);
     const title = encodeURIComponent(
-      `BXKR Session${sessionInfo.class_name ? ` - ${sessionInfo.class_name}` : ""}`
+      `BXKR Session${sessionInfo?.class_name ? ` - ${sessionInfo.class_name}` : ""}`
     );
     const details = encodeURIComponent(
-      `Location: ${sessionInfo.gym_name || "BXKR Gym"}`
+      `Location: ${sessionInfo?.gym_name || "BXKR Gym"}`
     );
     return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startStr}/${endStr}&details=${details}`;
   };
@@ -94,7 +97,10 @@ export default function BookTokenPage() {
           <p className="mb-1">{sessionInfo.gym_name || "BXKR Gym"}</p>
           {sessionInfo.start_time ? (
             <p className="mb-0">
-              {new Date(sessionInfo.start_time * 1000).toLocaleString()}
+              {(() => {
+                const ms = toMillis(sessionInfo.start_time);
+                return ms ? new Date(ms).toLocaleString() : "Date TBD";
+              })()}
             </p>
           ) : null}
         </div>
