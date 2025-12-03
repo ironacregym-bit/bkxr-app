@@ -72,6 +72,23 @@ export default function Profile() {
     setFormData((prev) => ({ ...prev, [name]: toNumberOrNull(value) }));
   };
 
+  // ✅ Auto-calculate caloric target when relevant fields change
+  useEffect(() => {
+    const { weight_kg, height_cm, DOB, sex, activity_factor } = formData;
+    if (weight_kg && height_cm && DOB && sex && activity_factor) {
+      const birthDate = new Date(DOB);
+      const age = !isNaN(birthDate.getTime())
+        ? new Date().getFullYear() - birthDate.getFullYear()
+        : 30; // fallback
+      const base =
+        sex.toLowerCase() === "male"
+          ? 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
+          : 10 * weight_kg + 6.25 * height_cm - 5 * age - 161;
+      const target = Math.round(base * activity_factor);
+      setFormData((prev) => ({ ...prev, caloric_target: target }));
+    }
+  }, [formData.weight_kg, formData.height_cm, formData.DOB, formData.sex, formData.activity_factor]);
+
   const handleUpdate = async () => {
     if (!email) {
       alert("❌ Not signed in.");
@@ -178,6 +195,7 @@ export default function Profile() {
 
           {data && (
             <form>
+              {/* Text fields */}
               {[
                 { label: "Name", name: "name", type: "text" },
                 { label: "Location", name: "location", type: "text" },
@@ -198,12 +216,12 @@ export default function Profile() {
                 </div>
               ))}
 
+              {/* Number fields */}
               {[
                 { label: "Height (cm)", name: "height_cm", step: "1" },
                 { label: "Weight (kg)", name: "weight_kg", step: "0.1" },
                 { label: "Body Fat (%)", name: "bodyfat_pct", step: "0.1" },
                 { label: "Activity Factor", name: "activity_factor", step: "0.1" },
-                { label: "Caloric Target", name: "caloric_target", step: "1" },
               ].map((field) => (
                 <div className="mb-3" key={field.name}>
                   <label className="form-label">{field.label}</label>
@@ -218,13 +236,28 @@ export default function Profile() {
                 </div>
               ))}
 
+              {/* Auto-calculated caloric target */}
+              <div className="mb-3">
+                <label className="form-label">Caloric Target (auto-calculated)</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  name="caloric_target"
+                  value={formData.caloric_target ?? ""}
+                  readOnly
+                />
+              </div>
+
+              {/* Update button */}
               <button
                 type="button"
-                className="btn btn-primary w-100"
+                className="btn w-100"
                 style={{
                   backgroundColor: "#ff7f32",
                   borderRadius: "24px",
                   fontWeight: 600,
+                  color: "#fff",
+                  boxShadow: "0 0 12px rgba(255,127,50,0.8)",
                 }}
                 onClick={handleUpdate}
                 disabled={saving || status !== "authenticated"}
