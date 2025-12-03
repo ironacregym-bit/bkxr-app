@@ -8,6 +8,9 @@ const ALLOWED_KEYS = new Set([
   "activity_factor",
   "bodyfat_pct",
   "caloric_target",
+  "protein_target",  // ✅ new
+  "carb_target",     // ✅ new
+  "fat_target",      // ✅ new
   "created_at",
   "email",
   "height_cm",
@@ -16,15 +19,18 @@ const ALLOWED_KEYS = new Set([
   "name",
   "sex",
   "weight_kg",
-  "location"
+  "location",
 ]);
 
-// Response shape (all fields you specified)
+// Response shape (all fields you specified + new macro targets)
 interface ProfileResponse {
   DOB: string;                 // "" when unknown
   activity_factor: number | null;
   bodyfat_pct: number | null;
   caloric_target: number | null;
+  protein_target: number | null; // ✅ new
+  carb_target: number | null;    // ✅ new
+  fat_target: number | null;     // ✅ new
   created_at: string;          // ISO string or "" if not set
   email: string;               // provided in query or stored value
   height_cm: number | null;
@@ -52,7 +58,6 @@ function toIsoStringOrEmpty(value: any): string {
   }
   // If already a string that looks like a date, return as-is
   if (typeof value === "string") {
-    // Optionally validate, but pass through to avoid mangling user data
     return value;
   }
   return "";
@@ -76,6 +81,9 @@ function buildProfileResponse(email: string, data: Record<string, any> = {}): Pr
     bodyfat_pct: typeof data.bodyfat_pct === "number" ? data.bodyfat_pct : null,
     activity_factor: typeof data.activity_factor === "number" ? data.activity_factor : null,
     caloric_target: typeof data.caloric_target === "number" ? data.caloric_target : null,
+    protein_target: typeof data.protein_target === "number" ? data.protein_target : null, // ✅
+    carb_target: typeof data.carb_target === "number" ? data.carb_target : null,         // ✅
+    fat_target: typeof data.fat_target === "number" ? data.fat_target : null,            // ✅
     created_at: toIsoStringOrEmpty(data.created_at),
     last_login_at: toIsoStringOrEmpty(data.last_login_at),
     location: (typeof data.location === "string" && data.location.trim()) || "",
@@ -110,7 +118,7 @@ function filterPatchBody(body: any): Record<string, any> {
 
     // Allow Firestore Timestamp objects or Date objects unmodified;
     // they will be normalised when building the response.
-    if (val && (typeof val.toDate === "function" || val instanceof Date)) {
+    if (val && (typeof (val as any).toDate === "function" || val instanceof Date)) {
       out[key] = val;
       continue;
     }
@@ -148,6 +156,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             bodyfat_pct: null,
             activity_factor: null,
             caloric_target: null,
+            protein_target: null, // ✅
+            carb_target: null,    // ✅
+            fat_target: null,     // ✅
             created_at: "",
             last_login_at: "",
             location: "",
