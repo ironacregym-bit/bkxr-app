@@ -49,7 +49,7 @@ export default function NutritionPage() {
   const totals = useMemo(() => {
     const entries = logsData?.entries || [];
     return entries.reduce(
-      (acc: any, e: any) => {
+      (acc: { calories: number; protein: number; carbs: number; fat: number }, e: any) => {
         acc.calories += e.calories || 0;
         acc.protein += e.protein || 0;
         acc.carbs += e.carbs || 0;
@@ -212,7 +212,7 @@ export default function NutritionPage() {
           const mealEntries = logsData?.entries?.filter((e: any) => e.meal === meal) || [];
           const isOpen = openMeal === meal;
           const mealTotals = mealEntries.reduce(
-            (acc, e) => {
+            (acc: { calories: number; protein: number; carbs: number; fat: number }, e: any) => {
               acc.calories += e.calories || 0;
               acc.protein += e.protein || 0;
               acc.carbs += e.carbs || 0;
