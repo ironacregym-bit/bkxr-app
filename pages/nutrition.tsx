@@ -176,19 +176,33 @@ export default function NutritionPage() {
             <p style={{ color: "#d63384" }}>Fat: {round2(totals.fat)} / {goals.fat} g</p>
           </div>
 
-          {/* Right Column - Circular Charts */}
-          <div className="col-6 d-flex flex-wrap gap-3 justify-content-center">
-            <div style={{ width: 80, height: 80 }}>
-              <CircularProgressbar value={progress.calories} text="Cal" styles={buildStyles({ pathColor: "blue" })} />
-            </div>
-            <div style={{ width: 80, height: 80 }}>
-              <CircularProgressbar value={progress.protein} text="Prot" styles={buildStyles({ pathColor: "green" })} />
-            </div>
-            <div style={{ width: 80, height: 80 }}>
-              <CircularProgressbar value={progress.carbs} text="Carb" styles={buildStyles({ pathColor: "orange" })} />
-            </div>
-            <div style={{ width: 80, height: 80 }}>
-              <CircularProgressbar value={progress.fat} text="Fat" styles={buildStyles({ pathColor: "#d63384" })} />
+          {/* Right Column - Nested Circular Charts */}
+          <div className="col-6 d-flex justify-content-center">
+            <div style={{ position: "relative", width: 160, height: 160 }}>
+              <div style={{ position: "absolute", top: 0, left: 0, width: 160, height: 160 }}>
+                <CircularProgressbar
+                  value={progress.calories}
+                  styles={buildStyles({ pathColor: "blue", trailColor: "#eee", pathTransitionDuration: 1 })}
+                />
+              </div>
+              <div style={{ position: "absolute", top: 10, left: 10, width: 140, height: 140 }}>
+                <CircularProgressbar
+                  value={progress.protein}
+                  styles={buildStyles({ pathColor: "green", trailColor: "#eee", pathTransitionDuration: 1 })}
+                />
+              </div>
+              <div style={{ position: "absolute", top: 20, left: 20, width: 120, height: 120 }}>
+                <CircularProgressbar
+                  value={progress.carbs}
+                  styles={buildStyles({ pathColor: "orange", trailColor: "#eee", pathTransitionDuration: 1 })}
+                />
+              </div>
+              <div style={{ position: "absolute", top: 30, left: 30, width: 100, height: 100 }}>
+                <CircularProgressbar
+                  value={progress.fat}
+                  styles={buildStyles({ pathColor: "#d63384", trailColor: "#eee", pathTransitionDuration: 1 })}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -197,6 +211,16 @@ export default function NutritionPage() {
         {meals.map((meal) => {
           const mealEntries = logsData?.entries?.filter((e: any) => e.meal === meal) || [];
           const isOpen = openMeal === meal;
+          const mealTotals = mealEntries.reduce(
+            (acc, e) => {
+              acc.calories += e.calories || 0;
+              acc.protein += e.protein || 0;
+              acc.carbs += e.carbs || 0;
+              acc.fat += e.fat || 0;
+              return acc;
+            },
+            { calories: 0, protein: 0, carbs: 0, fat: 0 }
+          );
 
           return (
             <div key={meal} className="mb-3">
@@ -204,7 +228,11 @@ export default function NutritionPage() {
                 className="btn btn-outline-primary w-100 mb-2 text-start"
                 onClick={() => setOpenMeal(isOpen ? null : meal)}
               >
-                {meal} ({mealEntries.length})
+                {meal} ({mealEntries.length}) - 
+                <span className="text-primary"> {round2(mealTotals.calories)} kcal</span> | 
+                <span className="text-success"> {round2(mealTotals.protein)}p</span> | 
+                <span className="text-warning"> {round2(mealTotals.carbs)}c</span> | 
+                <span style={{ color: "#d63384" }}> {round2(mealTotals.fat)}f</span>
               </button>
 
               {isOpen && (
