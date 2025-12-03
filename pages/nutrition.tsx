@@ -16,11 +16,12 @@ function round2(n: number | undefined) {
   return n !== undefined ? n.toFixed(2) : "-";
 }
 
+// Futuristic color palette
 const COLORS = {
-  calories: "rgb(0,102,255)",
-  protein: "rgb(0,153,51)",
-  carbs: "rgb(255,140,0)",
-  fat: "rgb(214,51,132)",
+  calories: "#ff7f32", // Neon orange
+  protein: "#32ff7f",  // Electric green
+  carbs: "#ffc107",    // Amber yellow
+  fat: "#ff4fa3",      // Hot pink
 };
 
 export default function NutritionPage() {
@@ -32,7 +33,6 @@ export default function NutritionPage() {
   // Date navigation state
   const [selectedDate, setSelectedDate] = useState(new Date());
 
-  // If query param exists, set selectedDate from it
   useEffect(() => {
     if (router.query.date) {
       const parsed = new Date(router.query.date as string);
@@ -190,15 +190,25 @@ export default function NutritionPage() {
 
   return (
     <>
-      <main className="container py-3" style={{ paddingBottom: "90px" }}>
+      <main
+        className="container py-3"
+        style={{
+          paddingBottom: "90px",
+          background: "linear-gradient(135deg, #1a1a1a 0%, #2e1a0f 100%)",
+          color: "#fff",
+          borderRadius: "12px",
+        }}
+      >
         {/* Date Navigation */}
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <button className="btn btn-outline-secondary" onClick={goPrevDay}>
+          <button className="btn btn-outline-light" onClick={goPrevDay}>
             ← Previous
           </button>
-          <h2 className="text-center mb-0">Nutrition ({formattedDate})</h2>
+          <h2 className="text-center mb-0" style={{ fontWeight: 700 }}>
+            Nutrition ({formattedDate})
+          </h2>
           <button
-            className="btn btn-outline-secondary"
+            className="btn btn-outline-light"
             onClick={goNextDay}
             disabled={formattedDate === new Date().toISOString().slice(0, 10)}
           >
@@ -210,19 +220,21 @@ export default function NutritionPage() {
         <div className="row mb-4">
           {/* Left Column */}
           <div className="col-6">
-            <h5>Macros</h5>
-            <p style={{ color: COLORS.calories }}>
-              Calories: {round2(totals.calories)} / {goals.calories}
-            </p>
-            <p style={{ color: COLORS.protein }}>
-              Protein: {round2(totals.protein)} / {goals.protein} g
-            </p>
-            <p style={{ color: COLORS.carbs }}>
-              Carbs: {round2(totals.carbs)} / {goals.carbs} g
-            </p>
-            <p style={{ color: COLORS.fat }}>
-              Fat: {round2(totals.fat)} / {goals.fat} g
-            </p>
+            <div
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                borderRadius: "16px",
+                padding: "16px",
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+              }}
+            >
+              <h5 style={{ marginBottom: "12px" }}>Macros</h5>
+              <p style={{ color: COLORS.calories }}>Calories: {round2(totals.calories)} / {goals.calories}</p>
+              <p style={{ color: COLORS.protein }}>Protein: {round2(totals.protein)} / {goals.protein} g</p>
+              <p style={{ color: COLORS.carbs }}>Carbs: {round2(totals.carbs)} / {goals.carbs} g</p>
+              <p style={{ color: COLORS.fat }}>Fat: {round2(totals.fat)} / {goals.fat} g</p>
+            </div>
           </div>
 
           {/* Right Column - Concentric Rings */}
@@ -235,7 +247,7 @@ export default function NutritionPage() {
                   strokeWidth={7}
                   styles={buildStyles({
                     pathColor: COLORS.calories,
-                    trailColor: "rgba(0,102,255,0.12)",
+                    trailColor: "rgba(255,127,50,0.15)",
                     strokeLinecap: "butt",
                     pathTransitionDuration: 0.8,
                   })}
@@ -248,7 +260,7 @@ export default function NutritionPage() {
                   strokeWidth={8}
                   styles={buildStyles({
                     pathColor: COLORS.protein,
-                    trailColor: "rgba(0,153,51,0.12)",
+                    trailColor: "rgba(50,255,127,0.15)",
                     strokeLinecap: "butt",
                     pathTransitionDuration: 0.8,
                   })}
@@ -258,10 +270,10 @@ export default function NutritionPage() {
               <div style={{ position: "absolute", top: 28, left: 28, width: 124, height: 124 }}>
                 <CircularProgressbar
                   value={progress.carbs}
-                  strokeWidth={9}
+                  strokeWidth={10}
                   styles={buildStyles({
                     pathColor: COLORS.carbs,
-                    trailColor: "rgba(255,140,0,0.12)",
+                    trailColor: "rgba(255,193,7,0.15)",
                     strokeLinecap: "butt",
                     pathTransitionDuration: 0.8,
                   })}
@@ -274,7 +286,7 @@ export default function NutritionPage() {
                   strokeWidth={12}
                   styles={buildStyles({
                     pathColor: COLORS.fat,
-                    trailColor: "rgba(214,51,132,0.12)",
+                    trailColor: "rgba(255,79,163,0.15)",
                     strokeLinecap: "butt",
                     pathTransitionDuration: 0.8,
                   })}
@@ -302,7 +314,8 @@ export default function NutritionPage() {
           return (
             <div key={meal} className="mb-3">
               <button
-                className="btn btn-outline-primary w-100 mb-2 text-start"
+                className="btn btn-outline-light w-100 mb-2 text-start"
+                style={{ borderRadius: "12px", background: "rgba(255,255,255,0.05)" }}
                 onClick={() => setOpenMeal(isOpen ? null : meal)}
               >
                 {meal} ({mealEntries.length}) -{" "}
@@ -314,7 +327,6 @@ export default function NutritionPage() {
 
               {isOpen && (
                 <div className="px-2">
-                  {/* Add food search */}
                   <input
                     className="form-control mb-2"
                     placeholder={`Search foods for ${meal}...`}
@@ -328,7 +340,15 @@ export default function NutritionPage() {
                     results.slice(0, 5).map((f) => (
                       <div key={f.id ?? f.code ?? f.name} className="mb-1">
                         {selectedFood?.id === f.id ? (
-                          <div className="bxkr-card p-2 mb-1">
+                          <div
+                            style={{
+                              background: "rgba(255,255,255,0.05)",
+                              borderRadius: "12px",
+                              padding: "12px",
+                              backdropFilter: "blur(8px)",
+                              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                            }}
+                          >
                             <div className="d-flex justify-content-between align-items-center mb-1">
                               <input
                                 type="number"
@@ -345,6 +365,7 @@ export default function NutritionPage() {
                             </div>
                             <button
                               className="btn btn-primary w-100 mb-1"
+                              style={{ backgroundColor: COLORS.calories, borderRadius: "24px", fontWeight: 600 }}
                               onClick={() => addEntry(meal, selectedFood)}
                               disabled={adding}
                             >
@@ -357,6 +378,7 @@ export default function NutritionPage() {
                         ) : (
                           <button
                             className="list-group-item list-group-item-action"
+                            style={{ background: "rgba(255,255,255,0.05)", color: "#fff" }}
                             onClick={() => setSelectedFood(f)}
                           >
                             {f.name} ({f.brand}) - {round2(f.calories)} kcal/100g
@@ -365,9 +387,9 @@ export default function NutritionPage() {
                       </div>
                     ))}
 
-                  {/* Manual entry */}
                   <button
-                    className="btn btn-outline-secondary w-100 mb-2"
+                    className="btn btn-outline-light w-100 mb-2"
+                    style={{ borderRadius: "12px" }}
                     onClick={() =>
                       setSelectedFood({
                         id: `manual-${Date.now()}`,
@@ -383,13 +405,20 @@ export default function NutritionPage() {
                     Add manual food
                   </button>
 
-                  {/* Meal entries */}
                   {mealEntries.map((e: any) => (
-                    <div key={e.id} className="bxkr-card p-2 mb-1 d-flex justify-content-between align-items-center">
+                    <div
+                      key={e.id}
+                      style={{
+                        background: "rgba(255,255,255,0.05)",
+                        borderRadius: "12px",
+                        padding: "12px",
+                        marginBottom: "8px",
+                        backdropFilter: "blur(8px)",
+                      }}
+                      className="d-flex justify-content-between align-items-center"
+                    >
                       <div>
-                        <div className="fw-bold">
-                          {e.food.name} ({e.food.brand})
-                        </div>
+                        <div className="fw-bold">{e.food.name} ({e.food.brand})</div>
                         <div className="small text-muted">{e.grams} g</div>
                         <div className="small">
                           <span style={{ color: COLORS.calories }}>{round2(e.calories)} kcal</span> |{" "}
