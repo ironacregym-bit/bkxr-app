@@ -170,10 +170,10 @@ export default function NutritionPage() {
           {/* Left Column */}
           <div className="col-6">
             <h5>Macros</h5>
-            <p className="text-primary">Calories: {round2(totals.calories)} / {goals.calories}</p>
-            <p className="text-success">Protein: {round2(totals.protein)} / {goals.protein} g</p>
-            <p className="text-warning">Carbs: {round2(totals.carbs)} / {goals.carbs} g</p>
-            <p style={{ color: "#d63384" }}>Fat: {round2(totals.fat)} / {goals.fat} g</p>
+            <p style={{ color: "rgb(0,102,255)" }}>Calories: {round2(totals.calories)} / {goals.calories}</p>
+            <p style={{ color: "rgb(0,153,51)" }}>Protein: {round2(totals.protein)} / {goals.protein} g</p>
+            <p style={{ color: "rgb(255,140,0)" }}>Carbs: {round2(totals.carbs)} / {goals.carbs} g</p>
+            <p style={{ color: "rgb(214,51,132)" }}>Fat: {round2(totals.fat)} / {goals.fat} g</p>
           </div>
 
           {/* Right Column - Exactly 4 concentric rings */}
@@ -257,10 +257,10 @@ export default function NutritionPage() {
                 onClick={() => setOpenMeal(isOpen ? null : meal)}
               >
                 {meal} ({mealEntries.length}) - 
-                <span className="text-primary"> {round2(mealTotals.calories)} kcal</span> | 
-                <span className="text-success"> {round2(mealTotals.protein)}p</span> | 
-                <span className="text-warning"> {round2(mealTotals.carbs)}c</span> | 
-                <span style={{ color: "#d63384" }}> {round2(mealTotals.fat)}f</span>
+                <span style={{ color: "rgb(0,102,255)" }}> {round2(mealTotals.calories)} kcal</span> | 
+                <span style={{ color: "rgb(0,153,51)" }}> {round2(mealTotals.protein)}p</span> | 
+                <span style={{ color: "rgb(255,140,0)" }}> {round2(mealTotals.carbs)}c</span> | 
+                <span style={{ color: "rgb(214,51,132)" }}> {round2(mealTotals.fat)}f</span>
               </button>
 
               {isOpen && (
@@ -287,10 +287,10 @@ export default function NutritionPage() {
                               onChange={(e) => setGrams(Number(e.target.value))}
                             />
                             <div>
-                              <span className="text-primary">{round2(scaledSelected?.calories)} kcal</span> | 
-                              <span className="text-success">{round2(scaledSelected?.protein)}p</span> | 
-                              <span className="text-warning">{round2(scaledSelected?.carbs)}c</span> | 
-                              <span style={{ color: "#d63384" }}>{round2(scaledSelected?.fat)}f</span>
+                              <span style={{ color: "rgb(0,102,255)" }}>{round2(scaledSelected?.calories)} kcal</span> | 
+                              <span style={{ color: "rgb(0,153,51)" }}>{round2(scaledSelected?.protein)}p</span> | 
+                              <span style={{ color: "rgb(255,140,0)" }}>{round2(scaledSelected?.carbs)}c</span> | 
+                              <span style={{ color: "rgb(214,51,132)" }}>{round2(scaledSelected?.fat)}f</span>
                             </div>
                           </div>
                           <button
@@ -330,10 +330,10 @@ export default function NutritionPage() {
                         <div className="fw-bold">{e.food.name} ({e.food.brand})</div>
                         <div className="small text-muted">{e.grams} g</div>
                         <div className="small">
-                          <span className="text-primary">{round2(e.calories)} kcal</span> | 
-                          <span className="text-success">{round2(e.protein)}p</span> | 
-                          <span className="text-warning">{round2(e.carbs)}c</span> | 
-                          <span style={{ color: "#d63384" }}>{round2(e.fat)}f</span>
+                          <span style={{ color: "rgb(0,102,255)" }}>{round2(e.calories)} kcal</span> | 
+                          <span style={{ color: "rgb(0,153,51)" }}>{round2(e.protein)}p</span> | 
+                          <span style={{ color: "rgb(255,140,0)" }}>{round2(e.carbs)}c</span> | 
+                          <span style={{ color: "rgb(214,51,132)" }}>{round2(e.fat)}f</span>
                         </div>
                       </div>
                       <button className="btn btn-link text-danger" onClick={() => removeEntry(e.id)}>Remove</button>
