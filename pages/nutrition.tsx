@@ -15,13 +15,6 @@ function round2(n: number | undefined) {
   return n !== undefined ? n.toFixed(2) : "-";
 }
 
-// Geometry helper for concentric rings
-function ringGeometry(index: number, totalSize = 180, stroke = 12, gap = 2) {
-  const inset = index * (stroke + gap);
-  const size = totalSize - inset * 2;
-  return { size, inset, stroke };
-}
-
 export default function NutritionPage() {
   const { data: session } = useSession();
   const [openMeal, setOpenMeal] = useState<string | null>(null);
@@ -183,81 +176,61 @@ export default function NutritionPage() {
             <p style={{ color: "#d63384" }}>Fat: {round2(totals.fat)} / {goals.fat} g</p>
           </div>
 
-          {/* Right Column - Concentric Rings */}
+          {/* Right Column - Exactly 4 concentric rings */}
           <div className="col-6 d-flex justify-content-center">
             <div style={{ position: "relative", width: 180, height: 180 }}>
               {/* Calories */}
-              {(() => {
-                const geo = ringGeometry(0);
-                return (
-                  <div style={{ position: "absolute", top: geo.inset, left: geo.inset, width: geo.size, height: geo.size }}>
-                    <CircularProgressbar
-                      value={progress.calories}
-                      strokeWidth={geo.stroke}
-                      styles={buildStyles({
-                        pathColor: "rgb(0,102,255)",
-                        trailColor: "rgba(0,102,255,0.12)",
-                        strokeLinecap: "butt",
-                        pathTransitionDuration: 0.8,
-                      })}
-                    />
-                  </div>
-                );
-              })()}
+              <div style={{ position: "absolute", top: 0, left: 0, width: 180, height: 180 }}>
+                <CircularProgressbar
+                  value={progress.calories}
+                  strokeWidth={12}
+                  styles={buildStyles({
+                    pathColor: "rgb(0,102,255)",
+                    trailColor: "rgba(0,102,255,0.12)",
+                    strokeLinecap: "butt",
+                    pathTransitionDuration: 0.8,
+                  })}
+                />
+              </div>
               {/* Protein */}
-              {(() => {
-                const geo = ringGeometry(1);
-                return (
-                  <div style={{ position: "absolute", top: geo.inset, left: geo.inset, width: geo.size, height: geo.size }}>
-                    <CircularProgressbar
-                      value={progress.protein}
-                      strokeWidth={geo.stroke}
-                      styles={buildStyles({
-                        pathColor: "rgb(0,153,51)",
-                        trailColor: "rgba(0,153,51,0.12)",
-                        strokeLinecap: "butt",
-                        pathTransitionDuration: 0.8,
-                      })}
-                    />
-                  </div>
-                );
-              })()}
+              <div style={{ position: "absolute", top: 14, left: 14, width: 152, height: 152 }}>
+                <CircularProgressbar
+                  value={progress.protein}
+                  strokeWidth={12}
+                  styles={buildStyles({
+                    pathColor: "rgb(0,153,51)",
+                    trailColor: "rgba(0,153,51,0.12)",
+                    strokeLinecap: "butt",
+                    pathTransitionDuration: 0.8,
+                  })}
+                />
+              </div>
               {/* Carbs */}
-              {(() => {
-                const geo = ringGeometry(2);
-                return (
-                  <div style={{ position: "absolute", top: geo.inset, left: geo.inset, width: geo.size, height: geo.size }}>
-                    <CircularProgressbar
-                      value={progress.carbs}
-                      strokeWidth={geo.stroke}
-                      styles={buildStyles({
-                        pathColor: "rgb(255,140,0)",
-                        trailColor: "rgba(255,140,0,0.12)",
-                        strokeLinecap: "butt",
-                        pathTransitionDuration: 0.8,
-                      })}
-                    />
-                  </div>
-                );
-              })()}
+              <div style={{ position: "absolute", top: 28, left: 28, width: 124, height: 124 }}>
+                <CircularProgressbar
+                  value={progress.carbs}
+                  strokeWidth={12}
+                  styles={buildStyles({
+                    pathColor: "rgb(255,140,0)",
+                    trailColor: "rgba(255,140,0,0.12)",
+                    strokeLinecap: "butt",
+                    pathTransitionDuration: 0.8,
+                  })}
+                />
+              </div>
               {/* Fat */}
-              {(() => {
-                const geo = ringGeometry(3);
-                return (
-                  <div style={{ position: "absolute", top: geo.inset, left: geo.inset, width: geo.size, height: geo.size }}>
-                    <CircularProgressbar
-                      value={progress.fat}
-                      strokeWidth={geo.stroke}
-                      styles={buildStyles({
-                        pathColor: "rgb(214,51,132)",
-                        trailColor: "rgba(214,51,132,0.12)",
-                        strokeLinecap: "butt",
-                        pathTransitionDuration: 0.8,
-                      })}
-                    />
-                  </div>
-                );
-              })()}
+              <div style={{ position: "absolute", top: 42, left: 42, width: 96, height: 96 }}>
+                <CircularProgressbar
+                  value={progress.fat}
+                  strokeWidth={12}
+                  styles={buildStyles({
+                    pathColor: "rgb(214,51,132)",
+                    trailColor: "rgba(214,51,132,0.12)",
+                    strokeLinecap: "butt",
+                    pathTransitionDuration: 0.8,
+                  })}
+                />
+              </div>
             </div>
           </div>
         </div>
