@@ -21,6 +21,25 @@ export default function Document() {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="BXKR" />
+
+        {/* ===== Global Safe Area Spacer for BottomNav ===== */}
+        <style>{`
+          :root {
+            /* Height of the fixed BottomNav (pill container + padding).
+               Tweak once here if you change the BottomNav size. */
+            --bxkr-bottomnav-height: 84px;
+          }
+
+          /* Ensure content isn't obscured by the fixed BottomNav or iOS home indicator */
+          body {
+            padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--bxkr-bottomnav-height));
+          }
+
+          /* Optional: smooth scrolling feel and prevent bounce issues */
+          html, body {
+            overscroll-behavior: contain;
+          }
+        `}</style>
       </Head>
 
       <body>
