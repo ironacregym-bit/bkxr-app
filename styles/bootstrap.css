@@ -76,6 +76,12 @@ body {
   transform: scale(1.05);
 }
 
+.nav-icon:hover {
+  background: rgba(255,127,50,0.15);
+  box-shadow: 0 0 15px rgba(255,127,50,0.8);
+  transform: scale(1.08);
+}
+
 .bxkr-bottomnav-link,
 .bxkr-bottomnav-link:visited,
 .bxkr-bottomnav-link:active,
