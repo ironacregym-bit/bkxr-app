@@ -182,6 +182,7 @@ export default function NutritionPage() {
               <div style={{ position: "absolute", top: 0, left: 0, width: 180, height: 180 }}>
                 <CircularProgressbar
                   value={progress.calories}
+                  strokeWidth={14}
                   styles={buildStyles({
                     pathColor: "blue",
                     trailColor: "rgba(0, 0, 255, 0.15)",
@@ -192,6 +193,7 @@ export default function NutritionPage() {
               <div style={{ position: "absolute", top: 12, left: 12, width: 156, height: 156 }}>
                 <CircularProgressbar
                   value={progress.protein}
+                  strokeWidth={14}
                   styles={buildStyles({
                     pathColor: "green",
                     trailColor: "rgba(0, 128, 0, 0.15)",
@@ -202,6 +204,7 @@ export default function NutritionPage() {
               <div style={{ position: "absolute", top: 24, left: 24, width: 132, height: 132 }}>
                 <CircularProgressbar
                   value={progress.carbs}
+                  strokeWidth={14}
                   styles={buildStyles({
                     pathColor: "orange",
                     trailColor: "rgba(255, 165, 0, 0.15)",
@@ -212,6 +215,7 @@ export default function NutritionPage() {
               <div style={{ position: "absolute", top: 36, left: 36, width: 108, height: 108 }}>
                 <CircularProgressbar
                   value={progress.fat}
+                  strokeWidth={14}
                   styles={buildStyles({
                     pathColor: "#d63384",
                     trailColor: "rgba(214, 51, 132, 0.15)",
@@ -220,6 +224,7 @@ export default function NutritionPage() {
                 />
               </div>
             </div>
+          </div>
         </div>
 
         {/* Meals */}
