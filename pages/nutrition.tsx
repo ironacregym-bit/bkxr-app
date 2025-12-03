@@ -238,7 +238,7 @@ export default function NutritionPage() {
                         pathColor: "rgb(0, 153, 51)", // green
                         trailColor: "rgba(0, 153, 51, 0.12)",
                         pathTransitionDuration: 0.8,
-                        pathLinecap: "butt",
+                        strokeLinecap: "butt",
                       })}
                     />
                   </div>
@@ -265,7 +265,7 @@ export default function NutritionPage() {
                         pathColor: "rgb(255, 140, 0)", // orange
                         trailColor: "rgba(255, 140, 0, 0.12)",
                         pathTransitionDuration: 0.8,
-                        pathLinecap: "butt",
+                        strokeLinecap: "butt",
                       })}
                     />
                   </div>
@@ -292,7 +292,7 @@ export default function NutritionPage() {
                         pathColor: "rgb(214, 51, 132)", // dark pink
                         trailColor: "rgba(214, 51, 132, 0.12)",
                         pathTransitionDuration: 0.8,
-                        pathLinecap: "butt",
+                        strokeLinecap: "butt",
                       })}
                     />
                   </div>
