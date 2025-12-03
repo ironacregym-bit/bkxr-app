@@ -2,10 +2,11 @@
 import Head from "next/head";
 import useSWR from "swr";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 import AddToHomeScreen from "../components/AddToHomeScreen";
+import CoachBanner from "../components/CoachBanner";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -35,8 +36,10 @@ function isSameDay(a: Date, b: Date) {
 export default function Home() {
   const { data: session, status } = useSession();
 
+  // Fetch workouts
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
 
+  // Completion history
   const [range, setRange] = useState<"week" | "month" | "all">("week");
   const { data: completionData } = useSWR(
     session?.user?.email
@@ -44,7 +47,6 @@ export default function Home() {
       : null,
     fetcher
   );
-
   const completedIds = completionData?.history?.map((h: any) => h.workout_id) || [];
 
   useEffect(() => {
@@ -78,11 +80,12 @@ export default function Home() {
     (w: any) => (w.day_name || "").toLowerCase() === selectedDayName.toLowerCase()
   );
 
+  // Stats from completionData
   const now = new Date();
   let startDate: Date;
   if (range === "week") {
     startDate = new Date();
-    startDate.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    startDate.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // Monday
     startDate.setHours(0, 0, 0, 0);
   } else if (range === "month") {
     startDate = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -112,12 +115,21 @@ export default function Home() {
     );
   });
 
+  // ===== Nutrition check (today) =====
+  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const { data: nutritionData } = useSWR(
+    session?.user?.email ? `/api/nutrition/logs?date=${todayKey}` : null,
+    fetcher
+  );
+  const noNutritionLogged = (nutritionData?.entries?.length || 0) === 0;
+
   return (
     <>
       <Head>
         <title>BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
+
       <main
         className="container py-3"
         style={{
@@ -127,6 +139,15 @@ export default function Home() {
           borderRadius: "12px",
         }}
       >
+        {/* Coach reminder pill */}
+        {status === "authenticated" && noNutritionLogged && (
+          <CoachBanner
+            message="Don't forget to log your nutrition today! Tap here to add your meals."
+            dateKey={todayKey}
+          />
+        )}
+
+        {/* Greeting */}
         <h2 className="mb-4 text-center" style={{ fontWeight: 700, fontSize: "1.8rem" }}>
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
@@ -136,9 +157,7 @@ export default function Home() {
           {["week", "month", "all"].map((r) => (
             <button
               key={r}
-              className={`btn btn-sm ${
-                range === r ? "btn-primary" : "btn-outline-primary"
-              }`}
+              className={`btn btn-sm ${range === r ? "btn-primary" : "btn-outline-primary"}`}
               style={{
                 borderRadius: "24px",
                 backgroundColor: range === r ? "#ff7f32" : "transparent",
@@ -156,7 +175,6 @@ export default function Home() {
         <div className="row text-center mb-4 gx-3">
           <div className="col">
             <div
-              className="futuristic-card"
               style={{
                 background: "rgba(255,255,255,0.05)",
                 borderRadius: "16px",
@@ -176,7 +194,6 @@ export default function Home() {
           </div>
           <div className="col">
             <div
-              className="futuristic-card"
               style={{
                 background: "rgba(255,255,255,0.05)",
                 borderRadius: "16px",
@@ -196,7 +213,6 @@ export default function Home() {
           </div>
           <div className="col">
             <div
-              className="futuristic-card"
               style={{
                 background: "rgba(255,255,255,0.05)",
                 borderRadius: "16px",
@@ -290,13 +306,13 @@ export default function Home() {
           selectedWorkouts.map((w: any) => (
             <div
               key={w.id}
-              className="futuristic-card mb-3"
               style={{
                 background: "rgba(255,255,255,0.05)",
                 borderRadius: "16px",
                 padding: "16px",
                 backdropFilter: "blur(10px)",
                 boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+                marginBottom: "12px",
               }}
             >
               <div className="mb-2 fw-bold">{selectedDayName}</div>
