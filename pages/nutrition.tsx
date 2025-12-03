@@ -178,33 +178,48 @@ export default function NutritionPage() {
 
           {/* Right Column - Nested Circular Charts */}
           <div className="col-6 d-flex justify-content-center">
-            <div style={{ position: "relative", width: 160, height: 160 }}>
-              <div style={{ position: "absolute", top: 0, left: 0, width: 160, height: 160 }}>
+            <div style={{ position: "relative", width: 180, height: 180 }}>
+              <div style={{ position: "absolute", top: 0, left: 0, width: 180, height: 180 }}>
                 <CircularProgressbar
                   value={progress.calories}
-                  styles={buildStyles({ pathColor: "blue", trailColor: "#eee", pathTransitionDuration: 1 })}
+                  styles={buildStyles({
+                    pathColor: "blue",
+                    trailColor: "rgba(0, 0, 255, 0.15)",
+                    pathTransitionDuration: 1,
+                  })}
                 />
               </div>
-              <div style={{ position: "absolute", top: 10, left: 10, width: 140, height: 140 }}>
+              <div style={{ position: "absolute", top: 12, left: 12, width: 156, height: 156 }}>
                 <CircularProgressbar
                   value={progress.protein}
-                  styles={buildStyles({ pathColor: "green", trailColor: "#eee", pathTransitionDuration: 1 })}
+                  styles={buildStyles({
+                    pathColor: "green",
+                    trailColor: "rgba(0, 128, 0, 0.15)",
+                    pathTransitionDuration: 1,
+                  })}
                 />
               </div>
-              <div style={{ position: "absolute", top: 20, left: 20, width: 120, height: 120 }}>
+              <div style={{ position: "absolute", top: 24, left: 24, width: 132, height: 132 }}>
                 <CircularProgressbar
                   value={progress.carbs}
-                  styles={buildStyles({ pathColor: "orange", trailColor: "#eee", pathTransitionDuration: 1 })}
+                  styles={buildStyles({
+                    pathColor: "orange",
+                    trailColor: "rgba(255, 165, 0, 0.15)",
+                    pathTransitionDuration: 1,
+                  })}
                 />
               </div>
-              <div style={{ position: "absolute", top: 30, left: 30, width: 100, height: 100 }}>
+              <div style={{ position: "absolute", top: 36, left: 36, width: 108, height: 108 }}>
                 <CircularProgressbar
                   value={progress.fat}
-                  styles={buildStyles({ pathColor: "#d63384", trailColor: "#eee", pathTransitionDuration: 1 })}
+                  styles={buildStyles({
+                    pathColor: "#d63384",
+                    trailColor: "rgba(214, 51, 132, 0.15)",
+                    pathTransitionDuration: 1,
+                  })}
                 />
               </div>
             </div>
-          </div>
         </div>
 
         {/* Meals */}
