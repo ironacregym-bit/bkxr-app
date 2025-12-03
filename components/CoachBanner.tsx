@@ -1,71 +1,60 @@
 
 "use client";
 
-import Image from "next/image";
-import { useEffect, useState } from "react";
+import Link from "next/link";
 
-type CoachBannerProps = {
-  message: string;
-  onDismiss?: () => void;
-  dateKey: string; // e.g., "2025-12-02"
-};
-
-export default function CoachBanner({ message, onDismiss, dateKey }: CoachBannerProps) {
-  const [hidden, setHidden] = useState(false);
-
-  useEffect(() => {
-    const key = `bxkr_banner_dismissed_${dateKey}`;
-    const dismissed = localStorage.getItem(key) === "1";
-    setHidden(dismissed);
-  }, [dateKey]);
-
-  const handleDismiss = () => {
-    const key = `bxkr_banner_dismissed_${dateKey}`;
-    localStorage.setItem(key, "1");
-    setHidden(true);
-    onDismiss?.();
-  };
-
-  if (hidden) return null;
-
+export default function CoachBanner({ message, dateKey }: { message: string; dateKey: string }) {
   return (
-    <div
-      className="d-flex align-items-center p-2 mb-3"
+    <Link
+      href={`/nutrition?date=${dateKey}`}
       style={{
-        background: "rgba(255,255,255,0.08)",
-        backdropFilter: "blur(8px)",
-        borderRadius: "16px",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        background: "linear-gradient(90deg, #3a2f2f, #2e1a0f)", // warm brown gradient
+        borderRadius: "50px",
+        padding: "12px 16px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
         color: "#fff",
+        textDecoration: "none",
+        marginBottom: "16px",
       }}
     >
+      {/* Left Icon */}
       <div
-        className="me-3 d-flex align-items-center justify-content-center"
         style={{
-          width: 44,
-          height: 44,
+          width: 40,
+          height: 40,
           borderRadius: "50%",
-          background: "rgba(255,127,50,0.2)",
-          boxShadow: "0 0 10px rgba(255,127,50,0.5)",
+          background: "rgba(255,255,255,0.1)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          marginRight: "12px",
         }}
       >
-        {/* Use your coach avatar here; fallback to a default */}
-        /coach.png
+        <i className="fas fa-crown" style={{ color: "#ffcc00", fontSize: "18px" }}></i>
       </div>
 
-      <div className="flex-grow-1">
-        <div className="fw-semibold" style={{ color: "#ff7f32" }}>Coach</div>
-        <div className="small" style={{ opacity: 0.9 }}>{message}</div>
+      {/* Text */}
+      <div style={{ flexGrow: 1 }}>
+        <div style={{ fontWeight: 600, fontSize: "16px" }}>Don’t forget!</div>
+        <div style={{ fontSize: "13px", opacity: 0.8 }}>{message}</div>
       </div>
 
-      <button
-        className="btn btn-sm btn-outline-light ms-2"
-        style={{ borderRadius: "24px" }}
-        onClick={handleDismiss}
-        aria-label="Dismiss coach reminder"
+      {/* Action Button */}
+      <div
+        style={{
+          backgroundColor: "#fff",
+          color: "#2e1a0f",
+          fontWeight: 600,
+          borderRadius: "24px",
+          padding: "6px 16px",
+          fontSize: "14px",
+        }}
       >
-        Dismiss
-      </button>
-    </div>
+        Start
+      </div>
+    </Link>
   );
 }
