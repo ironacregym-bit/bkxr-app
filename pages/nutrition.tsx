@@ -15,6 +15,15 @@ function round2(n: number | undefined) {
   return n !== undefined ? n.toFixed(2) : "-";
 }
 
+/** Helper to compute concentric ring geometry */
+function ringGeometry(index: number, totalSize = 180, stroke = 12, gap = 6) {
+  // index: 0 (outermost) .. 3 (innermost)
+  // Each ring is inset by (stroke + gap) per index, so there’s always a consistent visual gap.
+  const inset = index * (stroke + gap);
+  const size = totalSize - inset * 2; // width/height for this ring
+  return { size, inset, stroke };
+}
+
 export default function NutritionPage() {
   const { data: session } = useSession();
   const [openMeal, setOpenMeal] = useState<string | null>(null);
@@ -36,8 +45,11 @@ export default function NutritionPage() {
     fetcher
   );
 
-  // Fetch user goals
-  const { data: profile } = useSWR(session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email)}` : null, fetcher);
+  // Fetch user goals (via /api/profile that you shared)
+  const { data: profile } = useSWR(
+    session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email)}` : null,
+    fetcher
+  );
   const goals = {
     calories: profile?.caloric_target || 2000,
     protein: profile?.protein_target || 150,
@@ -61,10 +73,10 @@ export default function NutritionPage() {
   }, [logsData]);
 
   const progress = {
-    calories: (totals.calories / goals.calories) * 100,
-    protein: (totals.protein / goals.protein) * 100,
-    carbs: (totals.carbs / goals.carbs) * 100,
-    fat: (totals.fat / goals.fat) * 100,
+    calories: Math.max(0, Math.min(100, (totals.calories / goals.calories) * 100)),
+    protein: Math.max(0, Math.min(100, (totals.protein / goals.protein) * 100)),
+    carbs: Math.max(0, Math.min(100, (totals.carbs / goals.carbs) * 100)),
+    fat: Math.max(0, Math.min(100, (totals.fat / goals.fat) * 100)),
   };
 
   // Debounce search
@@ -124,10 +136,10 @@ export default function NutritionPage() {
         meal,
         food,
         grams,
-        calories: scaledSelected.calories,
-        protein: scaledSelected.protein,
-        carbs: scaledSelected.carbs,
-        fat: scaledSelected.fat,
+        calories: scaledSelected!.calories,
+        protein: scaledSelected!.protein,
+        carbs: scaledSelected!.carbs,
+        fat: scaledSelected!.fat,
       };
 
       const optimistic = { id: `temp-${Date.now()}`, created_at: new Date().toISOString(), ...payload };
@@ -176,53 +188,116 @@ export default function NutritionPage() {
             <p style={{ color: "#d63384" }}>Fat: {round2(totals.fat)} / {goals.fat} g</p>
           </div>
 
-          {/* Right Column - Nested Circular Charts */}
+          {/* Right Column - Concentric Rings with proper geometry */}
           <div className="col-6 d-flex justify-content-center">
             <div style={{ position: "relative", width: 180, height: 180 }}>
-              <div style={{ position: "absolute", top: 0, left: 0, width: 180, height: 180 }}>
-                <CircularProgressbar
-                  value={progress.calories}
-                  strokeWidth={14}
-                  styles={buildStyles({
-                    pathColor: "blue",
-                    trailColor: "rgba(0, 0, 255, 0.15)",
-                    pathTransitionDuration: 1,
-                  })}
-                />
-              </div>
-              <div style={{ position: "absolute", top: 12, left: 12, width: 156, height: 156 }}>
-                <CircularProgressbar
-                  value={progress.protein}
-                  strokeWidth={14}
-                  styles={buildStyles({
-                    pathColor: "green",
-                    trailColor: "rgba(0, 128, 0, 0.15)",
-                    pathTransitionDuration: 1,
-                  })}
-                />
-              </div>
-              <div style={{ position: "absolute", top: 24, left: 24, width: 132, height: 132 }}>
-                <CircularProgressbar
-                  value={progress.carbs}
-                  strokeWidth={14}
-                  styles={buildStyles({
-                    pathColor: "orange",
-                    trailColor: "rgba(255, 165, 0, 0.15)",
-                    pathTransitionDuration: 1,
-                  })}
-                />
-              </div>
-              <div style={{ position: "absolute", top: 36, left: 36, width: 108, height: 108 }}>
-                <CircularProgressbar
-                  value={progress.fat}
-                  strokeWidth={14}
-                  styles={buildStyles({
-                    pathColor: "#d63384",
-                    trailColor: "rgba(214, 51, 132, 0.15)",
-                    pathTransitionDuration: 1,
-                  })}
-                />
-              </div>
+              {/* Calories (outer, blue) */}
+              {(() => {
+                const geo = ringGeometry(0, 180, 12, 6);
+                return (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: geo.inset,
+                      left: geo.inset,
+                      width: geo.size,
+                      height: geo.size,
+                    }}
+                  >
+                    <CircularProgressbar
+                      value={progress.calories}
+                      strokeWidth={geo.stroke}
+                      styles={buildStyles({
+                        pathColor: "rgb(0, 102, 255)", // blue
+                        trailColor: "rgba(0, 102, 255, 0.12)",
+                        pathTransitionDuration: 0.8,
+                        pathLinecap: "butt",
+                      })}
+                    />
+                  </div>
+                );
+              })()}
+
+              {/* Protein (green) */}
+              {(() => {
+                const geo = ringGeometry(1, 180, 12, 6);
+                return (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: geo.inset,
+                      left: geo.inset,
+                      width: geo.size,
+                      height: geo.size,
+                    }}
+                  >
+                    <CircularProgressbar
+                      value={progress.protein}
+                      strokeWidth={geo.stroke}
+                      styles={buildStyles({
+                        pathColor: "rgb(0, 153, 51)", // green
+                        trailColor: "rgba(0, 153, 51, 0.12)",
+                        pathTransitionDuration: 0.8,
+                        pathLinecap: "butt",
+                      })}
+                    />
+                  </div>
+                );
+              })()}
+
+              {/* Carbs (orange) */}
+              {(() => {
+                const geo = ringGeometry(2, 180, 12, 6);
+                return (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: geo.inset,
+                      left: geo.inset,
+                      width: geo.size,
+                      height: geo.size,
+                    }}
+                  >
+                    <CircularProgressbar
+                      value={progress.carbs}
+                      strokeWidth={geo.stroke}
+                      styles={buildStyles({
+                        pathColor: "rgb(255, 140, 0)", // orange
+                        trailColor: "rgba(255, 140, 0, 0.12)",
+                        pathTransitionDuration: 0.8,
+                        pathLinecap: "butt",
+                      })}
+                    />
+                  </div>
+                );
+              })()}
+
+              {/* Fat (innermost, dark pink) */}
+              {(() => {
+                const geo = ringGeometry(3, 180, 12, 6);
+                return (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: geo.inset,
+                      left: geo.inset,
+                      width: geo.size,
+                      height: geo.size,
+                    }}
+                  >
+                    <CircularProgressbar
+                      value={progress.fat}
+                      strokeWidth={geo.stroke}
+                      styles={buildStyles({
+                        pathColor: "rgb(214, 51, 132)", // dark pink
+                        trailColor: "rgba(214, 51, 132, 0.12)",
+                        pathTransitionDuration: 0.8,
+                        pathLinecap: "butt",
+                      })}
+                    />
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -252,7 +327,7 @@ export default function NutritionPage() {
                 <span className="text-primary"> {round2(mealTotals.calories)} kcal</span> | 
                 <span className="text-success"> {round2(mealTotals.protein)}p</span> | 
                 <span className="text-warning"> {round2(mealTotals.carbs)}c</span> | 
-                <span style={{ color: "#d63384" }}> {round2(mealTotals.fat)}f</span>
+                <span style={{ color: "rgb(214, 51, 132)" }}> {round2(mealTotals.fat)}f</span>
               </button>
 
               {isOpen && (
@@ -282,7 +357,7 @@ export default function NutritionPage() {
                               <span className="text-primary">{round2(scaledSelected?.calories)} kcal</span> | 
                               <span className="text-success">{round2(scaledSelected?.protein)}p</span> | 
                               <span className="text-warning">{round2(scaledSelected?.carbs)}c</span> | 
-                              <span style={{ color: "#d63384" }}>{round2(scaledSelected?.fat)}f</span>
+                              <span style={{ color: "rgb(214, 51, 132)" }}>{round2(scaledSelected?.fat)}f</span>
                             </div>
                           </div>
                           <button
@@ -325,7 +400,7 @@ export default function NutritionPage() {
                           <span className="text-primary">{round2(e.calories)} kcal</span> | 
                           <span className="text-success">{round2(e.protein)}p</span> | 
                           <span className="text-warning">{round2(e.carbs)}c</span> | 
-                          <span style={{ color: "#d63384" }}>{round2(e.fat)}f</span>
+                          <span style={{ color: "rgb(214, 51, 132)" }}>{round2(e.fat)}f</span>
                         </div>
                       </div>
                       <button className="btn btn-link text-danger" onClick={() => removeEntry(e.id)}>Remove</button>
