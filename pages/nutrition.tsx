@@ -1,12 +1,14 @@
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
 import useSWR, { mutate } from "swr";
 import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
+import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
+import "react-circular-progressbar/dist/styles.css";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
-
 const meals = ["Breakfast", "Lunch", "Dinner", "Snack"];
 
 function round2(n: number | undefined) {
@@ -29,10 +31,19 @@ export default function NutritionPage() {
   const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   // Fetch logs
-  const { data: logsData, error: logsError } = useSWR(
+  const { data: logsData } = useSWR(
     session?.user?.email ? `/api/nutrition/logs?date=${todayKey}` : null,
     fetcher
   );
+
+  // Fetch user goals
+  const { data: profile } = useSWR(session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email)}` : null, fetcher);
+  const goals = {
+    calories: profile?.caloric_target || 2000,
+    protein: profile?.protein_target || 150,
+    carbs: profile?.carb_target || 250,
+    fat: profile?.fat_target || 70,
+  };
 
   // Totals
   const totals = useMemo(() => {
@@ -49,7 +60,14 @@ export default function NutritionPage() {
     );
   }, [logsData]);
 
-  // Debounce function
+  const progress = {
+    calories: (totals.calories / goals.calories) * 100,
+    protein: (totals.protein / goals.protein) * 100,
+    carbs: (totals.carbs / goals.carbs) * 100,
+    fat: (totals.fat / goals.fat) * 100,
+  };
+
+  // Debounce search
   function debounce<T extends (...args: any[]) => void>(fn: T, delay: number) {
     let timer: NodeJS.Timeout;
     return (...args: Parameters<T>) => {
@@ -58,7 +76,6 @@ export default function NutritionPage() {
     };
   }
 
-  // Search OpenFoodFacts
   const doSearch = useMemo(
     () =>
       debounce(async (q: string) => {
@@ -85,7 +102,6 @@ export default function NutritionPage() {
     doSearch(query);
   }, [query, doSearch]);
 
-  // Compute scaled nutrition
   const scaledSelected = useMemo(() => {
     if (!selectedFood) return null;
     const factor = grams / 100;
@@ -98,7 +114,6 @@ export default function NutritionPage() {
     };
   }, [selectedFood, grams]);
 
-  // Add entry
   const addEntry = async (meal: string, food: any) => {
     if (!session?.user?.email || !food) return signIn("google");
     setAdding(true);
@@ -150,30 +165,30 @@ export default function NutritionPage() {
       <main className="container py-3" style={{ paddingBottom: "90px" }}>
         <h2 className="mb-3 text-center">Nutrition</h2>
 
-        {/* Macro tiles */}
-        <div className="row text-center mb-3 gx-2">
-          <div className="col">
-            <div className="bxkr-card py-2">
-              <div><i className="fas fa-fire text-warning me-1"></i>Calories</div>
-              <div className="fw-bold">{round2(totals.calories)}</div>
-            </div>
+        {/* Top Section */}
+        <div className="row mb-4">
+          {/* Left Column */}
+          <div className="col-6">
+            <h5>Macros</h5>
+            <p className="text-primary">Calories: {round2(totals.calories)} / {goals.calories}</p>
+            <p className="text-success">Protein: {round2(totals.protein)} / {goals.protein} g</p>
+            <p className="text-warning">Carbs: {round2(totals.carbs)} / {goals.carbs} g</p>
+            <p style={{ color: "#d63384" }}>Fat: {round2(totals.fat)} / {goals.fat} g</p>
           </div>
-          <div className="col">
-            <div className="bxkr-card py-2">
-              <div><i className="fas fa-drumstick-bite text-danger me-1"></i>Protein</div>
-              <div className="fw-bold">{round2(totals.protein)} g</div>
+
+          {/* Right Column - Circular Charts */}
+          <div className="col-6 d-flex flex-wrap gap-3 justify-content-center">
+            <div style={{ width: 80, height: 80 }}>
+              <CircularProgressbar value={progress.calories} text="Cal" styles={buildStyles({ pathColor: "blue" })} />
             </div>
-          </div>
-          <div className="col">
-            <div className="bxkr-card py-2">
-              <div><i className="fas fa-bread-slice text-success me-1"></i>Carbs</div>
-              <div className="fw-bold">{round2(totals.carbs)} g</div>
+            <div style={{ width: 80, height: 80 }}>
+              <CircularProgressbar value={progress.protein} text="Prot" styles={buildStyles({ pathColor: "green" })} />
             </div>
-          </div>
-          <div className="col">
-            <div className="bxkr-card py-2">
-              <div><i className="fas fa-oil-can text-secondary me-1"></i>Fat</div>
-              <div className="fw-bold">{round2(totals.fat)} g</div>
+            <div style={{ width: 80, height: 80 }}>
+              <CircularProgressbar value={progress.carbs} text="Carb" styles={buildStyles({ pathColor: "orange" })} />
+            </div>
+            <div style={{ width: 80, height: 80 }}>
+              <CircularProgressbar value={progress.fat} text="Fat" styles={buildStyles({ pathColor: "#d63384" })} />
             </div>
           </div>
         </div>
@@ -208,7 +223,6 @@ export default function NutritionPage() {
                     <div key={f.id ?? f.code ?? f.name} className="mb-1">
                       {selectedFood?.id === f.id ? (
                         <div className="bxkr-card p-2 mb-1">
-                          {/* Amount & macros ABOVE */}
                           <div className="d-flex justify-content-between align-items-center mb-1">
                             <input
                               type="number"
@@ -217,7 +231,10 @@ export default function NutritionPage() {
                               onChange={(e) => setGrams(Number(e.target.value))}
                             />
                             <div>
-                              {round2(scaledSelected?.calories)} kcal | {round2(scaledSelected?.protein)}p | {round2(scaledSelected?.carbs)}c | {round2(scaledSelected?.fat)}f
+                              <span className="text-primary">{round2(scaledSelected?.calories)} kcal</span> | 
+                              <span className="text-success">{round2(scaledSelected?.protein)}p</span> | 
+                              <span className="text-warning">{round2(scaledSelected?.carbs)}c</span> | 
+                              <span style={{ color: "#d63384" }}>{round2(scaledSelected?.fat)}f</span>
                             </div>
                           </div>
                           <button
@@ -256,7 +273,12 @@ export default function NutritionPage() {
                       <div>
                         <div className="fw-bold">{e.food.name} ({e.food.brand})</div>
                         <div className="small text-muted">{e.grams} g</div>
-                        <div className="small">{round2(e.calories)} kcal | {round2(e.protein)}p | {round2(e.carbs)}c | {round2(e.fat)}f</div>
+                        <div className="small">
+                          <span className="text-primary">{round2(e.calories)} kcal</span> | 
+                          <span className="text-success">{round2(e.protein)}p</span> | 
+                          <span className="text-warning">{round2(e.carbs)}c</span> | 
+                          <span style={{ color: "#d63384" }}>{round2(e.fat)}f</span>
+                        </div>
                       </div>
                       <button className="btn btn-link text-danger" onClick={() => removeEntry(e.id)}>Remove</button>
                     </div>
