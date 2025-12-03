@@ -176,7 +176,7 @@ export default function WorkoutPage() {
               {userLocation ? (
                 <div className="fw-semibold">{userLocation}</div>
               ) : (
-                /profile
+                <Link href="/profile">
                   Set your location
                 </Link>
               )}
