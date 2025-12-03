@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/router";
 import useSWR, { mutate } from "swr";
 import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
@@ -15,9 +16,39 @@ function round2(n: number | undefined) {
   return n !== undefined ? n.toFixed(2) : "-";
 }
 
+const COLORS = {
+  calories: "rgb(0,102,255)",
+  protein: "rgb(0,153,51)",
+  carbs: "rgb(255,140,0)",
+  fat: "rgb(214,51,132)",
+};
+
 export default function NutritionPage() {
   const { data: session } = useSession();
+  const router = useRouter();
+
   const [openMeal, setOpenMeal] = useState<string | null>(null);
+
+  // Date navigation state
+  const [selectedDate, setSelectedDate] = useState(new Date());
+
+  // If query param exists, set selectedDate from it
+  useEffect(() => {
+    if (router.query.date) {
+      const parsed = new Date(router.query.date as string);
+      if (!isNaN(parsed.getTime())) {
+        setSelectedDate(parsed);
+      }
+    }
+  }, [router.query.date]);
+
+  const formattedDate = useMemo(() => selectedDate.toISOString().slice(0, 10), [selectedDate]);
+
+  const goPrevDay = () => setSelectedDate((d) => new Date(d.getTime() - 86400000));
+  const goNextDay = () => {
+    const tomorrow = new Date(selectedDate.getTime() + 86400000);
+    if (tomorrow <= new Date()) setSelectedDate(tomorrow);
+  };
 
   // Search state
   const [query, setQuery] = useState("");
@@ -27,12 +58,9 @@ export default function NutritionPage() {
   const [grams, setGrams] = useState(100);
   const [adding, setAdding] = useState(false);
 
-  // Today's date key
-  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
-
-  // Fetch logs
+  // Fetch logs for selected date
   const { data: logsData } = useSWR(
-    session?.user?.email ? `/api/nutrition/logs?date=${todayKey}` : null,
+    session?.user?.email ? `/api/nutrition/logs?date=${formattedDate}` : null,
     fetcher
   );
 
@@ -120,7 +148,7 @@ export default function NutritionPage() {
 
     try {
       const payload = {
-        date: todayKey,
+        date: formattedDate,
         meal,
         food,
         grams,
@@ -132,7 +160,7 @@ export default function NutritionPage() {
 
       const optimistic = { id: `temp-${Date.now()}`, created_at: new Date().toISOString(), ...payload };
       mutate(
-        `/api/nutrition/logs?date=${todayKey}`,
+        `/api/nutrition/logs?date=${formattedDate}`,
         (data: any) => ({ entries: [optimistic, ...(data?.entries || [])] }),
         false
       );
@@ -144,7 +172,7 @@ export default function NutritionPage() {
       });
       if (!res.ok) throw new Error("Failed to save");
 
-      mutate(`/api/nutrition/logs?date=${todayKey}`);
+      mutate(`/api/nutrition/logs?date=${formattedDate}`);
       setSelectedFood(null);
       setQuery("");
       setResults([]);
@@ -157,35 +185,56 @@ export default function NutritionPage() {
   const removeEntry = async (id: string) => {
     if (!confirm("Remove this entry?")) return;
     await fetch(`/api/nutrition/logs?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    mutate(`/api/nutrition/logs?date=${todayKey}`);
+    mutate(`/api/nutrition/logs?date=${formattedDate}`);
   };
 
   return (
     <>
       <main className="container py-3" style={{ paddingBottom: "90px" }}>
-        <h2 className="mb-3 text-center">Nutrition</h2>
+        {/* Date Navigation */}
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <button className="btn btn-outline-secondary" onClick={goPrevDay}>
+            ← Previous
+          </button>
+          <h2 className="text-center mb-0">Nutrition ({formattedDate})</h2>
+          <button
+            className="btn btn-outline-secondary"
+            onClick={goNextDay}
+            disabled={formattedDate === new Date().toISOString().slice(0, 10)}
+          >
+            Next →
+          </button>
+        </div>
 
         {/* Top Section */}
         <div className="row mb-4">
           {/* Left Column */}
           <div className="col-6">
             <h5>Macros</h5>
-            <p style={{ color: "rgb(0,102,255)" }}>Calories: {round2(totals.calories)} / {goals.calories}</p>
-            <p style={{ color: "rgb(0,153,51)" }}>Protein: {round2(totals.protein)} / {goals.protein} g</p>
-            <p style={{ color: "rgb(255,140,0)" }}>Carbs: {round2(totals.carbs)} / {goals.carbs} g</p>
-            <p style={{ color: "rgb(214,51,132)" }}>Fat: {round2(totals.fat)} / {goals.fat} g</p>
+            <p style={{ color: COLORS.calories }}>
+              Calories: {round2(totals.calories)} / {goals.calories}
+            </p>
+            <p style={{ color: COLORS.protein }}>
+              Protein: {round2(totals.protein)} / {goals.protein} g
+            </p>
+            <p style={{ color: COLORS.carbs }}>
+              Carbs: {round2(totals.carbs)} / {goals.carbs} g
+            </p>
+            <p style={{ color: COLORS.fat }}>
+              Fat: {round2(totals.fat)} / {goals.fat} g
+            </p>
           </div>
 
-          {/* Right Column - Exactly 4 concentric rings */}
+          {/* Right Column - Concentric Rings */}
           <div className="col-6 d-flex justify-content-center">
             <div style={{ position: "relative", width: 180, height: 180 }}>
               {/* Calories */}
               <div style={{ position: "absolute", top: 0, left: 0, width: 180, height: 180 }}>
                 <CircularProgressbar
                   value={progress.calories}
-                  strokeWidth={7}
+                  strokeWidth={12}
                   styles={buildStyles({
-                    pathColor: "rgb(0,102,255)",
+                    pathColor: COLORS.calories,
                     trailColor: "rgba(0,102,255,0.12)",
                     strokeLinecap: "butt",
                     pathTransitionDuration: 0.8,
@@ -196,9 +245,9 @@ export default function NutritionPage() {
               <div style={{ position: "absolute", top: 14, left: 14, width: 152, height: 152 }}>
                 <CircularProgressbar
                   value={progress.protein}
-                  strokeWidth={8}
+                  strokeWidth={12}
                   styles={buildStyles({
-                    pathColor: "rgb(0,153,51)",
+                    pathColor: COLORS.protein,
                     trailColor: "rgba(0,153,51,0.12)",
                     strokeLinecap: "butt",
                     pathTransitionDuration: 0.8,
@@ -209,9 +258,9 @@ export default function NutritionPage() {
               <div style={{ position: "absolute", top: 28, left: 28, width: 124, height: 124 }}>
                 <CircularProgressbar
                   value={progress.carbs}
-                  strokeWidth={9}
+                  strokeWidth={12}
                   styles={buildStyles({
-                    pathColor: "rgb(255,140,0)",
+                    pathColor: COLORS.carbs,
                     trailColor: "rgba(255,140,0,0.12)",
                     strokeLinecap: "butt",
                     pathTransitionDuration: 0.8,
@@ -224,7 +273,7 @@ export default function NutritionPage() {
                   value={progress.fat}
                   strokeWidth={12}
                   styles={buildStyles({
-                    pathColor: "rgb(214,51,132)",
+                    pathColor: COLORS.fat,
                     trailColor: "rgba(214,51,132,0.12)",
                     strokeLinecap: "butt",
                     pathTransitionDuration: 0.8,
@@ -256,11 +305,11 @@ export default function NutritionPage() {
                 className="btn btn-outline-primary w-100 mb-2 text-start"
                 onClick={() => setOpenMeal(isOpen ? null : meal)}
               >
-                {meal} ({mealEntries.length}) - 
-                <span style={{ color: "rgb(0,102,255)" }}> {round2(mealTotals.calories)} kcal</span> | 
-                <span style={{ color: "rgb(0,153,51)" }}> {round2(mealTotals.protein)}p</span> | 
-                <span style={{ color: "rgb(255,140,0)" }}> {round2(mealTotals.carbs)}c</span> | 
-                <span style={{ color: "rgb(214,51,132)" }}> {round2(mealTotals.fat)}f</span>
+                {meal} ({mealEntries.length}) -{" "}
+                <span style={{ color: COLORS.calories }}>{round2(mealTotals.calories)} kcal</span> |{" "}
+                <span style={{ color: COLORS.protein }}>{round2(mealTotals.protein)}p</span> |{" "}
+                <span style={{ color: COLORS.carbs }}>{round2(mealTotals.carbs)}c</span> |{" "}
+                <span style={{ color: COLORS.fat }}>{round2(mealTotals.fat)}f</span>
               </button>
 
               {isOpen && (
@@ -275,49 +324,60 @@ export default function NutritionPage() {
 
                   {loadingSearch && <div>Searching…</div>}
 
-                  {results.length > 0 && results.slice(0, 5).map((f) => (
-                    <div key={f.id ?? f.code ?? f.name} className="mb-1">
-                      {selectedFood?.id === f.id ? (
-                        <div className="bxkr-card p-2 mb-1">
-                          <div className="d-flex justify-content-between align-items-center mb-1">
-                            <input
-                              type="number"
-                              className="form-control w-25"
-                              value={grams}
-                              onChange={(e) => setGrams(Number(e.target.value))}
-                            />
-                            <div>
-                              <span style={{ color: "rgb(0,102,255)" }}>{round2(scaledSelected?.calories)} kcal</span> | 
-                              <span style={{ color: "rgb(0,153,51)" }}>{round2(scaledSelected?.protein)}p</span> | 
-                              <span style={{ color: "rgb(255,140,0)" }}>{round2(scaledSelected?.carbs)}c</span> | 
-                              <span style={{ color: "rgb(214,51,132)" }}>{round2(scaledSelected?.fat)}f</span>
+                  {results.length > 0 &&
+                    results.slice(0, 5).map((f) => (
+                      <div key={f.id ?? f.code ?? f.name} className="mb-1">
+                        {selectedFood?.id === f.id ? (
+                          <div className="bxkr-card p-2 mb-1">
+                            <div className="d-flex justify-content-between align-items-center mb-1">
+                              <input
+                                type="number"
+                                className="form-control w-25"
+                                value={grams}
+                                onChange={(e) => setGrams(Number(e.target.value))}
+                              />
+                              <div>
+                                <span style={{ color: COLORS.calories }}>{round2(scaledSelected?.calories)} kcal</span> |{" "}
+                                <span style={{ color: COLORS.protein }}>{round2(scaledSelected?.protein)}p</span> |{" "}
+                                <span style={{ color: COLORS.carbs }}>{round2(scaledSelected?.carbs)}c</span> |{" "}
+                                <span style={{ color: COLORS.fat }}>{round2(scaledSelected?.fat)}f</span>
+                              </div>
+                            </div>
+                            <button
+                              className="btn btn-primary w-100 mb-1"
+                              onClick={() => addEntry(meal, selectedFood)}
+                              disabled={adding}
+                            >
+                              Add to {meal}
+                            </button>
+                            <div className="fw-bold">
+                              {f.name} ({f.brand}) - {round2(f.calories)} kcal/100g
                             </div>
                           </div>
+                        ) : (
                           <button
-                            className="btn btn-primary w-100 mb-1"
-                            onClick={() => addEntry(meal, selectedFood)}
-                            disabled={adding}
+                            className="list-group-item list-group-item-action"
+                            onClick={() => setSelectedFood(f)}
                           >
-                            Add to {meal}
+                            {f.name} ({f.brand}) - {round2(f.calories)} kcal/100g
                           </button>
-                          <div className="fw-bold">{f.name} ({f.brand}) - {round2(f.calories)} kcal/100g</div>
-                        </div>
-                      ) : (
-                        <button
-                          className="list-group-item list-group-item-action"
-                          onClick={() => setSelectedFood(f)}
-                        >
-                          {f.name} ({f.brand}) - {round2(f.calories)} kcal/100g
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                        )}
+                      </div>
+                    ))}
 
                   {/* Manual entry */}
                   <button
                     className="btn btn-outline-secondary w-100 mb-2"
                     onClick={() =>
-                      setSelectedFood({ id: `manual-${Date.now()}`, name: "", calories: 0, protein: 0, carbs: 0, fat: 0, brand: "" })
+                      setSelectedFood({
+                        id: `manual-${Date.now()}`,
+                        name: "",
+                        calories: 0,
+                        protein: 0,
+                        carbs: 0,
+                        fat: 0,
+                        brand: "",
+                      })
                     }
                   >
                     Add manual food
@@ -327,16 +387,20 @@ export default function NutritionPage() {
                   {mealEntries.map((e: any) => (
                     <div key={e.id} className="bxkr-card p-2 mb-1 d-flex justify-content-between align-items-center">
                       <div>
-                        <div className="fw-bold">{e.food.name} ({e.food.brand})</div>
+                        <div className="fw-bold">
+                          {e.food.name} ({e.food.brand})
+                        </div>
                         <div className="small text-muted">{e.grams} g</div>
                         <div className="small">
-                          <span style={{ color: "rgb(0,102,255)" }}>{round2(e.calories)} kcal</span> | 
-                          <span style={{ color: "rgb(0,153,51)" }}>{round2(e.protein)}p</span> | 
-                          <span style={{ color: "rgb(255,140,0)" }}>{round2(e.carbs)}c</span> | 
-                          <span style={{ color: "rgb(214,51,132)" }}>{round2(e.fat)}f</span>
+                          <span style={{ color: COLORS.calories }}>{round2(e.calories)} kcal</span> |{" "}
+                          <span style={{ color: COLORS.protein }}>{round2(e.protein)}p</span> |{" "}
+                          <span style={{ color: COLORS.carbs }}>{round2(e.carbs)}c</span> |{" "}
+                          <span style={{ color: COLORS.fat }}>{round2(e.fat)}f</span>
                         </div>
                       </div>
-                      <button className="btn btn-link text-danger" onClick={() => removeEntry(e.id)}>Remove</button>
+                      <button className="btn btn-link text-danger" onClick={() => removeEntry(e.id)}>
+                        Remove
+                      </button>
                     </div>
                   ))}
                 </div>
