@@ -28,13 +28,6 @@ export default function WorkoutPage() {
   const [weekStart, setWeekStart] = useState<Date>(initialMonday);
   const [selectedDay, setSelectedDay] = useState<Date>(today);
 
-  const greeting =
-    today.getHours() < 12
-      ? "Good Morning"
-      : today.getHours() < 18
-      ? "Good Afternoon"
-      : "Good Evening";
-
   const getDayName = (date: Date) =>
     date.toLocaleDateString(undefined, { weekday: "long" });
 
@@ -142,6 +135,8 @@ export default function WorkoutPage() {
       <Head>
         <title>BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      </Head>
+
       <main
         className="container py-3"
         style={{
@@ -176,9 +171,7 @@ export default function WorkoutPage() {
               {userLocation ? (
                 <div className="fw-semibold">{userLocation}</div>
               ) : (
-                <Link href="/profile">
-                  Set your location
-                </Link>
+                <Link href="/profile">Set your location</Link>
               )}
             </div>
           </div>
