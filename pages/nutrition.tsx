@@ -183,7 +183,7 @@ export default function NutritionPage() {
               <div style={{ position: "absolute", top: 0, left: 0, width: 180, height: 180 }}>
                 <CircularProgressbar
                   value={progress.calories}
-                  strokeWidth={12}
+                  strokeWidth={6}
                   styles={buildStyles({
                     pathColor: "rgb(0,102,255)",
                     trailColor: "rgba(0,102,255,0.12)",
@@ -196,7 +196,7 @@ export default function NutritionPage() {
               <div style={{ position: "absolute", top: 14, left: 14, width: 152, height: 152 }}>
                 <CircularProgressbar
                   value={progress.protein}
-                  strokeWidth={12}
+                  strokeWidth={8}
                   styles={buildStyles({
                     pathColor: "rgb(0,153,51)",
                     trailColor: "rgba(0,153,51,0.12)",
@@ -209,7 +209,7 @@ export default function NutritionPage() {
               <div style={{ position: "absolute", top: 28, left: 28, width: 124, height: 124 }}>
                 <CircularProgressbar
                   value={progress.carbs}
-                  strokeWidth={12}
+                  strokeWidth={10}
                   styles={buildStyles({
                     pathColor: "rgb(255,140,0)",
                     trailColor: "rgba(255,140,0,0.12)",
