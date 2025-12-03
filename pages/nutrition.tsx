@@ -211,7 +211,7 @@ export default function NutritionPage() {
                         pathColor: "rgb(0, 102, 255)", // blue
                         trailColor: "rgba(0, 102, 255, 0.12)",
                         pathTransitionDuration: 0.8,
-                        pathLinecap: "butt",
+                        strokeLinecap: "butt",
                       })}
                     />
                   </div>
