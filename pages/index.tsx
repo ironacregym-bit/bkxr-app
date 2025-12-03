@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 import AddToHomeScreen from "../components/AddToHomeScreen";
+
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 function getWeek() {
@@ -34,10 +35,8 @@ function isSameDay(a: Date, b: Date) {
 export default function Home() {
   const { data: session, status } = useSession();
 
-  // Fetch workouts for current week
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
 
-  // Fetch completion history for logged-in user with range
   const [range, setRange] = useState<"week" | "month" | "all">("week");
   const { data: completionData } = useSWR(
     session?.user?.email
@@ -46,8 +45,7 @@ export default function Home() {
     fetcher
   );
 
-  const completedIds =
-    completionData?.history?.map((h: any) => h.workout_id) || [];
+  const completedIds = completionData?.history?.map((h: any) => h.workout_id) || [];
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.email) {
@@ -76,17 +74,15 @@ export default function Home() {
 
   const selectedDayName = getDayName(selectedDay);
 
-  // Filter workouts for selected day using day_name
   const selectedWorkouts = (data?.workouts || []).filter(
     (w: any) => (w.day_name || "").toLowerCase() === selectedDayName.toLowerCase()
   );
 
-  // Compute stats from completionData
   const now = new Date();
   let startDate: Date;
   if (range === "week") {
     startDate = new Date();
-    startDate.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // Monday
+    startDate.setDate(now.getDate() - ((now.getDay() + 6) % 7));
     startDate.setHours(0, 0, 0, 0);
   } else if (range === "month") {
     startDate = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -95,7 +91,7 @@ export default function Home() {
   }
 
   const filteredCompletions = (completionData?.history || []).filter((c: any) => {
-    const completedAt = new Date(c.completed_date); // ✅ use completed_date
+    const completedAt = new Date(c.completed_date);
     return completedAt >= startDate && completedAt <= now;
   });
 
@@ -109,7 +105,6 @@ export default function Home() {
     0
   );
 
-  // Determine which days have workouts using day_name
   const daysWithWorkout = weekDays.map((d) => {
     const dayName = getDayName(d);
     return (data?.workouts || []).some(
@@ -122,10 +117,19 @@ export default function Home() {
       <Head>
         <title>BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+        <link
+         loudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css
       </Head>
-      <main className="container py-3" style={{ paddingBottom: "70px" }}>
-        <h2 className="mb-4 text-center">
+      <main
+        className="container py-3"
+        style={{
+          paddingBottom: "70px",
+          background: "linear-gradient(135deg, #1a1a1a 0%, #2e1a0f 100%)",
+          color: "#fff",
+          borderRadius: "12px",
+        }}
+      >
+        <h2 className="mb-4 text-center" style={{ fontWeight: 700, fontSize: "1.8rem" }}>
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
 
@@ -134,7 +138,15 @@ export default function Home() {
           {["week", "month", "all"].map((r) => (
             <button
               key={r}
-              className={`btn btn-sm ${range === r ? "btn-primary" : "btn-outline-primary"}`}
+              className={`btn btn-sm ${
+                range === r ? "btn-primary" : "btn-outline-primary"
+              }`}
+              style={{
+                borderRadius: "24px",
+                backgroundColor: range === r ? "#ff7f32" : "transparent",
+                color: "#fff",
+                border: range === r ? "none" : "1px solid #ff7f32",
+              }}
               onClick={() => setRange(r as "week" | "month" | "all")}
             >
               {r.charAt(0).toUpperCase() + r.slice(1)}
@@ -145,34 +157,61 @@ export default function Home() {
         {/* Stats Overview */}
         <div className="row text-center mb-4 gx-3">
           <div className="col">
-            <div className="bxkr-card py-2">
-              <div className="bxkr-stat-label">
-                <i className="fas fa-dumbbell bxkr-icon bxkr-icon-blue me-1" />Workouts
+            <div
+              className="futuristic-card"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                borderRadius: "16px",
+                padding: "16px",
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+              }}
+            >
+              <div style={{ opacity: 0.7 }}>
+                <i className="fas fa-dumbbell me-1" style={{ color: "#ff7f32" }} /> Workouts
               </div>
-              <div className="bxkr-stat-value">{workoutsCompleted}</div>
-              <div className="bxkr-stat-sub">
+              <div style={{ fontSize: "22px", fontWeight: 700 }}>{workoutsCompleted}</div>
+              <div style={{ fontSize: "12px", opacity: 0.6 }}>
                 {range === "week" ? "This Week" : range === "month" ? "This Month" : "All Time"}
               </div>
             </div>
           </div>
           <div className="col">
-            <div className="bxkr-card py-2">
-              <div className="bxkr-stat-label">
-                <i className="fas fa-fire bxkr-icon bxkr-icon-orange-gradient me-1" />Calories
+            <div
+              className="futuristic-card"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                borderRadius: "16px",
+                padding: "16px",
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+              }}
+            >
+              <div style={{ opacity: 0.7 }}>
+                <i className="fas fa-fire me-1" style={{ color: "#ff7f32" }} /> Calories
               </div>
-              <div className="bxkr-stat-value">{caloriesBurned}</div>
-              <div className="bxkr-stat-sub">
+              <div style={{ fontSize: "22px", fontWeight: 700 }}>{caloriesBurned}</div>
+              <div style={{ fontSize: "12px", opacity: 0.6 }}>
                 {range === "week" ? "This Week" : range === "month" ? "This Month" : "All Time"}
               </div>
             </div>
           </div>
           <div className="col">
-            <div className="bxkr-card py-2">
-              <div className="bxkr-stat-label">
-                <i className="fas fa-layer-group bxkr-icon bxkr-icon-green me-1" />Sets
+            <div
+              className="futuristic-card"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                borderRadius: "16px",
+                padding: "16px",
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+              }}
+            >
+              <div style={{ opacity: 0.7 }}>
+                <i className="fas fa-layer-group me-1" style={{ color: "#ff7f32" }} /> Sets
               </div>
-              <div className="bxkr-stat-value">{setsCompleted}</div>
-              <div className="bxkr-stat-sub">
+              <div style={{ fontSize: "22px", fontWeight: 700 }}>{setsCompleted}</div>
+              <div style={{ fontSize: "12px", opacity: 0.6 }}>
                 {range === "week" ? "This Week" : range === "month" ? "This Month" : "All Time"}
               </div>
             </div>
@@ -184,7 +223,15 @@ export default function Home() {
           {status === "loading" ? (
             <span>Checking session…</span>
           ) : !session ? (
-            <button className="btn btn-dark" onClick={() => signIn("google")}>
+            <button
+              className="btn btn-primary"
+              style={{
+                backgroundColor: "#ff7f32",
+                borderRadius: "24px",
+                fontWeight: 600,
+              }}
+              onClick={() => signIn("google")}
+            >
               Sign in with Google
             </button>
           ) : (
@@ -195,8 +242,12 @@ export default function Home() {
                 className="rounded-circle"
                 style={{ width: 32, height: 32 }}
               />
-              <span className="text-muted">{session.user?.email}</span>
-              <button className="btn btn-outline-dark" onClick={() => signOut()}>
+              <span style={{ opacity: 0.7 }}>{session.user?.email}</span>
+              <button
+                className="btn btn-outline-light"
+                style={{ borderRadius: "24px" }}
+                onClick={() => signOut()}
+              >
                 Sign out
               </button>
             </div>
@@ -239,11 +290,29 @@ export default function Home() {
         {/* Selected day's workouts */}
         {selectedWorkouts.length > 0 &&
           selectedWorkouts.map((w: any) => (
-            <div key={w.id} className="p-3 mb-3 bxkr-card">
+            <div
+              key={w.id}
+              className="futuristic-card mb-3"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                borderRadius: "16px",
+                padding: "16px",
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+              }}
+            >
               <div className="mb-2 fw-bold">{selectedDayName}</div>
               <h6>{w.workout_name}</h6>
               <p>{w.notes || "Workout details"}</p>
-              <Link href={`/workout/${w.id}`} className="btn btn-primary btn-sm mt-2">
+              <Link
+                href={`/workout/${w.id}`}
+                className="btn btn-primary btn-sm mt-2"
+                style={{
+                  backgroundColor: "#ff7f32",
+                  borderRadius: "24px",
+                  fontWeight: 600,
+                }}
+              >
                 Start Workout
               </Link>
             </div>
