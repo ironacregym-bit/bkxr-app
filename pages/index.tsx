@@ -142,10 +142,11 @@ export default function Home() {
         {/* Coach reminder pill */}
         {status === "authenticated" && noNutritionLogged && (
           <CoachBanner
-            message="Don't forget to log your nutrition today! Tap here to add your meals."
+            message="Log your meals for today to stay on track!"
             dateKey={todayKey}
           />
         )}
+
 
         {/* Greeting */}
         <h2 className="mb-4 text-center" style={{ fontWeight: 700, fontSize: "1.8rem" }}>
