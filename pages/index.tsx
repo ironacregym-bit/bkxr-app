@@ -117,8 +117,6 @@ export default function Home() {
       <Head>
         <title>BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link
-         loudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css
       </Head>
       <main
         className="container py-3"
