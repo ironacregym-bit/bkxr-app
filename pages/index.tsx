@@ -7,7 +7,26 @@ import { signIn, signOut, useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 import AddToHomeScreen from "../components/AddToHomeScreen";
 import CoachBanner from "../components/CoachBanner";
+// Redirect logic for index
+import { getSession } from "next-auth/react";
 
+export async function getServerSideProps(context) {
+  const session = await getSession(context);
+
+  // If the user is NOT logged in → show landing page instead
+  if (!session) {
+    return {
+      redirect: {
+        destination: "/landing",
+        permanent: false,
+      },
+    };
+  }
+
+  return {
+    props: {}, // loads your existing home/dashboard
+  };
+}
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 function getWeek() {
