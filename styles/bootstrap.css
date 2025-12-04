@@ -12,147 +12,191 @@
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/main/LICENSE)
  */
 
-.bxkr-bottomnav-link .nav-icon:hover {
-  background: rgba(65,101,205,0.3); /* Accent color glow */
-  box-shadow: 0 0 10px rgba(65,101,205,0.6);
-  transform: scale(1.05);
-}
-
-/* Base pill for the date circle */
-.bxkr-day-pill {
-  width: 28px;
-  height: 28px;
-  margin: 4px auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  box-sizing: border-box;
-  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s, border 0.2s;
-}
-
-/* Ring shown when a workout is scheduled */
-.bxkr-has-workout, 
-.bxkr-has-session {
-  box-shadow: 0 0 0 2px var(--bxkr-ring);
-}
-
-/* Selected day style: filled with ring colour and white text */
-.bxkr-selected {
-  background-color: var(--bxkr-ring);
-  color: #fff;
-}
-
-/* Today (if not selected): keep your warning highlight */
-.bxkr-today {
-  background-color: var(--bs-warning);
-  color: var(--bs-dark);
-}
-
 body {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2e1a0f 100%);
-  color: #fff;
+  background: var(--bxkr-bg-1);
   font-family: 'Inter', sans-serif;
-  min-height: 100vh;
+  color: var(--bxkr-text-main);
 }
 
-.futuristic-card {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  padding: 16px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
-
-.btn-primary {
-  background-color: #ff7f32;
-  border: none;
-  color: #fff;
-  border-radius: 24px;
-  font-weight: 600;
-}
-.btn-primary:hover {
-  box-shadow: 0 0 12px rgba(255,127,50,0.8);
-  transform: scale(1.05);
-}
-
-.nav-icon:hover {
-  background: rgba(255,127,50,0.15);
-  box-shadow: 0 0 15px rgba(255,127,50,0.8);
-  transform: scale(1.08);
-}
-
-.bxkr-bottomnav-link,
-.bxkr-bottomnav-link:visited,
-.bxkr-bottomnav-link:active,
-.bxkr-bottomnav-link:hover,
-.bxkr-bottomnav-link:focus {
-  color: #fff !important;
-  text-decoration: none !important;
+/* HEADER */
+.bxkr-header {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-width: 56px;
+  margin: 12px 4px 28px 4px;
 }
 
-.bxkr-bottomnav-link i {
-  font-size: 1.6rem; /* Larger icon */
-  line-height: 1;
-  margin-bottom: 2px;
+.bxkr-greeting {
+  font-size: 1.8rem;
+  font-weight: 700;
 }
 
-.bxkr-bottomnav-link div {
-  font-size: 12px;
-  line-height: 1;
-  margin-top: 0;
+.bxkr-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid var(--bxkr-orange);
 }
 
-/* ==== BXKR Icon Colours (no inline overrides) ==== */
-
-/* Solid blue (aligns with --bxkr-ring if present) */
-.bxkr-icon-blue {
-  color: #4165cd !important;
+/* NUDGE */
+.bxkr-nudge {
+  background: var(--bxkr-bg-2);
+  border-left: 4px solid var(--bxkr-orange);
+  padding: 10px 12px;
+  margin-top: 6px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-/* Solid green */
-.bxkr-icon-green {
-  color: #28a745 !important; /* Bootstrap "success" tone; adjust if you prefer */
+.bxkr-nudge-btn {
+  background: var(--bxkr-orange);
+  border: none;
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-weight: 600;
+  color: #fff;
 }
 
-/* Two-tone orange gradient for fire icon */
-.bxkr-icon-orange-gradient {
-  /* Gradient applied to the glyph; we use text-fill transparent and background-clip */
-  background: linear-gradient(180deg, #ff8c00 0%, #ff4500 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent; /* fallback to ensure no solid colour leaks */
+/* STATS */
+.bxkr-stats-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 22px;
 }
 
-/* Optional: ensure icon line-height doesn’t collide with adjacent text */
-.bxkr-icon {
-  line-height: 1;
-  vertical-align: middle;
+.bxkr-stat-card {
+  flex: 1;
+  background: var(--bxkr-bg-2);
+  padding: 16px;
+  border-radius: 16px;
+  text-align: center;
 }
 
-/* If you want the number lines below to align nicely with icons */
 .bxkr-stat-label {
   font-size: 14px;
   opacity: 0.7;
 }
+
 .bxkr-stat-value {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
+  margin: 4px 0;
 }
+
 .bxkr-stat-sub {
   font-size: 12px;
-  opacity: 0.6;
+  opacity: 0.5;
 }
+
+/* RANGE BUTTONS */
+.bxkr-range-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.bxkr-range-btn {
+  padding: 6px 18px;
+  border-radius: 20px;
+  border: 1px solid var(--bxkr-orange);
+  background: transparent;
+  color: var(--bxkr-text-main);
+  font-weight: 600;
+}
+
+.bxkr-range-btn.active {
+  background: var(--bxkr-orange);
+  border: none;
+}
+
+/* CALENDAR */
+.bxkr-calendar {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 26px;
+}
+
+.bxkr-day-label {
+  text-align: center;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.bxkr-day-pill {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bxkr-bg-2);
+  transition: 0.2s;
+}
+
+.bxkr-day-pill.has-workout {
+  box-shadow: 0 0 0 2px var(--bxkr-ring);
+}
+
+.bxkr-day-pill.selected {
+  background: var(--bxkr-orange);
+  color: #fff;
+}
+
+.bxkr-day-pill.today {
+  border: 1px solid var(--bxkr-orange);
+}
+
+/* WORKOUT CARD */
+.bxkr-workout-card {
+  display: flex;
+  background: var(--bxkr-bg-2);
+  border-radius: 16px;
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+
+.bxkr-workout-strip {
+  width: 6px;
+  background: var(--bxkr-orange);
+}
+
+.bxkr-workout-content {
+  padding: 14px 18px;
+  flex: 1;
+}
+
+.bxkr-workout-content h5 {
+  margin: 0 0 6px 0;
+}
+
+.bxkr-start-btn {
+  background: var(--bxkr-orange);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-weight: 600;
+  color: #fff;
+  text-decoration: none;
+}
+
 :root,
+
 [data-bs-theme=light] {
-  --bxkr-ring: #4165cd;
+  --bxkr-orange: #FF6A1A;
+  --bxkr-orange-dark: #CC4F12;
+  --bxkr-orange-glow: rgba(255,106,26,0.5);
+
+  --bxkr-bg-1: #0D0D0D;
+  --bxkr-bg-2: #1A1A1A;
+  --bxkr-bg-3: #242424;
+
+  --bxkr-text-main: #FFFFFF;
+  --bxkr-text-soft: rgba(255,255,255,0.65);
+
   --bs-blue: #007bff;
   --bs-indigo: #6610f2;
   --bs-purple: #6f42c1;
