@@ -35,6 +35,8 @@ export default function Landing() {
       <Head>
         <title>BXKR — Boxing x Kettlebell Rounds</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {/* Font Awesome (icons) */}
+        https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css
       </Head>
 
       {/* Page wrapper with futuristic background */}
@@ -84,19 +86,14 @@ export default function Landing() {
         </div>
 
         {/* Hero */}
-        <section
-          className="text-center mb-4"
-          style={{ ...glassCard, padding: "24px" }}
-        >
+        <section className="text-center mb-4" style={{ ...glassCard, padding: "24px" }}>
           <h1 className="fw-bold" style={{ fontSize: "2rem" }}>
             Boxing x Kettlebell — 10 Rounds. One System.
           </h1>
           <p className="mt-2" style={{ opacity: 0.9 }}>
-            BXKR blends the skill of{" "}
-            <span className="fw-semibold">boxing</span> with the strength and
-            conditioning of <span className="fw-semibold">kettlebells</span> in
-            a simple, repeatable format. Track nutrition, book sessions, and
-            build engine—fast.
+            BXKR blends the skill of <span className="fw-semibold">boxing</span> with the strength
+            and conditioning of <span className="fw-semibold">kettlebells</span> in a simple,
+            repeatable format. Track nutrition, book sessions, and build engine—fast.
           </p>
 
           <div className="d-flex justify-content-center gap-2 mt-3">
@@ -123,21 +120,17 @@ export default function Landing() {
               Continue with Email
             </button>
             <Link
-              href="#why           </Link>
-          </div>
-        </section>
-
-        {/* Value Pill */}
-        <section className="mb-4">
-          <div
+              href="#why"
+              className="btn btn-outline-light"
+              style={{ borderRadius: "24px", padding: "8px 18px" }}
+           div
             className="d-flex align-items-center justify-content-between"
             style={{
               borderRadius: "50px",
               padding: "12px 16px",
               boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
               color: "#fff",
-              background:
-                "linear-gradient(90deg, rgba(58,47,47,0.9), rgba(46,26,15,0.9))",
+              background: "linear-gradient(90deg, rgba(58,47,47,0.9), rgba(46,26,15,0.9))",
             }}
           >
             <div
@@ -161,9 +154,7 @@ export default function Landing() {
               className="btn btn-light"
               style={{ borderRadius: "24px", fontWeight: 600 }}
               onClick={() =>
-                window.location.assign(
-                  "/nutrition?date=" + new Date().toISOString().slice(0, 10)
-                )
+                window.location.assign("/nutrition?date=" + new Date().toISOString().slice(0, 10))
               }
             >
               Start
@@ -175,9 +166,7 @@ export default function Landing() {
         <section id="why" className="mb-4">
           <div className="text-center mb-3">
             <h2 className="fw-bold">Why BXKR?</h2>
-            <p style={{ opacity: 0.85 }}>
-              Practical programming. Real progression. No fluff.
-            </p>
+            <p style={{ opacity: 0.85 }}>Practical programming. Real progression. No fluff.</p>
           </div>
 
           <div className="row gx-3">
@@ -225,10 +214,7 @@ export default function Landing() {
                         background: "rgba(255,255,255,0.1)",
                       }}
                     >
-                      <i
-                        className={`fas ${f.icon}`}
-                        style={{ color: accent, fontSize: "18px" }}
-                      ></i>
+                      <i className={`fas ${f.icon}`} style={{ color: accent, fontSize: "18px" }}></i>
                     </div>
                     <div>
                       <div className="fw-semibold">{f.title}</div>
@@ -247,9 +233,7 @@ export default function Landing() {
         <section className="mb-4">
           <div className="text-center mb-3">
             <h2 className="fw-bold">The BXKR Format</h2>
-            <p style={{ opacity: 0.85 }}>
-              A repeatable structure that balances skill and capacity.
-            </p>
+            <p style={{ opacity: 0.85 }}>A repeatable structure that balances skill and capacity.</p>
           </div>
           <div className="row gx-3">
             <div className="col-12 col-md-6 mb-3">
@@ -262,9 +246,7 @@ export default function Landing() {
                   <li>Defensive</li>
                   <li>Engine</li>
                 </ul>
-                <small className="text-muted">
-                  Each round: 3 x 1‑minute combos.
-                </small>
+                <small className="text-muted">Each round: 3 x 1‑minute combos.</small>
               </div>
             </div>
             <div className="col-12 col-md-6 mb-3">
@@ -277,9 +259,7 @@ export default function Landing() {
                   <li>Core</li>
                   <li>Load</li>
                 </ul>
-                <small className="text-muted">
-                  Work formats: AMRAP / EMOM / Ladder.
-                </small>
+                <small className="text-muted">Work formats: AMRAP / EMOM / Ladder.</small>
               </div>
             </div>
           </div>
@@ -402,7 +382,8 @@ export default function Landing() {
                 </p>
                 <Link
                   href="#why"
-                  className         </div>
+                 ink>
+              </div>
             </div>
           </div>
         </section>
@@ -430,9 +411,7 @@ export default function Landing() {
               <div className="col-12 col-md-4 mb-3" key={idx}>
                 <div style={{ ...glassCard }}>
                   <div className="fw-semibold">{faq.q}</div>
-                  <div className="small" style={{ opacity: 0.85 }}>
-                    {faq.a}
-                  </div>
+                  <div className="small" style={{ opacity: 0.85 }}>{faq.a}</div>
                 </div>
               </div>
             ))}
@@ -442,9 +421,7 @@ export default function Landing() {
         {/* Bottom CTA */}
         <section className="text-center mb-2" style={{ ...glassCard, padding: "24px" }}>
           <h3 className="fw-bold">Ready to build your engine?</h3>
-          <p style={{ opacity: 0.9 }}>
-            Tap below to sign in and start your first BXKR session.
-          </p>
+          <p style={{ opacity: 0.9 }}>Tap below to sign in and start your first BXKR session.</p>
           <div className="d-flex justify-content-center gap-2">
             <button
               className="btn btn-primary"
@@ -473,13 +450,7 @@ export default function Landing() {
         <footer className="text-center mt-3" style={{ opacity: 0.7 }}>
           <small>
             © {new Date().getFullYear()} BXKR. All rights reserved.{" "}
-            /privacy
-              Privacy
-            </Link>{" "}
-            ·{" "}
-            /terms
-              Terms
-            </Link>
+            <privacyPrivacy</Link> · /termsTerms</Link>
           </small>
         </footer>
       </main>
