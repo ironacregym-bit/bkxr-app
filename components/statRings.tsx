@@ -1,3 +1,18 @@
+//  ADD THIS TO THE HTML
+//<StatRings
+//  mode={mode}
+//  workoutsValue={workoutsValue}
+//  workoutsTarget={workoutsTarget}
+//  workoutsRemainingWeek={Math.max(0, 3 - workoutsThisWeek)} // only used when mode==="week"
+//
+//  caloriesValue={caloriesValue}
+//  caloriesTarget={caloriesTarget}          // null for all-time
+//  isBehindLastWeek={isBehindLastWeek}      // your existing boolean
+//
+//  streakDays={streakDays}
+//  streakVisualTarget={365}                 // saturate at full year
+//  // colors={{ workouts:"#ff7f32", calories:"#ff4fa3", streak:"#32ff7f" }} // optional
+///>
 
 import Head from "next/head";
 import useSWR from "swr";
