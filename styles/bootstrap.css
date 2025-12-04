@@ -12,6 +12,25 @@
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/main/LICENSE)
  */
 
+/* Responsive ring box (shrinks on small screens) */
+.bxkr-ring {
+  width: 180px;
+  height: 180px;
+  margin: 0 auto;
+}
+@media (max-width: 576px) {
+  .bxkr-ring {
+    width: 120px;
+    height: 120px;
+  }
+}
+@media (max-width: 380px) {
+  .bxkr-ring {
+    width: 100px;
+    height: 100px;
+  }
+}
+
 .bxkr-bottomnav-link .nav-icon:hover {
   background: rgba(65,101,205,0.3); /* Accent color glow */
   box-shadow: 0 0 10px rgba(65,101,205,0.6);
