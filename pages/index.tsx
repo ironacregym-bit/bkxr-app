@@ -52,27 +52,18 @@ function isSameDay(a: Date, b: Date) {
   );
 }
 
-// ---- Goals used for ring percentages (tweak to taste)
-const GOALS = {
-  workoutsPerWeek: 4,     // Goal count for completed workouts per week
-  caloriesPerWeek: 2000,  // Target calorie burn per week (from completions)
-  streakTarget: 7,        // Target streak in days
-};
-
-// Geometry helper for concentric rings
-function ringGeometry(index: number, totalSize = 180, stroke = 12, gap = 2) {
-  const inset = index * (stroke + gap);
-  const size = totalSize - inset * 2;
-  return { size, inset, stroke };
+// Geometry helper for single rings
+function ringBox(size = 180) {
+  return { width: size, height: size };
 }
 
 export default function Home() {
   const { data: session, status } = useSession();
 
-  // Fetch workouts (programmed)
+  // Programmed workouts
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
 
-  // Completion history (performed workouts)
+  // Performed workouts (completions)
   const [range, setRange] = useState<"week" | "month" | "all">("week");
   const { data: completionData } = useSWR(
     session?.user?.email
@@ -80,7 +71,6 @@ export default function Home() {
       : null,
     fetcher
   );
-  const completedIds = completionData?.history?.map((h: any) => h.workout_id) || [];
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.email) {
@@ -113,55 +103,92 @@ export default function Home() {
     (w: any) => (w.day_name || "").toLowerCase() === selectedDayName.toLowerCase()
   );
 
-  // ---- Stats from completionData for the chosen range
-  const now = new Date();
-  let startDate: Date;
-  if (range === "week") {
-    startDate = new Date();
-    startDate.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // Monday
-    startDate.setHours(0, 0, 0, 0);
-  } else if (range === "month") {
-    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-  } else {
-    startDate = new Date(2000, 0, 1);
+  // ---- Metrics from completions (use raw data, not only filtered-by-range, for tabs)
+  const allCompletions = (completionData?.history || []) as any[];
+
+  // This week window (Mon..Sun)
+  const startOfThisWeek = (() => {
+    const s = new Date();
+    s.setDate(today.getDate() - ((today.getDay() + 6) % 7)); // Monday
+    s.setHours(0, 0, 0, 0);
+    return s;
+  })();
+  const endOfThisWeek = (() => {
+    const e = new Date(startOfThisWeek);
+    e.setDate(startOfThisWeek.getDate() + 6);
+    e.setHours(23, 59, 59, 999);
+    return e;
+  })();
+
+  // Workouts completed this week
+  const workoutsThisWeek = allCompletions.filter((c) => {
+    const d = new Date(c.completed_date);
+    return d >= startOfThisWeek && d <= endOfThisWeek;
+  }).length;
+  const WORKOUTS_TARGET = 3; // recommended
+
+  // Calories burned this week (sum of c.calories_burned)
+  const caloriesThisWeek = allCompletions
+    .filter((c) => {
+      const d = new Date(c.completed_date);
+      return d >= startOfThisWeek && d <= endOfThisWeek;
+    })
+    .reduce((sum, c) => sum + (c.calories_burned || 0), 0);
+
+  // Self-normalising visual scale for calories:
+  // Use the best weekly total from the last 4 weeks as "visual max" (no target label shown)
+  const weeksBack = 4;
+  const weeklyBuckets: number[] = [];
+  for (let i = 0; i < weeksBack; i++) {
+    const s = new Date(startOfThisWeek);
+    s.setDate(s.getDate() - i * 7);
+    const e = new Date(s);
+    e.setDate(s.getDate() + 6);
+    e.setHours(23, 59, 59, 999);
+    const total = allCompletions
+      .filter((c) => {
+        const d = new Date(c.completed_date);
+        return d >= s && d <= e;
+      })
+      .reduce((sum, c) => sum + (c.calories_burned || 0), 0);
+    weeklyBuckets.push(total);
   }
-
-  const filteredCompletions = (completionData?.history || []).filter((c: any) => {
-    const completedAt = new Date(c.completed_date);
-    return completedAt >= startDate && completedAt <= now;
-  });
-
-  const workoutsCompleted = filteredCompletions.length;
-  const caloriesBurned = filteredCompletions.reduce(
-    (sum: number, c: any) => sum + (c.calories_burned || 0),
-    0
+  const bestRecentWeekCalories = Math.max(1, ...weeklyBuckets); // avoid division by 0
+  const caloriesPct = Math.max(
+    0,
+    Math.min(100, (caloriesThisWeek / bestRecentWeekCalories) * 100)
   );
 
-  // ---- Streak calculation (consecutive days with ≥1 completion)
-  const toKey = (d: Date) => {
-    const dd = new Date(d);
-    dd.setHours(0, 0, 0, 0);
-    return dd.toISOString().slice(0, 10);
+  // Streak calculation (consecutive days with ≥1 completion ending today)
+  const dayKey = (d: Date) => {
+    const n = new Date(d);
+    n.setHours(0, 0, 0, 0);
+    return n.toISOString().slice(0, 10);
   };
   const completionDays = new Set<string>(
-    (completionData?.history || []).map((c: any) => {
+    allCompletions.map((c) => {
       const d = new Date(c.completed_date);
       d.setHours(0, 0, 0, 0);
       return d.toISOString().slice(0, 10);
     })
   );
   let streakDays = 0;
-  const cursor = new Date();
-  cursor.setHours(0, 0, 0, 0);
-  while (true) {
-    const k = toKey(cursor);
-    if (completionDays.has(k)) {
-      streakDays += 1;
-      cursor.setDate(cursor.getDate() - 1);
-    } else {
-      break;
-    }
+  const cur = new Date();
+  cur.setHours(0, 0, 0, 0);
+  while (completionDays.has(dayKey(cur))) {
+    streakDays += 1;
+    cur.setDate(cur.getDate() - 1);
   }
+  const STREAK_VISUAL_TARGET = 7; // for the ring visual only; we show the exact streak beside it
+  const streakPct = Math.max(0, Math.min(100, (streakDays / STREAK_VISUAL_TARGET) * 100));
+
+  // Nutrition check (today)
+  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const { data: nutritionData } = useSWR(
+    session?.user?.email ? `/api/nutrition/logs?date=${todayKey}` : null,
+    fetcher
+  );
+  const noNutritionLogged = (nutritionData?.entries?.length || 0) === 0;
 
   const daysWithWorkout = weekDays.map((d) => {
     const dayName = getDayName(d);
@@ -170,40 +197,17 @@ export default function Home() {
     );
   });
 
-  // ===== Nutrition check (today)
-  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const { data: nutritionData } = useSWR(
-    session?.user?.email ? `/api/nutrition/logs?date=${todayKey}` : null,
-    fetcher
-  );
-  const noNutritionLogged = (nutritionData?.entries?.length || 0) === 0;
+  // Tab selection
+  const [tab, setTab] = useState<"workouts" | "calories" | "streak">("workouts");
 
-  // ---- Ring targets based on range (simple scaling)
-  const workoutsTarget =
-    range === "week"
-      ? GOALS.workoutsPerWeek
-      : range === "month"
-      ? GOALS.workoutsPerWeek * 4
-      : Math.max(GOALS.workoutsPerWeek, workoutsCompleted || 1); // avoid 0 target on 'all'
-
-  const caloriesTarget =
-    range === "week"
-      ? GOALS.caloriesPerWeek
-      : range === "month"
-      ? GOALS.caloriesPerWeek * 4
-      : Math.max(GOALS.caloriesPerWeek, caloriesBurned || 1);
-
-  const streakTarget = GOALS.streakTarget;
-
-  const pctWorkouts = Math.min(100, (workoutsCompleted / workoutsTarget) * 100);
-  const pctCalories = Math.min(100, (caloriesBurned / caloriesTarget) * 100);
-  const pctStreak = Math.min(100, (streakDays / streakTarget) * 100);
-
-  // ---- Ring colors (Apple-like but BXKR vibe)
+  // Theme colours
   const COLORS = {
     workouts: "#ff7f32", // neon orange
-    calories: "#ff4fa3", // hot pink / red
+    calories: "#ff4fa3", // hot pink
     streak: "#32ff7f",   // electric green
+    trailOrange: "rgba(255,127,50,0.15)",
+    trailPink: "rgba(255,79,163,0.15)",
+    trailGreen: "rgba(50,255,127,0.15)",
   };
 
   return (
@@ -231,11 +235,142 @@ export default function Home() {
         )}
 
         {/* Greeting */}
-        <h2 className="mb-3 text-center" style={{ fontWeight: 700, fontSize: "1.8rem" }}>
+        <h2 className="text-center" style={{ fontWeight: 700, fontSize: "1.8rem" }}>
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
 
-        {/* Range Filter Buttons */}
+        {/* Tabs: Workouts | Calories | Streak */}
+        <div className="d-flex justify-content-center gap-2 mt-3 mb-2">
+          <button
+            className={`btn btn-sm ${tab === "workouts" ? "btn-primary" : "btn-outline-light"}`}
+            style={{
+              borderRadius: "24px",
+              backgroundColor: tab === "workouts" ? COLORS.workouts : "transparent",
+              border: tab === "workouts" ? "none" : `1px solid ${COLORS.workouts}`,
+              fontWeight: 600,
+              color: "#fff",
+            }}
+            onClick={() => setTab("workouts")}
+          >
+            Workouts
+          </button>
+          <button
+            className={`btn btn-sm ${tab === "calories" ? "btn-primary" : "btn-outline-light"}`}
+            style={{
+              borderRadius: "24px",
+              backgroundColor: tab === "calories" ? COLORS.calories : "transparent",
+              border: tab === "calories" ? "none" : `1px solid ${COLORS.calories}`,
+              fontWeight: 600,
+              color: "#fff",
+            }}
+            onClick={() => setTab("calories")}
+          >
+            Calories
+          </button>
+          <button
+            className={`btn btn-sm ${tab === "streak" ? "btn-primary" : "btn-outline-light"}`}
+            style={{
+              borderRadius: "24px",
+              backgroundColor: tab === "streak" ? COLORS.streak : "transparent",
+              border: tab === "streak" ? "none" : `1px solid ${COLORS.streak}`,
+              fontWeight: 600,
+              color: "#fff",
+            }}
+            onClick={() => setTab("streak")}
+          >
+            Streak
+          </button>
+        </div>
+
+        {/* Tab panel */}
+        <div
+          className="d-flex flex-column align-items-center"
+          style={{
+            background: "rgba(255,255,255,0.05)",
+            borderRadius: "16px",
+            padding: "16px",
+            backdropFilter: "blur(10px)",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+            marginBottom: "16px",
+          }}
+        >
+          {tab === "workouts" && (
+            <>
+              <div style={{ ...ringBox(180) }}>
+                <CircularProgressbar
+                  value={Math.min(100, (workoutsThisWeek / WORKOUTS_TARGET) * 100)}
+                  strokeWidth={12}
+                  styles={buildStyles({
+                    pathColor: COLORS.workouts,
+                    trailColor: COLORS.trailOrange,
+                    strokeLinecap: "butt",
+                    pathTransitionDuration: 0.8,
+                  })}
+                />
+              </div>
+              <div className="text-center mt-2">
+                <div style={{ fontWeight: 700, color: COLORS.workouts }}>
+                  {workoutsThisWeek}/{WORKOUTS_TARGET} completed
+                </div>
+                <div className="small" style={{ opacity: 0.85 }}>
+                  Weekly recommendation: {WORKOUTS_TARGET}
+                </div>
+              </div>
+            </>
+          )}
+
+          {tab === "calories" && (
+            <>
+              <div style={{ ...ringBox(180) }}>
+                <CircularProgressbar
+                  value={caloriesPct}
+                  strokeWidth={12}
+                  styles={buildStyles({
+                    pathColor: COLORS.calories,
+                    trailColor: COLORS.trailPink,
+                    strokeLinecap: "butt",
+                    pathTransitionDuration: 0.8,
+                  })}
+                />
+              </div>
+              <div className="text-center mt-2">
+                <div style={{ fontWeight: 700, color: COLORS.calories }}>
+                  {Math.round(caloriesThisWeek)} kcal this week
+                </div>
+                <div className="small" style={{ opacity: 0.85 }}>
+                  Visual scale: relative to your best week in the last 4 weeks
+                </div>
+              </div>
+            </>
+          )}
+
+          {tab === "streak" && (
+            <>
+              <div style={{ ...ringBox(180) }}>
+                <CircularProgressbar
+                  value={streakPct}
+                  strokeWidth={12}
+                  styles={buildStyles({
+                    pathColor: COLORS.streak,
+                    trailColor: COLORS.trailGreen,
+                    strokeLinecap: "butt",
+                    pathTransitionDuration: 0.8,
+                  })}
+                />
+              </div>
+              <div className="text-center mt-2">
+                <div style={{ fontWeight: 700, color: COLORS.streak }}>
+                  Current streak: {streakDays} {streakDays === 1 ? "day" : "days"}
+                </div>
+                <div className="small" style={{ opacity: 0.85 }}>
+                  Ring saturates at {STREAK_VISUAL_TARGET}, number shows full streak
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Range Filter Buttons (existing) */}
         <div className="d-flex justify-content-center gap-2 mb-3">
           {["week", "month", "all"].map((r) => (
             <button
@@ -253,151 +388,6 @@ export default function Home() {
             </button>
           ))}
         </div>
-
-        {/* Apple Fitness-style triple concentric ring */}
-        <div className="d-flex justify-content-center mb-2">
-          <div style={{ position: "relative", width: 180, height: 180 }}>
-            {/* Outer: Workouts */}
-            {(() => {
-              const geo = ringGeometry(0, 180, 12, 2);
-              return (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: geo.inset,
-                    left: geo.inset,
-                    width: geo.size,
-                    height: geo.size,
-                  }}
-                >
-                  <CircularProgressbar
-                    value={pctWorkouts}
-                    strokeWidth={geo.stroke}
-                    styles={buildStyles({
-                      pathColor: COLORS.workouts,
-                      trailColor: "rgba(255,127,50,0.15)",
-                      strokeLinecap: "butt",
-                      pathTransitionDuration: 0.8,
-                    })}
-                  />
-                </div>
-              );
-            })()}
-            {/* Middle: Calories */}
-            {(() => {
-              const geo = ringGeometry(1, 180, 12, 2);
-              return (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: geo.inset,
-                    left: geo.inset,
-                    width: geo.size,
-                    height: geo.size,
-                  }}
-                >
-                  <CircularProgressbar
-                    value={pctCalories}
-                    strokeWidth={geo.stroke}
-                    styles={buildStyles({
-                      pathColor: COLORS.calories,
-                      trailColor: "rgba(255,79,163,0.15)",
-                      strokeLinecap: "butt",
-                      pathTransitionDuration: 0.8,
-                    })}
-                  />
-                </div>
-              );
-            })()}
-            {/* Inner: Streak (replaces Sets) */}
-            {(() => {
-              const geo = ringGeometry(2, 180, 12, 2);
-              return (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: geo.inset,
-                    left: geo.inset,
-                    width: geo.size,
-                    height: geo.size,
-                  }}
-                >
-                  <CircularProgressbar
-                    value={pctStreak}
-                    strokeWidth={geo.stroke}
-                    styles={buildStyles({
-                      pathColor: COLORS.streak,
-                      trailColor: "rgba(50,255,127,0.15)",
-                      strokeLinecap: "butt",
-                      pathTransitionDuration: 0.8,
-                    })}
-                  />
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-
-        {/* Legends under rings */}
-        <div className="d-flex justify-content-around text-center mb-4">
-          <div>
-            <div style={{ color: COLORS.workouts, fontWeight: 700 }}>Workouts</div>
-            <div className="small" style={{ opacity: 0.85 }}>
-              {workoutsCompleted}/{workoutsTarget} ({Math.round(pctWorkouts)}%)
-            </div>
-          </div>
-          <div>
-            <div style={{ color: COLORS.calories, fontWeight: 700 }}>Calories</div>
-            <div className="small" style={{ opacity: 0.85 }}>
-              {Math.round(caloriesBurned)}/{caloriesTarget} ({Math.round(pctCalories)}%)
-            </div>
-          </div>
-          <div>
-            <div style={{ color: COLORS.streak, fontWeight: 700 }}>Streak</div>
-            <div className="small" style={{ opacity: 0.85 }}>
-              {streakDays}/{streakTarget} ({Math.round(pctStreak)}%)
-            </div>
-          </div>
-        </div>
-
-        {/* Auth */}
-        <div className="mb-4 d-flex justify-content-center gap-3 flex-wrap">
-          {status === "loading" ? (
-            <span>Checking session…</span>
-          ) : !session ? (
-            <button
-              className="btn btn-primary"
-              style={{
-                backgroundColor: "#ff7f32",
-                borderRadius: "24px",
-                fontWeight: 600,
-              }}
-              onClick={() => signIn("google")}
-            >
-              Sign in with Google
-            </button>
-          ) : (
-            <div className="d-flex gap-3 align-items-center">
-              <img
-                src={session.user?.image ?? ""}
-                alt=""
-                className="rounded-circle"
-                style={{ width: 32, height: 32 }}
-              />
-              <span style={{ opacity: 0.7 }}>{session.user?.email}</span>
-              <button
-                className="btn btn-outline-light"
-                style={{ borderRadius: "24px" }}
-                onClick={() => signOut()}
-              >
-                Sign out
-              </button>
-            </div>
-          )}
-        </div>
-
-        {error && <div className="alert alert-danger">Failed to load workouts</div>}
-        {isLoading && <div className="alert alert-secondary">Loading…</div>}
 
         {/* Weekly strip */}
         <div className="d-flex justify-content-between text-center mb-4">
