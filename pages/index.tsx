@@ -43,7 +43,7 @@ function getWeek() {
   });
 }
 
-const dayLabels = ["M", "T", "W", "T", "F", "S", "S"];
+const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function isSameDay(a: Date, b: Date) {
   return (
