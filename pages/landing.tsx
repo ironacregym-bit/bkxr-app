@@ -35,10 +35,6 @@ export default function Landing() {
       <Head>
         <title>BXKR — Boxing x Kettlebell Rounds</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* Font Awesome (icons) */}
-        <link
-          rel="stylesheet"
-         t-awesome/6.4.0/css/all.min.css
       </Head>
 
       {/* Page wrapper with futuristic background */}
