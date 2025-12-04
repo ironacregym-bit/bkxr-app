@@ -122,8 +122,8 @@ export default function Landing() {
             <Link
               href="#why"
               className="btn btn-outline-light"
-              style={{ borderRadius: "24px", padding: "8px 18px" }}
-           div
+              style={{ borderRadius: "24px", padding: "8px 18px" }}>Why</Link>
+           <div
             className="d-flex align-items-center justify-content-between"
             style={{
               borderRadius: "50px",
@@ -382,7 +382,7 @@ export default function Landing() {
                 </p>
                 <Link
                   href="#why"
-                 ink>
+                </Link>
               </div>
             </div>
           </div>
@@ -450,7 +450,7 @@ export default function Landing() {
         <footer className="text-center mt-3" style={{ opacity: 0.7 }}>
           <small>
             © {new Date().getFullYear()} BXKR. All rights reserved.{" "}
-            <privacyPrivacy</Link> · /termsTerms</Link>
+            <Link href="/privacy">Privacy Policy</Link> · <Link href="/terms">Terms</Link>
           </small>
         </footer>
       </main>
