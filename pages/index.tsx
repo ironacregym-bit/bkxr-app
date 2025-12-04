@@ -10,7 +10,6 @@ import CoachBanner from "../components/CoachBanner";
 import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 
-// Rings
 import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
 
@@ -18,11 +17,8 @@ export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
 ) => {
   const session = await getSession(context);
-  // If the user is NOT logged in → show landing page instead
   if (!session) {
-    return {
-      redirect: { destination: "/landing", permanent: false },
-    };
+    return { redirect: { destination: "/landing", permanent: false } };
   }
   return { props: {} };
 };
@@ -52,9 +48,48 @@ function isSameDay(a: Date, b: Date) {
   );
 }
 
-// Geometry helper for single rings
-function ringBox(size = 180) {
-  return { width: size, height: size };
+// ----- Helpers for aligned week/month/year windows
+function startOfAlignedWeek(d: Date) {
+  const day = d.getDay();
+  const diffToMon = (day + 6) % 7;
+  const s = new Date(d);
+  s.setDate(d.getDate() - diffToMon);
+  s.setHours(0, 0, 0, 0);
+  return s;
+}
+function endOfAlignedWeek(d: Date) {
+  const s = startOfAlignedWeek(d);
+  const e = new Date(s);
+  e.setDate(s.getDate() + 6);
+  e.setHours(23, 59, 59, 999);
+  return e;
+}
+function startOfMonth(d: Date) {
+  const s = new Date(d.getFullYear(), d.getMonth(), 1);
+  s.setHours(0, 0, 0, 0);
+  return s;
+}
+function endOfMonth(d: Date) {
+  const e = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  e.setHours(23, 59, 59, 999);
+  return e;
+}
+function weeksInMonthAligned(d: Date) {
+  // Count Monday–Sunday blocks overlapping the month
+  const s = startOfMonth(d);
+  const e = endOfMonth(d);
+  const sAligned = startOfAlignedWeek(s);
+  const eAligned = endOfAlignedWeek(e);
+  const diffDays = Math.ceil((eAligned.getTime() - sAligned.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  return Math.ceil(diffDays / 7); // typically 4 or 5
+}
+function weeksInYear(year: number) {
+  const jan1 = new Date(year, 0, 1);
+  const dec31 = new Date(year, 11, 31);
+  const sAligned = startOfAlignedWeek(jan1);
+  const eAligned = endOfAlignedWeek(dec31);
+  const diffDays = Math.ceil((eAligned.getTime() - sAligned.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  return Math.ceil(diffDays / 7); // 52 or 53
 }
 
 export default function Home() {
@@ -63,14 +98,14 @@ export default function Home() {
   // Programmed workouts
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
 
-  // Performed workouts (completions)
-  const [range, setRange] = useState<"week" | "month" | "all">("week");
+  // Performed workouts (full history; we compute week/month/year windows client-side)
   const { data: completionData } = useSWR(
     session?.user?.email
-      ? `/api/completions/history?email=${encodeURIComponent(session.user.email)}&range=${range}`
+      ? `/api/completions/history?email=${encodeURIComponent(session.user.email)}&range=all`
       : null,
     fetcher
   );
+  const allCompletions = (completionData?.history || []) as any[];
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.email) {
@@ -96,70 +131,47 @@ export default function Home() {
 
   const getDayName = (date: Date) =>
     date.toLocaleDateString(undefined, { weekday: "long" });
-
   const selectedDayName = getDayName(selectedDay);
 
   const selectedWorkouts = (data?.workouts || []).filter(
     (w: any) => (w.day_name || "").toLowerCase() === selectedDayName.toLowerCase()
   );
 
-  // ---- Metrics from completions (use raw data, not only filtered-by-range, for tabs)
-  const allCompletions = (completionData?.history || []) as any[];
+  // ---- Windows for week and month
+  const thisWeekStart = startOfAlignedWeek(today);
+  const thisWeekEnd = endOfAlignedWeek(today);
+  const thisMonthStart = startOfMonth(today);
+  const thisMonthEnd = endOfMonth(today);
+  const weeksInMonth = weeksInMonthAligned(today);
+  const weeksInThisYear = weeksInYear(today.getFullYear());
 
-  // This week window (Mon..Sun)
-  const startOfThisWeek = (() => {
-    const s = new Date();
-    s.setDate(today.getDate() - ((today.getDay() + 6) % 7)); // Monday
-    s.setHours(0, 0, 0, 0);
-    return s;
-  })();
-  const endOfThisWeek = (() => {
-    const e = new Date(startOfThisWeek);
-    e.setDate(startOfThisWeek.getDate() + 6);
-    e.setHours(23, 59, 59, 999);
-    return e;
-  })();
-
-  // Workouts completed this week
+  // ---- Workouts counts
   const workoutsThisWeek = allCompletions.filter((c) => {
     const d = new Date(c.completed_date);
-    return d >= startOfThisWeek && d <= endOfThisWeek;
+    return d >= thisWeekStart && d <= thisWeekEnd;
   }).length;
-  const WORKOUTS_TARGET = 3; // recommended
 
-  // Calories burned this week (sum of c.calories_burned)
-  const caloriesThisWeek = allCompletions
-    .filter((c) => {
-      const d = new Date(c.completed_date);
-      return d >= startOfThisWeek && d <= endOfThisWeek;
-    })
-    .reduce((sum, c) => sum + (c.calories_burned || 0), 0);
+  const workoutsThisMonth = allCompletions.filter((c) => {
+    const d = new Date(c.completed_date);
+    return d >= thisMonthStart && d <= thisMonthEnd;
+  }).length;
 
-  // Self-normalising visual scale for calories:
-  // Use the best weekly total from the last 4 weeks as "visual max" (no target label shown)
-  const weeksBack = 4;
-  const weeklyBuckets: number[] = [];
-  for (let i = 0; i < weeksBack; i++) {
-    const s = new Date(startOfThisWeek);
-    s.setDate(s.getDate() - i * 7);
-    const e = new Date(s);
-    e.setDate(s.getDate() + 6);
-    e.setHours(23, 59, 59, 999);
-    const total = allCompletions
-      .filter((c) => {
-        const d = new Date(c.completed_date);
-        return d >= s && d <= e;
-      })
-      .reduce((sum, c) => sum + (c.calories_burned || 0), 0);
-    weeklyBuckets.push(total);
-  }
-  const bestRecentWeekCalories = Math.max(1, ...weeklyBuckets); // avoid division by 0
-  const caloriesPct = Math.max(
-    0,
-    Math.min(100, (caloriesThisWeek / bestRecentWeekCalories) * 100)
+  const startOfYear = new Date(today.getFullYear(), 0, 1);
+  startOfYear.setHours(0, 0, 0, 0);
+  const workoutsYTD = allCompletions.filter((c) => {
+    const d = new Date(c.completed_date);
+    return d >= startOfYear && d <= today;
+  }).length;
+
+  // ---- Calories with planning target 500/session (Week/Month); All Time uses recorded totals
+  const caloriesThisWeek = workoutsThisWeek * 500;
+  const caloriesThisMonth = workoutsThisMonth * 500;
+  const caloriesAllTime = allCompletions.reduce(
+    (sum, c) => sum + (c.calories_burned || 0),
+    0
   );
 
-  // Streak calculation (consecutive days with ≥1 completion ending today)
+  // ---- Streak (consecutive days with ≥1 completion ending today)
   const dayKey = (d: Date) => {
     const n = new Date(d);
     n.setHours(0, 0, 0, 0);
@@ -179,10 +191,9 @@ export default function Home() {
     streakDays += 1;
     cur.setDate(cur.getDate() - 1);
   }
-  const STREAK_VISUAL_TARGET = 7; // for the ring visual only; we show the exact streak beside it
-  const streakPct = Math.max(0, Math.min(100, (streakDays / STREAK_VISUAL_TARGET) * 100));
+  const STREAK_VISUAL_TARGET = 7; // for ring only; label shows full streak
 
-  // Nutrition check (today)
+  // ===== Nutrition check (today)
   const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const { data: nutritionData } = useSWR(
     session?.user?.email ? `/api/nutrition/logs?date=${todayKey}` : null,
@@ -197,17 +208,41 @@ export default function Home() {
     );
   });
 
-  // Tab selection
-  const [tab, setTab] = useState<"workouts" | "calories" | "streak">("workouts");
+  // ===== Pills: Week | Month | All Time (controls targets and percentages)
+  const [mode, setMode] = useState<"week" | "month" | "all">("week");
+
+  // Targets
+  const WORKOUTS_TARGET_WEEK = 3;
+  const WORKOUTS_TARGET_MONTH = 3 * weeksInMonth;
+  const WORKOUTS_TARGET_YEAR = 3 * weeksInThisYear;
+
+  const CALORIES_TARGET_WEEK = 500 * 3; // 1500
+  const CALORIES_TARGET_MONTH = 500 * (3 * weeksInMonth);
+  // CALORIES All Time has no target
+
+  // Values by mode
+  const workoutsValue =
+    mode === "week" ? workoutsThisWeek : mode === "month" ? workoutsThisMonth : workoutsYTD;
+  const workoutsTarget =
+    mode === "week" ? WORKOUTS_TARGET_WEEK : mode === "month" ? WORKOUTS_TARGET_MONTH : WORKOUTS_TARGET_YEAR;
+  const workoutsPct = Math.min(100, (workoutsValue / workoutsTarget) * 100);
+
+  const caloriesValue =
+    mode === "week" ? caloriesThisWeek : mode === "month" ? caloriesThisMonth : Math.round(caloriesAllTime);
+  const caloriesTarget =
+    mode === "week" ? CALORIES_TARGET_WEEK : mode === "month" ? CALORIES_TARGET_MONTH : null;
+  const caloriesPct = caloriesTarget ? Math.min(100, (caloriesValue / caloriesTarget) * 100) : 100;
+
+  const streakPct = Math.min(100, (streakDays / STREAK_VISUAL_TARGET) * 100);
 
   // Theme colours
   const COLORS = {
     workouts: "#ff7f32", // neon orange
     calories: "#ff4fa3", // hot pink
-    streak: "#32ff7f",   // electric green
+    streak:   "#32ff7f", // electric green
     trailOrange: "rgba(255,127,50,0.15)",
-    trailPink: "rgba(255,79,163,0.15)",
-    trailGreen: "rgba(50,255,127,0.15)",
+    trailPink:   "rgba(255,79,163,0.15)",
+    trailGreen:  "rgba(50,255,127,0.15)",
   };
 
   return (
@@ -228,77 +263,51 @@ export default function Home() {
       >
         {/* Coach reminder pill */}
         {status === "authenticated" && noNutritionLogged && (
-          <CoachBanner
-            message="Log your meals for today to stay on track!"
-            dateKey={todayKey}
-          />
+          <CoachBanner message="Log your meals for today to stay on track!" dateKey={todayKey} />
         )}
 
         {/* Greeting */}
         <h2 className="text-center" style={{ fontWeight: 700, fontSize: "1.8rem" }}>
-          {greeting}, {session?.user?.name || "Athlete"}
+          {hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening"},{" "}
+          {session?.user?.name || "Athlete"}
         </h2>
 
-        {/* Tabs: Workouts | Calories | Streak */}
-        <div className="d-flex justify-content-center gap-2 mt-3 mb-2">
-          <button
-            className={`btn btn-sm ${tab === "workouts" ? "btn-primary" : "btn-outline-light"}`}
-            style={{
-              borderRadius: "24px",
-              backgroundColor: tab === "workouts" ? COLORS.workouts : "transparent",
-              border: tab === "workouts" ? "none" : `1px solid ${COLORS.workouts}`,
-              fontWeight: 600,
-              color: "#fff",
-            }}
-            onClick={() => setTab("workouts")}
-          >
-            Workouts
-          </button>
-          <button
-            className={`btn btn-sm ${tab === "calories" ? "btn-primary" : "btn-outline-light"}`}
-            style={{
-              borderRadius: "24px",
-              backgroundColor: tab === "calories" ? COLORS.calories : "transparent",
-              border: tab === "calories" ? "none" : `1px solid ${COLORS.calories}`,
-              fontWeight: 600,
-              color: "#fff",
-            }}
-            onClick={() => setTab("calories")}
-          >
-            Calories
-          </button>
-          <button
-            className={`btn btn-sm ${tab === "streak" ? "btn-primary" : "btn-outline-light"}`}
-            style={{
-              borderRadius: "24px",
-              backgroundColor: tab === "streak" ? COLORS.streak : "transparent",
-              border: tab === "streak" ? "none" : `1px solid ${COLORS.streak}`,
-              fontWeight: 600,
-              color: "#fff",
-            }}
-            onClick={() => setTab("streak")}
-          >
-            Streak
-          </button>
+        {/* Mode pills: Week | Month | All Time */}
+        <div className="d-flex justify-content-center gap-2 mt-2 mb-3">
+          {(["week", "month", "all"] as const).map((m) => (
+            <button
+              key={m}
+              className={`btn btn-sm ${mode === m ? "btn-primary" : "btn-outline-light"}`}
+              style={{
+                borderRadius: "24px",
+                backgroundColor: mode === m ? "#ff7f32" : "transparent",
+                border: mode === m ? "none" : "1px solid #ff7f32",
+                fontWeight: 600,
+                color: "#fff",
+              }}
+              onClick={() => setMode(m)}
+            >
+              {m === "week" ? "Week" : m === "month" ? "Month" : "All Time"}
+            </button>
+          ))}
         </div>
 
-        {/* Tab panel */}
-        <div
-          className="d-flex flex-column align-items-center"
-          style={{
-            background: "rgba(255,255,255,0.05)",
-            borderRadius: "16px",
-            padding: "16px",
-            backdropFilter: "blur(10px)",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-            marginBottom: "16px",
-          }}
-        >
-          {tab === "workouts" && (
-            <>
-              <div style={{ ...ringBox(180) }}>
+        {/* Three visual cards always visible: Workouts | Calories | Streak */}
+        <div className="row gx-3 mb-4 text-center">
+          {/* Workouts */}
+          <div className="col-12 col-md-4 mb-3">
+            <div
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                borderRadius: "16px",
+                padding: "16px",
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+              }}
+            >
+              <div style={{ width: 180, height: 180, margin: "0 auto" }}>
                 <CircularProgressbar
-                  value={Math.min(100, (workoutsThisWeek / WORKOUTS_TARGET) * 100)}
+                  value={workoutsPct}
                   strokeWidth={12}
                   styles={buildStyles({
                     pathColor: COLORS.workouts,
@@ -308,20 +317,32 @@ export default function Home() {
                   })}
                 />
               </div>
-              <div className="text-center mt-2">
-                <div style={{ fontWeight: 700, color: COLORS.workouts }}>
-                  {workoutsThisWeek}/{WORKOUTS_TARGET} completed
-                </div>
-                <div className="small" style={{ opacity: 0.85 }}>
-                  Weekly recommendation: {WORKOUTS_TARGET}
-                </div>
+              <div className="mt-2" style={{ color: COLORS.workouts, fontWeight: 700 }}>
+                Workouts
               </div>
-            </>
-          )}
+              <div className="small" style={{ opacity: 0.85 }}>
+                {workoutsValue}/{workoutsTarget} completed ({Math.round(workoutsPct)}%)
+              </div>
+              <div className="small" style={{ opacity: 0.7 }}>
+                {mode === "week" && "Recommendation: 3 per week"}
+                {mode === "month" && `Recommendation: ${WORKOUTS_TARGET_MONTH} this month`}
+                {mode === "all" && `Recommendation: ${WORKOUTS_TARGET_YEAR} this year`}
+              </div>
+            </div>
+          </div>
 
-          {tab === "calories" && (
-            <>
-              <div style={{ ...ringBox(180) }}>
+          {/* Calories */}
+          <div className="col-12 col-md-4 mb-3">
+            <div
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                borderRadius: "16px",
+                padding: "16px",
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+              }}
+            >
+              <div style={{ width: 180, height: 180, margin: "0 auto" }}>
                 <CircularProgressbar
                   value={caloriesPct}
                   strokeWidth={12}
@@ -333,20 +354,32 @@ export default function Home() {
                   })}
                 />
               </div>
-              <div className="text-center mt-2">
-                <div style={{ fontWeight: 700, color: COLORS.calories }}>
-                  {Math.round(caloriesThisWeek)} kcal this week
-                </div>
-                <div className="small" style={{ opacity: 0.85 }}>
-                  Visual scale: relative to your best week in the last 4 weeks
-                </div>
+              <div className="mt-2" style={{ color: COLORS.calories, fontWeight: 700 }}>
+                Calories
               </div>
-            </>
-          )}
+              <div className="small" style={{ opacity: 0.85 }}>
+                {caloriesValue} kcal {caloriesTarget ? `of ${caloriesTarget}` : "(total)"}
+              </div>
+              <div className="small" style={{ opacity: 0.7 }}>
+                {mode === "week" && "500 × 3 (sessions) = 1500"}
+                {mode === "month" && `500 × (3 × ${weeksInMonth}) = ${CALORIES_TARGET_MONTH}`}
+                {mode === "all" && "All‑time total calories burnt"}
+              </div>
+            </div>
+          </div>
 
-          {tab === "streak" && (
-            <>
-              <div style={{ ...ringBox(180) }}>
+          {/* Streak */}
+          <div className="col-12 col-md-4 mb-3">
+            <div
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                borderRadius: "16px",
+                padding: "16px",
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+              }}
+            >
+              <div style={{ width: 180, height: 180, margin: "0 auto" }}>
                 <CircularProgressbar
                   value={streakPct}
                   strokeWidth={12}
@@ -358,36 +391,57 @@ export default function Home() {
                   })}
                 />
               </div>
-              <div className="text-center mt-2">
-                <div style={{ fontWeight: 700, color: COLORS.streak }}>
-                  Current streak: {streakDays} {streakDays === 1 ? "day" : "days"}
-                </div>
-                <div className="small" style={{ opacity: 0.85 }}>
-                  Ring saturates at {STREAK_VISUAL_TARGET}, number shows full streak
-                </div>
+              <div className="mt-2" style={{ color: COLORS.streak, fontWeight: 700 }}>
+                Streak
               </div>
-            </>
+              <div className="small" style={{ opacity: 0.85 }}>
+                {streakDays} {streakDays === 1 ? "day" : "days"}
+              </div>
+              <div className="small" style={{ opacity: 0.7 }}>
+                Ring saturates at {STREAK_VISUAL_TARGET}; number shows full streak
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Auth */}
+        <div className="mb-4 d-flex justify-content-center gap-3 flex-wrap">
+          {status === "loading" ? (
+            <span>Checking session…</span>
+          ) : !session ? (
+            <button
+              className="btn btn-primary"
+              style={{
+                backgroundColor: "#ff7f32",
+                borderRadius: "24px",
+                fontWeight: 600,
+              }}
+              onClick={() => signIn("google")}
+            >
+              Sign in with Google
+            </button>
+          ) : (
+            <div className="d-flex gap-3 align-items-center">
+              <img
+                src={session.user?.image ?? ""}
+                alt=""
+                className="rounded-circle"
+                style={{ width: 32, height: 32 }}
+              />
+              <span style={{ opacity: 0.7 }}>{session.user?.email}</span>
+              <button
+                className="btn btn-outline-light"
+                style={{ borderRadius: "24px" }}
+                onClick={() => signOut()}
+              >
+                Sign out
+              </button>
+            </div>
           )}
         </div>
 
-        {/* Range Filter Buttons (existing) */}
-        <div className="d-flex justify-content-center gap-2 mb-3">
-          {["week", "month", "all"].map((r) => (
-            <button
-              key={r}
-              className={`btn btn-sm ${range === r ? "btn-primary" : "btn-outline-primary"}`}
-              style={{
-                borderRadius: "24px",
-                backgroundColor: range === r ? "#ff7f32" : "transparent",
-                color: "#fff",
-                border: range === r ? "none" : "1px solid #ff7f32",
-              }}
-              onClick={() => setRange(r as "week" | "month" | "all")}
-            >
-              {r.charAt(0).toUpperCase() + r.slice(1)}
-            </button>
-          ))}
-        </div>
+        {error && <div className="alert alert-danger">Failed to load workouts</div>}
+        {isLoading && <div className="alert alert-secondary">Loading…</div>}
 
         {/* Weekly strip */}
         <div className="d-flex justify-content-between text-center mb-4">
