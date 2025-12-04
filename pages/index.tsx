@@ -94,9 +94,6 @@ function weeksInYear(year: number) {
 // small ring wrapper with glow
 function ringWrapGlow(color: string): React.CSSProperties {
   return {
-    width: 180,
-    height: 180,
-    margin: "0 auto",
     filter: `drop-shadow(0 0 6px ${hexToRGBA(color, 0.35)})`,
     animation: "bxkrPulse 3.2s ease-in-out infinite",
   };
@@ -212,7 +209,7 @@ export default function Home() {
     streakDays += 1;
     cur.setDate(cur.getDate() - 1);
   }
-  const STREAK_VISUAL_TARGET = 7; // ring only
+  const STREAK_VISUAL_TARGET = 156; // ring only
 
   // Nutrition (today)
   const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -376,7 +373,7 @@ export default function Home() {
 
         {/* Dynamic callout notification (moved below greeting) */}
         <div className="mb-3">
-          <CoachBanner message={calloutText} dateKey={todayKey} />
+          <CoachBanner message="Don’t forget to log your nutrition today!" dateKey={todayKey} />
         </div>
 
         {/* Mode pills: Week | Month | All Time */}
@@ -400,9 +397,9 @@ export default function Home() {
         </div>
 
         {/* Three visuals with tiny glow + breathing room */}
-        <div className="row gx-3 mb-4 text-center">
+        <div className="row row-cols-3 gx-2 gx-sm-3 mb-4 text-center">
           {/* Workouts */}
-          <div className="col-12 col-md-4 mb-3">
+          <div className="col mb-3">
             <div
               style={{
                 background: "rgba(255,255,255,0.05)",
@@ -412,7 +409,7 @@ export default function Home() {
                 boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
               }}
             >
-              <div style={ringWrapGlow(COLORS.workouts)}>
+              <div className="bxkr-ring" style={ringWrapGlow(COLORS.workouts)}>
                 <CircularProgressbar
                   value={workoutsPct}
                   strokeWidth={12}
@@ -427,19 +424,21 @@ export default function Home() {
               <div className="mt-2" style={{ color: COLORS.workouts, fontWeight: 700 }}>
                 Workouts
               </div>
-              <div className="small" style={{ opacity: 0.9 }}>
-                {workoutsValue}/{workoutsTarget} completed ({Math.round(workoutsPct)}%)
-              </div>
-              <div className="small" style={{ opacity: 0.7 }}>
-                {mode === "week" && "Recommendation: 3 per week"}
-                {mode === "month" && `Recommendation: ${WORKOUTS_TARGET_MONTH} this month`}
-                {mode === "all" && `Recommendation: ${WORKOUTS_TARGET_YEAR} this year`}
-              </div>
+              {/* Micro goal ONLY here; remove 0/3 and recommendation lines */}
+              {remaining > 0 ? (
+                <div className="small" style={{ opacity: 0.9 }}>
+                  You’re {remaining} session{remaining === 1 ? "" : "s"} away from your weekly goal.
+                </div>
+              ) : (
+                <div className="small" style={{ opacity: 0.9 }}>
+                  Weekly goal hit. Keep the streak alive!
+                </div>
+              )}
             </div>
           </div>
 
           {/* Calories */}
-          <div className="col-12 col-md-4 mb-3">
+          <div className="col mb-3">
             <div
               style={{
                 background: "rgba(255,255,255,0.05)",
@@ -449,7 +448,7 @@ export default function Home() {
                 boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
               }}
             >
-              <div style={ringWrapGlow(COLORS.calories)}>
+              <div className="bxkr-ring" style={ringWrapGlow(COLORS.calories)}>
                 <CircularProgressbar
                   value={caloriesPct}
                   strokeWidth={12}
@@ -472,16 +471,18 @@ export default function Home() {
                   {caloriesMomentum}
                 </div>
               )}
-              <div className="small" style={{ opacity: 0.7 }}>
-                {mode === "week" && "Target assumes 500 kcal per session × 3"}
-                {mode === "month" && `Target assumes 500 × (3 × ${weeksInMonth})`}
-                {mode === "all" && "All‑time calories burnt"}
-              </div>
+
+              {/* Only show momentum if actually behind last week */}
+              {isBehindLastWeek && (
+                <div className="small" style={{ opacity: 0.9 }}>
+                  You’re behind last week’s total — push a bit today.
+                </div>
+
             </div>
           </div>
 
           {/* Streak */}
-          <div className="col-12 col-md-4 mb-3">
+          <div className="col mb-3">
             <div
               style={{
                 background: "rgba(255,255,255,0.05)",
@@ -491,7 +492,7 @@ export default function Home() {
                 boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
               }}
             >
-              <div style={ringWrapGlow(COLORS.streak)}>
+              <div className="bxkr-ring" style={ringWrapGlow(COLORS.streak)}>
                 <CircularProgressbar
                   value={streakPct}
                   strokeWidth={12}
@@ -508,9 +509,6 @@ export default function Home() {
               </div>
               <div className="small" style={{ opacity: 0.9 }}>
                 {streakDays} {streakDays === 1 ? "day" : "days"}
-              </div>
-              <div className="small" style={{ opacity: 0.7 }}>
-                Ring saturates at {STREAK_VISUAL_TARGET}; label shows full streak
               </div>
             </div>
           </div>
