@@ -9,6 +9,7 @@ import AddToHomeScreen from "../components/AddToHomeScreen";
 import CoachBanner from "../components/CoachBanner";
 // Redirect logic for index
 import { getSession } from "next-auth/react";
+import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   const session = await getSession(context);
