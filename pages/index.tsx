@@ -7,27 +7,26 @@ import { signIn, signOut, useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 import AddToHomeScreen from "../components/AddToHomeScreen";
 import CoachBanner from "../components/CoachBanner";
-// Redirect logic for index
 import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 
-export async function getServerSideProps(context: GetServerSidePropsContext) {
-  const session = await getSession(context);
+// Rings
+import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
+import "react-circular-progressbar/dist/styles.css";
 
+export const getServerSideProps: GetServerSideProps = async (
+  context: GetServerSidePropsContext
+) => {
+  const session = await getSession(context);
   // If the user is NOT logged in → show landing page instead
   if (!session) {
     return {
-      redirect: {
-        destination: "/landing",
-        permanent: false,
-      },
+      redirect: { destination: "/landing", permanent: false },
     };
   }
+  return { props: {} };
+};
 
-  return {
-    props: {}, // loads your existing home/dashboard
-  };
-}
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 function getWeek() {
@@ -53,13 +52,27 @@ function isSameDay(a: Date, b: Date) {
   );
 }
 
+// ---- Goals used for ring percentages (tweak to taste)
+const GOALS = {
+  workoutsPerWeek: 4,     // Goal count for completed workouts per week
+  caloriesPerWeek: 2000,  // Target calorie burn per week (from completions)
+  streakTarget: 7,        // Target streak in days
+};
+
+// Geometry helper for concentric rings
+function ringGeometry(index: number, totalSize = 180, stroke = 12, gap = 2) {
+  const inset = index * (stroke + gap);
+  const size = totalSize - inset * 2;
+  return { size, inset, stroke };
+}
+
 export default function Home() {
   const { data: session, status } = useSession();
 
-  // Fetch workouts
+  // Fetch workouts (programmed)
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
 
-  // Completion history
+  // Completion history (performed workouts)
   const [range, setRange] = useState<"week" | "month" | "all">("week");
   const { data: completionData } = useSWR(
     session?.user?.email
@@ -100,7 +113,7 @@ export default function Home() {
     (w: any) => (w.day_name || "").toLowerCase() === selectedDayName.toLowerCase()
   );
 
-  // Stats from completionData
+  // ---- Stats from completionData for the chosen range
   const now = new Date();
   let startDate: Date;
   if (range === "week") {
@@ -123,10 +136,32 @@ export default function Home() {
     (sum: number, c: any) => sum + (c.calories_burned || 0),
     0
   );
-  const setsCompleted = filteredCompletions.reduce(
-    (sum: number, c: any) => sum + (c.sets_completed || 0),
-    0
+
+  // ---- Streak calculation (consecutive days with ≥1 completion)
+  const toKey = (d: Date) => {
+    const dd = new Date(d);
+    dd.setHours(0, 0, 0, 0);
+    return dd.toISOString().slice(0, 10);
+  };
+  const completionDays = new Set<string>(
+    (completionData?.history || []).map((c: any) => {
+      const d = new Date(c.completed_date);
+      d.setHours(0, 0, 0, 0);
+      return d.toISOString().slice(0, 10);
+    })
   );
+  let streakDays = 0;
+  const cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+  while (true) {
+    const k = toKey(cursor);
+    if (completionDays.has(k)) {
+      streakDays += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    } else {
+      break;
+    }
+  }
 
   const daysWithWorkout = weekDays.map((d) => {
     const dayName = getDayName(d);
@@ -135,13 +170,41 @@ export default function Home() {
     );
   });
 
-  // ===== Nutrition check (today) =====
+  // ===== Nutrition check (today)
   const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const { data: nutritionData } = useSWR(
     session?.user?.email ? `/api/nutrition/logs?date=${todayKey}` : null,
     fetcher
   );
   const noNutritionLogged = (nutritionData?.entries?.length || 0) === 0;
+
+  // ---- Ring targets based on range (simple scaling)
+  const workoutsTarget =
+    range === "week"
+      ? GOALS.workoutsPerWeek
+      : range === "month"
+      ? GOALS.workoutsPerWeek * 4
+      : Math.max(GOALS.workoutsPerWeek, workoutsCompleted || 1); // avoid 0 target on 'all'
+
+  const caloriesTarget =
+    range === "week"
+      ? GOALS.caloriesPerWeek
+      : range === "month"
+      ? GOALS.caloriesPerWeek * 4
+      : Math.max(GOALS.caloriesPerWeek, caloriesBurned || 1);
+
+  const streakTarget = GOALS.streakTarget;
+
+  const pctWorkouts = Math.min(100, (workoutsCompleted / workoutsTarget) * 100);
+  const pctCalories = Math.min(100, (caloriesBurned / caloriesTarget) * 100);
+  const pctStreak = Math.min(100, (streakDays / streakTarget) * 100);
+
+  // ---- Ring colors (Apple-like but BXKR vibe)
+  const COLORS = {
+    workouts: "#ff7f32", // neon orange
+    calories: "#ff4fa3", // hot pink / red
+    streak: "#32ff7f",   // electric green
+  };
 
   return (
     <>
@@ -167,9 +230,8 @@ export default function Home() {
           />
         )}
 
-
         {/* Greeting */}
-        <h2 className="mb-4 text-center" style={{ fontWeight: 700, fontSize: "1.8rem" }}>
+        <h2 className="mb-3 text-center" style={{ fontWeight: 700, fontSize: "1.8rem" }}>
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
 
@@ -192,63 +254,108 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Stats Overview */}
-        <div className="row text-center mb-4 gx-3">
-          <div className="col">
-            <div
-              style={{
-                background: "rgba(255,255,255,0.05)",
-                borderRadius: "16px",
-                padding: "16px",
-                backdropFilter: "blur(10px)",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-              }}
-            >
-              <div style={{ opacity: 0.7 }}>
-                <i className="fas fa-dumbbell me-1" style={{ color: "#ff7f32" }} /> Workouts
-              </div>
-              <div style={{ fontSize: "22px", fontWeight: 700 }}>{workoutsCompleted}</div>
-              <div style={{ fontSize: "12px", opacity: 0.6 }}>
-                {range === "week" ? "This Week" : range === "month" ? "This Month" : "All Time"}
-              </div>
+        {/* Apple Fitness-style triple concentric ring */}
+        <div className="d-flex justify-content-center mb-2">
+          <div style={{ position: "relative", width: 180, height: 180 }}>
+            {/* Outer: Workouts */}
+            {(() => {
+              const geo = ringGeometry(0, 180, 12, 2);
+              return (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: geo.inset,
+                    left: geo.inset,
+                    width: geo.size,
+                    height: geo.size,
+                  }}
+                >
+                  <CircularProgressbar
+                    value={pctWorkouts}
+                    strokeWidth={geo.stroke}
+                    styles={buildStyles({
+                      pathColor: COLORS.workouts,
+                      trailColor: "rgba(255,127,50,0.15)",
+                      strokeLinecap: "butt",
+                      pathTransitionDuration: 0.8,
+                    })}
+                  />
+                </div>
+              );
+            })()}
+            {/* Middle: Calories */}
+            {(() => {
+              const geo = ringGeometry(1, 180, 12, 2);
+              return (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: geo.inset,
+                    left: geo.inset,
+                    width: geo.size,
+                    height: geo.size,
+                  }}
+                >
+                  <CircularProgressbar
+                    value={pctCalories}
+                    strokeWidth={geo.stroke}
+                    styles={buildStyles({
+                      pathColor: COLORS.calories,
+                      trailColor: "rgba(255,79,163,0.15)",
+                      strokeLinecap: "butt",
+                      pathTransitionDuration: 0.8,
+                    })}
+                  />
+                </div>
+              );
+            })()}
+            {/* Inner: Streak (replaces Sets) */}
+            {(() => {
+              const geo = ringGeometry(2, 180, 12, 2);
+              return (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: geo.inset,
+                    left: geo.inset,
+                    width: geo.size,
+                    height: geo.size,
+                  }}
+                >
+                  <CircularProgressbar
+                    value={pctStreak}
+                    strokeWidth={geo.stroke}
+                    styles={buildStyles({
+                      pathColor: COLORS.streak,
+                      trailColor: "rgba(50,255,127,0.15)",
+                      strokeLinecap: "butt",
+                      pathTransitionDuration: 0.8,
+                    })}
+                  />
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* Legends under rings */}
+        <div className="d-flex justify-content-around text-center mb-4">
+          <div>
+            <div style={{ color: COLORS.workouts, fontWeight: 700 }}>Workouts</div>
+            <div className="small" style={{ opacity: 0.85 }}>
+              {workoutsCompleted}/{workoutsTarget} ({Math.round(pctWorkouts)}%)
             </div>
           </div>
-          <div className="col">
-            <div
-              style={{
-                background: "rgba(255,255,255,0.05)",
-                borderRadius: "16px",
-                padding: "16px",
-                backdropFilter: "blur(10px)",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-              }}
-            >
-              <div style={{ opacity: 0.7 }}>
-                <i className="fas fa-fire me-1" style={{ color: "#ff7f32" }} /> Calories
-              </div>
-              <div style={{ fontSize: "22px", fontWeight: 700 }}>{caloriesBurned}</div>
-              <div style={{ fontSize: "12px", opacity: 0.6 }}>
-                {range === "week" ? "This Week" : range === "month" ? "This Month" : "All Time"}
-              </div>
+          <div>
+            <div style={{ color: COLORS.calories, fontWeight: 700 }}>Calories</div>
+            <div className="small" style={{ opacity: 0.85 }}>
+              {Math.round(caloriesBurned)}/{caloriesTarget} ({Math.round(pctCalories)}%)
             </div>
           </div>
-          <div className="col">
-            <div
-              style={{
-                background: "rgba(255,255,255,0.05)",
-                borderRadius: "16px",
-                padding: "16px",
-                backdropFilter: "blur(10px)",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-              }}
-            >
-              <div style={{ opacity: 0.7 }}>
-                <i className="fas fa-layer-group me-1" style={{ color: "#ff7f32" }} /> Sets
-              </div>
-              <div style={{ fontSize: "22px", fontWeight: 700 }}>{setsCompleted}</div>
-              <div style={{ fontSize: "12px", opacity: 0.6 }}>
-                {range === "week" ? "This Week" : range === "month" ? "This Month" : "All Time"}
-              </div>
+          <div>
+            <div style={{ color: COLORS.streak, fontWeight: 700 }}>Streak</div>
+            <div className="small" style={{ opacity: 0.85 }}>
+              {streakDays}/{streakTarget} ({Math.round(pctStreak)}%)
             </div>
           </div>
         </div>
@@ -298,7 +405,7 @@ export default function Home() {
             const isToday = isSameDay(d, today);
             const isSelected = isSameDay(d, selectedDay);
             const hasWorkout = daysWithWorkout[i];
-        
+
             return (
               <div
                 key={i}
@@ -327,10 +434,11 @@ export default function Home() {
                       : isToday
                       ? "rgba(255,127,50,0.2)"
                       : "transparent",
-                    color: isSelected ? "#fff" : "#fff",
+                    color: "#fff",
                     border: isToday && !isSelected ? "1px solid #ff7f32" : "none",
                     opacity: hasWorkout ? 1 : 0.5,
                     fontWeight: isSelected ? 700 : 500,
+                    textAlign: "center",
                   }}
                 >
                   {d.getDate()}
@@ -339,7 +447,7 @@ export default function Home() {
             );
           })}
         </div>
-        
+
         {/* Selected day's workouts */}
         {selectedWorkouts.length > 0 &&
           selectedWorkouts.map((w: any) => (
