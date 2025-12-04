@@ -298,16 +298,7 @@ export default function Home() {
             const isToday = isSameDay(d, today);
             const isSelected = isSameDay(d, selectedDay);
             const hasWorkout = daysWithWorkout[i];
-
-            const pillClasses = [
-              "bxkr-day-pill",
-              isSelected ? "bxkr-selected" : "",
-              !isSelected && isToday ? "bxkr-today" : "",
-              hasWorkout ? "bxkr-has-workout" : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
-
+        
             return (
               <div
                 key={i}
@@ -315,13 +306,40 @@ export default function Home() {
                 onClick={() => setSelectedDay(d)}
                 aria-label={`Select ${dayLabels[i]} ${d.getDate()}`}
               >
-                <div className="fw-bold">{dayLabels[i]}</div>
-                <div className={pillClasses}>{d.getDate()}</div>
+                <div
+                  style={{
+                    fontSize: "0.8rem",
+                    opacity: 0.7,
+                    marginBottom: "4px",
+                  }}
+                >
+                  {dayLabels[i]}
+                </div>
+                <div
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    lineHeight: "32px",
+                    borderRadius: "50%",
+                    margin: "0 auto",
+                    backgroundColor: isSelected
+                      ? "#ff7f32"
+                      : isToday
+                      ? "rgba(255,127,50,0.2)"
+                      : "transparent",
+                    color: isSelected ? "#fff" : "#fff",
+                    border: isToday && !isSelected ? "1px solid #ff7f32" : "none",
+                    opacity: hasWorkout ? 1 : 0.5,
+                    fontWeight: isSelected ? 700 : 500,
+                  }}
+                >
+                  {d.getDate()}
+                </div>
               </div>
             );
           })}
         </div>
-
+        
         {/* Selected day's workouts */}
         {selectedWorkouts.length > 0 &&
           selectedWorkouts.map((w: any) => (
