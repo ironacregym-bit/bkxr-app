@@ -97,7 +97,6 @@ function weeksInYear(year: number) {
 function toMillis(ts: any): number {
   if (!ts) return 0;
   if (typeof ts === "number") return ts;
-  // Firestore Timestamp { seconds, nanoseconds } or _seconds/_nanoseconds
   if (ts?._seconds != null) {
     return ts._seconds * 1000 + Math.floor((ts._nanoseconds || 0) / 1e6);
   }
@@ -243,7 +242,7 @@ export default function Home() {
     });
   }, [allCompletions, hasWorkoutToday, workoutIdsToday, selectedDay]);
 
-  // ---------- Day tasks model
+  // ---------- Day tasks model for SELECTED day
   const dayTasks = [
     {
       key: "nutrition",
@@ -251,7 +250,7 @@ export default function Home() {
       description: `Log today’s meals and macros.`,
       complete: nutritionLogged,
       show: true,
-      href: "/nutrition", // existing page
+      href: "/nutrition",
     },
     {
       key: "workout",
@@ -272,7 +271,7 @@ export default function Home() {
       description: `Fill in your daily habit for ${selectedDayName}.`,
       complete: habitComplete,
       show: true,
-      href: "/habit", // confirm route
+      href: "/habit",
     },
     {
       key: "checkin",
@@ -280,17 +279,16 @@ export default function Home() {
       description: `Complete your weekly check‑in.`,
       complete: isFridaySelected ? checkinComplete : true,
       show: isFridaySelected,
-      href: "/checkin", // confirm route
+      href: "/checkin",
     },
   ];
   const allTasksDone = dayTasks.filter((t) => t.show).every((t) => t.complete);
 
-  // ---------- Calendar day labels: highlight Mon/Tue/Wed completion for selected day
-  const targetDaysForRings = new Set(["Mon", "Tue", "Wed"]);
+  // ---------- Calendar day labels
   const ringCompleteColor = "#2ecc71"; // green
   const ringOutstandingColor = "#ff7f32"; // brand orange
 
-  // ---------- Days with a workout (existing signal)
+  // Existing signal for opacity: days that have a programmed workout
   const daysWithWorkout = weekDays.map((d) => {
     const dayName = getDayName(d);
     return (data?.workouts || []).some(
@@ -298,17 +296,39 @@ export default function Home() {
     );
   });
 
+  // Themed button style injected once
+  const btnClass = "bxkr-btn";
+
   return (
     <>
       <Head>
         <title>BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        {/* page-level pulse keyframes */}
         <style>{`
           @keyframes bxkrPulse {
             0% { filter: drop-shadow(0 0 4px rgba(255,255,255,0.12)); }
             50% { filter: drop-shadow(0 0 10px rgba(255,255,255,0.22)); }
             100% { filter: drop-shadow(0 0 4px rgba(255,255,255,0.12)); }
+          }
+          /* Futuristic themed button */
+          .${btnClass} {
+            background: linear-gradient(135deg, #ff7f32 0%, #ff9458 100%);
+            color: #0e0e0e !important;
+            border: none;
+            border-radius: 24px;
+            font-weight: 700;
+            padding: 8px 14px;
+            box-shadow: 0 6px 18px rgba(255, 127, 50, 0.35);
+            transition: transform .08s ease, box-shadow .2s ease, filter .2s ease;
+          }
+          .${btnClass}:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 22px rgba(255, 127, 50, 0.45);
+            filter: brightness(1.05);
+          }
+          .${btnClass}:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 14px rgba(255, 127, 50, 0.3);
           }
         `}</style>
       </Head>
@@ -342,8 +362,7 @@ export default function Home() {
               </button>
             ) : (
               <button
-                className="btn btn-primary"
-                style={{ backgroundColor: "#ff7f32", borderRadius: "24px", fontWeight: 600 }}
+                className={btnClass}
                 onClick={() => signIn("google")}
               >
                 Sign in
@@ -377,7 +396,6 @@ export default function Home() {
               Target: 3/week
             </div>
           </div>
-          {/* Optional subtle progress ring (kept lightweight) */}
           <div className="mt-2 small" style={{ opacity: 0.8 }}>
             Completed this week: {weeklyCompletedCount}
           </div>
@@ -389,12 +407,13 @@ export default function Home() {
             const isToday = isSameDay(d, today);
             const isSelected = isSameDay(d, selectedDay);
             const hasWorkout = daysWithWorkout[i];
-            const label = dayLabels[i];
-            const isTargetDay = targetDaysForRings.has(label);
 
-            // Ring only for Mon/Tue/Wed when selected; green if all tasks complete, orange otherwise
-            const ringColor =
-              isTargetDay && isSelected ? (allTasksDone ? ringCompleteColor : ringOutstandingColor) : undefined;
+            // Rings reflect the SELECTED day's task state (accurate + light)
+            const ringColor = isSelected
+              ? allTasksDone
+                ? ringCompleteColor
+                : ringOutstandingColor
+              : undefined;
 
             return (
               <div
@@ -408,6 +427,7 @@ export default function Home() {
                     fontSize: "0.8rem",
                     opacity: 0.7,
                     marginBottom: "4px",
+                    color: "#fff",
                   }}
                 >
                   {dayLabels[i]}
@@ -424,12 +444,12 @@ export default function Home() {
                       : isToday
                       ? "rgba(255,127,50,0.2)"
                       : "transparent",
-                    color: "#fff",
+                    color: "#fff", // ensure all numbers are white
                     border: isToday && !isSelected ? "1px solid #ff7f32" : "none",
-                    opacity: hasWorkout ? 1 : 0.5,
+                    opacity: hasWorkout ? 1 : 0.75,
                     fontWeight: isSelected ? 700 : 500,
                     textAlign: "center",
-                    boxShadow: ringColor ? `0 0 0 2px ${ringColor}` : "none",
+                    boxShadow: ringColor ? `0 0 0 2px ${ringColor}` : "0 0 0 2px rgba(255,255,255,0.08)", // subtle circle baseline
                     ...(ringColor ? ringWrapGlow(ringColor) : {}),
                   }}
                 >
@@ -440,13 +460,32 @@ export default function Home() {
           })}
         </div>
 
-        {/* Day tasks cards (replaces the single nutrition reminder pattern) */}
+        {/* Nutrition reminder for the selected day (kept behaviour) */}
+        {status === "authenticated" && !nutritionLogged && (
+          <div className="mb-3">
+            <CoachBanner
+              message={`Don’t forget to log your nutrition for ${selectedDayName}.`}
+              dateKey={selectedDateKey}
+            />
+          </div>
+        )}
+
+        {/* Day tasks cards */}
         <div className="mb-3">
           {dayTasks
             .filter((t) => t.show)
             .map((t) => {
               const accent = t.complete ? "#2ecc71" : "#ff7f32";
               const statusText = t.complete ? "Completed" : "Outstanding";
+              const ctaLabel =
+                t.key === "workout"
+                  ? "Start workout"
+                  : t.key === "nutrition"
+                  ? "Open nutrition"
+                  : t.key === "habit"
+                  ? "Fill habit"
+                  : "Open check‑in";
+
               return (
                 <div
                   key={t.key}
@@ -461,6 +500,7 @@ export default function Home() {
                 >
                   <div className="d-flex align-items-center justify-content-between">
                     <div className="fw-bold">{t.title}</div>
+                    {/* Consistent status badge on the right (including workout) */}
                     <span
                       className="badge"
                       style={{
@@ -477,16 +517,8 @@ export default function Home() {
                     {t.description}
                   </div>
                   {t.href ? (
-                    <Link
-                      href={t.href}
-                      className="btn btn-primary btn-sm mt-2"
-                      style={{
-                        backgroundColor: "#ff7f32",
-                        borderRadius: "24px",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {t.key === "workout" ? "Start workout" : t.key === "nutrition" ? "Open nutrition" : t.key === "habit" ? "Fill habit" : "Open check‑in"}
+                    <Link href={t.href} className={`${btnClass} btn btn-sm mt-2`}>
+                      {ctaLabel}
                     </Link>
                   ) : null}
                 </div>
@@ -513,12 +545,7 @@ export default function Home() {
               <p>{w.notes || "Workout details"}</p>
               <Link
                 href={`/workout/${w.id}`}
-                className="btn btn-primary btn-sm mt-2"
-                style={{
-                  backgroundColor: "#ff7f32",
-                  borderRadius: "24px",
-                  fontWeight: 600,
-                }}
+                className={`${btnClass} btn btn-sm mt-2`}
               >
                 Start Workout
               </Link>
