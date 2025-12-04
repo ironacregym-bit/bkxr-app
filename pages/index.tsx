@@ -25,6 +25,7 @@ export const getServerSideProps: GetServerSideProps = async (
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
+// ---------- Date helpers
 function getWeek() {
   const today = new Date();
   const day = today.getDay();
@@ -37,8 +38,8 @@ function getWeek() {
     return d;
   });
 }
-
 const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
 function isSameDay(a: Date, b: Date) {
   return (
     a.getFullYear() === b.getFullYear() &&
@@ -74,14 +75,13 @@ function endOfMonth(d: Date) {
   return e;
 }
 function weeksInMonthAligned(d: Date) {
-  // Count Monday–Sunday blocks overlapping the month
   const s = startOfMonth(d);
   const e = endOfMonth(d);
   const sAligned = startOfAlignedWeek(s);
   const eAligned = endOfAlignedWeek(e);
   const diffDays =
     Math.ceil((eAligned.getTime() - sAligned.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  return Math.ceil(diffDays / 7); // typically 4 or 5
+  return Math.ceil(diffDays / 7);
 }
 function weeksInYear(year: number) {
   const jan1 = new Date(year, 0, 1);
@@ -90,10 +90,29 @@ function weeksInYear(year: number) {
   const eAligned = endOfAlignedWeek(dec31);
   const diffDays =
     Math.ceil((eAligned.getTime() - sAligned.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  return Math.ceil(diffDays / 7); // 52 or 53
+  return Math.ceil(diffDays / 7);
 }
 
-// small ring wrapper with glow
+// ---------- Timestamps normalisation (Firestore-safe)
+function toMillis(ts: any): number {
+  if (!ts) return 0;
+  if (typeof ts === "number") return ts;
+  // Firestore Timestamp { seconds, nanoseconds } or _seconds/_nanoseconds
+  if (ts?._seconds != null) {
+    return ts._seconds * 1000 + Math.floor((ts._nanoseconds || 0) / 1e6);
+  }
+  if (ts?.seconds != null) {
+    return ts.seconds * 1000 + Math.floor((ts.nanoseconds || 0) / 1e6);
+  }
+  if (typeof ts === "string") {
+    const v = new Date(ts).getTime();
+    return Number.isFinite(v) ? v : 0;
+  }
+  const v = new Date(ts).getTime();
+  return Number.isFinite(v) ? v : 0;
+}
+
+// ---------- UI helpers
 function ringWrapGlow(color: string): React.CSSProperties {
   return {
     filter: `drop-shadow(0 0 6px ${hexToRGBA(color, 0.35)})`,
@@ -165,9 +184,16 @@ export default function Home() {
   const weeksInMonth = weeksInMonthAligned(today);
   const weeksInThisYear = weeksInYear(today.getFullYear());
 
-  
+  // ---------- Micro task: sessions away from weekly goal (goal = 3)
+  const weeklyCompletedCount = useMemo(() => {
+    return allCompletions.filter((c: any) => {
+      const m = toMillis(c.completed_date || c.completed_at || c.started_at);
+      return m >= thisWeekStart.getTime() && m <= thisWeekEnd.getTime();
+    }).length;
+  }, [allCompletions, thisWeekStart, thisWeekEnd]);
+  const sessionsAway = Math.max(0, 3 - weeklyCompletedCount);
 
-  // Nutrition (selected day key for banner under calendar)
+  // ---------- Nutrition (selected day key for banner under calendar)
   function formatYMD(d: Date) {
     const n = new Date(d);
     n.setHours(0, 0, 0, 0);
@@ -179,8 +205,92 @@ export default function Home() {
     session?.user?.email ? `/api/nutrition/logs?date=${selectedDateKey}` : null,
     fetcher
   );
-  const noNutritionForSelected = (nutritionForSelected?.entries?.length || 0) === 0;
+  const nutritionLogged = (nutritionForSelected?.entries?.length || 0) > 0;
 
+  // ---------- Habits for selected day (new collection; non-breaking until wired)
+  const { data: habitForSelected } = useSWR(
+    session?.user?.email ? `/api/habits/logs?date=${selectedDateKey}` : null,
+    fetcher
+  );
+  const habitComplete = (habitForSelected?.entries?.length || 0) > 0;
+
+  // ---------- Weekly check-in (Fridays only; new collection)
+  const isFridaySelected = selectedDay.getDay() === 5;
+  function formatWeekKey(d: Date) {
+    const s = startOfAlignedWeek(d);
+    s.setHours(0, 0, 0, 0);
+    return s.toISOString().slice(0, 10);
+  }
+  const weekKey = useMemo(() => formatWeekKey(selectedDay), [selectedDay]);
+  const { data: checkinForWeek } = useSWR(
+    session?.user?.email && isFridaySelected ? `/api/checkins/weekly?week=${weekKey}` : null,
+    fetcher
+  );
+  const checkinComplete = !!checkinForWeek?.entry;
+
+  // ---------- Workout completion for selected day
+  const hasWorkoutToday = selectedWorkouts.length > 0;
+  const workoutIdsToday = selectedWorkouts.map((w: any) => w.id);
+  const workoutDoneToday = useMemo(() => {
+    if (!hasWorkoutToday) return false;
+    return allCompletions.some((c: any) => {
+      const completedAt = toMillis(c.completed_date || c.completed_at || c.started_at);
+      const completedDate = new Date(completedAt);
+      return (
+        workoutIdsToday.includes(c.workout_id) &&
+        isSameDay(completedDate, selectedDay)
+      );
+    });
+  }, [allCompletions, hasWorkoutToday, workoutIdsToday, selectedDay]);
+
+  // ---------- Day tasks model
+  const dayTasks = [
+    {
+      key: "nutrition",
+      title: "Nutrition",
+      description: `Log today’s meals and macros.`,
+      complete: nutritionLogged,
+      show: true,
+      href: "/nutrition", // existing page
+    },
+    {
+      key: "workout",
+      title: "Complete today’s workout",
+      description: hasWorkoutToday
+        ? `Start your programmed session for ${selectedDayName}.`
+        : `No workout scheduled for ${selectedDayName}.`,
+      complete: hasWorkoutToday ? workoutDoneToday : true,
+      show: hasWorkoutToday,
+      href:
+        hasWorkoutToday && selectedWorkouts[0]?.id
+          ? `/workout/${selectedWorkouts[0].id}`
+          : undefined,
+    },
+    {
+      key: "habit",
+      title: "Daily habit",
+      description: `Fill in your daily habit for ${selectedDayName}.`,
+      complete: habitComplete,
+      show: true,
+      href: "/habit", // confirm route
+    },
+    {
+      key: "checkin",
+      title: "Weekly check‑in",
+      description: `Complete your weekly check‑in.`,
+      complete: isFridaySelected ? checkinComplete : true,
+      show: isFridaySelected,
+      href: "/checkin", // confirm route
+    },
+  ];
+  const allTasksDone = dayTasks.filter((t) => t.show).every((t) => t.complete);
+
+  // ---------- Calendar day labels: highlight Mon/Tue/Wed completion for selected day
+  const targetDaysForRings = new Set(["Mon", "Tue", "Wed"]);
+  const ringCompleteColor = "#2ecc71"; // green
+  const ringOutstandingColor = "#ff7f32"; // brand orange
+
+  // ---------- Days with a workout (existing signal)
   const daysWithWorkout = weekDays.map((d) => {
     const dayName = getDayName(d);
     return (data?.workouts || []).some(
@@ -200,7 +310,6 @@ export default function Home() {
             50% { filter: drop-shadow(0 0 10px rgba(255,255,255,0.22)); }
             100% { filter: drop-shadow(0 0 4px rgba(255,255,255,0.12)); }
           }
-
         `}</style>
       </Head>
 
@@ -213,7 +322,7 @@ export default function Home() {
           borderRadius: "12px",
         }}
       >
-        {/* Header: profile + sign-out (no pill) */}
+        {/* Header: profile + sign-out */}
         <div className="d-flex align-items-center justify-content-between mb-3">
           <div className="d-flex align-items-center gap-2">
             {session?.user?.image && (
@@ -243,11 +352,35 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Greeting + micro motivation */}
+        {/* Greeting */}
         <div className="mb-2">
           <h2 className="mb-1" style={{ fontWeight: 700, fontSize: "1.6rem" }}>
             {greeting}, {session?.user?.name || "Athlete"}
           </h2>
+        </div>
+
+        {/* Micro task: sessions away banner */}
+        <div
+          className="mb-3 p-3"
+          style={{
+            background: "rgba(255,255,255,0.05)",
+            borderRadius: "16px",
+            backdropFilter: "blur(10px)",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+          }}
+        >
+          <div className="d-flex align-items-center justify-content-between">
+            <div className="fw-semibold">
+              You’re {sessionsAway} {sessionsAway === 1 ? "session" : "sessions"} away from your weekly goal
+            </div>
+            <div className="small" style={{ opacity: 0.85 }}>
+              Target: 3/week
+            </div>
+          </div>
+          {/* Optional subtle progress ring (kept lightweight) */}
+          <div className="mt-2 small" style={{ opacity: 0.8 }}>
+            Completed this week: {weeklyCompletedCount}
+          </div>
         </div>
 
         {/* Weekly strip (calendar) */}
@@ -256,6 +389,12 @@ export default function Home() {
             const isToday = isSameDay(d, today);
             const isSelected = isSameDay(d, selectedDay);
             const hasWorkout = daysWithWorkout[i];
+            const label = dayLabels[i];
+            const isTargetDay = targetDaysForRings.has(label);
+
+            // Ring only for Mon/Tue/Wed when selected; green if all tasks complete, orange otherwise
+            const ringColor =
+              isTargetDay && isSelected ? (allTasksDone ? ringCompleteColor : ringOutstandingColor) : undefined;
 
             return (
               <div
@@ -290,6 +429,8 @@ export default function Home() {
                     opacity: hasWorkout ? 1 : 0.5,
                     fontWeight: isSelected ? 700 : 500,
                     textAlign: "center",
+                    boxShadow: ringColor ? `0 0 0 2px ${ringColor}` : "none",
+                    ...(ringColor ? ringWrapGlow(ringColor) : {}),
                   }}
                 >
                   {d.getDate()}
@@ -299,17 +440,61 @@ export default function Home() {
           })}
         </div>
 
-        {/* Nutrition reminder for the selected day (below calendar) */}
-        {status === "authenticated" && noNutritionForSelected && (
-          <div className="mb-3">
-            <CoachBanner
-              message={`Don’t forget to log your nutrition for ${selectedDayName}.`}
-              dateKey={selectedDateKey}
-            />
-          </div>
-        )}
+        {/* Day tasks cards (replaces the single nutrition reminder pattern) */}
+        <div className="mb-3">
+          {dayTasks
+            .filter((t) => t.show)
+            .map((t) => {
+              const accent = t.complete ? "#2ecc71" : "#ff7f32";
+              const statusText = t.complete ? "Completed" : "Outstanding";
+              return (
+                <div
+                  key={t.key}
+                  className="mb-3"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    borderRadius: "16px",
+                    padding: "16px",
+                    backdropFilter: "blur(10px)",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+                  }}
+                >
+                  <div className="d-flex align-items-center justify-content-between">
+                    <div className="fw-bold">{t.title}</div>
+                    <span
+                      className="badge"
+                      style={{
+                        backgroundColor: accent,
+                        color: "#000",
+                        borderRadius: "999px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {statusText}
+                    </span>
+                  </div>
+                  <div className="mt-1" style={{ opacity: 0.9 }}>
+                    {t.description}
+                  </div>
+                  {t.href ? (
+                    <Link
+                      href={t.href}
+                      className="btn btn-primary btn-sm mt-2"
+                      style={{
+                        backgroundColor: "#ff7f32",
+                        borderRadius: "24px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {t.key === "workout" ? "Start workout" : t.key === "nutrition" ? "Open nutrition" : t.key === "habit" ? "Fill habit" : "Open check‑in"}
+                    </Link>
+                  ) : null}
+                </div>
+              );
+            })}
+        </div>
 
-        {/* Selected day's workouts */}
+        {/* Selected day's workouts list (kept) */}
         {selectedWorkouts.length > 0 &&
           selectedWorkouts.map((w: any) => (
             <div
