@@ -287,7 +287,7 @@ export default function Home() {
       : avgThisWeek >= avgLastWeek
       ? "Good work — you’ve averaged more calories than last week so far."
       : "You’re behind last week’s pace — a little extra today goes a long way.";
-
+  const isBehindLastWeek = caloriesThisWeek < lastWeekCalories
   // Theme colours
   const COLORS = {
     workouts: "#ff7f32", // neon orange
