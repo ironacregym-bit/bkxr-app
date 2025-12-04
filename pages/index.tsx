@@ -248,11 +248,6 @@ export default function Home() {
           <h2 className="mb-1" style={{ fontWeight: 700, fontSize: "1.6rem" }}>
             {greeting}, {session?.user?.name || "Athlete"}
           </h2>
-          <div className="small" style={{ opacity: 0.8 }}>
-            {remaining > 0
-              ? `You’re ${remaining} session${remaining === 1 ? "" : "s"} away from your weekly goal.`
-              : "Consistency beats intensity."}
-          </div>
         </div>
 
         {/* Weekly strip (calendar) */}
