@@ -79,7 +79,8 @@ function weeksInMonthAligned(d: Date) {
   const e = endOfMonth(d);
   const sAligned = startOfAlignedWeek(s);
   const eAligned = endOfAlignedWeek(e);
-  const diffDays = Math.ceil((eAligned.getTime() - sAligned.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  const diffDays =
+    Math.ceil((eAligned.getTime() - sAligned.getTime()) / (1000 * 60 * 60 * 24)) + 1;
   return Math.ceil(diffDays / 7); // typically 4 or 5
 }
 function weeksInYear(year: number) {
@@ -87,7 +88,8 @@ function weeksInYear(year: number) {
   const dec31 = new Date(year, 11, 31);
   const sAligned = startOfAlignedWeek(jan1);
   const eAligned = endOfAlignedWeek(dec31);
-  const diffDays = Math.ceil((eAligned.getTime() - sAligned.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  const diffDays =
+    Math.ceil((eAligned.getTime() - sAligned.getTime()) / (1000 * 60 * 60 * 24)) + 1;
   return Math.ceil(diffDays / 7); // 52 or 53
 }
 
@@ -209,15 +211,22 @@ export default function Home() {
     streakDays += 1;
     cur.setDate(cur.getDate() - 1);
   }
-  const STREAK_VISUAL_TARGET = 156; // ring only
+  // Saturate streak ring at a full year (365)
+  const STREAK_VISUAL_TARGET = 365;
 
-  // Nutrition (today)
-  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const { data: nutritionData } = useSWR(
-    session?.user?.email ? `/api/nutrition/logs?date=${todayKey}` : null,
+  // Nutrition (selected day key for banner under calendar)
+  function formatYMD(d: Date) {
+    const n = new Date(d);
+    n.setHours(0, 0, 0, 0);
+    return n.toISOString().slice(0, 10);
+  }
+  const selectedDateKey = useMemo(() => formatYMD(selectedDay), [selectedDay]);
+
+  const { data: nutritionForSelected } = useSWR(
+    session?.user?.email ? `/api/nutrition/logs?date=${selectedDateKey}` : null,
     fetcher
   );
-  const noNutritionLogged = (nutritionData?.entries?.length || 0) === 0;
+  const noNutritionForSelected = (nutritionForSelected?.entries?.length || 0) === 0;
 
   // Pills: Week | Month | All Time (controls visuals)
   const [mode, setMode] = useState<"week" | "month" | "all">("week");
@@ -250,19 +259,14 @@ export default function Home() {
 
   const streakPct = Math.min(100, (streakDays / STREAK_VISUAL_TARGET) * 100);
 
-  // Dynamic callout under greeting
-  const remaining = Math.max(0, 3 - workoutsThisWeek);
-  const calloutText = (() => {
-    if (workoutsThisWeek === 0) {
-      return `${greeting} — No workout logged this week. Let’s get it!`;
-    }
-    if (workoutsThisWeek < 3) {
-      return `${greeting} — ${workoutsThisWeek} down, ${remaining} to go.`;
-    }
-    return `${greeting} — Weekly goal hit. Keep the streak alive!`;
-  })();
+  // Mode labels for dynamic wording under visuals
+  const modeLabel = mode === "week" ? "This week" : mode === "month" ? "This month" : "Year to date";
+  const modeLabelCalories = mode === "week" ? "This week" : mode === "month" ? "This month" : "All time";
 
-  // Momentum: compare week calories vs last week (so far)
+  // Dynamic callout under greeting (kept for overall message)
+  const remaining = Math.max(0, 3 - workoutsThisWeek);
+
+  // Momentum: compare week calories vs last week (aligned weeks)
   const lastWeekStart = new Date(thisWeekStart);
   lastWeekStart.setDate(thisWeekStart.getDate() - 7);
   const lastWeekEnd = new Date(thisWeekEnd);
@@ -275,19 +279,19 @@ export default function Home() {
     })
     .reduce((sum, c) => sum + (c.calories_burned || 0), 0);
 
-  // Average so far this week vs last week average/day
   const elapsedDaysThisWeek =
     Math.floor((Math.min(today.getTime(), thisWeekEnd.getTime()) - thisWeekStart.getTime()) / (1000 * 60 * 60 * 24)) +
     1;
   const avgThisWeek = caloriesValue && mode !== "all" ? caloriesThisWeek / Math.max(1, elapsedDaysThisWeek) : 0;
   const avgLastWeek = lastWeekCalories / 7;
+  const isBehindLastWeek = caloriesThisWeek < lastWeekCalories;
   const caloriesMomentum =
     mode === "all"
       ? null
       : avgThisWeek >= avgLastWeek
       ? "Good work — you’ve averaged more calories than last week so far."
       : "You’re behind last week’s total — crush the next workout.";
-  const isBehindLastWeek = caloriesThisWeek < lastWeekCalories
+
   // Theme colours
   const COLORS = {
     workouts: "#ff7f32", // neon orange
@@ -305,6 +309,7 @@ export default function Home() {
     );
   });
 
+
   return (
     <>
       <Head>
@@ -317,6 +322,7 @@ export default function Home() {
             50% { filter: drop-shadow(0 0 10px rgba(255,255,255,0.22)); }
             100% { filter: drop-shadow(0 0 4px rgba(255,255,255,0.12)); }
           }
+
         `}</style>
       </Head>
 
@@ -371,11 +377,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Dynamic callout notification (moved below greeting) */}
-        <div className="mb-3">
-          <CoachBanner message="Don’t forget to log your nutrition today!" dateKey={todayKey} />
-        </div>
-
         {/* Mode pills: Week | Month | All Time */}
         <div className="d-flex justify-content-center gap-2 mb-3">
           {(["week", "month", "all"] as const).map((m) => (
@@ -396,118 +397,7 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Three visuals with tiny glow + breathing room */}
-        <div className="row row-cols-3 gx-2 gx-sm-3 mb-4 text-center">
-          {/* Workouts */}
-          <div className="col mb-3">
-            <div
-              style={{
-                background: "rgba(255,255,255,0.05)",
-                borderRadius: "16px",
-                padding: "16px",
-                backdropFilter: "blur(10px)",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-              }}
-            >
-              <div className="bxkr-ring" style={ringWrapGlow(COLORS.workouts)}>
-                <CircularProgressbar
-                  value={workoutsPct}
-                  strokeWidth={12}
-                  styles={buildStyles({
-                    pathColor: COLORS.workouts,
-                    trailColor: COLORS.trailOrange,
-                    strokeLinecap: "butt",
-                    pathTransitionDuration: 0.8,
-                  })}
-                />
-              </div>
-              <div className="mt-2" style={{ color: COLORS.workouts, fontWeight: 700 }}>
-                Workouts
-              </div>
-              {/* Micro goal ONLY here; remove 0/3 and recommendation lines */}
-              {remaining > 0 ? (
-                <div className="small" style={{ opacity: 0.9 }}>
-                  You’re {remaining} session{remaining === 1 ? "" : "s"} away from your weekly goal.
-                </div>
-              ) : (
-                <div className="small" style={{ opacity: 0.9 }}>
-                  Weekly goal hit. Keep the streak alive!
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Calories */}
-          <div className="col mb-3">
-            <div
-              style={{
-                background: "rgba(255,255,255,0.05)",
-                borderRadius: "16px",
-                padding: "16px",
-                backdropFilter: "blur(10px)",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-              }}
-            >
-              <div className="bxkr-ring" style={ringWrapGlow(COLORS.calories)}>
-                <CircularProgressbar
-                  value={caloriesPct}
-                  strokeWidth={12}
-                  styles={buildStyles({
-                    pathColor: COLORS.calories,
-                    trailColor: COLORS.trailPink,
-                    strokeLinecap: "butt",
-                    pathTransitionDuration: 0.8,
-                  })}
-                />
-              </div>
-              <div className="mt-2" style={{ color: COLORS.calories, fontWeight: 700 }}>
-                Calories
-              </div>
-              <div className="small" style={{ opacity: 0.9 }}>
-                {caloriesValue} kcal {caloriesTarget ? `of ${caloriesTarget}` : "(total)"}
-              </div>
-              {caloriesMomentum && (
-                <div className="small mt-1" style={{ opacity: 0.8 }}>
-                  {caloriesMomentum}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Streak */}
-          <div className="col mb-3">
-            <div
-              style={{
-                background: "rgba(255,255,255,0.05)",
-                borderRadius: "16px",
-                padding: "16px",
-                backdropFilter: "blur(10px)",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-              }}
-            >
-              <div className="bxkr-ring" style={ringWrapGlow(COLORS.streak)}>
-                <CircularProgressbar
-                  value={streakPct}
-                  strokeWidth={12}
-                  styles={buildStyles({
-                    pathColor: COLORS.streak,
-                    trailColor: COLORS.trailGreen,
-                    strokeLinecap: "butt",
-                    pathTransitionDuration: 0.8,
-                  })}
-                />
-              </div>
-              <div className="mt-2" style={{ color: COLORS.streak, fontWeight: 700 }}>
-                Streak
-              </div>
-              <div className="small" style={{ opacity: 0.9 }}>
-                {streakDays} {streakDays === 1 ? "day" : "days"}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Weekly strip */}
+        {/* Weekly strip (calendar) */}
         <div className="d-flex justify-content-between text-center mb-3">
           {weekDays.map((d, i) => {
             const isToday = isSameDay(d, today);
@@ -556,6 +446,131 @@ export default function Home() {
           })}
         </div>
 
+        {/* Nutrition reminder for the selected day (below calendar) */}
+        {status === "authenticated" && noNutritionForSelected && (
+          <div className="mb-3">
+            <CoachBanner
+              message={`Don’t forget to log your nutrition for ${selectedDayName}.`}
+              dateKey={selectedDateKey}
+            />
+          </div>
+        )}
+
+        {/* Stat visuals: Workouts | Calories | Streak */}
+        <div className="row row-cols-3 gx-2 gx-sm-3 mb-4 text-center">
+          {/* Workouts */}
+          <div className="col mb-3">
+            <div
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                borderRadius: "16px",
+                padding: "16px",
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+              }}
+            >
+              <div className="bxkr-ring" style={ringWrapGlow(COLORS.workouts)}>
+                <CircularProgressbar
+                  value={workoutsPct}
+                  strokeWidth={12}
+                  styles={buildStyles({
+                    pathColor: COLORS.workouts,
+                    trailColor: COLORS.trailOrange,
+                    strokeLinecap: "butt",
+                    pathTransitionDuration: 0.8,
+                  })}
+                />
+              </div>
+              <div className="mt-2" style={{ color: COLORS.workouts, fontWeight: 700 }}>
+                Workouts
+              </div>
+              <div className="small" style={{ opacity: 0.8 }}>{modeLabel}</div>
+
+              {/* Weekly micro-goal only for Week */}
+              {mode === "week" && (
+                remaining > 0 ? (
+                  <div className="small" style={{ opacity: 0.9 }}>
+                    You’re {remaining} session{remaining === 1 ? "" : "s"} away from your weekly goal.
+                  </div>
+                ) : (
+                  <div className="small" style={{ opacity: 0.9 }}>
+                    Weekly goal hit. Keep the streak alive!
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+
+          {/* Calories */}
+          <div className="col mb-3">
+            <div
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                borderRadius: "16px",
+                padding: "16px",
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+              }}
+            >
+              <div className="bxkr-ring" style={ringWrapGlow(COLORS.calories)}>
+                <CircularProgressbar
+                  value={caloriesPct}
+                  strokeWidth={12}
+                  styles={buildStyles({
+                    pathColor: COLORS.calories,
+                    trailColor: COLORS.trailPink,
+                    strokeLinecap: "butt",
+                    pathTransitionDuration: 0.8,
+                  })}
+                />
+              </div>
+              <div className="mt-2" style={{ color: COLORS.calories, fontWeight: 700 }}>
+                Calories
+              </div>
+              <div className="small" style={{ opacity: 0.8 }}>{modeLabelCalories}</div>
+
+              {/* Only show momentum if actually behind last week */}
+              {mode !== "all" && isBehindLastWeek && (
+                <div className="small mt-1" style={{ opacity: 0.9 }}>
+                  You’re behind last week’s total — push a bit today.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Streak */}
+          <div className="col mb-3">
+            <div
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                borderRadius: "16px",
+                padding: "16px",
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+              }}
+            >
+              <div className="bxkr-ring" style={ringWrapGlow(COLORS.streak)}>
+                <CircularProgressbar
+                  value={streakPct}
+                  strokeWidth={12}
+                  styles={buildStyles({
+                    pathColor: COLORS.streak,
+                    trailColor: COLORS.trailGreen,
+                    strokeLinecap: "butt",
+                    pathTransitionDuration: 0.8,
+                  })}
+                />
+              </div>
+              <div className="mt-2" style={{ color: COLORS.streak, fontWeight: 700 }}>
+                Streak
+              </div>
+              <div className="small" style={{ opacity: 0.9 }}>
+                {streakDays} {streakDays === 1 ? "day" : "days"}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Selected day's workouts */}
         {selectedWorkouts.length > 0 &&
           selectedWorkouts.map((w: any) => (
@@ -587,7 +602,7 @@ export default function Home() {
             </div>
           ))}
 
-        {/* Auth errors / loaders (kept light) */}
+        {/* Loaders and errors */}
         {error && <div className="alert alert-danger">Failed to load workouts</div>}
         {isLoading && <div className="alert alert-secondary">Loading…</div>}
       </main>
@@ -597,3 +612,5 @@ export default function Home() {
     </>
   );
 }
+
+
