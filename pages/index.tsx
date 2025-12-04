@@ -475,9 +475,9 @@ export default function Home() {
               {/* Only show momentum if actually behind last week */}
               {isBehindLastWeek && (
                 <div className="small" style={{ opacity: 0.9 }}>
-                  You’re behind last week’s total — push a bit today.
+                  You’re behind last week’s total — crush the next workout.
                 </div>
-
+            )}
             </div>
           </div>
 
