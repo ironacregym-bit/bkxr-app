@@ -286,7 +286,7 @@ export default function Home() {
       ? null
       : avgThisWeek >= avgLastWeek
       ? "Good work — you’ve averaged more calories than last week so far."
-      : "You’re behind last week’s pace — a little extra today goes a long way.";
+      : "You’re behind last week’s total — crush the next workout.";
   const isBehindLastWeek = caloriesThisWeek < lastWeekCalories
   // Theme colours
   const COLORS = {
@@ -471,13 +471,6 @@ export default function Home() {
                   {caloriesMomentum}
                 </div>
               )}
-
-              {/* Only show momentum if actually behind last week */}
-              {isBehindLastWeek && (
-                <div className="small" style={{ opacity: 0.9 }}>
-                  You’re behind last week’s total — crush the next workout.
-                </div>
-            )}
             </div>
           </div>
 
