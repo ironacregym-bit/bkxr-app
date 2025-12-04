@@ -10,7 +10,7 @@ import CoachBanner from "../components/CoachBanner";
 // Redirect logic for index
 import { getSession } from "next-auth/react";
 
-export async function getServerSideProps(context) {
+export async function getServerSideProps(context: GetServerSidePropsContext) {
   const session = await getSession(context);
 
   // If the user is NOT logged in → show landing page instead
