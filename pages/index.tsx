@@ -1,7 +1,6 @@
 
 import Head from "next/head";
 import useSWR from "swr";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
@@ -66,6 +65,7 @@ function endOfAlignedWeek(d: Date) {
   return e;
 }
 
+// Firestore‑safe timestamp normalisation
 function toMillis(ts: any): number {
   if (!ts) return 0;
   if (typeof ts === "number") return ts;
@@ -81,7 +81,7 @@ export default function Home() {
   // Programmed workouts
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
 
-  // Completions (for weekly goal + detecting today's workout completion)
+  // Completions (for weekly goal and “today” checks)
   const { data: completionData } = useSWR(
     session?.user?.email
       ? `/api/completions/history?email=${encodeURIComponent(session.user.email)}&range=all`
@@ -127,7 +127,7 @@ export default function Home() {
   const thisWeekStart = startOfAlignedWeek(today);
   const thisWeekEnd = endOfAlignedWeek(today);
 
-  // Weekly goal (3 sessions/week)
+  // Weekly goal (3/week)
   const weeklyCompletedCount = useMemo(() => {
     return allCompletions.filter((c: any) => {
       const m = toMillis(c.completed_date || c.completed_at || c.started_at);
@@ -136,7 +136,7 @@ export default function Home() {
   }, [allCompletions, thisWeekStart, thisWeekEnd]);
   const sessionsAway = Math.max(0, 3 - weeklyCompletedCount);
 
-  // Selected date key (YYYY-MM-DD)
+  // Selected date key (YYYY‑MM‑DD)
   function formatYMD(d: Date) {
     const n = new Date(d);
     n.setHours(0, 0, 0, 0);
@@ -158,15 +158,17 @@ export default function Home() {
   );
   const habitComplete = (habitForSelected?.entries?.length || 0) > 0;
 
-  // Weekly check-in (Fridays only)
+  // Weekly check‑in (Fridays only)
   const isFridaySelected = selectedDay.getDay() === 5;
   const { data: checkinForWeek } = useSWR(
-    session?.user?.email && isFridaySelected ? `/api/checkins/weekly?week=${formatYMD(selectedDay)}` : null,
+    session?.user?.email && isFridaySelected
+      ? `/api/checkins/weekly?week=${formatYMD(selectedDay)}`
+      : null,
     fetcher
   );
   const checkinComplete = !!checkinForWeek?.entry;
 
-  // Today's workout completion
+  // Today’s workout completion
   const hasWorkoutToday = selectedWorkouts.length > 0;
   const workoutIdsToday = selectedWorkouts.map((w: WorkoutLite) => w.id);
   const workoutDoneToday = useMemo(() => {
@@ -180,7 +182,9 @@ export default function Home() {
 
   // CTA hrefs + icons (Font Awesome)
   const workoutHref =
-    hasWorkoutToday && selectedWorkouts[0]?.id ? `/workout/${selectedWorkouts[0].id}` : `/habit?date=${selectedDateKey}`;
+    hasWorkoutToday && selectedWorkouts[0]?.id
+      ? `/workout/${selectedWorkouts[0].id}`
+      : `/habit?date=${selectedDateKey}`;
   const microHref = workoutHref; // sensible default: start workout if available, else habits
   const nutritionHref = `/nutrition?date=${selectedDateKey}`;
   const habitHref = `/habit?date=${selectedDateKey}`;
@@ -191,7 +195,13 @@ export default function Home() {
   const iconWorkout = "fas fa-dumbbell";
   const iconHabit = "fas fa-check-circle";
   const iconCheckin = "fas fa-clipboard-list";
-  const crownIcon = "fas fa-crown"; // button icon (as requested; can be changed later)
+
+  // Accent colours (representational)
+  const accentMicro = "#ff7f32";  // brand orange — urgency / momentum
+  const accentNutrition = "#2da8ff"; // bright blue — tracking/logging
+  const accentWorkout = "#2ecc71"; // electric green — action/completion
+  const accentHabit = "#ff6ec7";   // neon pink — behaviour/habits
+  const accentCheckin = "#ffd166"; // amber — review/check‑in
 
   return (
     <>
@@ -265,14 +275,14 @@ export default function Home() {
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
 
-        {/* Micro-task banner (BXKR banner) */}
+        {/* Micro‑task banner (Momentum) */}
         <BxkrBanner
           title="Momentum"
           message={`You’re ${sessionsAway} ${sessionsAway === 1 ? "session" : "sessions"} away from your weekly goal (target: 3/week).`}
           href={microHref}
           iconLeft={iconMicro}
+          accentColor={accentMicro}
           buttonText="Start"
-          buttonIcon={crownIcon}
         />
 
         {/* Calendar strip (clean) */}
@@ -292,17 +302,17 @@ export default function Home() {
           })}
         </div>
 
-        {/* Nutrition banner (BXKR banner) */}
+        {/* Nutrition banner */}
         <BxkrBanner
-          title="Don’t forget!"
+          title="Nutrition"
           message="Log today’s meals and macros."
           href={nutritionHref}
           iconLeft={iconNutrition}
+          accentColor={accentNutrition}
           buttonText="Start"
-          buttonIcon={crownIcon}
         />
 
-        {/* Workout banner (BXKR banner) */}
+        {/* Workout banner (only if there’s a programmed session today) */}
         {hasWorkoutToday && (
           <BxkrBanner
             title="Workout"
@@ -313,12 +323,12 @@ export default function Home() {
             }
             href={workoutHref}
             iconLeft={iconWorkout}
+            accentColor={accentWorkout}
             buttonText={workoutDoneToday ? "View" : "Start"}
-            buttonIcon={crownIcon}
           />
         )}
 
-        {/* Habit banner (BXKR banner) */}
+        {/* Habit banner */}
         <BxkrBanner
           title="Daily habit"
           message={
@@ -328,19 +338,19 @@ export default function Home() {
           }
           href={habitHref}
           iconLeft={iconHabit}
+          accentColor={accentHabit}
           buttonText={habitComplete ? "Review" : "Fill"}
-          buttonIcon={crownIcon}
         />
 
-        {/* Weekly check-in banner (BXKR banner, Fridays only) */}
+        {/* Weekly check‑in banner (Fridays only) */}
         {isFridaySelected && (
           <BxkrBanner
             title="Weekly check‑in"
             message={checkinComplete ? "Check‑in submitted." : "Complete your weekly check‑in."}
             href={checkinHref}
             iconLeft={iconCheckin}
+            accentColor={accentCheckin}
             buttonText={checkinComplete ? "Review" : "Check in"}
-            buttonIcon={crownIcon}
           />
         )}
 
