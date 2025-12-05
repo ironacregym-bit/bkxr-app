@@ -19,6 +19,62 @@ export const getServerSideProps: GetServerSideProps = async (context: GetServerS
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
+// ✅ Helpers
+function getWeek(): Date[] {
+  const today = new Date();
+  const day = today.getDay();
+  const diffToMon = (day + 6) % 7; // Monday start
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - diffToMon);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
+  });
+}
+
+function formatYMD(d: Date) {
+  const n = new Date(d);
+  n.setHours(0, 0, 0, 0);
+  return n.toISOString().slice(0, 10);
+}
+
+function isSameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function startOfAlignedWeek(d: Date) {
+  const day = d.getDay();
+  const diffToMon = (day + 6) % 7;
+  const s = new Date(d);
+  s.setDate(d.getDate() - diffToMon);
+  s.setHours(0, 0, 0, 0);
+  return s;
+}
+
+function endOfAlignedWeek(d: Date) {
+  const s = startOfAlignedWeek(d);
+  const e = new Date(s);
+  e.setDate(s.getDate() + 6);
+  e.setHours(23, 59, 59, 999);
+  return e;
+}
+
+function toMillis(ts: any): number {
+  if (!ts) return 0;
+  if (typeof ts === "number") return ts;
+  if (ts?._seconds != null) return ts._seconds * 1000;
+  if (ts?.seconds != null) return ts.seconds * 1000;
+  const v = new Date(ts).getTime();
+  return Number.isFinite(v) ? v : 0;
+}
+
+const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
 export default function Home() {
   const { data: session, status } = useSession();
 
@@ -66,6 +122,7 @@ export default function Home() {
 
   const selectedDateKey = formatYMD(selectedDay);
 
+  // Habit data
   const { data: habitForSelected } = useSWR(
     session?.user?.email ? `/api/habits/logs?date=${selectedDateKey}` : null,
     fetcher
@@ -79,10 +136,25 @@ export default function Home() {
     habitEntry.step_count &&
     habitEntry.time_outside;
 
+  const { data: checkinForWeek } = useSWR(
+    session?.user?.email && selectedDay.getDay() === 5
+      ? `/api/checkins/weekly?week=${formatYMD(selectedDay)}`
+      : null,
+    fetcher
+  );
+  const checkinComplete = !!checkinForWeek?.entry;
+
   const nutritionHref = `/nutrition?date=${selectedDateKey}`;
   const habitHref = `/habit?date=${selectedDateKey}`;
   const workoutHref = selectedWorkouts[0]?.id ? `/workout/${selectedWorkouts[0].id}` : habitHref;
   const checkinHref = `/checkin`;
+
+  // Accent colors
+  const accentMicro = "#d97a3a";
+  const accentNutrition = "#4fa3a5";
+  const accentWorkout = "#5b7c99";
+  const accentHabit = "#9b6fa3";
+  const accentCheckin = "#c9a34e";
 
   return (
     <>
@@ -119,7 +191,7 @@ export default function Home() {
           message={`You’re ${sessionsAway} sessions away from your weekly goal.`}
           href={workoutHref}
           iconLeft="fas fa-bolt"
-          accentColor="#d97a3a"
+          accentColor={accentMicro}
           buttonText="Start"
         />
 
@@ -142,7 +214,7 @@ export default function Home() {
           message="Log today’s meals and macros."
           href={nutritionHref}
           iconLeft="fas fa-utensils"
-          accentColor="#4fa3a5"
+          accentColor={accentNutrition}
           buttonText="Start"
         />
 
@@ -153,7 +225,7 @@ export default function Home() {
             message={habitAllDone ? "Workout done!" : `Start your ${selectedDayName} session.`}
             href={workoutHref}
             iconLeft="fas fa-dumbbell"
-            accentColor="#5b7c99"
+            accentColor={accentWorkout}
             buttonText="Start"
           />
         )}
@@ -165,10 +237,25 @@ export default function Home() {
             message={`Fill in your daily habit for ${selectedDayName}.`}
             href={habitHref}
             iconLeft="fas fa-check-circle"
-            accentColor="#9b6fa3"
+            accentColor={accentHabit}
             buttonText="Fill"
           />
         )}
+
+        {/* Weekly Check-in */}
+        {selectedDay.getDay() === 5 && (
+          <BxkrBanner
+            title="Weekly check‑in"
+            message={checkinComplete ? "Check‑in submitted." : "Complete your weekly check‑in."}
+            href={checkinHref}
+            iconLeft="fas fa-clipboard-list"
+            accentColor={accentCheckin}
+            buttonText={checkinComplete ? "Review" : "Check in"}
+          />
+        )}
+
+        {error && <div className="alert alert-danger">Failed to load workouts</div>}
+        {isLoading && <div className="alert alert-secondary">Loading…</div>}
       </main>
 
       <BottomNav />
