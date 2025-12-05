@@ -19,9 +19,6 @@ import useSWR from "swr";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
-import BottomNav from "../components/BottomNav";
-import AddToHomeScreen from "../components/AddToHomeScreen";
-import CoachBanner from "../components/CoachBanner";
 import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 
@@ -461,16 +458,6 @@ export default function Home() {
           })}
         </div>
 
-        {/* Nutrition reminder for the selected day (below calendar) */}
-        {status === "authenticated" && noNutritionForSelected && (
-          <div className="mb-3">
-            <CoachBanner
-              message={`Don’t forget to log your nutrition for ${selectedDayName}.`}
-              dateKey={selectedDateKey}
-            />
-          </div>
-        )}
-
         {/* Stat visuals: Workouts | Calories | Streak */}
         <div className="row row-cols-3 gx-2 gx-sm-3 mb-4 text-center">
           {/* Workouts */}
@@ -621,9 +608,6 @@ export default function Home() {
         {error && <div className="alert alert-danger">Failed to load workouts</div>}
         {isLoading && <div className="alert alert-secondary">Loading…</div>}
       </main>
-
-      <BottomNav />
-      <AddToHomeScreen />
     </>
   );
 }
