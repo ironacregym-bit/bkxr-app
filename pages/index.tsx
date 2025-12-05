@@ -6,9 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 import AddToHomeScreen from "../components/AddToHomeScreen";
-import CoachBanner from "../components/CoachBanner";
 import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
+import BxkrBanner from "../components/BxkrBanner";
 
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
@@ -50,7 +50,6 @@ function isSameDay(a: Date, b: Date) {
     a.getDate() === b.getDate()
   );
 }
-
 function startOfAlignedWeek(d: Date) {
   const day = d.getDay();
   const diffToMon = (day + 6) % 7;
@@ -78,7 +77,11 @@ function toMillis(ts: any): number {
 
 export default function Home() {
   const { data: session, status } = useSession();
+
+  // Programmed workouts
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
+
+  // Completions (for weekly goal + detecting today's workout completion)
   const { data: completionData } = useSWR(
     session?.user?.email
       ? `/api/completions/history?email=${encodeURIComponent(session.user.email)}&range=all`
@@ -87,6 +90,7 @@ export default function Home() {
   );
   const allCompletions = (completionData?.history || []) as any[];
 
+  // Upsert user record (as before)
   useEffect(() => {
     if (status === "authenticated" && session?.user?.email) {
       fetch("/api/users/upsert", {
@@ -101,20 +105,29 @@ export default function Home() {
     }
   }, [status, session?.user?.email]);
 
+  // Calendar strip
   const weekDays = getWeek();
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState<Date>(today);
 
-  const greeting = today.getHours() < 12 ? "Good Morning" : today.getHours() < 18 ? "Good Afternoon" : "Good Evening";
-  const getDayName = (date: Date) => date.toLocaleDateString(undefined, { weekday: "long" });
+  // Greeting
+  const hour = today.getHours();
+  const greeting =
+    hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
+
+  const getDayName = (date: Date) =>
+    date.toLocaleDateString(undefined, { weekday: "long" });
   const selectedDayName = getDayName(selectedDay);
 
   const selectedWorkouts: WorkoutLite[] = (data?.workouts || []).filter(
     (w: WorkoutLite) => (w.day_name || "").toLowerCase() === selectedDayName.toLowerCase()
   );
 
+  // Windows
   const thisWeekStart = startOfAlignedWeek(today);
   const thisWeekEnd = endOfAlignedWeek(today);
+
+  // Weekly goal (3 sessions/week)
   const weeklyCompletedCount = useMemo(() => {
     return allCompletions.filter((c: any) => {
       const m = toMillis(c.completed_date || c.completed_at || c.started_at);
@@ -123,6 +136,7 @@ export default function Home() {
   }, [allCompletions, thisWeekStart, thisWeekEnd]);
   const sessionsAway = Math.max(0, 3 - weeklyCompletedCount);
 
+  // Selected date key (YYYY-MM-DD)
   function formatYMD(d: Date) {
     const n = new Date(d);
     n.setHours(0, 0, 0, 0);
@@ -130,18 +144,21 @@ export default function Home() {
   }
   const selectedDateKey = useMemo(() => formatYMD(selectedDay), [selectedDay]);
 
+  // Nutrition status
   const { data: nutritionForSelected } = useSWR(
     session?.user?.email ? `/api/nutrition/logs?date=${selectedDateKey}` : null,
     fetcher
   );
   const nutritionLogged = (nutritionForSelected?.entries?.length || 0) > 0;
 
+  // Habit status
   const { data: habitForSelected } = useSWR(
     session?.user?.email ? `/api/habits/logs?date=${selectedDateKey}` : null,
     fetcher
   );
   const habitComplete = (habitForSelected?.entries?.length || 0) > 0;
 
+  // Weekly check-in (Fridays only)
   const isFridaySelected = selectedDay.getDay() === 5;
   const { data: checkinForWeek } = useSWR(
     session?.user?.email && isFridaySelected ? `/api/checkins/weekly?week=${formatYMD(selectedDay)}` : null,
@@ -149,6 +166,7 @@ export default function Home() {
   );
   const checkinComplete = !!checkinForWeek?.entry;
 
+  // Today's workout completion
   const hasWorkoutToday = selectedWorkouts.length > 0;
   const workoutIdsToday = selectedWorkouts.map((w: WorkoutLite) => w.id);
   const workoutDoneToday = useMemo(() => {
@@ -160,62 +178,28 @@ export default function Home() {
     });
   }, [allCompletions, hasWorkoutToday, workoutIdsToday, selectedDay]);
 
-  const dayTasks = [
-    {
-      key: "workout",
-      title: "Workout",
-      description: hasWorkoutToday ? `Start your programmed session for ${selectedDayName}.` : `No workout scheduled.`,
-      complete: hasWorkoutToday ? workoutDoneToday : true,
-      show: hasWorkoutToday,
-      href: hasWorkoutToday && selectedWorkouts[0]?.id ? `/workout/${selectedWorkouts[0].id}` : undefined,
-    },
-    {
-      key: "habit",
-      title: "Daily habit",
-      description: `Fill in your daily habit for ${selectedDayName}.`,
-      complete: habitComplete,
-      show: true,
-      href: `/habit?date=${selectedDateKey}`,
-    },
-    {
-      key: "checkin",
-      title: "Weekly check‑in",
-      description: `Complete your weekly check‑in.`,
-      complete: isFridaySelected ? checkinComplete : true,
-      show: isFridaySelected,
-      href: "/checkin",
-    },
-  ];
+  // CTA hrefs + icons (Font Awesome)
+  const workoutHref =
+    hasWorkoutToday && selectedWorkouts[0]?.id ? `/workout/${selectedWorkouts[0].id}` : `/habit?date=${selectedDateKey}`;
+  const microHref = workoutHref; // sensible default: start workout if available, else habits
+  const nutritionHref = `/nutrition?date=${selectedDateKey}`;
+  const habitHref = `/habit?date=${selectedDateKey}`;
+  const checkinHref = `/checkin`;
 
-  const btnClass = "bxkr-btn";
+  const iconMicro = "fas fa-bolt";
+  const iconNutrition = "fas fa-utensils";
+  const iconWorkout = "fas fa-dumbbell";
+  const iconHabit = "fas fa-check-circle";
+  const iconCheckin = "fas fa-clipboard-list";
+  const crownIcon = "fas fa-crown"; // button icon (as requested; can be changed later)
 
   return (
     <>
       <Head>
         <title>BXKR</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <style>{`
-          .${btnClass} {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: linear-gradient(135deg, #cf6a33 0%, #e07a3a 100%);
-            color: #0e0e0e !important;
-            border-radius: 999px;
-            font-weight: 700;
-            padding: 8px 16px;
-            text-decoration: none;
-          }
-          .bxkr-banner {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-radius: 999px;
-            padding: 14px 18px;
-            background: rgba(255,255,255,0.06);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 22px rgba(0,0,0,0.38);
-            margin-bottom: 12px;
-          }
+          /* Calendar day — minimal, clickable, white numbers, circular outline, neon on active */
           .bxkr-day {
             width: 40px;
             height: 40px;
@@ -228,9 +212,7 @@ export default function Home() {
             cursor: pointer;
             transition: all 0.2s ease;
           }
-          .bxkr-day:hover {
-            border-color: #ff7f32;
-          }
+          .bxkr-day:hover { border-color: #ff7f32; }
           .bxkr-day.active {
             border-color: #ff7f32;
             box-shadow: 0 0 8px #ff7f32;
@@ -239,64 +221,130 @@ export default function Home() {
         `}</style>
       </Head>
 
-      <main className="container py-3" style={{ paddingBottom: "70px", background: "linear-gradient(135deg,#1a1a1a,#2e1a0f)", color: "#fff", borderRadius: "12px" }}>
+      <main
+        className="container py-3"
+        style={{
+          paddingBottom: "70px",
+          background: "linear-gradient(135deg,#1a1a1a,#2e1a0f)",
+          color: "#fff",
+          borderRadius: 12,
+        }}
+      >
         {/* Header */}
         <div className="d-flex justify-content-between mb-3">
-          <div className="d-flex gap-2">
-            {session?.user?.image && <img src={session.user.image} alt="" className="rounded-circle" style={{ width: 36, height: 36 }} />}
-            <div>{session?.user?.name || "Athlete"}</div>
+          <div className="d-flex align-items-center gap-2">
+            {session?.user?.image && (
+              <img
+                src={session.user.image}
+                alt=""
+                className="rounded-circle"
+                style={{ width: 36, height: 36, objectFit: "cover" }}
+              />
+            )}
+            <div className="fw-semibold">{session?.user?.name || "Athlete"}</div>
           </div>
           {status === "authenticated" ? (
             <button className="btn btn-link text-light p-0" onClick={() => signOut()}>Sign out</button>
           ) : (
-            <button className={btnClass} onClick={() => signIn("google")}>Sign in</button>
+            <button
+              className="btn btn-link text-light p-0"
+              onClick={() => signIn("google")}
+              style={{
+                background: "transparent",
+                border: "none",
+                textDecoration: "underline",
+              }}
+            >
+              Sign in
+            </button>
           )}
         </div>
 
-        <h2 className="mb-2">{greeting}, {session?.user?.name || "Athlete"}</h2>
+        {/* Greeting */}
+        <h2 className="mb-3" style={{ fontWeight: 700, fontSize: "1.6rem" }}>
+          {greeting}, {session?.user?.name || "Athlete"}
+        </h2>
 
-        {/* Micro-task banner */}
-        <div className="bxkr-banner">
-          <div>You’re {Math.max(0, 3 - weeklyCompletedCount)} sessions away from your weekly goal</div>
-          <Link href="#" className={btnClass}><i className="fa fa-crown"></i> Start</Link>
-        </div>
+        {/* Micro-task banner (BXKR banner) */}
+        <BxkrBanner
+          title="Momentum"
+          message={`You’re ${sessionsAway} ${sessionsAway === 1 ? "session" : "sessions"} away from your weekly goal (target: 3/week).`}
+          href={microHref}
+          iconLeft={iconMicro}
+          buttonText="Start"
+          buttonIcon={crownIcon}
+        />
 
-        {/* Calendar strip */}
+        {/* Calendar strip (clean) */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
           {weekDays.map((d, i) => {
             const isSelected = isSameDay(d, selectedDay);
             return (
               <div key={i} style={{ width: 44 }} onClick={() => setSelectedDay(d)}>
-                <div style={{ fontSize: "0.8rem", color: "#fff" }}>{dayLabels[i]}</div>
-                <div className={`bxkr-day ${isSelected ? "active" : ""}`}>{d.getDate()}</div>
+                <div style={{ fontSize: "0.8rem", color: "#fff", opacity: 0.85, marginBottom: 4 }}>
+                  {dayLabels[i]}
+                </div>
+                <div className={`bxkr-day ${isSelected ? "active" : ""}`}>
+                  {d.getDate()}
+                </div>
               </div>
             );
           })}
         </div>
 
-        {/* CoachBanner */}
-        <CoachBanner message="Nutrition — Log today’s meals and macros." dateKey={selectedDateKey} />
+        {/* Nutrition banner (BXKR banner) */}
+        <BxkrBanner
+          title="Don’t forget!"
+          message="Log today’s meals and macros."
+          href={nutritionHref}
+          iconLeft={iconNutrition}
+          buttonText="Start"
+          buttonIcon={crownIcon}
+        />
 
-        {/* Other notifications styled like CoachBanner */}
-        {dayTasks.filter(t => t.show).map(t => (
-          <div key={t.key} className="bxkr-banner">
-            <div>
-              <strong>{t.title}</strong> — {t.description}
-            </div>
-            {t.href && <Link href={t.href} className={btnClass}><i className="fa fa-crown"></i> Go</Link>}
-          </div>
-        ))}
+        {/* Workout banner (BXKR banner) */}
+        {hasWorkoutToday && (
+          <BxkrBanner
+            title="Workout"
+            message={
+              workoutDoneToday
+                ? `Completed your ${selectedDayName} session.`
+                : `Start your programmed session for ${selectedDayName}.`
+            }
+            href={workoutHref}
+            iconLeft={iconWorkout}
+            buttonText={workoutDoneToday ? "View" : "Start"}
+            buttonIcon={crownIcon}
+          />
+        )}
 
-        {/* Workouts */}
-        {selectedWorkouts.map((w: WorkoutLite) => (
-          <div key={w.id} className="bxkr-banner">
-            <div>
-              <strong>{selectedDayName}</strong> — {w.workout_name}
-            </div>
-            <Link href={`/workout/${w.id}`} className={btnClass}><i className="fa fa-crown"></i> Start</Link>
-          </div>
-        ))}
+        {/* Habit banner (BXKR banner) */}
+        <BxkrBanner
+          title="Daily habit"
+          message={
+            habitComplete
+              ? `Habits done for ${selectedDayName}.`
+              : `Fill in your daily habit for ${selectedDayName}.`
+          }
+          href={habitHref}
+          iconLeft={iconHabit}
+          buttonText={habitComplete ? "Review" : "Fill"}
+          buttonIcon={crownIcon}
+        />
 
+        {/* Weekly check-in banner (BXKR banner, Fridays only) */}
+        {isFridaySelected && (
+          <BxkrBanner
+            title="Weekly check‑in"
+            message={checkinComplete ? "Check‑in submitted." : "Complete your weekly check‑in."}
+            href={checkinHref}
+            iconLeft={iconCheckin}
+            buttonText={checkinComplete ? "Review" : "Check in"}
+            buttonIcon={crownIcon}
+          />
+        )}
+
+        {/* Loaders and errors */}
         {error && <div className="alert alert-danger">Failed to load workouts</div>}
         {isLoading && <div className="alert alert-secondary">Loading…</div>}
       </main>
@@ -305,4 +353,3 @@ export default function Home() {
       <AddToHomeScreen />
     </>
   );
-}
