@@ -38,7 +38,6 @@ export default function BottomNav() {
         width: "90%",
         maxWidth: "420px",
         zIndex: 1000,
-        background: "rgba(0,0,0,0.6)",
       }}
     >
       {navItems.map((item) => {
