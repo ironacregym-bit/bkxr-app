@@ -4,28 +4,37 @@
 import Link from "next/link";
 
 type BxkrBannerProps = {
+  /** Left header text (bold). Defaults to “Reminder”. */
   title?: string;
+  /** Supporting text under the title. */
   message: string;
+  /** Link target for the whole banner action button. */
   href: string;
-  icon?: string; // Font Awesome class, e.g., "fas fa-crown"
+  /** Left circular icon class, e.g. "fas fa-dumbbell". */
+  iconLeft?: string;
+  /** Button label, e.g. "Start", "Fill", "Check in". Defaults to "Start". */
   buttonText?: string;
+  /** Button icon class (to the left of the button text). Defaults to "fas fa-crown". */
+  buttonIcon?: string;
 };
 
 export default function BxkrBanner({
   title = "Reminder",
   message,
   href,
-  icon = "fas fa-crown",
+  iconLeft = "fas fa-crown",
   buttonText = "Start",
+  buttonIcon = "fas fa-crown",
 }: BxkrBannerProps) {
   return (
     <Link
       href={href}
+      aria-label={`${title}: ${message}`}
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        background: "linear-gradient(90deg, #3a2f2f, #2e1a0f)", // warm brown gradient
+        background: "linear-gradient(90deg, #3a2f2f, #2e1a0f)", // warm brown gradient (matches your CoachBanner)
         borderRadius: "50px",
         padding: "12px 16px",
         boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
@@ -34,7 +43,7 @@ export default function BxkrBanner({
         marginBottom: "16px",
       }}
     >
-      {/* Left Icon */}
+      {/* Left Icon circle */}
       <div
         style={{
           width: 40,
@@ -45,18 +54,24 @@ export default function BxkrBanner({
           justifyContent: "center",
           alignItems: "center",
           marginRight: "12px",
+          flexShrink: 0,
         }}
+        aria-hidden="true"
       >
-        <i className={icon} style={{ color: "#ffcc00", fontSize: "18px" }}></i>
+        <i className={iconLeft} style={{ color: "#ffcc00", fontSize: 18 }} />
       </div>
 
-      {/* Text */}
-      <div style={{ flexGrow: 1 }}>
-        <div style={{ fontWeight: 600, fontSize: "16px" }}>{title}</div>
-        <div style={{ fontSize: "13px", opacity: 0.8 }}>{message}</div>
+      {/* Text block */}
+      <div style={{ flexGrow: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: 16, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {title}
+        </div>
+        <div style={{ fontSize: 13, opacity: 0.85 }}>
+          {message}
+        </div>
       </div>
 
-      {/* Action Button */}
+      {/* Action button – white pill with icon (matches CoachBanner exactly) */}
       <div
         style={{
           backgroundColor: "#fff",
@@ -64,13 +79,15 @@ export default function BxkrBanner({
           fontWeight: 600,
           borderRadius: "24px",
           padding: "6px 16px",
-          fontSize: "14px",
-          display: "flex",
+          fontSize: 14,
+          display: "inline-flex",
           alignItems: "center",
-          gap: "6px",
+          gap: 8,
+          marginLeft: 12,
+          flexShrink: 0,
         }}
       >
-        <i className={icon} style={{ color: "#ffcc00", fontSize: "14px" }}></i>
+        <i className={buttonIcon} style={{ color: "#ffcc00", fontSize: 14 }} />
         {buttonText}
       </div>
     </Link>
