@@ -195,11 +195,15 @@ export default function Home() {
         <title>BXKR</title>
         <style>{`
           .${btnClass} {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
             background: linear-gradient(135deg, #cf6a33 0%, #e07a3a 100%);
             color: #0e0e0e !important;
             border-radius: 999px;
             font-weight: 700;
             padding: 8px 16px;
+            text-decoration: none;
           }
           .bxkr-banner {
             display: flex;
@@ -220,6 +224,17 @@ export default function Home() {
             margin: 0 auto;
             text-align: center;
             color: #fff;
+            border: 2px solid rgba(255,255,255,0.3);
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+          .bxkr-day:hover {
+            border-color: #ff7f32;
+          }
+          .bxkr-day.active {
+            border-color: #ff7f32;
+            box-shadow: 0 0 8px #ff7f32;
+            font-weight: 700;
           }
         `}</style>
       </Head>
@@ -243,17 +258,20 @@ export default function Home() {
         {/* Micro-task banner */}
         <div className="bxkr-banner">
           <div>You’re {Math.max(0, 3 - weeklyCompletedCount)} sessions away from your weekly goal</div>
-          <div className="small">Target: 3/week</div>
+          <Link href="#" className={btnClass}><i className="fa fa-crown"></i> Start</Link>
         </div>
 
         {/* Calendar strip */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
-          {weekDays.map((d, i) => (
-            <div key={i} style={{ width: 44 }} onClick={() => setSelectedDay(d)}>
-              <div style={{ fontSize: "0.8rem", color: "#fff" }}>{dayLabels[i]}</div>
-              <div className="bxkr-day">{d.getDate()}</div>
-            </div>
-          ))}
+          {weekDays.map((d, i) => {
+            const isSelected = isSameDay(d, selectedDay);
+            return (
+              <div key={i} style={{ width: 44 }} onClick={() => setSelectedDay(d)}>
+                <div style={{ fontSize: "0.8rem", color: "#fff" }}>{dayLabels[i]}</div>
+                <div className={`bxkr-day ${isSelected ? "active" : ""}`}>{d.getDate()}</div>
+              </div>
+            );
+          })}
         </div>
 
         {/* CoachBanner */}
@@ -265,7 +283,7 @@ export default function Home() {
             <div>
               <strong>{t.title}</strong> — {t.description}
             </div>
-            {t.href && <Link href={t.href} className={btnClass}>Go</Link>}
+            {t.href && <Link href={t.href} className={btnClass}><i className="fa fa-crown"></i> Go</Link>}
           </div>
         ))}
 
@@ -275,7 +293,7 @@ export default function Home() {
             <div>
               <strong>{selectedDayName}</strong> — {w.workout_name}
             </div>
-            <Link href={`/workout/${w.id}`} className={btnClass}>Start</Link>
+            <Link href={`/workout/${w.id}`} className={btnClass}><i className="fa fa-crown"></i> Start</Link>
           </div>
         ))}
 
