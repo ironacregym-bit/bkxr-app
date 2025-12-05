@@ -10,7 +10,6 @@ import CoachBanner from "../components/CoachBanner";
 import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 
-import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
 
 export const getServerSideProps: GetServerSideProps = async (
@@ -178,10 +177,6 @@ export default function Home() {
   // Windows
   const thisWeekStart = startOfAlignedWeek(today);
   const thisWeekEnd = endOfAlignedWeek(today);
-  const thisMonthStart = startOfMonth(today);
-  const thisMonthEnd = endOfMonth(today);
-  const weeksInMonth = weeksInMonthAligned(today);
-  const weeksInThisYear = weeksInYear(today.getFullYear());
 
   // ---------- Micro task: sessions away from weekly goal (goal = 3)
   const weeklyCompletedCount = useMemo(() => {
@@ -242,16 +237,8 @@ export default function Home() {
     });
   }, [allCompletions, hasWorkoutToday, workoutIdsToday, selectedDay]);
 
-  // ---------- Day tasks model
+  // ---------- Day tasks model (NOTE: nutrition card removed to avoid duplication)
   const dayTasks = [
-    {
-      key: "nutrition",
-      title: "Nutrition",
-      description: `Log today’s meals and macros.`,
-      complete: nutritionLogged,
-      show: true,
-      href: "/nutrition",
-    },
     {
       key: "workout",
       title: "Complete today’s workout",
@@ -271,7 +258,7 @@ export default function Home() {
       description: `Fill in your daily habit for ${selectedDayName}.`,
       complete: habitComplete,
       show: true,
-      href: "/habit",
+      href: `/habit?date=${selectedDateKey}`,
     },
     {
       key: "checkin",
@@ -286,7 +273,7 @@ export default function Home() {
 
   // ---------- Calendar day labels
   const ringCompleteColor = "#2ecc71"; // green
-  const ringOutstandingColor = "#ff7f32"; // brand orange (used as ring, not button fill)
+  const ringOutstandingColor = "#ff7f32"; // orange
 
   // Existing signal for opacity: days that have a programmed workout
   const daysWithWorkout = weekDays.map((d) => {
@@ -310,6 +297,7 @@ export default function Home() {
             50% { filter: drop-shadow(0 0 10px rgba(255,255,255,0.18)); }
             100% { filter: drop-shadow(0 0 4px rgba(255,255,255,0.10)); }
           }
+
           /* Muted futuristic button */
           .${btnClass} {
             background: linear-gradient(135deg, #cf6a33 0%, #e07a3a 100%);
@@ -331,18 +319,16 @@ export default function Home() {
             box-shadow: 0 4px 14px rgba(207, 106, 51, 0.22);
           }
 
-          /* Pill cards + badges to match your top banner shape */
+          /* Pill cards + badges */
           .bxkr-pill {
             background: rgba(255,255,255,0.06);
-            border-radius: 28px; /* bigger radius for pill feel */
+            border-radius: 28px;
             padding: 16px;
             backdrop-filter: blur(10px);
             box-shadow: 0 4px 22px rgba(0,0,0,0.38);
           }
           .bxkr-badge {
             display: inline-block;
-            background: #ff7f32;
-            color: #141414; /* readable on orange */
             border-radius: 999px;
             font-weight: 800;
             padding: 6px 10px;
@@ -351,15 +337,24 @@ export default function Home() {
           .bxkr-badge--ok { background: #2ecc71; color: #0e0e0e; }
           .bxkr-badge--warn { background: #ff7f32; color: #141414; }
 
-          /* Calendar day baseline circle */
+          /* Calendar strip wrapped in pill container */
+          .bxkr-calendar {
+            background: rgba(255,255,255,0.06);
+            border-radius: 28px;
+            padding: 10px 12px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 22px rgba(0,0,0,0.38);
+          }
+
+          /* Calendar day circle */
           .bxkr-day {
-            width: 32px;
-            height: 32px;
-            line-height: 32px;
-            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            line-height: 40px;
+            border-radius: 999px;
             margin: 0 auto;
             text-align: center;
-            color: #fff; /* all numbers white */
+            color: #fff;
             box-shadow: 0 0 0 2px rgba(255,255,255,0.08);
           }
         `}</style>
@@ -422,74 +417,77 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Weekly strip (calendar) */}
-        <div className="d-flex justify-content-between text-center mb-3">
-          {weekDays.map((d, i) => {
-            const isToday = isSameDay(d, today);
-            const isSelected = isSameDay(d, selectedDay);
-            const hasWorkout = daysWithWorkout[i];
+        {/* Weekly strip (calendar) in a pill container */}
+        <div className="bxkr-calendar mb-3">
+          <div className="d-flex justify-content-between text-center" style={{ gap: 8 }}>
+            {weekDays.map((d, i) => {
+              const isToday = isSameDay(d, today);
+              const isSelected = isSameDay(d, selectedDay);
+              const hasWorkout = daysWithWorkout[i];
 
-            // Ring colour reflects selected day's task state
-            const ringColor = isSelected
-              ? allTasksDone
-                ? ringCompleteColor
-                : ringOutstandingColor
-              : undefined;
+              // Ring colour reflects SELECTED day's task state
+              const ringColor = isSelected
+                ? allTasksDone
+                  ? ringCompleteColor
+                  : ringOutstandingColor
+                : undefined;
 
-            return (
-              <div
-                key={i}
-                style={{ width: "40px", cursor: "pointer" }}
-                onClick={() => setSelectedDay(d)}
-                aria-label={`Select ${dayLabels[i]} ${d.getDate()}`}
-              >
+              return (
                 <div
-                  style={{
-                    fontSize: "0.8rem",
-                    opacity: 0.75,
-                    marginBottom: "4px",
-                    color: "#fff",
-                  }}
+                  key={i}
+                  style={{ width: 44, cursor: "pointer" }}
+                  onClick={() => setSelectedDay(d)}
+                  aria-label={`Select ${dayLabels[i]} ${d.getDate()}`}
                 >
-                  {dayLabels[i]}
+                  <div
+                    style={{
+                      fontSize: "0.8rem",
+                      opacity: 0.8,
+                      marginBottom: "4px",
+                      color: "#fff",
+                    }}
+                  >
+                    {dayLabels[i]}
+                  </div>
+                  <div
+                    className="bxkr-day"
+                    style={{
+                      backgroundColor: isSelected
+                        ? "#ff7f32"
+                        : isToday
+                        ? "rgba(255,127,50,0.18)"
+                        : "transparent",
+                      border: isToday && !isSelected ? "1px solid #ff7f32" : "none",
+                      opacity: hasWorkout ? 1 : 0.85,
+                      fontWeight: isSelected ? 700 : 500,
+                      ...(ringColor
+                        ? {
+                            boxShadow: `0 0 0 2px ${ringColor}`,
+                            ...ringWrapGlow(ringColor),
+                          }
+                        : {}),
+                    }}
+                  >
+                    {d.getDate()}
+                  </div>
                 </div>
-                <div
-                  className="bxkr-day"
-                  style={{
-                    backgroundColor: isSelected
-                      ? "#ff7f32"
-                      : isToday
-                      ? "rgba(255,127,50,0.18)"
-                      : "transparent",
-                    border: isToday && !isSelected ? "1px solid #ff7f32" : "none",
-                    opacity: hasWorkout ? 1 : 0.8,
-                    fontWeight: isSelected ? 700 : 500,
-                    ...(ringColor
-                      ? {
-                          boxShadow: `0 0 0 2px ${ringColor}`,
-                          ...ringWrapGlow(ringColor),
-                        }
-                      : {}),
-                  }}
-                >
-                  {d.getDate()}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
-        {/* Nutrition reminder (kept), pill style */}
-        {status === "authenticated" && !nutritionLogged && (
+        {/* Nutrition reminder — single source of truth (pill look via CoachBanner) */}
+        {status === "authenticated" && (
           <div className="mb-3">
             <CoachBanner
-              message={`Don’t forget to log your nutrition for ${selectedDayName}.`}
+              // Rewrite as requested
+              message={`Nutrition — Log today’s meals and macros.`}
               dateKey={selectedDateKey}
             />
           </div>
         )}
 
-        {/* Day tasks – all pill-shaped, consistent badges, muted CTA */}
+        {/* Day tasks – nutrition card removed to avoid duplication */}
         <div className="mb-3">
           {dayTasks
             .filter((t) => t.show)
@@ -499,8 +497,6 @@ export default function Home() {
               const ctaLabel =
                 t.key === "workout"
                   ? "Start workout"
-                  : t.key === "nutrition"
-                  ? "Open nutrition"
                   : t.key === "habit"
                   ? "Fill habit"
                   : "Open check‑in";
@@ -509,7 +505,6 @@ export default function Home() {
                 <div key={t.key} className="bxkr-pill mb-3">
                   <div className="d-flex align-items-center justify-content-between">
                     <div className="fw-bold">{t.title}</div>
-                    {/* Consistent right-hand pill badge (fixed spacing/contrast) */}
                     <span className={accentClass} aria-label={statusText}>{statusText}</span>
                   </div>
                   <div className="mt-2" style={{ opacity: 0.9 }}>
