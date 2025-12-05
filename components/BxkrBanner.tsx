@@ -3,10 +3,24 @@
 
 import Link from "next/link";
 
-export default function CoachBanner({ message, dateKey }: { message: string; dateKey: string }) {
+type BxkrBannerProps = {
+  title?: string;
+  message: string;
+  href: string;
+  icon?: string; // Font Awesome class, e.g., "fas fa-crown"
+  buttonText?: string;
+};
+
+export default function BxkrBanner({
+  title = "Reminder",
+  message,
+  href,
+  icon = "fas fa-crown",
+  buttonText = "Start",
+}: BxkrBannerProps) {
   return (
     <Link
-      href={`/nutrition?date=${dateKey}`}
+      href={href}
       style={{
         display: "flex",
         alignItems: "center",
@@ -33,12 +47,12 @@ export default function CoachBanner({ message, dateKey }: { message: string; dat
           marginRight: "12px",
         }}
       >
-        <i className="fas fa-crown" style={{ color: "#ffcc00", fontSize: "18px" }}></i>
+        <i className={icon} style={{ color: "#ffcc00", fontSize: "18px" }}></i>
       </div>
 
       {/* Text */}
       <div style={{ flexGrow: 1 }}>
-        <div style={{ fontWeight: 600, fontSize: "16px" }}>Don’t forget!</div>
+        <div style={{ fontWeight: 600, fontSize: "16px" }}>{title}</div>
         <div style={{ fontSize: "13px", opacity: 0.8 }}>{message}</div>
       </div>
 
@@ -51,9 +65,13 @@ export default function CoachBanner({ message, dateKey }: { message: string; dat
           borderRadius: "24px",
           padding: "6px 16px",
           fontSize: "14px",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
         }}
       >
-        Start
+        <i className={icon} style={{ color: "#ffcc00", fontSize: "14px" }}></i>
+        {buttonText}
       </div>
     </Link>
   );
