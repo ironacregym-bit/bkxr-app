@@ -9,7 +9,9 @@ import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 import BxkrBanner from "../components/BxkrBanner";
 
-export const getServerSideProps: GetServerSideProps = async (context: GetServerSidePropsContext) => {
+export const getServerSideProps: GetServerSideProps = async (
+  context: GetServerSidePropsContext
+) => {
   const session = await getSession(context);
   if (!session) {
     return { redirect: { destination: "/landing", permanent: false } };
@@ -19,7 +21,15 @@ export const getServerSideProps: GetServerSideProps = async (context: GetServerS
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-// ✅ Helpers
+// ---------- Types
+type WorkoutLite = {
+  id: string;
+  workout_name?: string;
+  notes?: string;
+  day_name?: string;
+};
+
+// ---------- Helpers
 function getWeek(): Date[] {
   const today = new Date();
   const day = today.getDay();
@@ -64,6 +74,7 @@ function endOfAlignedWeek(d: Date) {
   return e;
 }
 
+// Firestore-safe timestamp normalisation
 function toMillis(ts: any): number {
   if (!ts) return 0;
   if (typeof ts === "number") return ts;
@@ -78,13 +89,21 @@ const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export default function Home() {
   const { data: session, status } = useSession();
 
+  // Programmed workouts
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
+
+  // Performed workouts (for weekly goal + today's detection)
   const { data: completionData } = useSWR(
-    session?.user?.email ? `/api/completions/history?email=${encodeURIComponent(session.user.email)}&range=all` : null,
+    session?.user?.email
+      ? `/api/completions/history?email=${encodeURIComponent(
+          session.user.email
+        )}&range=all`
+      : null,
     fetcher
   );
-  const allCompletions = completionData?.history || [];
+  const allCompletions = (completionData?.history || []) as any[];
 
+  // Upsert user record (preserved)
   useEffect(() => {
     if (status === "authenticated" && session?.user?.email) {
       fetch("/api/users/upsert", {
@@ -99,68 +118,134 @@ export default function Home() {
     }
   }, [status, session?.user?.email]);
 
+  // Calendar state
   const weekDays = getWeek();
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState<Date>(today);
 
-  const greeting = today.getHours() < 12 ? "Good Morning" : today.getHours() < 18 ? "Good Afternoon" : "Good Evening";
-  const selectedDayName = selectedDay.toLocaleDateString(undefined, { weekday: "long" });
+  // Greeting
+  const hour = today.getHours();
+  const greeting =
+    hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
+  const selectedDayName = selectedDay.toLocaleDateString(undefined, {
+    weekday: "long",
+  });
 
-  const selectedWorkouts = (data?.workouts || []).filter(
-    (w: any) => (w.day_name || "").toLowerCase() === selectedDayName.toLowerCase()
+  // Workouts for selected day
+  const selectedWorkouts: WorkoutLite[] = (data?.workouts || []).filter(
+    (w: WorkoutLite) =>
+      (w.day_name || "").toLowerCase() === selectedDayName.toLowerCase()
   );
 
+  // Weekly windows + goal
   const thisWeekStart = startOfAlignedWeek(today);
   const thisWeekEnd = endOfAlignedWeek(today);
+
   const weeklyCompletedCount = useMemo(() => {
     return allCompletions.filter((c: any) => {
       const m = toMillis(c.completed_date || c.completed_at || c.started_at);
       return m >= thisWeekStart.getTime() && m <= thisWeekEnd.getTime();
     }).length;
   }, [allCompletions, thisWeekStart, thisWeekEnd]);
+
   const sessionsAway = Math.max(0, 3 - weeklyCompletedCount);
 
+  // Selected date key (YYYY-MM-DD)
   const selectedDateKey = formatYMD(selectedDay);
 
-  // Habit data
-  const { data: habitForSelected } = useSWR(
-    session?.user?.email ? `/api/habits/logs?date=${selectedDateKey}` : null,
+  // Nutrition (optional status fetch retained for future use)
+  const { data: nutritionForSelected } = useSWR(
+    session?.user?.email
+      ? `/api/nutrition/logs?date=${selectedDateKey}`
+      : null,
     fetcher
   );
-  const habitEntry = habitForSelected?.entry || null;
+  const nutritionLogged = (nutritionForSelected?.entries?.length || 0) > 0; // not used yet in banner text, but kept
+
+  // Habits
+  type HabitEntry = {
+    id: string;
+    user_email: string;
+    date: any;
+    "2l_water": boolean;
+    assigned_workouts_completed: boolean;
+    macros_filled: boolean;
+    step_count: boolean;
+    time_outside: boolean;
+  };
+  const { data: habitForSelected } = useSWR(
+    session?.user?.email
+      ? `/api/habits/logs?date=${selectedDateKey}`
+      : null,
+    fetcher
+  );
+  const habitEntry: HabitEntry | null = habitForSelected?.entry || null;
+
+  // Daily habit completion (ALL toggles true)
   const habitAllDone =
     !!habitEntry &&
-    habitEntry["2l_water"] &&
-    habitEntry.assigned_workouts_completed &&
-    habitEntry.macros_filled &&
-    habitEntry.step_count &&
-    habitEntry.time_outside;
+    !!habitEntry["2l_water"] &&
+    !!habitEntry.assigned_workouts_completed &&
+    !!habitEntry.macros_filled &&
+    !!habitEntry.step_count &&
+    !!habitEntry.time_outside;
 
+  // Weekly check-in (Fridays only)
+  const isFridaySelected = selectedDay.getDay() === 5;
   const { data: checkinForWeek } = useSWR(
-    session?.user?.email && selectedDay.getDay() === 5
+    session?.user?.email && isFridaySelected
       ? `/api/checkins/weekly?week=${formatYMD(selectedDay)}`
       : null,
     fetcher
   );
   const checkinComplete = !!checkinForWeek?.entry;
 
+  // Workout completion for selected day
+  const hasWorkoutToday = selectedWorkouts.length > 0;
+  const workoutIdsToday = selectedWorkouts.map((w) => w.id);
+  const workoutDoneToday = useMemo(() => {
+    if (!hasWorkoutToday) return false;
+    return allCompletions.some((c: any) => {
+      const completedAt = toMillis(c.completed_date || c.completed_at || c.started_at);
+      const completedDate = new Date(completedAt);
+      return (
+        workoutIdsToday.includes(c.workout_id) &&
+        isSameDay(completedDate, selectedDay)
+      );
+    });
+  }, [allCompletions, hasWorkoutToday, workoutIdsToday, selectedDay]);
+
+  // Hrefs
+  const workoutHref =
+    hasWorkoutToday && selectedWorkouts[0]?.id
+      ? `/workout/${selectedWorkouts[0].id}`
+      : `/habit?date=${selectedDateKey}`;
+  const microHref = workoutHref; // Momentum CTA: start workout if available, else habits
   const nutritionHref = `/nutrition?date=${selectedDateKey}`;
   const habitHref = `/habit?date=${selectedDateKey}`;
-  const workoutHref = selectedWorkouts[0]?.id ? `/workout/${selectedWorkouts[0].id}` : habitHref;
   const checkinHref = `/checkin`;
 
-  // Accent colors
-  const accentMicro = "#d97a3a";
-  const accentNutrition = "#4fa3a5";
-  const accentWorkout = "#5b7c99";
-  const accentHabit = "#9b6fa3";
-  const accentCheckin = "#c9a34e";
+  // Font Awesome icons
+  const iconMicro = "fas fa-bolt";
+  const iconNutrition = "fas fa-utensils";
+  const iconWorkout = "fas fa-dumbbell";
+  const iconHabit = "fas fa-check-circle";
+  const iconCheckin = "fas fa-clipboard-list";
+
+  // Muted accent colours (theme-friendly)
+  const accentMicro = "#d97a3a"; // muted orange
+  const accentNutrition = "#4fa3a5"; // muted teal
+  const accentWorkout = "#5b7c99"; // muted steel blue
+  const accentHabit = "#9b6fa3"; // muted violet
+  const accentCheckin = "#c9a34e"; // muted amber
 
   return (
     <>
       <Head>
         <title>BXKR</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <style>{`
+          /* Calendar day — minimal, clickable, white numbers, circular outline, neon on active */
           .bxkr-day {
             width: 40px;
             height: 40px;
@@ -173,36 +258,106 @@ export default function Home() {
             cursor: pointer;
             transition: all 0.2s ease;
           }
+          .bxkr-day:hover { border-color: ${accentMicro}; }
           .bxkr-day.active {
-            border-color: #d97a3a;
-            box-shadow: 0 0 8px #d97a3a;
+            border-color: ${accentMicro};
+            box-shadow: 0 0 8px ${accentMicro};
             font-weight: 700;
           }
         `}</style>
       </Head>
 
-      <main style={{ paddingBottom: "70px", background: "linear-gradient(135deg,#1a1a1a,#2e1a0f)", color: "#fff" }}>
-        {/* Greeting */}
-        <h2 style={{ fontWeight: 700 }}>{greeting}, {session?.user?.name || "Athlete"}</h2>
+      <main
+        className="container py-3"
+        style={{
+          paddingBottom: "70px",
+          background: "linear-gradient(135deg,#1a1a1a,#2e1a0f)",
+          color: "#fff",
+          borderRadius: 12,
+        }}
+      >
+        {/* Header */}
+        <div className="d-flex justify-content-between mb-3">
+          <div className="d-flex align-items-center gap-2">
+            {session?.user?.image && (
+              <img
+                src={session.user.image}
+                alt=""
+                className="rounded-circle"
+                style={{ width: 36, height: 36, objectFit: "cover" }}
+              />
+            )}
+            <div className="fw-semibold">
+              {session?.user?.name || "Athlete"}
+            </div>
+          </div>
+          {status === "authenticated" ? (
+            <button
+              className="btn btn-link text-light p-0"
+              onClick={() => signOut()}
+            >
+              Sign out
+            </button>
+          ) : (
+            <button
+              className="btn btn-link text-light p-0"
+              onClick={() => signIn("google")}
+              style={{
+                background: "transparent",
+                border: "none",
+                textDecoration: "underline",
+              }}
+            >
+              Sign in
+            </button>
+          )}
+        </div>
 
-        {/* Momentum */}
+        {/* Greeting */}
+        <h2 className="mb-3" style={{ fontWeight: 700, fontSize: "1.6rem" }}>
+          {greeting}, {session?.user?.name || "Athlete"}
+        </h2>
+
+        {/* Momentum (weekly goal) */}
         <BxkrBanner
           title="Momentum"
-          message={`You’re ${sessionsAway} sessions away from your weekly goal.`}
-          href={workoutHref}
-          iconLeft="fas fa-bolt"
+          message={`You’re ${sessionsAway} ${
+            sessionsAway === 1 ? "session" : "sessions"
+          } away from your weekly goal (target: 3/week).`}
+          href={microHref}
+          iconLeft={iconMicro}
           accentColor={accentMicro}
           buttonText="Start"
         />
 
-        {/* Calendar */}
-        <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
+        {/* Calendar strip */}
+        <div
+          className="d-flex justify-content-between text-center mb-3"
+          style={{ gap: 8 }}
+        >
           {weekDays.map((d, i) => {
             const isSelected = isSameDay(d, selectedDay);
             return (
-              <div key={i} style={{ width: 44 }} onClick={() => setSelectedDay(d)}>
-                <div style={{ fontSize: "0.8rem", color: "#fff", opacity: 0.85 }}>{dayLabels[i]}</div>
-                <div className={`bxkr-day ${isSelected ? "active" : ""}`}>{d.getDate()}</div>
+              <div
+                key={i}
+                style={{ width: 44, cursor: "pointer" }}
+                onClick={() => setSelectedDay(d)}
+                aria-label={`Select ${dayLabels[i]} ${d.getDate()}`}
+                title={`${dayLabels[i]} ${d.toLocaleDateString()}`}
+              >
+                <div
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "#fff",
+                    opacity: 0.85,
+                    marginBottom: 4,
+                  }}
+                >
+                  {dayLabels[i]}
+                </div>
+                <div className={`bxkr-day ${isSelected ? "active" : ""}`}>
+                  {d.getDate()}
+                </div>
               </div>
             );
           })}
@@ -213,49 +368,62 @@ export default function Home() {
           title="Nutrition"
           message="Log today’s meals and macros."
           href={nutritionHref}
-          iconLeft="fas fa-utensils"
+          iconLeft={iconNutrition}
           accentColor={accentNutrition}
           buttonText="Start"
         />
 
         {/* Workout */}
-        {selectedWorkouts.length > 0 && (
+        {hasWorkoutToday && (
           <BxkrBanner
             title="Workout"
-            message={habitAllDone ? "Workout done!" : `Start your ${selectedDayName} session.`}
+            message={
+              workoutDoneToday
+                ? `Completed your ${selectedDayName} session.`
+                : `Start your programmed session for ${selectedDayName}.`
+            }
             href={workoutHref}
-            iconLeft="fas fa-dumbbell"
+            iconLeft={iconWorkout}
             accentColor={accentWorkout}
-            buttonText="Start"
+            buttonText={workoutDoneToday ? "View" : "Start"}
           />
         )}
 
-        {/* Daily Habit */}
+        {/* Daily Habit (only when not fully complete) */}
         {!habitAllDone && (
           <BxkrBanner
             title="Daily habit"
             message={`Fill in your daily habit for ${selectedDayName}.`}
             href={habitHref}
-            iconLeft="fas fa-check-circle"
+            iconLeft={iconHabit}
             accentColor={accentHabit}
             buttonText="Fill"
           />
         )}
 
-        {/* Weekly Check-in */}
-        {selectedDay.getDay() === 5 && (
+        {/* Weekly check‑in (Fridays only) */}
+        {isFridaySelected && (
           <BxkrBanner
             title="Weekly check‑in"
-            message={checkinComplete ? "Check‑in submitted." : "Complete your weekly check‑in."}
+            message={
+              checkinComplete
+                ? "Check‑in submitted."
+                : "Complete your weekly check‑in."
+            }
             href={checkinHref}
-            iconLeft="fas fa-clipboard-list"
+            iconLeft={iconCheckin}
             accentColor={accentCheckin}
             buttonText={checkinComplete ? "Review" : "Check in"}
           />
         )}
 
-        {error && <div className="alert alert-danger">Failed to load workouts</div>}
-        {isLoading && <div className="alert alert-secondary">Loading…</div>}
+        {/* Loaders and errors */}
+        {error && (
+          <div className="alert alert-danger">Failed to load workouts</div>
+        )}
+        {isLoading && (
+          <div className="alert alert-secondary">Loading…</div>
+        )}
       </main>
 
       <BottomNav />
