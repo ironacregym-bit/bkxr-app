@@ -114,7 +114,7 @@ function toMillis(ts: any): number {
 // ---------- UI helpers
 function ringWrapGlow(color: string): React.CSSProperties {
   return {
-    filter: `drop-shadow(0 0 6px ${hexToRGBA(color, 0.35)})`,
+    filter: `drop-shadow(0 0 6px ${hexToRGBA(color, 0.25)})`,
     animation: "bxkrPulse 3.2s ease-in-out infinite",
   };
 }
@@ -133,7 +133,7 @@ export default function Home() {
   // Programmed workouts
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
 
-  // Performed workouts (full history; we compute week/month/year windows client-side)
+  // Performed workouts
   const { data: completionData } = useSWR(
     session?.user?.email
       ? `/api/completions/history?email=${encodeURIComponent(session.user.email)}&range=all`
@@ -192,7 +192,7 @@ export default function Home() {
   }, [allCompletions, thisWeekStart, thisWeekEnd]);
   const sessionsAway = Math.max(0, 3 - weeklyCompletedCount);
 
-  // ---------- Nutrition (selected day key for banner under calendar)
+  // ---------- Nutrition (selected day key)
   function formatYMD(d: Date) {
     const n = new Date(d);
     n.setHours(0, 0, 0, 0);
@@ -206,14 +206,14 @@ export default function Home() {
   );
   const nutritionLogged = (nutritionForSelected?.entries?.length || 0) > 0;
 
-  // ---------- Habits for selected day (new collection; non-breaking until wired)
+  // ---------- Habits (new collection endpoint – safe if not wired yet)
   const { data: habitForSelected } = useSWR(
     session?.user?.email ? `/api/habits/logs?date=${selectedDateKey}` : null,
     fetcher
   );
   const habitComplete = (habitForSelected?.entries?.length || 0) > 0;
 
-  // ---------- Weekly check-in (Fridays only; new collection)
+  // ---------- Weekly check-in (Fridays only)
   const isFridaySelected = selectedDay.getDay() === 5;
   function formatWeekKey(d: Date) {
     const s = startOfAlignedWeek(d);
@@ -242,7 +242,7 @@ export default function Home() {
     });
   }, [allCompletions, hasWorkoutToday, workoutIdsToday, selectedDay]);
 
-  // ---------- Day tasks model for SELECTED day
+  // ---------- Day tasks model
   const dayTasks = [
     {
       key: "nutrition",
@@ -286,7 +286,7 @@ export default function Home() {
 
   // ---------- Calendar day labels
   const ringCompleteColor = "#2ecc71"; // green
-  const ringOutstandingColor = "#ff7f32"; // brand orange
+  const ringOutstandingColor = "#ff7f32"; // brand orange (used as ring, not button fill)
 
   // Existing signal for opacity: days that have a programmed workout
   const daysWithWorkout = weekDays.map((d) => {
@@ -296,7 +296,7 @@ export default function Home() {
     );
   });
 
-  // Themed button style injected once
+  // Themed button style (muted)
   const btnClass = "bxkr-btn";
 
   return (
@@ -306,29 +306,61 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <style>{`
           @keyframes bxkrPulse {
-            0% { filter: drop-shadow(0 0 4px rgba(255,255,255,0.12)); }
-            50% { filter: drop-shadow(0 0 10px rgba(255,255,255,0.22)); }
-            100% { filter: drop-shadow(0 0 4px rgba(255,255,255,0.12)); }
+            0% { filter: drop-shadow(0 0 4px rgba(255,255,255,0.10)); }
+            50% { filter: drop-shadow(0 0 10px rgba(255,255,255,0.18)); }
+            100% { filter: drop-shadow(0 0 4px rgba(255,255,255,0.10)); }
           }
-          /* Futuristic themed button */
+          /* Muted futuristic button */
           .${btnClass} {
-            background: linear-gradient(135deg, #ff7f32 0%, #ff9458 100%);
+            background: linear-gradient(135deg, #cf6a33 0%, #e07a3a 100%);
             color: #0e0e0e !important;
             border: none;
-            border-radius: 24px;
+            border-radius: 999px;
             font-weight: 700;
-            padding: 8px 14px;
-            box-shadow: 0 6px 18px rgba(255, 127, 50, 0.35);
+            padding: 8px 16px;
+            box-shadow: 0 6px 18px rgba(207, 106, 51, 0.28);
             transition: transform .08s ease, box-shadow .2s ease, filter .2s ease;
           }
           .${btnClass}:hover {
             transform: translateY(-1px);
-            box-shadow: 0 8px 22px rgba(255, 127, 50, 0.45);
-            filter: brightness(1.05);
+            box-shadow: 0 8px 22px rgba(207, 106, 51, 0.36);
+            filter: brightness(1.03);
           }
           .${btnClass}:active {
             transform: translateY(0);
-            box-shadow: 0 4px 14px rgba(255, 127, 50, 0.3);
+            box-shadow: 0 4px 14px rgba(207, 106, 51, 0.22);
+          }
+
+          /* Pill cards + badges to match your top banner shape */
+          .bxkr-pill {
+            background: rgba(255,255,255,0.06);
+            border-radius: 28px; /* bigger radius for pill feel */
+            padding: 16px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 22px rgba(0,0,0,0.38);
+          }
+          .bxkr-badge {
+            display: inline-block;
+            background: #ff7f32;
+            color: #141414; /* readable on orange */
+            border-radius: 999px;
+            font-weight: 800;
+            padding: 6px 10px;
+            line-height: 1;
+          }
+          .bxkr-badge--ok { background: #2ecc71; color: #0e0e0e; }
+          .bxkr-badge--warn { background: #ff7f32; color: #141414; }
+
+          /* Calendar day baseline circle */
+          .bxkr-day {
+            width: 32px;
+            height: 32px;
+            line-height: 32px;
+            border-radius: 50%;
+            margin: 0 auto;
+            text-align: center;
+            color: #fff; /* all numbers white */
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.08);
           }
         `}</style>
       </Head>
@@ -361,10 +393,7 @@ export default function Home() {
                 Sign out
               </button>
             ) : (
-              <button
-                className={btnClass}
-                onClick={() => signIn("google")}
-              >
+              <button className={btnClass} onClick={() => signIn("google")}>
                 Sign in
               </button>
             )}
@@ -378,16 +407,8 @@ export default function Home() {
           </h2>
         </div>
 
-        {/* Micro task: sessions away banner */}
-        <div
-          className="mb-3 p-3"
-          style={{
-            background: "rgba(255,255,255,0.05)",
-            borderRadius: "16px",
-            backdropFilter: "blur(10px)",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-          }}
-        >
+        {/* Micro task: sessions away banner – pill look */}
+        <div className="bxkr-pill mb-3">
           <div className="d-flex align-items-center justify-content-between">
             <div className="fw-semibold">
               You’re {sessionsAway} {sessionsAway === 1 ? "session" : "sessions"} away from your weekly goal
@@ -396,7 +417,7 @@ export default function Home() {
               Target: 3/week
             </div>
           </div>
-          <div className="mt-2 small" style={{ opacity: 0.8 }}>
+          <div className="mt-2 small" style={{ opacity: 0.85 }}>
             Completed this week: {weeklyCompletedCount}
           </div>
         </div>
@@ -408,7 +429,7 @@ export default function Home() {
             const isSelected = isSameDay(d, selectedDay);
             const hasWorkout = daysWithWorkout[i];
 
-            // Rings reflect the SELECTED day's task state (accurate + light)
+            // Ring colour reflects selected day's task state
             const ringColor = isSelected
               ? allTasksDone
                 ? ringCompleteColor
@@ -425,7 +446,7 @@ export default function Home() {
                 <div
                   style={{
                     fontSize: "0.8rem",
-                    opacity: 0.7,
+                    opacity: 0.75,
                     marginBottom: "4px",
                     color: "#fff",
                   }}
@@ -433,24 +454,22 @@ export default function Home() {
                   {dayLabels[i]}
                 </div>
                 <div
+                  className="bxkr-day"
                   style={{
-                    width: "32px",
-                    height: "32px",
-                    lineHeight: "32px",
-                    borderRadius: "50%",
-                    margin: "0 auto",
                     backgroundColor: isSelected
                       ? "#ff7f32"
                       : isToday
-                      ? "rgba(255,127,50,0.2)"
+                      ? "rgba(255,127,50,0.18)"
                       : "transparent",
-                    color: "#fff", // ensure all numbers are white
                     border: isToday && !isSelected ? "1px solid #ff7f32" : "none",
-                    opacity: hasWorkout ? 1 : 0.75,
+                    opacity: hasWorkout ? 1 : 0.8,
                     fontWeight: isSelected ? 700 : 500,
-                    textAlign: "center",
-                    boxShadow: ringColor ? `0 0 0 2px ${ringColor}` : "0 0 0 2px rgba(255,255,255,0.08)", // subtle circle baseline
-                    ...(ringColor ? ringWrapGlow(ringColor) : {}),
+                    ...(ringColor
+                      ? {
+                          boxShadow: `0 0 0 2px ${ringColor}`,
+                          ...ringWrapGlow(ringColor),
+                        }
+                      : {}),
                   }}
                 >
                   {d.getDate()}
@@ -460,7 +479,7 @@ export default function Home() {
           })}
         </div>
 
-        {/* Nutrition reminder for the selected day (kept behaviour) */}
+        {/* Nutrition reminder (kept), pill style */}
         {status === "authenticated" && !nutritionLogged && (
           <div className="mb-3">
             <CoachBanner
@@ -470,12 +489,12 @@ export default function Home() {
           </div>
         )}
 
-        {/* Day tasks cards */}
+        {/* Day tasks – all pill-shaped, consistent badges, muted CTA */}
         <div className="mb-3">
           {dayTasks
             .filter((t) => t.show)
             .map((t) => {
-              const accent = t.complete ? "#2ecc71" : "#ff7f32";
+              const accentClass = t.complete ? "bxkr-badge bxkr-badge--ok" : "bxkr-badge bxkr-badge--warn";
               const statusText = t.complete ? "Completed" : "Outstanding";
               const ctaLabel =
                 t.key === "workout"
@@ -487,37 +506,17 @@ export default function Home() {
                   : "Open check‑in";
 
               return (
-                <div
-                  key={t.key}
-                  className="mb-3"
-                  style={{
-                    background: "rgba(255,255,255,0.05)",
-                    borderRadius: "16px",
-                    padding: "16px",
-                    backdropFilter: "blur(10px)",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-                  }}
-                >
+                <div key={t.key} className="bxkr-pill mb-3">
                   <div className="d-flex align-items-center justify-content-between">
                     <div className="fw-bold">{t.title}</div>
-                    {/* Consistent status badge on the right (including workout) */}
-                    <span
-                      className="badge"
-                      style={{
-                        backgroundColor: accent,
-                        color: "#000",
-                        borderRadius: "999px",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {statusText}
-                    </span>
+                    {/* Consistent right-hand pill badge (fixed spacing/contrast) */}
+                    <span className={accentClass} aria-label={statusText}>{statusText}</span>
                   </div>
-                  <div className="mt-1" style={{ opacity: 0.9 }}>
+                  <div className="mt-2" style={{ opacity: 0.9 }}>
                     {t.description}
                   </div>
                   {t.href ? (
-                    <Link href={t.href} className={`${btnClass} btn btn-sm mt-2`}>
+                    <Link href={t.href} className={`${btnClass} btn btn-sm mt-3`}>
                       {ctaLabel}
                     </Link>
                   ) : null}
@@ -526,27 +525,14 @@ export default function Home() {
             })}
         </div>
 
-        {/* Selected day's workouts list (kept) */}
+        {/* Selected day's workouts list (kept), pill look + muted CTA */}
         {selectedWorkouts.length > 0 &&
           selectedWorkouts.map((w: any) => (
-            <div
-              key={w.id}
-              className="mb-3"
-              style={{
-                background: "rgba(255,255,255,0.05)",
-                borderRadius: "16px",
-                padding: "16px",
-                backdropFilter: "blur(10px)",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-              }}
-            >
+            <div key={w.id} className="bxkr-pill mb-3">
               <div className="mb-2 fw-bold">{selectedDayName}</div>
               <h6>{w.workout_name}</h6>
               <p>{w.notes || "Workout details"}</p>
-              <Link
-                href={`/workout/${w.id}`}
-                className={`${btnClass} btn btn-sm mt-2`}
-              >
+              <Link href={`/workout/${w.id}`} className={`${btnClass} btn btn-sm mt-2`}>
                 Start Workout
               </Link>
             </div>
