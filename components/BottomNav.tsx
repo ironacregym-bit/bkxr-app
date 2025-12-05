@@ -30,7 +30,6 @@ export default function BottomNav() {
         bottom: 20,
         left: "50%",
         transform: "translateX(-50%)",
-        background: "rgba(255, 255, 255, 0.05)",
         backdropFilter: "blur(12px)",
         borderRadius: "30px",
         padding: "12px 24px",
@@ -39,7 +38,6 @@ export default function BottomNav() {
         alignItems: "center",
         width: "90%",
         maxWidth: "420px",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
         zIndex: 1000,
       }}
     >
