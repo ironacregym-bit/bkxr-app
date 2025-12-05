@@ -65,7 +65,7 @@ function endOfAlignedWeek(d: Date) {
   return e;
 }
 
-// Firestore‑safe timestamp normalisation
+// Firestore-safe timestamp normalisation
 function toMillis(ts: any): number {
   if (!ts) return 0;
   if (typeof ts === "number") return ts;
@@ -78,10 +78,7 @@ function toMillis(ts: any): number {
 export default function Home() {
   const { data: session, status } = useSession();
 
-  // Programmed workouts
   const { data, error, isLoading } = useSWR("/api/workouts", fetcher);
-
-  // Completions (for weekly goal and “today” checks)
   const { data: completionData } = useSWR(
     session?.user?.email
       ? `/api/completions/history?email=${encodeURIComponent(session.user.email)}&range=all`
@@ -90,7 +87,6 @@ export default function Home() {
   );
   const allCompletions = (completionData?.history || []) as any[];
 
-  // Upsert user record (as before)
   useEffect(() => {
     if (status === "authenticated" && session?.user?.email) {
       fetch("/api/users/upsert", {
@@ -105,12 +101,10 @@ export default function Home() {
     }
   }, [status, session?.user?.email]);
 
-  // Calendar strip
   const weekDays = getWeek();
   const today = new Date();
   const [selectedDay, setSelectedDay] = useState<Date>(today);
 
-  // Greeting
   const hour = today.getHours();
   const greeting =
     hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
@@ -123,11 +117,9 @@ export default function Home() {
     (w: WorkoutLite) => (w.day_name || "").toLowerCase() === selectedDayName.toLowerCase()
   );
 
-  // Windows
   const thisWeekStart = startOfAlignedWeek(today);
   const thisWeekEnd = endOfAlignedWeek(today);
 
-  // Weekly goal (3/week)
   const weeklyCompletedCount = useMemo(() => {
     return allCompletions.filter((c: any) => {
       const m = toMillis(c.completed_date || c.completed_at || c.started_at);
@@ -136,7 +128,6 @@ export default function Home() {
   }, [allCompletions, thisWeekStart, thisWeekEnd]);
   const sessionsAway = Math.max(0, 3 - weeklyCompletedCount);
 
-  // Selected date key (YYYY‑MM‑DD)
   function formatYMD(d: Date) {
     const n = new Date(d);
     n.setHours(0, 0, 0, 0);
@@ -144,21 +135,18 @@ export default function Home() {
   }
   const selectedDateKey = useMemo(() => formatYMD(selectedDay), [selectedDay]);
 
-  // Nutrition status
   const { data: nutritionForSelected } = useSWR(
     session?.user?.email ? `/api/nutrition/logs?date=${selectedDateKey}` : null,
     fetcher
   );
   const nutritionLogged = (nutritionForSelected?.entries?.length || 0) > 0;
 
-  // Habit status
   const { data: habitForSelected } = useSWR(
     session?.user?.email ? `/api/habits/logs?date=${selectedDateKey}` : null,
     fetcher
   );
   const habitComplete = (habitForSelected?.entries?.length || 0) > 0;
 
-  // Weekly check‑in (Fridays only)
   const isFridaySelected = selectedDay.getDay() === 5;
   const { data: checkinForWeek } = useSWR(
     session?.user?.email && isFridaySelected
@@ -168,7 +156,6 @@ export default function Home() {
   );
   const checkinComplete = !!checkinForWeek?.entry;
 
-  // Today’s workout completion
   const hasWorkoutToday = selectedWorkouts.length > 0;
   const workoutIdsToday = selectedWorkouts.map((w: WorkoutLite) => w.id);
   const workoutDoneToday = useMemo(() => {
@@ -180,12 +167,11 @@ export default function Home() {
     });
   }, [allCompletions, hasWorkoutToday, workoutIdsToday, selectedDay]);
 
-  // CTA hrefs + icons (Font Awesome)
   const workoutHref =
     hasWorkoutToday && selectedWorkouts[0]?.id
       ? `/workout/${selectedWorkouts[0].id}`
       : `/habit?date=${selectedDateKey}`;
-  const microHref = workoutHref; // sensible default: start workout if available, else habits
+  const microHref = workoutHref;
   const nutritionHref = `/nutrition?date=${selectedDateKey}`;
   const habitHref = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
@@ -196,12 +182,12 @@ export default function Home() {
   const iconHabit = "fas fa-check-circle";
   const iconCheckin = "fas fa-clipboard-list";
 
-  // Accent colours (representational)
-  const accentMicro = "#ff7f32";  // brand orange — urgency / momentum
-  const accentNutrition = "#2da8ff"; // bright blue — tracking/logging
-  const accentWorkout = "#2ecc71"; // electric green — action/completion
-  const accentHabit = "#ff6ec7";   // neon pink — behaviour/habits
-  const accentCheckin = "#ffd166"; // amber — review/check‑in
+  // Muted accent colours for theme harmony
+  const accentMicro = "#d97a3a";    // muted orange
+  const accentNutrition = "#4fa3a5"; // muted teal
+  const accentWorkout = "#5b7c99";   // muted steel blue (replaces green)
+  const accentHabit = "#9b6fa3";     // muted violet
+  const accentCheckin = "#c9a34e";   // muted amber
 
   return (
     <>
@@ -209,7 +195,6 @@ export default function Home() {
         <title>BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <style>{`
-          /* Calendar day — minimal, clickable, white numbers, circular outline, neon on active */
           .bxkr-day {
             width: 40px;
             height: 40px;
@@ -222,10 +207,10 @@ export default function Home() {
             cursor: pointer;
             transition: all 0.2s ease;
           }
-          .bxkr-day:hover { border-color: #ff7f32; }
+          .bxkr-day:hover { border-color: #d97a3a; }
           .bxkr-day.active {
-            border-color: #ff7f32;
-            box-shadow: 0 0 8px #ff7f32;
+            border-color: #d97a3a;
+            box-shadow: 0 0 8px #d97a3a;
             font-weight: 700;
           }
         `}</style>
@@ -275,7 +260,7 @@ export default function Home() {
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
 
-        {/* Micro‑task banner (Momentum) */}
+        {/* Momentum */}
         <BxkrBanner
           title="Momentum"
           message={`You’re ${sessionsAway} ${sessionsAway === 1 ? "session" : "sessions"} away from your weekly goal (target: 3/week).`}
@@ -285,7 +270,7 @@ export default function Home() {
           buttonText="Start"
         />
 
-        {/* Calendar strip (clean) */}
+        {/* Calendar */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
           {weekDays.map((d, i) => {
             const isSelected = isSameDay(d, selectedDay);
@@ -302,7 +287,7 @@ export default function Home() {
           })}
         </div>
 
-        {/* Nutrition banner */}
+        {/* Nutrition */}
         <BxkrBanner
           title="Nutrition"
           message="Log today’s meals and macros."
@@ -312,7 +297,7 @@ export default function Home() {
           buttonText="Start"
         />
 
-        {/* Workout banner (only if there’s a programmed session today) */}
+        {/* Workout */}
         {hasWorkoutToday && (
           <BxkrBanner
             title="Workout"
@@ -328,7 +313,7 @@ export default function Home() {
           />
         )}
 
-        {/* Habit banner */}
+        {/* Habit */}
         <BxkrBanner
           title="Daily habit"
           message={
@@ -342,7 +327,7 @@ export default function Home() {
           buttonText={habitComplete ? "Review" : "Fill"}
         />
 
-        {/* Weekly check‑in banner (Fridays only) */}
+        {/* Weekly check-in */}
         {isFridaySelected && (
           <BxkrBanner
             title="Weekly check‑in"
@@ -354,7 +339,6 @@ export default function Home() {
           />
         )}
 
-        {/* Loaders and errors */}
         {error && <div className="alert alert-danger">Failed to load workouts</div>}
         {isLoading && <div className="alert alert-secondary">Loading…</div>}
       </main>
