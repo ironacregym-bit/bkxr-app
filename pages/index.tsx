@@ -153,14 +153,14 @@ export default function Home() {
   // Selected date key (YYYY-MM-DD)
   const selectedDateKey = formatYMD(selectedDay);
 
-  // Nutrition (optional status fetch retained for future use)
+  // Nutrition status
   const { data: nutritionForSelected } = useSWR(
     session?.user?.email
       ? `/api/nutrition/logs?date=${selectedDateKey}`
       : null,
     fetcher
   );
-  const nutritionLogged = (nutritionForSelected?.entries?.length || 0) > 0; // not used yet in banner text, but kept
+  const nutritionLogged = (nutritionForSelected?.entries?.length || 0) > 0;
 
   // Habits
   type HabitEntry = {
@@ -215,6 +215,16 @@ export default function Home() {
     });
   }, [allCompletions, hasWorkoutToday, workoutIdsToday, selectedDay]);
 
+  // Outstanding tasks for the SELECTED day
+  const outstandingNutrition = !nutritionLogged;
+  const outstandingWorkout = hasWorkoutToday && !workoutDoneToday;
+  const outstandingHabit = !habitAllDone;
+  const outstandingCheckin = isFridaySelected && !checkinComplete;
+
+  const anyOutstanding =
+    outstandingNutrition || outstandingWorkout || outstandingHabit || outstandingCheckin;
+  const allTasksDoneSelectedDay = !anyOutstanding;
+
   // Hrefs
   const workoutHref =
     hasWorkoutToday && selectedWorkouts[0]?.id
@@ -238,6 +248,7 @@ export default function Home() {
   const accentWorkout = "#5b7c99"; // muted steel blue
   const accentHabit = "#9b6fa3"; // muted violet
   const accentCheckin = "#c9a34e"; // muted amber
+  const accentRingComplete = "#64c37a"; // muted green for "all tasks done"
 
   return (
     <>
@@ -245,7 +256,7 @@ export default function Home() {
         <title>BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <style>{`
-          /* Calendar day — minimal, clickable, white numbers, circular outline, neon on active */
+          /* Calendar day — minimal, clickable, white numbers, circular outline; ring colour set inline */
           .bxkr-day {
             width: 40px;
             height: 40px;
@@ -257,12 +268,6 @@ export default function Home() {
             border: 2px solid rgba(255,255,255,0.3);
             cursor: pointer;
             transition: all 0.2s ease;
-          }
-          .bxkr-day:hover { border-color: ${accentMicro}; }
-          .bxkr-day.active {
-            border-color: ${accentMicro};
-            box-shadow: 0 0 8px ${accentMicro};
-            font-weight: 700;
           }
         `}</style>
       </Head>
@@ -337,6 +342,14 @@ export default function Home() {
         >
           {weekDays.map((d, i) => {
             const isSelected = isSameDay(d, selectedDay);
+
+            // Ring colour for the SELECTED day: green if all tasks done, orange if outstanding
+            const ringColor = isSelected
+              ? allTasksDoneSelectedDay
+                ? accentRingComplete
+                : accentMicro
+              : "rgba(255,255,255,0.3)";
+
             return (
               <div
                 key={i}
@@ -355,7 +368,14 @@ export default function Home() {
                 >
                   {dayLabels[i]}
                 </div>
-                <div className={`bxkr-day ${isSelected ? "active" : ""}`}>
+                <div
+                  className="bxkr-day"
+                  style={{
+                    borderColor: ringColor,
+                    boxShadow: isSelected ? `0 0 8px ${ringColor}` : "none",
+                    fontWeight: isSelected ? 700 : 500,
+                  }}
+                >
                   {d.getDate()}
                 </div>
               </div>
@@ -363,33 +383,31 @@ export default function Home() {
           })}
         </div>
 
-        {/* Nutrition */}
-        <BxkrBanner
-          title="Nutrition"
-          message="Log today’s meals and macros."
-          href={nutritionHref}
-          iconLeft={iconNutrition}
-          accentColor={accentNutrition}
-          buttonText="Start"
-        />
-
-        {/* Workout */}
-        {hasWorkoutToday && (
+        {/* Nutrition — hide when completed */}
+        {!nutritionLogged && (
           <BxkrBanner
-            title="Workout"
-            message={
-              workoutDoneToday
-                ? `Completed your ${selectedDayName} session.`
-                : `Start your programmed session for ${selectedDayName}.`
-            }
-            href={workoutHref}
-            iconLeft={iconWorkout}
-            accentColor={accentWorkout}
-            buttonText={workoutDoneToday ? "View" : "Start"}
+            title="Nutrition"
+            message="Log today’s meals and macros."
+            href={nutritionHref}
+            iconLeft={iconNutrition}
+            accentColor={accentNutrition}
+            buttonText="Start"
           />
         )}
 
-        {/* Daily Habit (only when not fully complete) */}
+        {/* Workout — hide when completed */}
+        {hasWorkoutToday && !workoutDoneToday && (
+          <BxkrBanner
+            title="Workout"
+            message={`Start your programmed session for ${selectedDayName}.`}
+            href={workoutHref}
+            iconLeft={iconWorkout}
+            accentColor={accentWorkout}
+            buttonText="Start"
+          />
+        )}
+
+        {/* Daily Habit — only when not fully complete */}
         {!habitAllDone && (
           <BxkrBanner
             title="Daily habit"
@@ -401,19 +419,15 @@ export default function Home() {
           />
         )}
 
-        {/* Weekly check‑in (Fridays only) */}
-        {isFridaySelected && (
+        {/* Weekly check‑in — Fridays only; hide when completed */}
+        {isFridaySelected && !checkinComplete && (
           <BxkrBanner
             title="Weekly check‑in"
-            message={
-              checkinComplete
-                ? "Check‑in submitted."
-                : "Complete your weekly check‑in."
-            }
+            message={"Complete your weekly check‑in."}
             href={checkinHref}
             iconLeft={iconCheckin}
             accentColor={accentCheckin}
-            buttonText={checkinComplete ? "Review" : "Check in"}
+            buttonText={"Check in"}
           />
         )}
 
