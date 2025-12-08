@@ -29,6 +29,17 @@ type WorkoutLite = {
   day_name?: string;
 };
 
+type DayStatus = {
+  dateKey: string;
+  hasWorkout: boolean;
+  workoutDone: boolean;
+  nutritionLogged: boolean;
+  habitAllDone: boolean;
+  isFriday: boolean;
+  checkinComplete: boolean;
+  allDone: boolean;
+};
+
 // ---------- Helpers
 function getWeek(): Date[] {
   const today = new Date();
@@ -153,7 +164,7 @@ export default function Home() {
   // Selected date key (YYYY-MM-DD)
   const selectedDateKey = formatYMD(selectedDay);
 
-  // Nutrition status
+  // Nutrition status for selected day
   const { data: nutritionForSelected } = useSWR(
     session?.user?.email
       ? `/api/nutrition/logs?date=${selectedDateKey}`
@@ -162,7 +173,7 @@ export default function Home() {
   );
   const nutritionLogged = (nutritionForSelected?.entries?.length || 0) > 0;
 
-  // Habits
+  // Habits for selected day
   type HabitEntry = {
     id: string;
     user_email: string;
@@ -190,7 +201,7 @@ export default function Home() {
     !!habitEntry.step_count &&
     !!habitEntry.time_outside;
 
-  // Weekly check-in (Fridays only)
+  // Weekly check-in (Fridays only) for selected day
   const isFridaySelected = selectedDay.getDay() === 5;
   const { data: checkinForWeek } = useSWR(
     session?.user?.email && isFridaySelected
@@ -221,9 +232,105 @@ export default function Home() {
   const outstandingHabit = !habitAllDone;
   const outstandingCheckin = isFridaySelected && !checkinComplete;
 
-  const anyOutstanding =
-    outstandingNutrition || outstandingWorkout || outstandingHabit || outstandingCheckin;
-  const allTasksDoneSelectedDay = !anyOutstanding;
+  const allTasksDoneSelectedDay =
+    !(outstandingNutrition || outstandingWorkout || outstandingHabit || outstandingCheckin);
+
+  // --------- NEW: compute per‑day status for the whole week (rings + dots)
+  const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    async function buildWeekStatus() {
+      if (!session?.user?.email) {
+        setWeekStatus({});
+        return;
+      }
+      const workouts = (data?.workouts || []) as WorkoutLite[];
+
+      // map helper for day name
+      const getDayName = (date: Date) =>
+        date.toLocaleDateString(undefined, { weekday: "long" });
+
+      const statuses: Record<string, DayStatus> = {};
+      for (const d of weekDays) {
+        const dateKey = formatYMD(d);
+        const dayName = getDayName(d);
+
+        // has workout programmed?
+        const dayWorkouts = workouts.filter(
+          (w) => (w.day_name || "").toLowerCase() === dayName.toLowerCase()
+        );
+        const hasWorkout = dayWorkouts.length > 0;
+        const workoutIds = dayWorkouts.map((w) => w.id);
+
+        // workout done?
+        const workoutDone = allCompletions.some((c: any) => {
+          const completedAt = toMillis(c.completed_date || c.completed_at || c.started_at);
+          if (!completedAt) return false;
+          const completedDate = new Date(completedAt);
+          return workoutIds.includes(c.workout_id) && isSameDay(completedDate, d);
+        });
+
+        // nutrition logged?
+        let nutritionLoggedDay = false;
+        try {
+          const r = await fetch(`/api/nutrition/logs?date=${dateKey}`);
+          const j = await r.json();
+          nutritionLoggedDay = (j?.entries?.length || 0) > 0;
+        } catch {}
+
+        // habit all done?
+        let habitAllDoneDay = false;
+        try {
+          const r = await fetch(`/api/habits/logs?date=${dateKey}`);
+          const j = await r.json();
+          const e = j?.entry || null;
+          habitAllDoneDay =
+            !!e &&
+            !!e["2l_water"] &&
+            !!e.assigned_workouts_completed &&
+            !!e.macros_filled &&
+            !!e.step_count &&
+            !!e.time_outside;
+        } catch {}
+
+        // check‑in (Fridays only)
+        const isFriday = d.getDay() === 5;
+        let checkinCompleteDay = false;
+        if (isFriday) {
+          try {
+            const r = await fetch(`/api/checkins/weekly?week=${dateKey}`);
+            const j = await r.json();
+            checkinCompleteDay = !!j?.entry;
+          } catch {}
+        }
+
+        const anyOutstanding =
+          (!nutritionLoggedDay) ||
+          (hasWorkout && !workoutDone) ||
+          (!habitAllDoneDay) ||
+          (isFriday && !checkinCompleteDay);
+
+        statuses[dateKey] = {
+          dateKey,
+          hasWorkout,
+          workoutDone,
+          nutritionLogged: nutritionLoggedDay,
+          habitAllDone: habitAllDoneDay,
+          isFriday,
+          checkinComplete: checkinCompleteDay,
+          allDone: !anyOutstanding,
+        };
+      }
+
+      if (!cancelled) setWeekStatus(statuses);
+    }
+    buildWeekStatus();
+    return () => {
+      cancelled = true;
+    };
+    // recompute when inputs change
+  }, [session?.user?.email, data?.workouts, allCompletions, weekDays]);
 
   // Hrefs
   const workoutHref =
@@ -235,20 +342,21 @@ export default function Home() {
   const habitHref = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
 
-  // Font Awesome icons
+  // Icons
   const iconMicro = "fas fa-bolt";
   const iconNutrition = "fas fa-utensils";
   const iconWorkout = "fas fa-dumbbell";
   const iconHabit = "fas fa-check-circle";
   const iconCheckin = "fas fa-clipboard-list";
 
-  // Muted accent colours (theme-friendly)
-  const accentMicro = "#d97a3a"; // muted orange
-  const accentNutrition = "#4fa3a5"; // muted teal
-  const accentWorkout = "#5b7c99"; // muted steel blue
-  const accentHabit = "#9b6fa3"; // muted violet
-  const accentCheckin = "#c9a34e"; // muted amber
-  const accentRingComplete = "#64c37a"; // muted green for "all tasks done"
+  // Muted theme colours
+  const accentMicro = "#d97a3a";   // orange
+  const accentNutrition = "#4fa3a5"; // teal
+  const accentWorkout = "#5b7c99";  // steel blue
+  const accentHabit = "#9b6fa3";    // violet
+  const accentCheckin = "#c9a34e";  // amber
+  const accentRingCompleteStrong = "#64c37a"; // bright muted green (selected)
+  const accentRingCompleteMuted  = "#4ea96a"; // softer green (non-selected)
 
   return (
     <>
@@ -256,7 +364,7 @@ export default function Home() {
         <title>BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <style>{`
-          /* Calendar day — minimal, clickable, white numbers, circular outline; ring colour set inline */
+          /* Calendar day ring baseline; specific colours applied inline */
           .bxkr-day {
             width: 40px;
             height: 40px;
@@ -268,6 +376,22 @@ export default function Home() {
             border: 2px solid rgba(255,255,255,0.3);
             cursor: pointer;
             transition: all 0.2s ease;
+            font-weight: 500;
+          }
+          .bxkr-dots {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+            margin-top: 4px;
+            height: 10px; /* reserve space to avoid layout shift */
+          }
+          .bxkr-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 6px currentColor;
           }
         `}</style>
       </Head>
@@ -342,13 +466,21 @@ export default function Home() {
         >
           {weekDays.map((d, i) => {
             const isSelected = isSameDay(d, selectedDay);
+            const dk = formatYMD(d);
+            const status = weekStatus[dk];
 
-            // Ring colour for the SELECTED day: green if all tasks done, orange if outstanding
-            const ringColor = isSelected
-              ? allTasksDoneSelectedDay
-                ? accentRingComplete
-                : accentMicro
-              : "rgba(255,255,255,0.3)";
+            // Ring colour:
+            // - Completed day (status?.allDone): green always
+            //   * non-selected: muted green
+            //   * selected: stronger green
+            // - Not completed:
+            //   * selected: orange (accentMicro)
+            //   * non-selected: neutral white
+            const ringColor = status?.allDone
+              ? (isSelected ? accentRingCompleteStrong : accentRingCompleteMuted)
+              : (isSelected ? accentMicro : "rgba(255,255,255,0.3)");
+
+            const boxShadow = isSelected ? `0 0 8px ${ringColor}` : (status?.allDone ? `0 0 4px ${ringColor}` : "none");
 
             return (
               <div
@@ -372,18 +504,38 @@ export default function Home() {
                   className="bxkr-day"
                   style={{
                     borderColor: ringColor,
-                    boxShadow: isSelected ? `0 0 8px ${ringColor}` : "none",
+                    boxShadow,
                     fontWeight: isSelected ? 700 : 500,
                   }}
                 >
                   {d.getDate()}
+                </div>
+
+                {/* Dots row (workout/check‑in outstanding indicators) */}
+                <div className="bxkr-dots">
+                  {status?.hasWorkout && !status?.workoutDone && (
+                    <span
+                      className="bxkr-dot"
+                      style={{ color: accentWorkout, backgroundColor: accentWorkout }}
+                      aria-label="Workout outstanding"
+                      title="Workout outstanding"
+                    />
+                  )}
+                  {status?.isFriday && !status?.checkinComplete && (
+                    <span
+                      className="bxkr-dot"
+                      style={{ color: accentCheckin, backgroundColor: accentCheckin }}
+                      aria-label="Weekly check‑in outstanding"
+                      title="Weekly check‑in outstanding"
+                    />
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Nutrition — hide when completed */}
+        {/* Nutrition — hide when completed (selected day banners) */}
         {!nutritionLogged && (
           <BxkrBanner
             title="Nutrition"
