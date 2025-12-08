@@ -12,7 +12,8 @@
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/main/LICENSE)
  */
 
-/* Responsive ring box (shrinks on small screens) */
+
+/* ==== Responsive Rings ==== */
 .bxkr-ring {
   width: 180px;
   height: 180px;
@@ -31,13 +32,7 @@
   }
 }
 
-.bxkr-bottomnav-link .nav-icon:hover {
-  background: rgba(65,101,205,0.3); /* Accent color glow */
-  box-shadow: 0 0 10px rgba(65,101,205,0.6);
-  transform: scale(1.05);
-}
-
-/* Base pill for the date circle */
+/* ==== Calendar Pills ==== */
 .bxkr-day-pill {
   width: 28px;
   height: 28px;
@@ -49,25 +44,20 @@
   box-sizing: border-box;
   transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s, border 0.2s;
 }
-
-/* Ring shown when a workout is scheduled */
-.bxkr-has-workout, 
+.bxkr-has-workout,
 .bxkr-has-session {
   box-shadow: 0 0 0 2px var(--bxkr-ring);
 }
-
-/* Selected day style: filled with ring colour and white text */
 .bxkr-selected {
   background-color: var(--bxkr-ring);
   color: #fff;
 }
-
-/* Today (if not selected): keep your warning highlight */
 .bxkr-today {
   background-color: var(--bs-warning);
   color: var(--bs-dark);
 }
 
+/* ==== Body & Typography ==== */
 body {
   background: linear-gradient(135deg, #1a1a1a 0%, #2e1a0f 100%);
   color: #fff;
@@ -75,6 +65,8 @@ body {
   min-height: 100vh;
 }
 
+/* ==== Glass Card ==== */
+.glass-card,
 .futuristic-card {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 16px;
@@ -83,24 +75,46 @@ body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
+/* ==== Pill Buttons ==== */
+.bxkr-btn,
 .btn-primary {
-  background-color: #ff7f32;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 18px;
+  border-radius: 999px;
   border: none;
   color: #fff;
-  border-radius: 24px;
+  background: linear-gradient(135deg, #ff7f32, #ff9a3a);
+  box-shadow: 0 0 12px rgba(255,127,50,0.6);
   font-weight: 600;
+  transition: box-shadow .2s ease, transform .2s ease;
 }
+.bxkr-btn:hover,
 .btn-primary:hover {
-  box-shadow: 0 0 12px rgba(255,127,50,0.8);
+  box-shadow: 0 0 18px rgba(255,127,50,0.8);
   transform: scale(1.05);
 }
-
-.nav-icon:hover {
-  background: rgba(255,127,50,0.15);
-  box-shadow: 0 0 15px rgba(255,127,50,0.8);
-  transform: scale(1.08);
+.bxkr-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
+/* ==== Inline Spinner ==== */
+.inline-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.25);
+  border-top-color: #ff8a2a;
+  animation: spin .8s linear infinite;
+  margin-left: 8px;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ==== Bottom Navigation ==== */
 .bxkr-bottomnav-link,
 .bxkr-bottomnav-link:visited,
 .bxkr-bottomnav-link:active,
@@ -115,60 +129,81 @@ body {
   gap: 2px;
   min-width: 56px;
 }
-
 .bxkr-bottomnav-link i {
-  font-size: 1.6rem; /* Larger icon */
+  font-size: 1.6rem;
   line-height: 1;
   margin-bottom: 2px;
 }
-
 .bxkr-bottomnav-link div {
   font-size: 12px;
   line-height: 1;
   margin-top: 0;
 }
-
-/* ==== BXKR Icon Colours (no inline overrides) ==== */
-
-/* Solid blue (aligns with --bxkr-ring if present) */
-.bxkr-icon-blue {
-  color: #4165cd !important;
+.nav-icon:hover {
+  background: rgba(255,127,50,0.15);
+  box-shadow: 0 0 15px rgba(255,127,50,0.8);
+  transform: scale(1.08);
 }
 
-/* Solid green */
-.bxkr-icon-green {
-  color: #28a745 !important; /* Bootstrap "success" tone; adjust if you prefer */
-}
-
-/* Two-tone orange gradient for fire icon */
+/* ==== Icon Colors ==== */
+.bxkr-icon-blue { color: #4165cd !important; }
+.bxkr-icon-green { color: #28a745 !important; }
 .bxkr-icon-orange-gradient {
-  /* Gradient applied to the glyph; we use text-fill transparent and background-clip */
   background: linear-gradient(180deg, #ff8c00 0%, #ff4500 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  color: transparent; /* fallback to ensure no solid colour leaks */
+  color: transparent;
+}
+.bxkr-icon { line-height: 1; vertical-align: middle; }
+
+/* ==== Stats Text ==== */
+.bxkr-stat-label { font-size: 14px; opacity: 0.7; }
+.bxkr-stat-value { font-size: 22px; font-weight: 700; }
+.bxkr-stat-sub { font-size: 12px; opacity: 0.6; }
+
+/* ==== Back Button ==== */
+.bxkr-back-btn {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.bxkr-back-btn:hover { opacity: 0.8; }
+
+/* ==== Habit Row ==== */
+.habit-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+}
+.check {
+  width: 22px;
+  height: 22px;
+  accent-color: #ff8a2a;
+  cursor: pointer;
 }
 
-/* Optional: ensure icon line-height doesn’t collide with adjacent text */
-.bxkr-icon {
-  line-height: 1;
-  vertical-align: middle;
+/* ==== Success Pill ==== */
+.pill-success {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: #0d1a12;
+  background: #64c37a;
+  box-shadow: 0 0 10px rgba(100,195,122,0.5);
+  font-weight: 600;
+  font-size: 0.85rem;
 }
 
-/* If you want the number lines below to align nicely with icons */
-.bxkr-stat-label {
-  font-size: 14px;
-  opacity: 0.7;
-}
-.bxkr-stat-value {
-  font-size: 22px;
-  font-weight: 700;
-}
-.bxkr-stat-sub {
-  font-size: 12px;
-  opacity: 0.6;
-}
 :root,
 
 [data-bs-theme=light] {
