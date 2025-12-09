@@ -51,6 +51,7 @@
   }
 }
 
+
 /* ==== Calendar Pills ==== */
 .bxkr-day-pill {
   width: 28px;
@@ -61,17 +62,21 @@
   justify-content: center;
   border-radius: 50%;
   box-sizing: border-box;
+  border: 2px solid rgba(255,255,255,0.3); /* subtle futuristic border */
+  background: rgba(255,255,255,0.05); /* faint glass effect */
+  backdrop-filter: blur(6px);
   transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s, border 0.2s;
 }
 
+/* Completed day */
 .bxkr-day-pill.completed {
   border-color: #64c37a; /* strong green */
-  box-shadow: 0 0 6px rgba(100,195,122,0.6);
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 0 8px rgba(100,195,122,0.8);
+  background: rgba(100,195,122,0.08); /* subtle green glow inside */
 }
 
 .bxkr-day-pill.completed:hover {
-  box-shadow: 0 0 12px rgba(100,195,122,0.9);
+  box-shadow: 0 0 14px rgba(100,195,122,1);
   transform: scale(1.08);
 }
 
