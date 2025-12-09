@@ -393,12 +393,18 @@ export default function Home() {
                   {dayLabels[i]}
                 </div>
                 {/* circle pill (global CSS defines size/shape) */}
+                
                 <div
                   className={`bxkr-day-pill ${status?.allDone ? "completed" : ""}`}
-                  style={{ borderColor: ringColor, boxShadow, fontWeight: isSelected ? 700 : 500 }}
+                  style={{
+                    boxShadow,
+                    fontWeight: isSelected ? 700 : 500,
+                    borderColor: status?.allDone ? undefined : ringColor
+                  }}
                 >
                   {d.getDate()}
                 </div>
+
 
                 {/* Dots: outstanding signals */}
                 <div className="bxkr-dots">
