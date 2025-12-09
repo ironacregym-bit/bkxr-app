@@ -78,10 +78,19 @@
 
 /* ==== Body & Typography ==== */
 body {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2e1a0f 100%);
+
+  background: linear-gradient(135deg, #1a1a1a, #2e1a0f);
   color: #fff;
   font-family: 'Inter', sans-serif;
   min-height: 100vh;
+
+  /* Logo overlay */
+  background-image: url('/BXKRLogo.png'); /* Place logo in /public folder */
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 60%; /* Adjust size for subtle effect */
+  opacity: 0.05; /* Make it very faint */
+
 }
 
 /* ==== Glass Card ==== */
