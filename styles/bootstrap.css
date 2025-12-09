@@ -63,6 +63,18 @@
   box-sizing: border-box;
   transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s, border 0.2s;
 }
+
+.bxkr-day-pill.completed {
+  border-color: #64c37a; /* strong green */
+  box-shadow: 0 0 6px rgba(100,195,122,0.6);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.bxkr-day-pill.completed:hover {
+  box-shadow: 0 0 12px rgba(100,195,122,0.9);
+  transform: scale(1.08);
+}
+
 .bxkr-has-workout,
 .bxkr-has-session {
   box-shadow: 0 0 0 2px var(--bxkr-ring);
