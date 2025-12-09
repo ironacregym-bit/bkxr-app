@@ -109,7 +109,7 @@ body::before {
   background-size: 40%; /* smaller for subtle effect */
   opacity: 0.03; /* very faint */
   z-index: -1; /* behind everything */
-
+}
 
 /* ==== Glass Card ==== */
 .glass-card,
