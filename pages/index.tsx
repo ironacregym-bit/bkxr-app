@@ -394,7 +394,7 @@ export default function Home() {
                 </div>
                 {/* circle pill (global CSS defines size/shape) */}
                 <div
-                  className=={`bxkr-day-pill ${status?.allDone ? "completed" : ""}`}
+                  className={`bxkr-day-pill ${status?.allDone ? "completed" : ""}`}
                   style={{ borderColor: ringColor, boxShadow, fontWeight: isSelected ? 700 : 500 }}
                 >
                   {d.getDate()}
