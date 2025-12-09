@@ -12,7 +12,7 @@ import BxkrBanner from "../components/BxkrBanner";
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
 ) => {
-  const session = await getSession(context);F
+  const session = await getSession(context);
   if (!session) {
     return { redirect: { destination: "/landing", permanent: false } };
   }
