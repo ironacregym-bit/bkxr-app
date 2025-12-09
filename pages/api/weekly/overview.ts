@@ -9,16 +9,16 @@ import { hasRole } from "../../../lib/rbac";
  * Weekly overview endpoint
  * GET /api/weekly/overview?week=YYYY-MM-DD
  *
- * Returns per-day status for the Monday-aligned week containing "week".
- * - nutritionLogged: whether any nutrition entry exists for that date
- * - habitAllDone: whether all six habit booleans are true in habitLogs
- * - isFriday: whether the day is Friday
- * - checkinComplete: whether the weekly check-in doc exists (Friday only)
+ * Returns per-day status for the Monday-aligned week containing "week":
+ *  - nutritionLogged: any nutrition entry exists for the date
+ *  - habitAllDone: all 6 habit booleans true in habitLogs
+ *  - isFriday: whether day is Friday
+ *  - checkinComplete: weekly check-in doc exists (Friday only)
  *
- * Collections:
- * - habitLogs: deterministic docId "email__YYYY-MM-DD"
- * - check_ins: deterministic docId "email__YYYY-MM-DD" (Friday of the week)
- * - nutrition collection name is configurable via env NUTRITION_COLLECTION (default "nutrition_logs")
+ * Collections used (confirmed):
+ *  - nutrition_logs
+ *  - habitLogs
+ *  - check_ins
  */
 
 type DayOverview = {
@@ -36,11 +36,12 @@ type WeeklyOverviewResponse = {
   days: DayOverview[];
 };
 
+// ----- Constants (your collections)
 const HABITS_COLLECTION = "habitLogs";
 const CHECKINS_COLLECTION = "check_ins";
-const NUTRITION_COLLECTION = process.env.NUTRITION_COLLECTION || "nutrition_logs";
+const NUTRITION_COLLECTION = "nutrition_logs";
 
-// ---------- Helpers
+// ----- Helpers
 function isYMD(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
@@ -50,8 +51,8 @@ function formatYMD(d: Date): string {
   return n.toISOString().slice(0, 10);
 }
 function startOfAlignedWeek(d: Date): Date {
-  const day = d.getDay();                // 0=Sun..6=Sat
-  const diffToMon = (day + 6) % 7;       // Monday=0
+  const day = d.getDay();            // 0=Sun..6=Sat
+  const diffToMon = (day + 6) % 7;   // Monday=0
   const s = new Date(d);
   s.setDate(d.getDate() - diffToMon);
   s.setHours(0, 0, 0, 0);
@@ -67,7 +68,7 @@ function endOfAlignedWeek(d: Date): Date {
 function fridayOfWeek(d: Date): Date {
   const s = startOfAlignedWeek(d);
   const f = new Date(s);
-  f.setDate(s.getDate() + 4);            // Monday + 4 = Friday
+  f.setDate(s.getDate() + 4);        // Monday + 4 = Friday
   f.setHours(0, 0, 0, 0);
   return f;
 }
@@ -79,7 +80,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Auth & RBAC
   const session = await getServerSession(req, res, authOptions);
   if (!session) return res.status(401).json({ error: "Not signed in" });
-
   if (!hasRole(session, ["user", "gym", "admin"])) {
     return res.status(403).json({ error: "Forbidden" });
   }
@@ -108,24 +108,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   });
 
   try {
-    // ---------- HABITS: batch read 7 deterministic docRefs in one go
+    // ----- HABITS: batch read 7 deterministic docRefs in one go
     const habitDocRefs = weekDays.map((d) =>
       firestore.collection(HABITS_COLLECTION).doc(buildDocId(userEmail, formatYMD(d)))
     );
     const habitSnaps = await firestore.getAll(...habitDocRefs);
     const habitMap: Record<string, boolean> = {};
     habitSnaps.forEach((snap) => {
+      // ymd from doc ID suffix
+      const id = snap.id;
+      const ymd = id.split("__")[1] || "";
       if (!snap.exists) {
-        // derive ymd from doc id suffix
-        const id = snap.id;
-        const ymd = id.split("__")[1] || "";
         habitMap[ymd] = false;
       } else {
         const data = snap.data() || {};
-        const ymd =
-          typeof data.date === "string"
-            ? data.date
-            : formatYMD(new Date((data.date as any)?._seconds ? (data.date as any)._seconds * 1000 : data.date));
         const allDone =
           !!data["2l_water"] &&
           !!data.assigned_workouts_completed &&
@@ -136,14 +132,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
-    // ---------- CHECK-IN: Friday deterministic docRef
+    // ----- CHECK-IN: Friday deterministic docRef
     const checkinDocRef = firestore.collection(CHECKINS_COLLECTION).doc(buildDocId(userEmail, fridayYMD));
     const checkinSnap = await checkinDocRef.get();
     const checkinComplete = checkinSnap.exists;
 
-    // ---------- NUTRITION: query per day (user + date range)
-    // We avoid assuming a deterministic doc ID since nutrition schema wasn’t shared.
-    // This uses date range: [dayStart, nextDayStart).
+    // ----- NUTRITION: query per day (user_email + date range)
+    // This avoids assumptions about nutrition doc IDs.
+    // Ensure an index exists for (user_email, date) if Firestore suggests it.
     const nutritionLoggedMap: Record<string, boolean> = {};
     for (const d of weekDays) {
       const ymd = formatYMD(d);
@@ -151,8 +147,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const nextDay = new Date(dayStart);
       nextDay.setDate(dayStart.getDate() + 1);
 
-      // If you keep 'date' as Timestamp(00:00Z), this range matches exactly.
-      // NOTE: For large datasets, Firestore may require a composite index for (user_email, date).
       const qSnap = await firestore
         .collection(NUTRITION_COLLECTION)
         .where("user_email", "==", userEmail)
@@ -164,7 +158,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       nutritionLoggedMap[ymd] = !qSnap.empty;
     }
 
-    // ---------- Compose response
+    // ----- Compose response
     const days: DayOverview[] = weekDays.map((d) => {
       const ymd = formatYMD(d);
       const isFriday = d.getDay() === 5;
