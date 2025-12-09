@@ -375,7 +375,7 @@ export default function Home() {
                   {dayLabels[i]}
                 </div>
                 <div
-                  className="bxkr-day"
+                  className="bxkr-day-pill"
                   style={{ borderColor: ringColor, boxShadow, fontWeight: isSelected ? 700 : 500 }}
                 >
                   {d.getDate()}
