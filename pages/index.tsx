@@ -97,7 +97,7 @@ export default function Home() {
   // Completions history (limit to current week to reduce reads)
   const { data: completionData } = useSWR(
     session?.user?.email
-      ? `/api/completions/history?email=${encodeURIComponent(session.user.email)}&range=week`
+      ? `/api/completions/history?email=${encodeURIComponent(session.user.email)}&range=all`
       : null,
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 60_000 }
