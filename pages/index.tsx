@@ -317,7 +317,6 @@ export default function Home() {
         className="container py-3"
         style={{
           paddingBottom: "70px",
-          background: "linear-gradient(135deg,#1a1a1a,#2e1a0f)",
           color: "#fff",
           borderRadius: 12,
         }}
