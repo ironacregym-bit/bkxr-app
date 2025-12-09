@@ -13,6 +13,25 @@
  */
 
 
+.bxkr-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  height: 10px;
+}
+
+.bxkr-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  background-color: currentColor; /* uses inline color */
+  box-shadow: 0 0 6px currentColor;
+}
+
+
 /* ==== Responsive Rings ==== */
 .bxkr-ring {
   width: 180px;
