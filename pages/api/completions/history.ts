@@ -9,12 +9,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const col = firestore.collection("workoutCompletions"); // ✅ Use correct collection name
+    const col = firestore.collection("workoutCompletions");
+    // Equality filter on user_email + orderBy on completed_date
+    // (Firestore may suggest a composite index; follow the link if it appears.)
     let query = col.where("user_email", "==", email).orderBy("completed_date", "desc");
 
-    // Fetch completions
     const snap = await query.get();
     if (snap.empty) {
+      res.setHeader("Cache-Control", "private, max-age=15, stale-while-revalidate=30");
       return res.status(200).json({ history: [] });
     }
 
@@ -32,18 +34,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const history = snap.docs
       .map((doc) => {
-        const d = doc.data();
-        const completedDate = d.completed_date?.toDate?.() || null;
+        const d = doc.data() as any;
+        const completedDateTS =
+          d.completed_date?.toDate?.() ||
+          d.completed_at?.toDate?.() ||
+          null;
         return {
           id: d.id || doc.id,
           workout_id: d.workout_id || "",
           user_email: d.user_email || email,
-          completed_date: completedDate ? completedDate.toISOString() : null,
+          completed_date: completedDateTS ? completedDateTS.toISOString() : null,
           calories_burned: d.calories_burned || 0,
           sets_completed: d.sets_completed || 0,
           weight_completed_with: d.weight_completed_with || 0,
           duration: d.duration || 0,
-          rating: d.rating || null,
+          rating: d.rating ?? null,
           notes: d.notes || "",
         };
       })
@@ -53,9 +58,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return completedAt >= startDate && completedAt <= now;
       });
 
+    res.setHeader("Cache-Control", "private, max-age=15, stale-while-revalidate=30");
     return res.status(200).json({ history });
   } catch (err: any) {
-    console.error("Failed to fetch completion history:", err.message);
+    console.error("Failed to fetch completion history:", err.message || err);
     return res.status(500).json({ error: "Failed to fetch completion history" });
   }
 }
