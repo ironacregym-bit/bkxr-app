@@ -17,6 +17,21 @@ interface Exercise {
   type?: string;
   name?: string;
   video_url?: string;
+  // keep optional metadata if present in your docs; safe to pass-through
+  met?: number;
+  MET?: number;
+  order?: number;
+  durationSec?: number;
+  restSec?: number;
+  reps?: number;
+  style?: string;
+}
+
+/** Firestore `in` queries accept max 30 items. */
+function chunk<T>(arr: T[], size = 30): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -29,20 +44,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const mondayTS = Timestamp.fromDate(monday);
     const sundayTS = Timestamp.fromDate(sunday);
 
-    // Fetch workouts for this week
-    const workoutsSnap = await firestore.collection("workouts")
-      .where("week_start", ">=", mondayTS)
-      .where("week_start", "<=", sundayTS)
+    // --- Workouts for this week (by week_start Timestamp)
+    const workoutsSnap = await firestore
+      .collection("workouts")
+      .where("week_start", ">=", mondayTS)   // ✅ real operators
+      .where("week_start", "<=", sundayTS)  // ✅ real operators
       .get();
 
     if (workoutsSnap.empty) {
-      return res.json({ weekStart: monday.toISOString(), workouts: [] });
+      // light caching — safe for "no workouts" too
+      res.setHeader("Cache-Control", "private, max-age=30, stale-while-revalidate=60");
+      return res.status(200).json({ weekStart: monday.toISOString(), workouts: [] });
     }
 
-    const Ws: Workout[] = workoutsSnap.docs.map(doc => {
+    // Map workouts with the fields you use everywhere
+    const Ws: Workout[] = workoutsSnap.docs.map((doc) => {
       const data = doc.data();
       return {
-        id: data.workout_id,
+        id: data.workout_id,               // keep your existing id mapping
         day_name: data.day_name,
         workout_name: data.workout_name,
         video_url: data.video_url || "",
@@ -50,28 +69,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
-    // Fetch all exercises
-    const exercisesSnap = await firestore.collection("workoutExercises")
-      .orderBy("order")
-      .get();
+    // --- Fetch only exercises that belong to these workouts
+    const workoutIds = Ws.map((w) => w.id).filter(Boolean);
+    let allExercises: any[] = [];
 
-    const eRows = exercisesSnap.docs.map(doc => doc.data());
+    if (workoutIds.length > 0) {
+      // Firestore 'in' max 30; chunk if more
+      const idChunks = chunk(workoutIds, 30);
+      const chunkSnaps = await Promise.all(
+        idChunks.map((ids) =>
+          firestore
+            .collection("workoutExercises")
+            .where("workout_id", "in", ids)
+            // cannot reliably use orderBy with "in" without composite index; sort client-side
+            .get()
+        )
+      );
 
-    // Attach exercises to workouts
-    const workouts = Ws.map(w => ({
-      ...w,
-      exercises: eRows
-        .filter(e => e.workout_id === w.id)
-        .map(e => ({
+      for (const snap of chunkSnaps) {
+        allExercises.push(...snap.docs.map((d) => d.data()));
+      }
+    }
+
+    // --- Attach exercises to workouts (client-side sort by 'order')
+    const workouts: Workout[] = Ws.map((w) => {
+      const exs = allExercises
+        .filter((e) => e.workout_id === w.id)
+        .sort((a, b) => {
+          const ao = typeof a.order === "number" ? a.order : 0;
+          const bo = typeof b.order === "number" ? b.order : 0;
+          return ao - bo;
+        })
+        .map((e): Exercise => ({
           type: e.type,
-          name: e.name,
-          video_url: e.video_url || "",
-        })),
-    }));
+          name: e.name || e.exercise_name,
+          video_url: e.video_url || e.VideoURL || "",
+          met: e.met ?? e.MET,
+          MET: e.MET,                // kept in case your client reads either
+          order: e.order,
+          durationSec: e.durationSec,
+          restSec: e.restSec,
+          reps: e.reps,
+          style: e.style,
+        }));
 
+      return { ...w, exercises: exs };
+    });
+
+    // Helpful caching: small TTL to avoid burst reads on quick revisits/tab focus
+    res.setHeader("Cache-Control", "private, max-age=30, stale-while-revalidate=60");
     return res.status(200).json({ weekStart: monday.toISOString(), workouts });
   } catch (err: any) {
-    console.error("API /workouts failed:", err.message || err);
+    console.error("API /workouts failed:", err?.message || err);
     return res.status(500).json({ error: "Failed to load workouts" });
   }
 }
