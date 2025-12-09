@@ -12,7 +12,7 @@ import BxkrBanner from "../components/BxkrBanner";
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
 ) => {
-  const session = await getSession(context);
+  const session = await getSession(context);F
   if (!session) {
     return { redirect: { destination: "/landing", permanent: false } };
   }
@@ -398,7 +398,7 @@ export default function Home() {
                   className={`bxkr-day-pill ${status?.allDone ? "completed" : ""}`}
                   style={{
                     boxShadow,
-                    fontWeight: isSelected ? 700 : 500,
+                    fontWeight: isSelected ? 600 : 400,
                     borderColor: status?.allDone ? undefined : ringColor
                   }}
                 >
