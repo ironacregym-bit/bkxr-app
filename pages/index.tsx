@@ -241,6 +241,7 @@ export default function Home() {
     }
 
     // Step 2: merge weeklyOverview (nutrition/habits/check-in in one payload
+
     if (weeklyOverview?.days?.length) {
       for (const o of weeklyOverview.days as any[]) {
         const s = statuses[o.dateKey];
@@ -251,13 +252,21 @@ export default function Home() {
         const isFriday = !!o.isFriday;
         const checkinComplete = !!o.checkinComplete;
     
+        // Build task list based on what is required every day
         const tasks: boolean[] = [];
+    
+        // Workout is required if scheduled
         if (s.hasWorkout) tasks.push(s.workoutDone);
-        if (nutritionLogged) tasks.push(nutritionLogged);
-        if (habitAllDone) tasks.push(habitAllDone);
+    
+        // Nutrition and habits are always required (per your note)
+        tasks.push(nutritionLogged);
+        tasks.push(habitAllDone);
+    
+        // Check-in only on Friday
         if (isFriday) tasks.push(checkinComplete);
     
-        const allDone = tasks.length === 0 || tasks.every(Boolean);
+        // All done only if every task is true
+        const allDone = tasks.every(Boolean);
     
         statuses[o.dateKey] = {
           ...s,
@@ -269,6 +278,7 @@ export default function Home() {
         };
       }
     }
+
  else {
       // Without overview yet, still allow dots for outstanding workouts
       for (const dk of Object.keys(statuses)) {
