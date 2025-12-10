@@ -134,30 +134,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const checkinComplete = checkinSnap.exists;
 
     // NUTRITION
+
     const nutritionLoggedMap: Record<string, boolean> = {};
     for (const d of weekDays) {
       const ymd = formatYMD(d);
-      const dayStart = new Date(`${ymd}T00:00:00Z`);
-      const nextDay = new Date(dayStart);
-      nextDay.setDate(dayStart.getDate() + 1);
-
-      const qSnap = await firestore
-        .collection(NUTRITION_COLLECTION)
-        .where("user_email", "==", userEmail)
-        .where("date", ">=", dayStart)
-        .where("date", "<", nextDay)
+      const snap = await firestore
+        .collection("nutrition_logs")
+        .doc(userEmail)
+        .collection(ymd)
         .limit(1)
         .get();
-
-      nutritionLoggedMap[ymd] = !qSnap.empty;
+      nutritionLoggedMap[ymd] = !snap.empty;
     }
+
 
     // WORKOUTS for the week (compare timestamp)
     const workoutsSnap = await firestore
       .collection(WORKOUTS_COLLECTION)
-      .where("week_start", "==", weekStart) // ✅ Timestamp match
+      .where("week_start", "==", weekStart) // Timestamp match
       .get();
     const workouts = workoutsSnap.docs.map(doc => doc.data());
+
 
     // COMPLETIONS for the week
     const completionsSnap = await firestore
