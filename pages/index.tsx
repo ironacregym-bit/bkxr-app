@@ -205,7 +205,8 @@ export default function Home() {
   const [weekLoading, setWeekLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!session?.user?.email || !data?.workouts) return;
+    if (!session?.user?.email || !data?.workouts || !weeklyOverview?.days) return;
+
 
     // Start loading while we compute/merge
     setWeekLoading(true);
@@ -240,45 +241,36 @@ export default function Home() {
       };
     }
 
-    // Step 2: merge weeklyOverview (nutrition/habits/check-in in one payload
-  if (weeklyOverview?.days?.length) {
-    for (const o of weeklyOverview.days as any[]) {
-      const s = statuses[o.dateKey];
-      if (!s) continue;
-  
-      const nutritionLogged = !!o.nutritionLogged;
-      const habitAllDone = !!o.habitAllDone;
-      const isFriday = !!o.isFriday;
-      const checkinComplete = !!o.checkinComplete;
-  
+    // Step 2: merge weeklyOverview (single source of truth for calendar)
+    if (!weeklyOverview?.days?.length) return;
+    
+    for (const day of weeklyOverview.days as Array<{
+      dateKey: string;
+      nutritionLogged: boolean;
+      habitAllDone: boolean;
+      isFriday: boolean;
+      checkinComplete: boolean;
+    }>) {
+      const base = statuses[day.dateKey];
+      if (!base) continue;
+    
       const allDone =
-        (s.hasWorkout ? s.workoutDone : true) &&
-        nutritionLogged &&
-        habitAllDone &&
-        (!isFriday || checkinComplete);
-  
-      statuses[o.dateKey] = {
-        ...s,
-        nutritionLogged,
-        habitAllDone,
-        isFriday,
-        checkinComplete,
+        (base.hasWorkout ? base.workoutDone : true) &&
+        day.nutritionLogged &&
+        day.habitAllDone &&
+        (!day.isFriday || day.checkinComplete);
+    
+      statuses[day.dateKey] = {
+        ...base,
+        nutritionLogged: day.nutritionLogged,
+        habitAllDone: day.habitAllDone,
+        isFriday: day.isFriday,
+        checkinComplete: day.checkinComplete,
         allDone,
       };
     }
-  }
- else {
-      // Without overview yet, still allow dots for outstanding workouts
-      for (const dk of Object.keys(statuses)) {
-        const s = statuses[dk];
-        const anyOutstanding =
-          !s.nutritionLogged ||
-          (s.hasWorkout && !s.workoutDone) ||
-          !s.habitAllDone ||
-          (s.isFriday && !s.checkinComplete);
-        statuses[dk] = { ...s, allDone: !anyOutstanding };
-      }
-    }
+
+
 
     setWeekStatus(statuses);
     setWeekLoading(false);
