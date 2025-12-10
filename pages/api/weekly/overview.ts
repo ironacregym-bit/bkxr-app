@@ -5,19 +5,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]";
 import { hasRole } from "../../../lib/rbac";
 
-/**
- * Weekly overview endpoint
- * GET /api/weekly/overview?week=YYYY-MM-DD
- *
- * Returns per-day status for the Monday-aligned week containing "week":
- *  - nutritionLogged: any nutrition entry exists for the date
- *  - habitAllDone: all habit booleans true in habitLogs
- *  - isFriday: whether day is Friday
- *  - checkinComplete: weekly check-in doc exists (Friday only)
- *  - hasWorkout: workout scheduled for that day
- *  - workoutDone: workout completed for that day
- */
-
 type DayOverview = {
   dateKey: string;
   isFriday: boolean;
@@ -134,12 +121,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const checkinComplete = checkinSnap.exists;
 
     // NUTRITION
-
     const nutritionLoggedMap: Record<string, boolean> = {};
     for (const d of weekDays) {
       const ymd = formatYMD(d);
       const snap = await firestore
-        .collection("nutrition_logs")
+        .collection(NUTRITION_COLLECTION)
         .doc(userEmail)
         .collection(ymd)
         .limit(1)
@@ -147,14 +133,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       nutritionLoggedMap[ymd] = !snap.empty;
     }
 
-
-    // WORKOUTS for the week (compare timestamp)
+    // WORKOUTS for the week (now using `date` Timestamp)
     const workoutsSnap = await firestore
       .collection(WORKOUTS_COLLECTION)
-      .where("week_start", "==", weekStart) // Timestamp match
+      .where("date", ">=", weekStart)
+      .where("date", "<=", weekEnd)
       .get();
     const workouts = workoutsSnap.docs.map(doc => doc.data());
-
 
     // COMPLETIONS for the week
     const completionsSnap = await firestore
@@ -168,11 +153,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Compose response
     const days: DayOverview[] = weekDays.map((d) => {
       const ymd = formatYMD(d);
-      const isFriday = d.getDay() === 5;
-      const dayName = d.toLocaleDateString(undefined, { weekday: "long" });
 
       // Find workouts for this day
-      const dayWorkouts = workouts.filter(w => (w.day_name || "").toLowerCase() === dayName.toLowerCase());
+      const dayWorkouts = workouts.filter(w => {
+        const workoutDate = formatYMD(w.date?.toDate ? w.date.toDate() : new Date(w.date));
+        return workoutDate === ymd;
+      });
       const hasWorkout = dayWorkouts.length > 0;
 
       // Check if any workout completed for this day
@@ -183,10 +169,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return {
         dateKey: ymd,
-        isFriday,
+        isFriday: d.getDay() === 5,
         nutritionLogged: !!nutritionLoggedMap[ymd],
         habitAllDone: !!habitMap[ymd],
-        checkinComplete: isFriday ? !!checkinComplete : false,
+        checkinComplete: d.getDay() === 5 ? !!checkinComplete : false,
         hasWorkout,
         workoutDone,
       };
