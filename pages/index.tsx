@@ -8,6 +8,7 @@ import AddToHomeScreen from "../components/AddToHomeScreen";
 import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 import BxkrBanner from "../components/BxkrBanner";
+import ChallengeBanner from "../components/ChallengeBanner";
 
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
@@ -356,14 +357,14 @@ export default function Home() {
         </h2>
 
         {/* Momentum */}
-        <BxkrBanner
-          title="Momentum"
-          message={`You’re ${sessionsAway} ${sessionsAway === 1 ? "session" : "sessions"} away from your weekly goal (target: 3/week).`}
-          href={microHref}
-          iconLeft={iconMicro}
-          accentColor={accentMicro}
-          buttonText="Start"
+        <ChallengeBanner
+          title="New Challenge"
+          message="2 Weeks of Energy"
+          href="/challenge"
+          iconLeft="fas fa-crown"
+          accentColor="#ffcc00"
         />
+
 
         {/* Calendar */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
