@@ -31,6 +31,7 @@ type DayStatus = {
   isFriday: boolean;
   checkinComplete: boolean;
   allDone: boolean;
+  workoutIds: string[];
 };
 
 function getWeek(): Date[] {
@@ -119,6 +120,7 @@ export default function Home() {
         isFriday: o.isFriday,
         checkinComplete: o.checkinComplete,
         allDone,
+        workoutIds: o.workoutIds || [],
       };
     }
 
@@ -135,7 +137,10 @@ export default function Home() {
   const isFridaySelected = selectedStatus.isFriday;
 
   // Hrefs
-  const workoutHref = hasWorkoutToday ? `/workout/${selectedDateKey}` : `/habit?date=${selectedDateKey}`;
+  
+  const workoutHref = hasWorkoutToday && selectedStatus.workoutIds?.length
+    ? `/workout/${selectedStatus.workoutIds[0]}`
+    : `/habit?date=${selectedDateKey}`;
   const nutritionHref = `/nutrition?date=${selectedDateKey}`;
   const habitHref = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
