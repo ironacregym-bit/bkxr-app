@@ -11,7 +11,7 @@ import { hasRole } from "../../../lib/rbac";
  *
  * Returns per-day status for the Monday-aligned week containing "week":
  *  - nutritionLogged: any nutrition entry exists for the date
- *  - habitAllDone: all 6 habit booleans true in habitLogs
+ *  - habitAllDone: all habit booleans true in habitLogs
  *  - isFriday: whether day is Friday
  *  - checkinComplete: weekly check-in doc exists (Friday only)
  *  - hasWorkout: workout scheduled for that day
@@ -78,34 +78,34 @@ function buildDocId(email: string, ymd: string): string {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const session = await getServerSession(req, res, authOptions);
-  if (!session) return res.status(401).json({ error: "Not signed in" });
-  if (!hasRole(session, ["user", "gym", "admin"])) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-
-  const userEmail: string | undefined = (session.user as any)?.email;
-  if (!userEmail) return res.status(400).json({ error: "Unable to resolve user email" });
-
-  const weekQ = String(req.query.week || formatYMD(new Date()));
-  if (!isYMD(weekQ)) return res.status(400).json({ error: "Invalid week format. Use YYYY-MM-DD." });
-
-  const weekDate = new Date(`${weekQ}T00:00:00Z`);
-  const weekStart = startOfAlignedWeek(weekDate);
-  const weekEnd = endOfAlignedWeek(weekDate);
-  const friday = fridayOfWeek(weekDate);
-
-  const weekStartYMD = formatYMD(weekStart);
-  const weekEndYMD = formatYMD(weekEnd);
-  const fridayYMD = formatYMD(friday);
-
-  const weekDays: Date[] = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(weekStart);
-    d.setDate(weekStart.getDate() + i);
-    return d;
-  });
-
   try {
+    const session = await getServerSession(req, res, authOptions);
+    if (!session) return res.status(401).json({ error: "Not signed in" });
+    if (!hasRole(session, ["user", "gym", "admin"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const userEmail: string | undefined = (session.user as any)?.email;
+    if (!userEmail) return res.status(400).json({ error: "Unable to resolve user email" });
+
+    const weekQ = String(req.query.week || formatYMD(new Date()));
+    if (!isYMD(weekQ)) return res.status(400).json({ error: "Invalid week format. Use YYYY-MM-DD." });
+
+    const weekDate = new Date(`${weekQ}T00:00:00Z`);
+    const weekStart = startOfAlignedWeek(weekDate);
+    const weekEnd = endOfAlignedWeek(weekDate);
+    const friday = fridayOfWeek(weekDate);
+
+    const weekStartYMD = formatYMD(weekStart);
+    const weekEndYMD = formatYMD(weekEnd);
+    const fridayYMD = formatYMD(friday);
+
+    const weekDays: Date[] = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      return d;
+    });
+
     // HABITS
     const habitDocRefs = weekDays.map((d) =>
       firestore.collection(HABITS_COLLECTION).doc(buildDocId(userEmail, formatYMD(d)))
@@ -152,10 +152,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       nutritionLoggedMap[ymd] = !qSnap.empty;
     }
 
-    // WORKOUTS for the week
+    // WORKOUTS for the week (compare timestamp)
     const workoutsSnap = await firestore
       .collection(WORKOUTS_COLLECTION)
-      .where("week_start", "==", weekStartYMD)
+      .where("week_start", "==", weekStart) // ✅ Timestamp match
       .get();
     const workouts = workoutsSnap.docs.map(doc => doc.data());
 
@@ -180,7 +180,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Check if any workout completed for this day
       const workoutDone = completions.some(c => {
-        const completedDate = formatYMD(c.date_completed.toDate());
+        const completedDate = formatYMD(c.date_completed?.toDate ? c.date_completed.toDate() : new Date(c.date_completed));
         return completedDate === ymd && dayWorkouts.some(w => w.workout_id === c.workout_id);
       });
 
