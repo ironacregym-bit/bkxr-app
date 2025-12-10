@@ -13,28 +13,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const role = (session.user as any)?.role || "user";
   if (role !== "admin" && role !== "gym") return res.status(403).json({ error: "Forbidden" });
 
-  const { workout_name, notes, rounds } = req.body as {
+  const { workout_name, notes, rounds, date } = req.body as {
     workout_name?: string;
     notes?: string;
     rounds?: any[];
+    date?: string; // expected format: YYYY-MM-DD
   };
 
+  // Validate input
   if (!workout_name || !rounds || rounds.length !== 10) {
     return res.status(400).json({ error: "Invalid workout data" });
   }
+  if (!date) {
+    return res.status(400).json({ error: "Workout date is required (YYYY-MM-DD)" });
+  }
 
   try {
+    // Convert date string to Firestore Timestamp
+    const workoutDate = new Date(`${date}T00:00:00Z`);
+
     const workoutRef = firestore.collection("workouts").doc();
     const workoutId = workoutRef.id;
 
+    // Create workout document with new date field
     await workoutRef.set({
       workout_id: workoutId,
       workout_name,
       notes: notes || "",
       rounds: 10,
+      date: workoutDate, // ✅ new date logic
       created_at: new Date(),
     });
 
+    // Create exercises in batch
     const batch = firestore.batch();
     rounds.forEach((round, i) => {
       if (round.type === "boxing") {
