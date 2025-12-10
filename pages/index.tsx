@@ -240,33 +240,36 @@ export default function Home() {
       };
     }
 
-    // Step 2: merge weeklyOverview (nutrition/habits/check-in in one payload)
+    // Step 2: merge weeklyOverview (nutrition/habits/check-in in one payload
     if (weeklyOverview?.days?.length) {
       for (const o of weeklyOverview.days as any[]) {
         const s = statuses[o.dateKey];
         if (!s) continue;
-
+    
         const nutritionLogged = !!o.nutritionLogged;
         const habitAllDone = !!o.habitAllDone;
         const isFriday = !!o.isFriday;
         const checkinComplete = !!o.checkinComplete;
-
-        const anyOutstanding =
-          !nutritionLogged ||
-          (s.hasWorkout && !s.workoutDone) ||
-          !habitAllDone ||
-          (isFriday && !checkinComplete);
-
+    
+        const tasks: boolean[] = [];
+        if (s.hasWorkout) tasks.push(s.workoutDone);
+        if (nutritionLogged) tasks.push(nutritionLogged);
+        if (habitAllDone) tasks.push(habitAllDone);
+        if (isFriday) tasks.push(checkinComplete);
+    
+        const allDone = tasks.length === 0 || tasks.every(Boolean);
+    
         statuses[o.dateKey] = {
           ...s,
           nutritionLogged,
           habitAllDone,
           isFriday,
           checkinComplete,
-          allDone: !anyOutstanding,
+          allDone,
         };
       }
-    } else {
+    }
+ else {
       // Without overview yet, still allow dots for outstanding workouts
       for (const dk of Object.keys(statuses)) {
         const s = statuses[dk];
