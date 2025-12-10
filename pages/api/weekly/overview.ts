@@ -14,34 +14,35 @@ import { hasRole } from "../../../lib/rbac";
  *  - habitAllDone: all 6 habit booleans true in habitLogs
  *  - isFriday: whether day is Friday
  *  - checkinComplete: weekly check-in doc exists (Friday only)
- *
- * Collections used (confirmed):
- *  - nutrition_logs
- *  - habitLogs
- *  - check_ins
+ *  - hasWorkout: workout scheduled for that day
+ *  - workoutDone: workout completed for that day
  */
 
 type DayOverview = {
-  dateKey: string;            // YYYY-MM-DD
+  dateKey: string;
   isFriday: boolean;
   nutritionLogged: boolean;
   habitAllDone: boolean;
-  checkinComplete: boolean;   // only meaningful on Friday
+  checkinComplete: boolean;
+  hasWorkout: boolean;
+  workoutDone: boolean;
 };
 
 type WeeklyOverviewResponse = {
-  weekStartYMD: string;       // Monday YYYY-MM-DD
-  weekEndYMD: string;         // Sunday YYYY-MM-DD
-  fridayYMD: string;          // Friday YYYY-MM-DD
+  weekStartYMD: string;
+  weekEndYMD: string;
+  fridayYMD: string;
   days: DayOverview[];
 };
 
-// ----- Constants (your collections)
+// Collections
 const HABITS_COLLECTION = "habitLogs";
 const CHECKINS_COLLECTION = "check_ins";
 const NUTRITION_COLLECTION = "nutrition_logs";
+const WORKOUTS_COLLECTION = "workouts";
+const COMPLETIONS_COLLECTION = "workoutCompletions";
 
-// ----- Helpers
+// Helpers
 function isYMD(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
@@ -51,8 +52,8 @@ function formatYMD(d: Date): string {
   return n.toISOString().slice(0, 10);
 }
 function startOfAlignedWeek(d: Date): Date {
-  const day = d.getDay();            // 0=Sun..6=Sat
-  const diffToMon = (day + 6) % 7;   // Monday=0
+  const day = d.getDay();
+  const diffToMon = (day + 6) % 7;
   const s = new Date(d);
   s.setDate(d.getDate() - diffToMon);
   s.setHours(0, 0, 0, 0);
@@ -68,7 +69,7 @@ function endOfAlignedWeek(d: Date): Date {
 function fridayOfWeek(d: Date): Date {
   const s = startOfAlignedWeek(d);
   const f = new Date(s);
-  f.setDate(s.getDate() + 4);        // Monday + 4 = Friday
+  f.setDate(s.getDate() + 4);
   f.setHours(0, 0, 0, 0);
   return f;
 }
@@ -77,7 +78,6 @@ function buildDocId(email: string, ymd: string): string {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Auth & RBAC
   const session = await getServerSession(req, res, authOptions);
   if (!session) return res.status(401).json({ error: "Not signed in" });
   if (!hasRole(session, ["user", "gym", "admin"])) {
@@ -87,7 +87,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const userEmail: string | undefined = (session.user as any)?.email;
   if (!userEmail) return res.status(400).json({ error: "Unable to resolve user email" });
 
-  // Input: week=YYYY-MM-DD (defaults to today)
   const weekQ = String(req.query.week || formatYMD(new Date()));
   if (!isYMD(weekQ)) return res.status(400).json({ error: "Invalid week format. Use YYYY-MM-DD." });
 
@@ -100,7 +99,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const weekEndYMD = formatYMD(weekEnd);
   const fridayYMD = formatYMD(friday);
 
-  // Build the seven dates of the week (Mon..Sun)
   const weekDays: Date[] = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart);
     d.setDate(weekStart.getDate() + i);
@@ -108,16 +106,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   });
 
   try {
-    // ----- HABITS: batch read 7 deterministic docRefs in one go
+    // HABITS
     const habitDocRefs = weekDays.map((d) =>
       firestore.collection(HABITS_COLLECTION).doc(buildDocId(userEmail, formatYMD(d)))
     );
     const habitSnaps = await firestore.getAll(...habitDocRefs);
     const habitMap: Record<string, boolean> = {};
     habitSnaps.forEach((snap) => {
-      // ymd from doc ID suffix
-      const id = snap.id;
-      const ymd = id.split("__")[1] || "";
+      const ymd = snap.id.split("__")[1] || "";
       if (!snap.exists) {
         habitMap[ymd] = false;
       } else {
@@ -132,14 +128,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
-    // ----- CHECK-IN: Friday deterministic docRef
+    // CHECK-IN
     const checkinDocRef = firestore.collection(CHECKINS_COLLECTION).doc(buildDocId(userEmail, fridayYMD));
     const checkinSnap = await checkinDocRef.get();
     const checkinComplete = checkinSnap.exists;
 
-    // ----- NUTRITION: query per day (user_email + date range)
-    // This avoids assumptions about nutrition doc IDs.
-    // Ensure an index exists for (user_email, date) if Firestore suggests it.
+    // NUTRITION
     const nutritionLoggedMap: Record<string, boolean> = {};
     for (const d of weekDays) {
       const ymd = formatYMD(d);
@@ -158,20 +152,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       nutritionLoggedMap[ymd] = !qSnap.empty;
     }
 
-    // ----- Compose response
+    // WORKOUTS for the week
+    const workoutsSnap = await firestore
+      .collection(WORKOUTS_COLLECTION)
+      .where("week_start", "==", weekStartYMD)
+      .get();
+    const workouts = workoutsSnap.docs.map(doc => doc.data());
+
+    // COMPLETIONS for the week
+    const completionsSnap = await firestore
+      .collection(COMPLETIONS_COLLECTION)
+      .where("user_email", "==", userEmail)
+      .where("date_completed", ">=", weekStart)
+      .where("date_completed", "<=", weekEnd)
+      .get();
+    const completions = completionsSnap.docs.map(doc => doc.data());
+
+    // Compose response
     const days: DayOverview[] = weekDays.map((d) => {
       const ymd = formatYMD(d);
       const isFriday = d.getDay() === 5;
+      const dayName = d.toLocaleDateString(undefined, { weekday: "long" });
+
+      // Find workouts for this day
+      const dayWorkouts = workouts.filter(w => (w.day_name || "").toLowerCase() === dayName.toLowerCase());
+      const hasWorkout = dayWorkouts.length > 0;
+
+      // Check if any workout completed for this day
+      const workoutDone = completions.some(c => {
+        const completedDate = formatYMD(c.date_completed.toDate());
+        return completedDate === ymd && dayWorkouts.some(w => w.workout_id === c.workout_id);
+      });
+
       return {
         dateKey: ymd,
         isFriday,
         nutritionLogged: !!nutritionLoggedMap[ymd],
         habitAllDone: !!habitMap[ymd],
         checkinComplete: isFriday ? !!checkinComplete : false,
+        hasWorkout,
+        workoutDone,
       };
     });
 
-    // Helpful caching: reduces repeated reads on tab switches / short revisits
     res.setHeader("Cache-Control", "private, max-age=30, stale-while-revalidate=60");
 
     const payload: WeeklyOverviewResponse = {
