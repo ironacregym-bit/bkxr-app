@@ -6,7 +6,6 @@ import firestore from "../../lib/firestoreClient";
 
 interface Workout {
   id: string;
-  day_name: string;
   workout_name: string;
   video_url?: string;
   notes?: string;
@@ -17,7 +16,6 @@ interface Exercise {
   type?: string;
   name?: string;
   video_url?: string;
-  // keep optional metadata if present in your docs; safe to pass-through
   met?: number;
   MET?: number;
   order?: number;
@@ -44,15 +42,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const mondayTS = Timestamp.fromDate(monday);
     const sundayTS = Timestamp.fromDate(sunday);
 
-    // --- Workouts for this week (by week_start Timestamp)
+    // --- Workouts for this week (using `date` Timestamp)
     const workoutsSnap = await firestore
       .collection("workouts")
-      .where("week_start", ">=", mondayTS)   // ✅ real operators
-      .where("week_start", "<=", sundayTS)  // ✅ real operators
+      .where("date", ">=", mondayTS)
+      .where("date", "<=", sundayTS)
       .get();
 
     if (workoutsSnap.empty) {
-      // light caching — safe for "no workouts" too
       res.setHeader("Cache-Control", "private, max-age=30, stale-while-revalidate=60");
       return res.status(200).json({ weekStart: monday.toISOString(), workouts: [] });
     }
@@ -61,27 +58,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const Ws: Workout[] = workoutsSnap.docs.map((doc) => {
       const data = doc.data();
       return {
-        id: data.workout_id,               // keep your existing id mapping
-        day_name: data.day_name,
+        id: data.workout_id,
         workout_name: data.workout_name,
         video_url: data.video_url || "",
         notes: data.notes || "",
       };
     });
 
-    // --- Fetch only exercises that belong to these workouts
+    // --- Fetch exercises for these workouts
     const workoutIds = Ws.map((w) => w.id).filter(Boolean);
     let allExercises: any[] = [];
 
     if (workoutIds.length > 0) {
-      // Firestore 'in' max 30; chunk if more
       const idChunks = chunk(workoutIds, 30);
       const chunkSnaps = await Promise.all(
         idChunks.map((ids) =>
           firestore
             .collection("workoutExercises")
             .where("workout_id", "in", ids)
-            // cannot reliably use orderBy with "in" without composite index; sort client-side
             .get()
         )
       );
@@ -91,21 +85,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // --- Attach exercises to workouts (client-side sort by 'order')
+    // Attach exercises to workouts
     const workouts: Workout[] = Ws.map((w) => {
       const exs = allExercises
         .filter((e) => e.workout_id === w.id)
-        .sort((a, b) => {
-          const ao = typeof a.order === "number" ? a.order : 0;
-          const bo = typeof b.order === "number" ? b.order : 0;
-          return ao - bo;
-        })
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         .map((e): Exercise => ({
           type: e.type,
           name: e.name || e.exercise_name,
           video_url: e.video_url || e.VideoURL || "",
           met: e.met ?? e.MET,
-          MET: e.MET,                // kept in case your client reads either
+          MET: e.MET,
           order: e.order,
           durationSec: e.durationSec,
           restSec: e.restSec,
@@ -116,7 +106,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return { ...w, exercises: exs };
     });
 
-    // Helpful caching: small TTL to avoid burst reads on quick revisits/tab focus
     res.setHeader("Cache-Control", "private, max-age=30, stale-while-revalidate=60");
     return res.status(200).json({ weekStart: monday.toISOString(), workouts });
   } catch (err: any) {
