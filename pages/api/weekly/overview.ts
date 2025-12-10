@@ -13,6 +13,7 @@ type DayOverview = {
   checkinComplete: boolean;
   hasWorkout: boolean;
   workoutDone: boolean;
+  workoutIds: string[]; // ✅ Added for linking
 };
 
 type WeeklyOverviewResponse = {
@@ -133,7 +134,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       nutritionLoggedMap[ymd] = !snap.empty;
     }
 
-    // WORKOUTS for the week (now using `date` Timestamp)
+    // WORKOUTS for the week (using `date` Timestamp)
     const workoutsSnap = await firestore
       .collection(WORKOUTS_COLLECTION)
       .where("date", ">=", weekStart)
@@ -161,6 +162,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
       const hasWorkout = dayWorkouts.length > 0;
 
+      // Collect workout IDs for linking
+      const workoutIds = dayWorkouts.map(w => w.workout_id);
+
       // Check if any workout completed for this day
       const workoutDone = completions.some(c => {
         const completedDate = formatYMD(c.date_completed?.toDate ? c.date_completed.toDate() : new Date(c.date_completed));
@@ -175,6 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         checkinComplete: d.getDay() === 5 ? !!checkinComplete : false,
         hasWorkout,
         workoutDone,
+        workoutIds, // ✅ Added for linking
       };
     });
 
