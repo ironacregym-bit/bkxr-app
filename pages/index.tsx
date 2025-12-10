@@ -256,8 +256,6 @@ export default function Home() {
         {isFridaySelected && !checkinComplete && (
           <BxkrBanner title="Weekly check‑in" message="Complete your weekly check‑in." href={checkinHref} iconLeft={iconCheckin} accentColor={accentCheckin} buttonText="Check in" />
         )}
-
-        {overviewLoading && <div className="alert alert-secondary">Loading…</div>}
       </main>
 
       <BottomNav />
