@@ -252,7 +252,7 @@ export default function Home() {
             );
           })}
         </div>
-
+      {weeklyOverview?.days && (
         <DailyTasksCard
           dayLabel={`${selectedDay.toLocaleDateString(undefined, { weekday: "long" })}, ${selectedDay.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`}
           nutritionSummary={(weeklyOverview?.days as ApiDay[]).find(d => d.dateKey === selectedDateKey)?.nutritionSummary}
@@ -265,7 +265,8 @@ export default function Home() {
           checkinSummary={(weeklyOverview?.days as ApiDay[]).find(d => d.dateKey === selectedDateKey)?.checkinSummary}
           checkinComplete={checkinComplete}
           hrefs={{ nutrition: nutritionHref, workout: workoutHref, habit: habitHref, checkin: checkinHref }}
-        />
+        /> 
+      )}
       </main>
       <BottomNav />
       <AddToHomeScreen />
