@@ -29,11 +29,11 @@ export default function DailyTasksCard({
   checkinComplete,
   hrefs
 }: Props) {
-  const rowStyle = (done: boolean) => ({
+  const rowStyle = (done: boolean, accent: string) => ({
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "10px 12px",
+    padding: "12px 16px",
     borderBottom: "1px solid rgba(255,255,255,0.1)",
     backgroundColor: done ? "rgba(100,195,122,0.15)" : "transparent",
     color: "#fff"
@@ -41,38 +41,40 @@ export default function DailyTasksCard({
 
   return (
     <div style={{ background: "#1e1e1e", borderRadius: 12, overflow: "hidden", marginBottom: 16 }}>
-      <div style={{ padding: "12px 16px", fontWeight: 700, fontSize: "1.1rem" }}>{dayLabel} Tasks</div>
+      <div style={{ padding: "14px 16px", fontWeight: 700, fontSize: "1.1rem" }}>{dayLabel} Tasks</div>
 
       {/* Nutrition */}
       <Link href={hrefs.nutrition}>
-        <div style={rowStyle(nutritionLogged)}>
-          <span><i className="fas fa-utensils" style={{ marginRight: 8 }} /> Nutrition</span>
+        <div style={rowStyle(nutritionLogged, "#4fa3a5")}>
+          <span><i className="fas fa-utensils" style={{ marginRight: 8, color: "#4fa3a5" }} /> Nutrition</span>
           <span>{nutritionSummary ? `${nutritionSummary.calories} kcal - ${nutritionSummary.protein}g protein` : "Not logged"}</span>
         </div>
       </Link>
 
-      {/* Workout */}
-      <Link href={hrefs.workout}>
-        <div style={rowStyle(workoutDone)}>
-          <span><i className="fas fa-dumbbell" style={{ marginRight: 8 }} /> Workout</span>
-          <span>
-            {hasWorkout ? (workoutDone ? `Completed - ${workoutSummary?.calories || 0} kcal - ${workoutSummary?.weightUsed || ""}` : "Pending") : "No workout"}
-          </span>
-        </div>
-      </Link>
+      {/* Workout (only if hasWorkout) */}
+      {hasWorkout && (
+        <Link href={hrefs.workout}>
+          <div style={rowStyle(workoutDone, "#5b7c99")}>
+            <span><i className="fas fa-dumbbell" style={{ marginRight: 8, color: "#5b7c99" }} /> Workout</span>
+            <span>
+              {workoutDone ? `Completed - ${workoutSummary?.calories || 0} kcal - ${workoutSummary?.weightUsed || ""}` : "Pending"}
+            </span>
+          </div>
+        </Link>
+      )}
 
       {/* Habits */}
       <Link href={hrefs.habit}>
-        <div style={rowStyle(habitAllDone)}>
-          <span><i className="fas fa-check-circle" style={{ marginRight: 8 }} /> Daily Habit</span>
+        <div style={rowStyle(habitAllDone, "#9b6fa3")}>
+          <span><i className="fas fa-check-circle" style={{ marginRight: 8, color: "#9b6fa3" }} /> Daily Habit</span>
           <span>{habitSummary ? `${habitSummary.completed}/${habitSummary.total} tasks` : "Not started"}</span>
         </div>
       </Link>
 
       {/* Check-in */}
       <Link href={hrefs.checkin}>
-        <div style={rowStyle(checkinComplete)}>
-          <span><i className="fas fa-clipboard-list" style={{ marginRight: 8 }} /> Check-In</span>
+        <div style={rowStyle(checkinComplete, "#c9a34e")}>
+          <span><i className="fas fa-clipboard-list" style={{ marginRight: 8, color: "#c9a34e" }} /> Check-In</span>
           <span>
             {checkinSummary
               ? `W: ${checkinSummary.weight}kg ${checkinSummary.weightChange ? `(${checkinSummary.weightChange.toFixed(1)}%)` : ""} | BF: ${checkinSummary.bodyFat}%`
