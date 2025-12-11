@@ -1,13 +1,12 @@
 
 import Head from "next/head";
-import useSWR, { mutate } from "swr";
+import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 import AddToHomeScreen from "../components/AddToHomeScreen";
 import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
-import BxkrBanner from "../components/BxkrBanner";
 import ChallengeBanner from "../components/ChallengeBanner";
 import DailyTasksCard from "../components/DailyTasksCard";
 
@@ -42,7 +41,6 @@ type ApiDay = {
   habitSummary?: { completed: number; total: number };
   checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number };
 };
-
 
 function getWeek(): Date[] {
   const today = new Date();
@@ -144,10 +142,14 @@ export default function Home() {
   const nutritionLogged = selectedStatus.nutritionLogged;
   const habitAllDone = selectedStatus.habitAllDone;
   const checkinComplete = selectedStatus.checkinComplete;
-  const isFridaySelected = selectedStatus.isFriday;
+
+  // Safe selected day data
+  const selectedDayData: ApiDay | undefined = useMemo(() => {
+    if (!weeklyOverview?.days) return undefined;
+    return (weeklyOverview.days as ApiDay[]).find(d => d.dateKey === selectedDateKey);
+  }, [weeklyOverview, selectedDateKey]);
 
   // Hrefs
-  
   const workoutHref = hasWorkoutToday && selectedStatus.workoutIds?.length
     ? `/workout/${selectedStatus.workoutIds[0]}`
     : `/habit?date=${selectedDateKey}`;
@@ -155,19 +157,11 @@ export default function Home() {
   const habitHref = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
 
-  const iconMicro = "fas fa-bolt";
-  const iconNutrition = "fas fa-utensils";
-  const iconWorkout = "fas fa-dumbbell";
-  const iconHabit = "fas fa-check-circle";
-  const iconCheckin = "fas fa-clipboard-list";
-
-  const accentMicro = "#d97a3a";
-  const accentNutrition = "#4fa3a5";
-  const accentWorkout = "#5b7c99";
-  const accentHabit = "#9b6fa3";
-  const accentCheckin = "#c9a34e";
   const ringGreenStrong = "#64c37a";
   const ringGreenMuted = "#4ea96a";
+  const accentMicro = "#d97a3a";
+  const accentWorkout = "#5b7c99";
+  const accentCheckin = "#c9a34e";
 
   return (
     <>
@@ -198,14 +192,30 @@ export default function Home() {
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
 
-        {/* Challenge Banner */}
-        <ChallengeBanner
-          title="New Challenge"
-          message="2 Weeks of Energy"
-          href="/challenge"
-          iconLeft="fas fa-crown"
-          accentColor="#ffcc00"
-        />
+        {/* Weekly Progress Bar */}
+        {weeklyOverview?.weeklyTotals && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Weekly Progress</div>
+            <div style={{ background: "#333", borderRadius: 8, overflow: "hidden", height: 12 }}>
+              <div
+                style={{
+                  width: `${(weeklyOverview.weeklyTotals.completedTasks / weeklyOverview.weeklyTotals.totalTasks) * 100}%`,
+                  background: "#64c37a",
+                  height: "100%"
+                }}
+              />
+            </div>
+            <div style={{ fontSize: "0.85rem", marginTop: 4 }}>
+              {weeklyOverview.weeklyTotals.completedTasks} / {weeklyOverview.weeklyTotals.totalTasks} tasks completed
+            </div>
+          </div>
+        )}
+        {/* Challenge Carousel */}
+        <div style={{ display: "flex", overflowX: "auto", gap: 12, marginBottom: 16 }}>
+          <ChallengeBanner title="New Challenge" message="2 Weeks of Energy" href="/challenge" iconLeft="fas fa-crown" accentColor="#ffcc00" />
+          <ChallengeBanner title="Suggested Goal" message="1h30 per week" href="/goal" iconLeft="fas fa-bullseye" accentColor="#4fa3a5" />
+          <ChallengeBanner title="Weekly Snapshot" message="Track your progress" href="/stats" iconLeft="fas fa-chart-line" accentColor="#5b7c99" />
+        </div>
 
         {/* Calendar */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
@@ -252,22 +262,27 @@ export default function Home() {
             );
           })}
         </div>
-      {weeklyOverview?.days && (
-        <DailyTasksCard
-          dayLabel={`${selectedDay.toLocaleDateString(undefined, { weekday: "long" })}, ${selectedDay.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`}
-          nutritionSummary={(weeklyOverview?.days as ApiDay[]).find(d => d.dateKey === selectedDateKey)?.nutritionSummary}
-          nutritionLogged={nutritionLogged}
-          workoutSummary={(weeklyOverview?.days as ApiDay[]).find(d => d.dateKey === selectedDateKey)?.workoutSummary}
-          hasWorkout={hasWorkoutToday}
-          workoutDone={workoutDoneToday}
-          habitSummary={(weeklyOverview?.days as ApiDay[]).find(d => d.dateKey === selectedDateKey)?.habitSummary}
-          habitAllDone={habitAllDone}
-          checkinSummary={(weeklyOverview?.days as ApiDay[]).find(d => d.dateKey === selectedDateKey)?.checkinSummary}
-          checkinComplete={checkinComplete}
-          hrefs={{ nutrition: nutritionHref, workout: workoutHref, habit: habitHref, checkin: checkinHref }}
-        /> 
-      )}
+
+        {/* Daily Tasks Card */}
+        {selectedDayData && (
+          <DailyTasksCard
+            dayLabel={`${selectedDay.toLocaleDateString(undefined, { weekday: "long" })}, ${selectedDay.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`}
+            nutritionSummary={selectedDayData.nutritionSummary}
+            nutritionLogged={nutritionLogged}
+            workoutSummary={selectedDayData.workoutSummary}
+            hasWorkout={hasWorkoutToday}
+            workoutDone={workoutDoneToday}
+            habitSummary={selectedDayData.habitSummary}
+            habitAllDone={habitAllDone}
+            checkinSummary={selectedDayData.checkinSummary}
+            checkinComplete={checkinComplete}
+            hrefs={{ nutrition: nutritionHref, workout: workoutHref, habit: habitHref, checkin: checkinHref }}
+          />
+        )}
+
+
       </main>
+
       <BottomNav />
       <AddToHomeScreen />
     </>
