@@ -35,6 +35,15 @@ type DayStatus = {
   workoutIds: string[];
 };
 
+type ApiDay = {
+  dateKey: string;
+  nutritionSummary?: { calories: number; protein: number };
+  workoutSummary?: { calories: number; duration: number; weightUsed?: string };
+  habitSummary?: { completed: number; total: number };
+  checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number };
+};
+
+
 function getWeek(): Date[] {
   const today = new Date();
   const day = today.getDay();
@@ -243,22 +252,21 @@ export default function Home() {
             );
           })}
         </div>
+
         <DailyTasksCard
-          dayLabel={selectedDay.toLocaleDateString(undefined, { weekday: "long" })}
-          nutritionSummary={weeklyOverview?.days.find(d => d.dateKey === selectedDateKey)?.nutritionSummary}
+          dayLabel={`${selectedDay.toLocaleDateString(undefined, { weekday: "long" })}, ${selectedDay.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`}
+          nutritionSummary={(weeklyOverview?.days as ApiDay[]).find(d => d.dateKey === selectedDateKey)?.nutritionSummary}
           nutritionLogged={nutritionLogged}
-          workoutSummary={weeklyOverview?.days.find(d => d.dateKey === selectedDateKey)?.workoutSummary}
+          workoutSummary={(weeklyOverview?.days as ApiDay[]).find(d => d.dateKey === selectedDateKey)?.workoutSummary}
           hasWorkout={hasWorkoutToday}
           workoutDone={workoutDoneToday}
-          habitSummary={weeklyOverview?.days.find(d => d.dateKey === selectedDateKey)?.habitSummary}
+          habitSummary={(weeklyOverview?.days as ApiDay[]).find(d => d.dateKey === selectedDateKey)?.habitSummary}
           habitAllDone={habitAllDone}
-          checkinSummary={weeklyOverview?.days.find(d => d.dateKey === selectedDateKey)?.checkinSummary}
+          checkinSummary={(weeklyOverview?.days as ApiDay[]).find(d => d.dateKey === selectedDateKey)?.checkinSummary}
           checkinComplete={checkinComplete}
           hrefs={{ nutrition: nutritionHref, workout: workoutHref, habit: habitHref, checkin: checkinHref }}
         />
-
       </main>
-
       <BottomNav />
       <AddToHomeScreen />
     </>
