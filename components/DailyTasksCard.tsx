@@ -40,7 +40,7 @@ export default function DailyTasksCard({
   });
 
   return (
-    <div style={{ background: "#1e1e1e", borderRadius: 12, overflow: "hidden", marginBottom: 16 }}>
+    <div style={{ borderRadius: 12, overflow: "hidden", marginBottom: 16 }}>
       <div style={{ padding: "14px 16px", fontWeight: 700, fontSize: "1.1rem" }}>{dayLabel} Tasks</div>
 
       {/* Nutrition */}
