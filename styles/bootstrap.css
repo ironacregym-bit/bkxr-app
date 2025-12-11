@@ -13,6 +13,14 @@
  */
 
 
+/* Optional: subtle hover scale and focus ring for task rows */
+.futuristic-card:hover {
+  transform: scale(1.02);
+}
+.futuristic-card:active {
+  transform: scale(0.995);
+}
+
 main {
   background: transparent;
 }
