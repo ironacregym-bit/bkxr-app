@@ -9,6 +9,7 @@ import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 import BxkrBanner from "../components/BxkrBanner";
 import ChallengeBanner from "../components/ChallengeBanner";
+import DailyTasksCard from "../components/DailyTasksCard";
 
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
