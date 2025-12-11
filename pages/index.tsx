@@ -242,20 +242,20 @@ export default function Home() {
             );
           })}
         </div>
+        <DailyTasksCard
+          dayLabel={selectedDay.toLocaleDateString(undefined, { weekday: "long" })}
+          nutritionSummary={weeklyOverview?.days.find(d => d.dateKey === selectedDateKey)?.nutritionSummary}
+          nutritionLogged={nutritionLogged}
+          workoutSummary={weeklyOverview?.days.find(d => d.dateKey === selectedDateKey)?.workoutSummary}
+          hasWorkout={hasWorkoutToday}
+          workoutDone={workoutDoneToday}
+          habitSummary={weeklyOverview?.days.find(d => d.dateKey === selectedDateKey)?.habitSummary}
+          habitAllDone={habitAllDone}
+          checkinSummary={weeklyOverview?.days.find(d => d.dateKey === selectedDateKey)?.checkinSummary}
+          checkinComplete={checkinComplete}
+          hrefs={{ nutrition: nutritionHref, workout: workoutHref, habit: habitHref, checkin: checkinHref }}
+        />
 
-        {/* Banners */}
-        {!nutritionLogged && (
-          <BxkrBanner title="Nutrition" message="Log today’s meals and macros." href={nutritionHref} iconLeft={iconNutrition} accentColor={accentNutrition} buttonText="Start" />
-        )}
-        {hasWorkoutToday && !workoutDoneToday && (
-          <BxkrBanner title="Workout" message={`Start your programmed session for ${selectedDay.toLocaleDateString(undefined, { weekday: "long" })}.`} href={workoutHref} iconLeft={iconWorkout} accentColor={accentWorkout} buttonText="Start" />
-        )}
-        {!habitAllDone && (
-          <BxkrBanner title="Daily habit" message={`Fill in your daily habit for ${selectedDay.toLocaleDateString(undefined, { weekday: "long" })}.`} href={habitHref} iconLeft={iconHabit} accentColor={accentHabit} buttonText="Fill" />
-        )}
-        {isFridaySelected && !checkinComplete && (
-          <BxkrBanner title="Weekly check‑in" message="Complete your weekly check‑in." href={checkinHref} iconLeft={iconCheckin} accentColor={accentCheckin} buttonText="Check in" />
-        )}
       </main>
 
       <BottomNav />
