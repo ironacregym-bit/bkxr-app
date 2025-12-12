@@ -99,7 +99,6 @@ export default function Home() {
     return formatYMD(s);
   }, []);
 
-  // Server-side API reads session; we just pass week
   const { data: weeklyOverview, isLoading: overviewLoading } = useSWR(
     `/api/weekly/overview?week=${weekStartKey}`,
     fetcher,
@@ -163,7 +162,6 @@ export default function Home() {
     setWeekLoading(false);
   }, [weeklyOverview]);
 
-  // Client-derived weekly totals (always match visible tasks)
   const derivedWeeklyTotals = useMemo(() => {
     const days = (weeklyOverview?.days as any[]) || [];
     let totalTasks = 0;
@@ -172,7 +170,7 @@ export default function Home() {
     for (const o of days) {
       const { isFriday, hasWorkout, workoutDone, nutritionLogged, habitAllDone, checkinComplete } = deriveDayBooleans(o);
 
-      const dayTaskCount = 1 /* nutrition */ + 1 /* habit */ + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
+      const dayTaskCount = 1 + 1 + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
       totalTasks += dayTaskCount;
 
       const dayCompleteCount =
@@ -198,7 +196,6 @@ export default function Home() {
     return (weeklyOverview.days as ApiDay[]).find((d) => d.dateKey === selectedDateKey);
   }, [weeklyOverview, selectedDateKey]);
 
-  // Hrefs: harden workout route until id is ready
   const workoutIds = selectedStatus.workoutIds || [];
   const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
   const workoutHref = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
@@ -248,7 +245,7 @@ export default function Home() {
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
 
-        {/* Weekly Progress Bar (derived so it can’t disagree) */}
+        {/* Weekly Progress */}
         {weeklyOverview?.days && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>Weekly Progress</div>
@@ -308,21 +305,37 @@ export default function Home() {
                   className={`bxkr-day-pill ${status.allDone ? "completed" : ""}`}
                   style={{ boxShadow, fontWeight: isSelected ? 600 : 400, borderColor: status.allDone ? undefined : ringColor }}
                 >
-                  {d.getDate()}
+                  <span
+                    className={`bxkr-day-content ${
+                      status.allDone ? (isSelected ? "state-num" : "state-flame") : "state-num"
+                    }`}
+                  >
+                    {status.allDone && !isSelected ? (
+                      <i
+                        className="fas fa-fire"
+                        style={{
+                          color: ringGreenStrong,
+                          textShadow: `0 0 8px ${ringGreenStrong}`,
+                          fontSize: "1rem",
+                          lineHeight: 1
+                        }}
+                      />
+                    ) : (
+                      d.getDate()
+                    )}
+                  </span>
                 </div>
-                  <div className="bxkr-dots">
-                    {status.hasWorkout && (
-                      <span
-                        className="bxkr-dot"
-                        style={{ color: accentWorkout, backgroundColor: accentWorkout }}
-                      >
-                        {status.workoutDone ? "🔥" : ""}
-                      </span>
-                    )}
-                    {status.isFriday && !status.checkinComplete && (
-                      <span className="bxkr-dot" style={{ color: accentCheckin, backgroundColor: accentCheckin }} />
-                    )}
-                  </div>
+                <div className="bxkr-dots">
+                  {status.hasWorkout && (
+                    <span
+                      className="bxkr-dot"
+                      style={{ color: accentWorkout, backgroundColor: accentWorkout }}
+                    />
+                  )}
+                  {status.isFriday && !status.checkinComplete && (
+                    <span className="bxkr-dot" style={{ color: accentCheckin, backgroundColor: accentCheckin }} />
+                  )}
+                </div>
               </div>
             );
           })}
@@ -345,13 +358,11 @@ export default function Home() {
           />
         )}
 
-        {/* Gentle hint if workoutId isn't ready yet */}
         {hasWorkoutToday && !hasWorkoutId && (
           <div className="text-center" style={{ opacity: 0.8, fontSize: "0.9rem", marginTop: 8 }}>
             Loading workout details… <span className="inline-spinner" />
           </div>
         )}
-
       </main>
 
       <BottomNav />
