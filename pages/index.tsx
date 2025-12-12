@@ -1,7 +1,7 @@
 
 import Head from "next/head";
 import useSWR from "swr";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 import AddToHomeScreen from "../components/AddToHomeScreen";
@@ -108,6 +108,7 @@ export default function Home() {
   const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
   const [weekLoading, setWeekLoading] = useState<boolean>(false);
 
+  // ==== TRUST API BOOLEANS (do not infer nutrition from summary) ====
   const deriveDayBooleans = (o: any) => {
     const isFriday = Boolean(o.isFriday ?? new Date(o.dateKey + "T00:00:00").getDay() === 5);
     const hasWorkout = Boolean(o.hasWorkout) || Boolean(o.workoutIds?.length) || Boolean(o.workoutSummary);
@@ -161,6 +162,7 @@ export default function Home() {
     setWeekLoading(false);
   }, [weeklyOverview]);
 
+  // === Streaks (Mon -> selected day) ===
   const dayStreak = useMemo(() => {
     let streak = 0;
     for (const d of weekDays) {
@@ -189,6 +191,7 @@ export default function Home() {
     return streak;
   }, [weekDays, weekStatus, selectedDay]);
 
+  // === Progress bar totals derived from visible tasks ===
   const derivedWeeklyTotals = useMemo(() => {
     const days = (weeklyOverview?.days as any[]) || [];
     let totalTasks = 0;
@@ -197,7 +200,7 @@ export default function Home() {
     for (const o of days) {
       const { isFriday, hasWorkout, workoutDone, nutritionLogged, habitAllDone, checkinComplete } = deriveDayBooleans(o);
 
-      const dayTaskCount = 1 + 1 + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
+      const dayTaskCount = 1 /* nutrition */ + 1 /* habit */ + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
       totalTasks += dayTaskCount;
 
       const dayCompleteCount =
@@ -223,6 +226,7 @@ export default function Home() {
     return (weeklyOverview.days as ApiDay[]).find((d) => d.dateKey === selectedDateKey);
   }, [weeklyOverview, selectedDateKey]);
 
+  // Hrefs
   const workoutIds = selectedStatus.workoutIds || [];
   const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
   const workoutHref = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
@@ -236,6 +240,33 @@ export default function Home() {
   const accentMicro = "#d97a3a";
   const accentWorkout = "#5b7c99";
   const accentCheckin = "#c9a34e";
+
+  // === Carousel refs/state ===
+  const slidesCount = 3; // Share | Streaks | Snapshot
+  const carouselRef = useRef<HTMLDivElement | null>(null);
+  const [slideIndex, setSlideIndex] = useState(0);
+
+  const goToSlide = (idx: number) => {
+    const el = carouselRef.current;
+    if (!el) return;
+    const width = el.clientWidth;
+    el.scrollTo({ left: idx * width, behavior: "smooth" });
+    setSlideIndex(idx);
+  };
+
+  // Track current slide on scroll (native scroll-snap)
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      const width = el.clientWidth;
+      const idx = Math.round(el.scrollLeft / Math.max(width, 1));
+      if (idx !== slideIndex) setSlideIndex(idx);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [slideIndex]);
 
   return (
     <>
@@ -257,7 +288,11 @@ export default function Home() {
           {status === "authenticated" ? (
             <button className="btn btn-link text-light p-0" onClick={() => signOut()}>Sign out</button>
           ) : (
-            <button className="btn btn-link text-light p-0" onClick={() => signIn("google")} style={{ background: "transparent", border: "none", textDecoration: "underline" }}>
+            <button
+              className="btn btn-link text-light p-0"
+              onClick={() => signIn("google")}
+              style={{ background: "transparent", border: "none", textDecoration: "underline" }}
+            >
               Sign in
             </button>
           )}
@@ -270,7 +305,7 @@ export default function Home() {
 
         {/* Weekly Progress */}
         {weeklyOverview?.days && (
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 12 }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>Weekly Progress</div>
             <div style={{ background: "#333", borderRadius: 8, overflow: "hidden", height: 12 }}>
               <div
@@ -290,72 +325,91 @@ export default function Home() {
           </div>
         )}
 
-
-        {/* Scrollable ChallengeBanner-style section (slightly wider, content across) */}
-        <div style={{ display: "flex", overflowX: "auto", gap: 12, marginBottom: 16 }}>
-          {/* Banner 1: Share Your Progress (disabled button) */}
-          <ChallengeBanner
-            title="Share Your Progress"
-            message={
-              <span style={{ whiteSpace: "nowrap" }}>
-              </span>
-            }
-            href="#"
-            iconLeft="fas fa-share-alt"
-            accentColor="#ffcc00"
-            // Replace the default button with a disabled pill
-            extraContent={
-              <button className="bxkr-btn" disabled style={{ marginLeft: 6 }}>Coming Soon</button>
-            }
-            // Slightly wider banner (like your original)
-            style={{ minWidth: 260, maxWidth: 280 }}
-          />
-        
-          {/* Banner 2: Streaks (no button) */}
-          <ChallengeBanner
-            title="Streaks"
-            message={
-              <span style={{ whiteSpace: "nowrap" }}>
-                <strong>Day Streak:</strong> {dayStreak} days &nbsp;|&nbsp; 
-                <strong>Workout Streak:</strong> {workoutStreak} days
-              </span>
-            }
-            href="#"                    // keeps consistent layout; click does nothing
-            iconLeft="fas fa-fire"
-            accentColor="#64c37a"
-            showButton={false}          // ⬅ removes Start button
-            style={{ minWidth: 260, maxWidth: 280 }}
-          />
-        
-          {/* Banner 3: Weekly Snapshot (no button) */}
-          {weeklyOverview?.weeklyTotals && (
+        {/* ======= FULL-WIDTH MOBILE CAROUSEL (one banner per screen) ======= */}
+        <div className="bxkr-carousel" ref={carouselRef} aria-label="Weekly banners carousel">
+          {/* Slide 1: Share Your Progress (disabled pill) */}
+          <section className="bxkr-slide">
             <ChallengeBanner
-              title="Weekly Snapshot"
+              title="Share Your Progress"
               message={
-                <div style={{ fontSize: "0.85rem", lineHeight: 1.35 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span><strong>Workouts Completed</strong></span>
-                    <span>{weeklyOverview.weeklyTotals.totalWorkoutsCompleted}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span><strong>Time Worked Out</strong></span>
-                    <span>{weeklyOverview.weeklyTotals.totalWorkoutTime} mins</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span><strong>Calories Burned</strong></span>
-                    <span>{weeklyOverview.weeklyTotals.totalCaloriesBurned} kcal</span>
-                  </div>
-                </div>
+                <span>
+                  Export a weekly card with streaks, workouts, time &amp; calories.
+                </span>
               }
               href="#"
-              iconLeft="fas fa-chart-line"
-              accentColor="#5b7c99"
-              showButton={false}         // ⬅ removes Start button
-              style={{ minWidth: 260, maxWidth: 280 }}
-          />
-          )}
+              iconLeft="fas fa-share-alt"
+              accentColor="#ffcc00"
+              extraContent={
+                <button className="bxkr-btn" disabled>Coming soon</button>
+              }
+              // no further width constraints—parent controls width
+              style={{ margin: 0 }}
+            />
+          </section>
+
+          {/* Slide 2: Streaks (no button) */}
+          <section className="bxkr-slide">
+            <ChallengeBanner
+              title="Streaks"
+              message={
+                <span style={{ whiteSpace: "nowrap" }}>
+                  <strong>Day Streak:</strong> {dayStreak} days &nbsp;|&nbsp;
+                  <strong>Workout Streak:</strong> {workoutStreak} days
+                </span>
+              }
+              href="#"
+              iconLeft="fas fa-fire"
+              accentColor="#64c37a"
+              showButton={false}
+              style={{ margin: 0 }}
+            />
+          </section>
+
+          {/* Slide 3: Weekly Snapshot (no button) */}
+          <section className="bxkr-slide">
+            {weeklyOverview?.weeklyTotals && (
+              <ChallengeBanner
+                title="Weekly Snapshot"
+                message={
+                  <div style={{ fontSize: "0.9rem", lineHeight: 1.35 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span><strong>Workouts Completed</strong></span>
+                      <span>{weeklyOverview.weeklyTotals.totalWorkoutsCompleted}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span><strong>Time Worked Out</strong></span>
+                      <span>{weeklyOverview.weeklyTotals.totalWorkoutTime} mins</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span><strong>Calories Burned</strong></span>
+                      <span>{weeklyOverview.weeklyTotals.totalCaloriesBurned} kcal</span>
+                    </div>
+                  </div>
+                }
+                href="#"
+                iconLeft="fas fa-chart-line"
+                accentColor="#5b7c99"
+                showButton={false}
+                style={{ margin: 0 }}
+              />
+            )}
+          </section>
         </div>
 
+        {/* Carousel dots */}
+        <div className="bxkr-carousel-dots" role="tablist" aria-label="Carousel pagination">
+          {[0, 1, 2].map((i) => (
+            <button
+              key={i}
+              type="button"
+              className={`bxkr-carousel-dot ${slideIndex === i ? "active" : ""}`}
+              aria-label={`Go to slide ${i + 1}`}
+              aria-selected={slideIndex === i}
+              onClick={() => goToSlide(i)}
+            />
+          ))}
+        </div>
+        {/* ======= /carousel ======= */}
 
         {/* Calendar */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
@@ -374,8 +428,8 @@ export default function Home() {
             }
 
             const ringColor = status.allDone
-              ? (isSelected ? ringGreenStrong : ringGreenMuted)
-              : (isSelected ? accentMicro : "rgba(255,255,255,0.3)");
+              ? (isSelected ? "#64c37a" : "#4ea96a")
+              : (isSelected ? "#d97a3a" : "rgba(255,255,255,0.3)");
 
             const boxShadow = isSelected
               ? `0 0 8px ${ringColor}`
@@ -397,8 +451,8 @@ export default function Home() {
                       <i
                         className="fas fa-fire"
                         style={{
-                          color: ringGreenStrong,
-                          textShadow: `0 0 8px ${ringGreenStrong}`,
+                          color: "#64c37a",
+                          textShadow: `0 0 8px #64c37a`,
                           fontSize: "1rem",
                           lineHeight: 1
                         }}
