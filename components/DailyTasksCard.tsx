@@ -33,10 +33,8 @@ export default function DailyTasksCard({
   userCalorieTarget = 2000,
   userProteinTarget = 150
 }: Props) {
-  // Robust Friday detection from the label your page already renders (e.g., "Friday")
   const isFriday = typeof dayLabel === "string" && dayLabel.toLowerCase().startsWith("fri");
 
-  // Glassy row with accent + done state glow
   const rowStyle = (done: boolean, accent: string): React.CSSProperties => ({
     display: "flex",
     alignItems: "center",
@@ -45,7 +43,6 @@ export default function DailyTasksCard({
     padding: "14px 18px",
     marginBottom: 10,
     borderRadius: 12,
-    // Glass base (matches your .futuristic-card / .habit-row vibe)
     background: done ? "rgba(100,195,122,0.12)" : "rgba(255,255,255,0.06)",
     backdropFilter: "blur(8px)",
     border: `1px solid ${done ? "rgba(100,195,122,0.35)" : "rgba(255,255,255,0.12)"}`,
@@ -67,19 +64,6 @@ export default function DailyTasksCard({
   const valueStyle: React.CSSProperties = {
     opacity: 0.9,
     fontWeight: 600
-  };
-
-  const pillSuccess: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "6px 12px",
-    borderRadius: 999,
-    color: "#0d1a12",
-    background: "#64c37a",
-    boxShadow: "0 0 10px rgba(100,195,122,0.5)",
-    fontWeight: 700,
-    fontSize: "0.85rem"
   };
 
   const onHover = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -115,7 +99,7 @@ export default function DailyTasksCard({
         </div>
       </Link>
 
-      {/* Workout (hidden entirely when no workout) */}
+      {/* Workout */}
       {hasWorkout && (
         <Link href={hrefs.workout} aria-label="Open Workout">
           <div
@@ -129,23 +113,9 @@ export default function DailyTasksCard({
               <span>Workout</span>
             </span>
             <span style={valueStyle}>
-              {workoutDone ? (
-                <>
-                  <span style={pillSuccess}>
-                    <i className="fas fa-check" />
-                    Completed
-                  </span>
-                  <span style={{ marginLeft: 10, opacity: 0.9 }}>
-                    {typeof workoutSummary?.calories === "number" ? `${workoutSummary.calories} kcal` : ""}
-                    {typeof workoutSummary?.duration === "number"
-                      ? ` · ${Math.round(workoutSummary.duration)} min`
-                      : ""}
-                    {workoutSummary?.weightUsed ? ` · ${workoutSummary.weightUsed}` : ""}
-                  </span>
-                </>
-              ) : (
-                "Pending"
-              )}
+              {workoutDone
+                ? `${workoutSummary?.calories || 0} kcal${workoutSummary?.duration ? ` · ${Math.round(workoutSummary.duration)} min` : ""}${workoutSummary?.weightUsed ? ` · ${workoutSummary.weightUsed}` : ""}`
+                : "Pending"}
             </span>
           </div>
         </Link>
@@ -169,7 +139,7 @@ export default function DailyTasksCard({
         </div>
       </Link>
 
-      {/* Weekly Check‑In – show ONLY on Fridays */}
+      {/* Weekly Check-In */}
       {isFriday && (
         <Link href={hrefs.checkin} aria-label="Open Weekly Check-In">
           <div
@@ -180,7 +150,7 @@ export default function DailyTasksCard({
           >
             <span style={iconWrap}>
               <i className="fas fa-clipboard-list" style={{ color: "#c9a34e" }} />
-              <span>Check‑In</span>
+              <span>Check-In</span>
             </span>
             <span style={valueStyle}>
               {checkinSummary
