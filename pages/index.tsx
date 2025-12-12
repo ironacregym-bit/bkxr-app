@@ -40,6 +40,12 @@ type ApiDay = {
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
   habitSummary?: { completed: number; total: number };
   checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number };
+  hasWorkout?: boolean;
+  workoutDone?: boolean;
+  nutritionLogged?: boolean;
+  habitAllDone?: boolean;
+  isFriday?: boolean;
+  checkinComplete?: boolean;
 };
 
 function getWeek(): Date[] {
@@ -48,6 +54,7 @@ function getWeek(): Date[] {
   const diffToMon = (day + 6) % 7;
   const monday = new Date(today);
   monday.setDate(today.getDate() - diffToMon);
+  monday.setHours(0, 0, 0, 0);
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
@@ -55,9 +62,7 @@ function getWeek(): Date[] {
   });
 }
 function formatYMD(d: Date) {
-  const n = new Date(d);
-  n.setHours(0, 0, 0, 0);
-  return n.toISOString().slice(0, 10);
+  return d.toLocaleDateString("en-CA");
 }
 function isSameDay(a: Date, b: Date) {
   return (
@@ -89,22 +94,49 @@ export default function Home() {
     hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
   const selectedDateKey = formatYMD(selectedDay);
 
-  // Compute week start key for API
   const weekStartKey = useMemo(() => {
     const s = startOfAlignedWeek(new Date());
-    s.setHours(0, 0, 0, 0);
-    return s.toISOString().slice(0, 10);
+    return formatYMD(s);
   }, []);
 
-  // Fetch weekly overview
+  // Server-side API reads session; we just pass week
   const { data: weeklyOverview, isLoading: overviewLoading } = useSWR(
-    session?.user?.email ? `/api/weekly/overview?week=${weekStartKey}` : null,
+    `/api/weekly/overview?week=${weekStartKey}`,
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 60_000 }
   );
 
   const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
   const [weekLoading, setWeekLoading] = useState<boolean>(false);
+
+  const deriveDayBooleans = (o: any) => {
+    const isFriday = Boolean(o.isFriday ?? new Date(o.dateKey + "T00:00:00").getDay() === 5);
+    const hasWorkout = Boolean(o.hasWorkout) || Boolean(o.workoutIds?.length) || Boolean(o.workoutSummary);
+    const workoutDone =
+      Boolean(o.workoutDone) ||
+      Boolean(o.workoutSummary && (o.workoutSummary.calories || o.workoutSummary.duration || o.workoutSummary.weightUsed));
+    const nutritionLogged = Boolean(o.nutritionLogged) || Boolean(o.nutritionSummary);
+    const habitAllDone =
+      Boolean(o.habitAllDone) ||
+      (o.habitSummary ? o.habitSummary.completed >= o.habitSummary.total && o.habitSummary.total > 0 : false);
+    const checkinComplete = Boolean(o.checkinComplete) || Boolean(o.checkinSummary);
+
+    const allDone =
+      (!hasWorkout || workoutDone) &&
+      nutritionLogged &&
+      habitAllDone &&
+      (!isFriday || checkinComplete);
+
+    return {
+      isFriday,
+      hasWorkout,
+      workoutDone,
+      nutritionLogged,
+      habitAllDone,
+      checkinComplete,
+      allDone
+    };
+  };
 
   useEffect(() => {
     if (!weeklyOverview?.days?.length) return;
@@ -113,21 +145,16 @@ export default function Home() {
     const statuses: Record<string, DayStatus> = {};
 
     for (const o of weeklyOverview.days as any[]) {
-      const allDone =
-        (!o.hasWorkout || o.workoutDone) &&
-        o.nutritionLogged &&
-        o.habitAllDone &&
-        (!o.isFriday || o.checkinComplete);
-
+      const b = deriveDayBooleans(o);
       statuses[o.dateKey] = {
         dateKey: o.dateKey,
-        hasWorkout: o.hasWorkout,
-        workoutDone: o.workoutDone,
-        nutritionLogged: o.nutritionLogged,
-        habitAllDone: o.habitAllDone,
-        isFriday: o.isFriday,
-        checkinComplete: o.checkinComplete,
-        allDone,
+        hasWorkout: b.hasWorkout,
+        workoutDone: b.workoutDone,
+        nutritionLogged: b.nutritionLogged,
+        habitAllDone: b.habitAllDone,
+        isFriday: b.isFriday,
+        checkinComplete: b.checkinComplete,
+        allDone: b.allDone,
         workoutIds: o.workoutIds || [],
       };
     }
@@ -136,23 +163,46 @@ export default function Home() {
     setWeekLoading(false);
   }, [weeklyOverview]);
 
-  const selectedStatus = weekStatus[selectedDateKey] || {};
-  const hasWorkoutToday = selectedStatus.hasWorkout;
-  const workoutDoneToday = selectedStatus.workoutDone;
-  const nutritionLogged = selectedStatus.nutritionLogged;
-  const habitAllDone = selectedStatus.habitAllDone;
-  const checkinComplete = selectedStatus.checkinComplete;
+  // Client-derived weekly totals (always match visible tasks)
+  const derivedWeeklyTotals = useMemo(() => {
+    const days = (weeklyOverview?.days as any[]) || [];
+    let totalTasks = 0;
+    let completedTasks = 0;
 
-  // Safe selected day data
+    for (const o of days) {
+      const { isFriday, hasWorkout, workoutDone, nutritionLogged, habitAllDone, checkinComplete } = deriveDayBooleans(o);
+
+      const dayTaskCount = 1 /* nutrition */ + 1 /* habit */ + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
+      totalTasks += dayTaskCount;
+
+      const dayCompleteCount =
+        (nutritionLogged ? 1 : 0) +
+        (habitAllDone ? 1 : 0) +
+        (hasWorkout && workoutDone ? 1 : 0) +
+        (isFriday && checkinComplete ? 1 : 0);
+      completedTasks += dayCompleteCount;
+    }
+
+    return { totalTasks, completedTasks };
+  }, [weeklyOverview]);
+
+  const selectedStatus = weekStatus[selectedDateKey] || {};
+  const hasWorkoutToday = Boolean(selectedStatus.hasWorkout);
+  const workoutDoneToday = Boolean(selectedStatus.workoutDone);
+  const nutritionLogged = Boolean(selectedStatus.nutritionLogged);
+  const habitAllDone = Boolean(selectedStatus.habitAllDone);
+  const checkinComplete = Boolean(selectedStatus.checkinComplete);
+
   const selectedDayData: ApiDay | undefined = useMemo(() => {
     if (!weeklyOverview?.days) return undefined;
-    return (weeklyOverview.days as ApiDay[]).find(d => d.dateKey === selectedDateKey);
+    return (weeklyOverview.days as ApiDay[]).find((d) => d.dateKey === selectedDateKey);
   }, [weeklyOverview, selectedDateKey]);
 
-  // Hrefs
-  const workoutHref = hasWorkoutToday && selectedStatus.workoutIds?.length
-    ? `/workout/${selectedStatus.workoutIds[0]}`
-    : `/habit?date=${selectedDateKey}`;
+  // Hrefs: harden workout route until id is ready
+  const workoutIds = selectedStatus.workoutIds || [];
+  const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
+  const workoutHref = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
+
   const nutritionHref = `/nutrition?date=${selectedDateKey}`;
   const habitHref = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
@@ -183,7 +233,13 @@ export default function Home() {
           {status === "authenticated" ? (
             <button className="btn btn-link text-light p-0" onClick={() => signOut()}>Sign out</button>
           ) : (
-            <button className="btn btn-link text-light p-0" onClick={() => signIn("google")} style={{ background: "transparent", border: "none", textDecoration: "underline" }}>Sign in</button>
+            <button
+              className="btn btn-link text-light p-0"
+              onClick={() => signIn("google")}
+              style={{ background: "transparent", border: "none", textDecoration: "underline" }}
+            >
+              Sign in
+            </button>
           )}
         </div>
 
@@ -192,24 +248,28 @@ export default function Home() {
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
 
-        {/* Weekly Progress Bar */}
-        {weeklyOverview?.weeklyTotals && (
+        {/* Weekly Progress Bar (derived so it can’t disagree) */}
+        {weeklyOverview?.days && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>Weekly Progress</div>
             <div style={{ background: "#333", borderRadius: 8, overflow: "hidden", height: 12 }}>
               <div
                 style={{
-                  width: `${(weeklyOverview.weeklyTotals.completedTasks / weeklyOverview.weeklyTotals.totalTasks) * 100}%`,
+                  width:
+                    derivedWeeklyTotals.totalTasks > 0
+                      ? `${(derivedWeeklyTotals.completedTasks / derivedWeeklyTotals.totalTasks) * 100}%`
+                      : "0%",
                   background: "#64c37a",
                   height: "100%"
                 }}
               />
             </div>
             <div style={{ fontSize: "0.85rem", marginTop: 4 }}>
-              {weeklyOverview.weeklyTotals.completedTasks} / {weeklyOverview.weeklyTotals.totalTasks} tasks completed
+              {derivedWeeklyTotals.completedTasks} / {derivedWeeklyTotals.totalTasks} tasks completed
             </div>
           </div>
         )}
+
         {/* Challenge Carousel */}
         <div style={{ display: "flex", overflowX: "auto", gap: 12, marginBottom: 16 }}>
           <ChallengeBanner title="New Challenge" message="2 Weeks of Energy" href="/challenge" iconLeft="fas fa-crown" accentColor="#ffcc00" />
@@ -280,6 +340,12 @@ export default function Home() {
           />
         )}
 
+        {/* Gentle hint if workoutId isn't ready yet */}
+        {hasWorkoutToday && !hasWorkoutId && (
+          <div className="text-center" style={{ opacity: 0.8, fontSize: "0.9rem", marginTop: 8 }}>
+            Loading workout details… <span className="inline-spinner" />
+          </div>
+        )}
 
       </main>
 
