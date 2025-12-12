@@ -146,13 +146,19 @@ export default function Home() {
     setWeekLoading(false);
   }, [weeklyOverview]);
 
+  // ✅ FIXED STREAK LOGIC
   const dayStreak = useMemo(() => {
     let streak = 0;
     for (const d of weekDays) {
       const st = weekStatus[formatYMD(d)];
       if (!st) break;
-      if (st.allDone) streak++;
-      else streak = 0;
+
+      if (d < selectedDay && st.allDone) {
+        streak++;
+      } else if (d < selectedDay && !st.allDone) {
+        streak = 0;
+      }
+
       if (isSameDay(d, selectedDay)) break;
     }
     return streak;
@@ -163,10 +169,12 @@ export default function Home() {
     for (const d of weekDays) {
       const st = weekStatus[formatYMD(d)];
       if (!st) break;
-      if (st.hasWorkout) {
+
+      if (d < selectedDay && st.hasWorkout) {
         if (st.workoutDone) streak++;
         else streak = 0;
       }
+
       if (isSameDay(d, selectedDay)) break;
     }
     return streak;
@@ -202,7 +210,6 @@ export default function Home() {
   const habitHref = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
 
-  const ringGreenStrong = "#64c37a";
   const accentMicro = "#ff8a2a"; // Neon Orange
 
   const carouselRef = useRef<HTMLDivElement | null>(null);
@@ -277,13 +284,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Loader for Weekly Snapshot */}
-        {overviewLoading && (
-          <div style={{ textAlign: "center", marginBottom: 12 }}>
-            Loading weekly snapshot… <span className="inline-spinner" />
-          </div>
-        )}
-
         {/* Carousel */}
         <div className="bxkr-carousel" ref={carouselRef} aria-label="Weekly banners carousel">
           {/* Slide 1 */}
@@ -293,8 +293,8 @@ export default function Home() {
               message=""
               href="#"
               iconLeft="fas fa-share-alt"
-              accentColor={accentMicro}
-              background="linear-gradient(90deg, rgba(255,138,42,.38), rgba(255,179,71,.32))"
+              accentColor="#ff8a2a"
+              background="linear-gradient(90deg, rgba(217,122,58,.38), rgba(255,179,71,.32))"
               extraContent={<button className="bxkr-btn" disabled>Coming soon</button>}
               style={{ margin: 0 }}
             />
@@ -375,7 +375,7 @@ export default function Home() {
               );
             }
 
-            const ringColor = st.allDone ? (isSelected ? ringGreenStrong : ringGreenStrong) : (isSelected ? accentMicro : "rgba(255,255,255,0.3)");
+            const ringColor = st.allDone ? "#64c37a" : (isSelected ? accentMicro : "rgba(255,255,255,0.3)");
             const boxShadow = isSelected ? `0 0 8px ${ringColor}` : (st.allDone ? `0 0 3px ${ringColor}` : "none");
 
             return (
@@ -387,14 +387,7 @@ export default function Home() {
                   className={`bxkr-day-pill ${st.allDone ? "completed" : ""}`}
                   style={{ boxShadow, fontWeight: isSelected ? 600 : 400, borderColor: st.allDone ? undefined : ringColor }}
                 >
-                  <span className={`bxkr-day-content ${st.allDone ? (isSelected ? "state-num" : "state-flame") : "state-num"}`}>
-                    {st.allDone && !isSelected ? (
-                      <i className="fas fa-fire" style={{ color: ringGreenStrong, textShadow: `0 0 8px ${ringGreenStrong}`, fontSize: "1rem", lineHeight: 1 }} />
-                    ) : (
-                      d.getDate()
-                    )}
-                  </span>
-                </div>
+                  <span className={`bxkr-day-content ${st.allDone ? (isSelected ? "state-num" : "state-flame") :
               </div>
             );
           })}
@@ -403,12 +396,7 @@ export default function Home() {
         {/* Daily Tasks Card */}
         {selectedDayData && (
           <DailyTasksCard
-            dayLabel={`${selectedDay.toLocaleDateString(undefined, {
-              weekday: "long",
-            })}, ${selectedDay.toLocaleDateString(undefined, {
-              day: "numeric",
-              month: "short",
-            })}`}
+            dayLabel={`${selectedDay.toLocaleDateString(undefined, { weekday: "long" })}, ${selectedDay.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`}
             nutritionSummary={selectedDayData.nutritionSummary}
             nutritionLogged={Boolean(selectedStatus.nutritionLogged)}
             workoutSummary={selectedDayData.workoutSummary}
@@ -450,4 +438,3 @@ export default function Home() {
     </>
   );
 }
-
