@@ -7,8 +7,7 @@ import BottomNav from "../components/BottomNav";
 import AddToHomeScreen from "../components/AddToHomeScreen";
 import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
-// ChallengeBanner removed (not used now)
-// import ChallengeBanner from "../components/ChallengeBanner";
+import ChallengeBanner from "../components/ChallengeBanner";
 import DailyTasksCard from "../components/DailyTasksCard";
 
 export const getServerSideProps: GetServerSideProps = async (
@@ -109,7 +108,6 @@ export default function Home() {
   const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
   const [weekLoading, setWeekLoading] = useState<boolean>(false);
 
-  // TRUST API flags; do not infer nutrition from summary
   const deriveDayBooleans = (o: any) => {
     const isFriday = Boolean(o.isFriday ?? new Date(o.dateKey + "T00:00:00").getDay() === 5);
     const hasWorkout = Boolean(o.hasWorkout) || Boolean(o.workoutIds?.length) || Boolean(o.workoutSummary);
@@ -163,7 +161,6 @@ export default function Home() {
     setWeekLoading(false);
   }, [weeklyOverview]);
 
-  // Streaks (Mon -> selected day)
   const dayStreak = useMemo(() => {
     let streak = 0;
     for (const d of weekDays) {
@@ -192,7 +189,6 @@ export default function Home() {
     return streak;
   }, [weekDays, weekStatus, selectedDay]);
 
-  // Progress bar totals derived from visible tasks
   const derivedWeeklyTotals = useMemo(() => {
     const days = (weeklyOverview?.days as any[]) || [];
     let totalTasks = 0;
@@ -201,7 +197,7 @@ export default function Home() {
     for (const o of days) {
       const { isFriday, hasWorkout, workoutDone, nutritionLogged, habitAllDone, checkinComplete } = deriveDayBooleans(o);
 
-      const dayTaskCount = 1 /* nutrition */ + 1 /* habit */ + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
+      const dayTaskCount = 1 + 1 + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
       totalTasks += dayTaskCount;
 
       const dayCompleteCount =
@@ -227,7 +223,6 @@ export default function Home() {
     return (weeklyOverview.days as ApiDay[]).find((d) => d.dateKey === selectedDateKey);
   }, [weeklyOverview, selectedDateKey]);
 
-  // Hrefs
   const workoutIds = selectedStatus.workoutIds || [];
   const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
   const workoutHref = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
@@ -273,7 +268,7 @@ export default function Home() {
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
 
-        {/* Weekly Progress Bar */}
+        {/* Weekly Progress */}
         {weeklyOverview?.days && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>Weekly Progress</div>
@@ -295,54 +290,46 @@ export default function Home() {
           </div>
         )}
 
-        {/* Scrollable Cards */}
-        <div className="bxkr-card-scroller" style={{ marginBottom: 16 }}>
-          {/* Share Your Progress */}
-          <div className="glass-card" style={{ minWidth: 220, padding: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <i className="fas fa-share-alt" style={{ fontSize: "1.4rem", color: "#ffcc00" }} />
-              <div style={{ fontWeight: 700, fontSize: "1rem" }}>Share Your Progress</div>
-            </div>
-            <div style={{ fontSize: "0.9rem", opacity: 0.85, marginBottom: 12 }}>
-              Export a weekly card with streaks, workouts, time & calories.
-            </div>
-            <button className="bxkr-btn" disabled aria-label="Coming soon">Coming soon</button>
-          </div>
+        {/* Scrollable ChallengeBanner-style section */}
+        <div style={{ display: "flex", overflowX: "auto", gap: 12, marginBottom: 16 }}>
+          {/* Banner 1: Share Your Progress */}
+          <ChallengeBanner
+            title="Share Your Progress"
+            message="Export a weekly card with streaks, workouts, time & calories."
+            href="#"
+            iconLeft="fas fa-share-alt"
+            accentColor="#ffcc00"
+            extraContent={
+              <button className="bxkr-btn" disabled style={{ marginTop: 8 }}>Coming Soon</button>
+            }
+          />
 
-          {/* Day Streak */}
-          <div className="glass-card" style={{ minWidth: 160, padding: 16, textAlign: "center" }}>
-            <i className="fas fa-fire" style={{ fontSize: "1.6rem", color: ringGreenStrong, marginBottom: 8 }} />
-            <div style={{ fontWeight: 700 }}>Day Streak</div>
-            <div style={{ fontSize: "1.2rem" }}>{dayStreak} days</div>
-          </div>
+          {/* Banner 2: Streaks */}
+          <ChallengeBanner
+            title="Streaks"
+            message={`Day Streak: ${dayStreak} days | Workout Streak: ${workoutStreak} days`}
+            href="#"
+            iconLeft="fas fa-fire"
+            accentColor="#64c37a"
+          />
 
-          {/* Workout Streak */}
-          <div className="glass-card" style={{ minWidth: 160, padding: 16, textAlign: "center" }}>
-            <i className="fas fa-dumbbell" style={{ fontSize: "1.6rem", color: accentWorkout, marginBottom: 8 }} />
-            <div style={{ fontWeight: 700 }}>Workout Streak</div>
-            <div style={{ fontSize: "1.2rem" }}>{workoutStreak} days</div>
-          </div>
-
-          {/* Weekly Snapshot */}
+          {/* Banner 3: Weekly Snapshot */}
           {weeklyOverview?.weeklyTotals && (
-            <div className="glass-card snapshot-card" style={{ minWidth: 220, padding: 16 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                <i className="fas fa-chart-line" style={{ color: "#5b7c99" }} />
-                Weekly Snapshot
-              </div>
-              <div className="snapshot-row">
-                <span>Workouts completed</span>
-                <span>{weeklyOverview.weeklyTotals.totalWorkoutsCompleted}</span>
-              </div>
-              <div className="snapshot-row">
-                <span>Time worked out</span>
-                <span>{weeklyOverview.weeklyTotals.totalWorkoutTime} min</span>
-              </div>
-              <div className="snapshot-row">
-                <span>Calories burned</span>
-                <span>{weeklyOverview.weeklyTotals.totalCaloriesBurned} kcal</span>
-              </div>
-            </div>
+            <ChallengeBanner
+              title="Weekly Snapshot"
+              message={
+                <>
+                  <div style={{ fontSize: "0.85rem", lineHeight: "1.4" }}>
+                    <strong>Workouts:</strong> {weeklyOverview.weeklyTotals.totalWorkoutsCompleted}<br />
+                    <strong>Time:</strong> {weeklyOverview.weeklyTotals.totalWorkoutTime} mins<br />
+                    <strong>Calories:</strong> {weeklyOverview.weeklyTotals.totalCaloriesBurned} kcal
+                  </div>
+                </>
+              }
+              href="#"
+              iconLeft="fas fa-chart-line"
+              accentColor="#5b7c99"
+            />
           )}
         </div>
 
