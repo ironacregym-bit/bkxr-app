@@ -291,6 +291,32 @@ body::before {
   animation: bxkr-pop-in .18s ease;
 }
 
+/* Banner lane: keep items aligned and prevent oversized widths */
+.bxkr-banner-lane {
+  display: flex;
+  overflow-x: auto;
+  gap: 12px;
+  padding-bottom: 4px;
+}
+
+/* Optional: tighten banner title & message spacing inside ChallengeBanner */
+.challenge-banner-title {
+  font-weight: 700;
+  font-size: 16px;
+}
+.challenge-banner-message {
+  font-size: 13px;
+  opacity: 0.9;
+  line-height: 1.35;
+  white-space: nowrap; /* keep content flowing across */
+}
+
+/* Disabled pill consistency (already matches your .bxkr-btn styles) */
+.bxkr-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 
 :root,
 
