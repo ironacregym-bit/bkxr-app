@@ -99,6 +99,7 @@ export default function Home() {
     return formatYMD(s);
   }, []);
 
+  // Weekly overview from server (session-aware)
   const { data: weeklyOverview, isLoading: overviewLoading } = useSWR(
     `/api/weekly/overview?week=${weekStartKey}`,
     fetcher,
@@ -108,13 +109,15 @@ export default function Home() {
   const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
   const [weekLoading, setWeekLoading] = useState<boolean>(false);
 
+  // ==== TRUST API BOOLEANS (fixes nutrition showing as complete) ====
   const deriveDayBooleans = (o: any) => {
     const isFriday = Boolean(o.isFriday ?? new Date(o.dateKey + "T00:00:00").getDay() === 5);
     const hasWorkout = Boolean(o.hasWorkout) || Boolean(o.workoutIds?.length) || Boolean(o.workoutSummary);
     const workoutDone =
       Boolean(o.workoutDone) ||
       Boolean(o.workoutSummary && (o.workoutSummary.calories || o.workoutSummary.duration || o.workoutSummary.weightUsed));
-    const nutritionLogged = Boolean(o.nutritionLogged) || Boolean(o.nutritionSummary);
+    // IMPORTANT: do NOT infer nutrition from summary; only trust API flag
+    const nutritionLogged = Boolean(o.nutritionLogged);
     const habitAllDone =
       Boolean(o.habitAllDone) ||
       (o.habitSummary ? o.habitSummary.completed >= o.habitSummary.total && o.habitSummary.total > 0 : false);
@@ -154,7 +157,7 @@ export default function Home() {
         isFriday: b.isFriday,
         checkinComplete: b.checkinComplete,
         allDone: b.allDone,
-        workoutIds: o.workoutIds || [],
+        workoutIds: Array.isArray(o.workoutIds) ? o.workoutIds : [],
       };
     }
 
@@ -162,6 +165,41 @@ export default function Home() {
     setWeekLoading(false);
   }, [weeklyOverview]);
 
+  // ==== Streaks (current week, up to selected day) ====
+  const dayStreak = useMemo(() => {
+    // consecutive fully-completed days (allDone) up to selected day; restarts on any not-allDone day
+    let streak = 0;
+    for (const d of weekDays) {
+      const dk = formatYMD(d);
+      const st = weekStatus[dk];
+      if (!st) break;
+      if (st.allDone) {
+        streak++;
+      } else {
+        streak = 0;
+      }
+      if (isSameDay(d, selectedDay)) break;
+    }
+    return streak;
+  }, [weekDays, weekStatus, selectedDay]);
+
+  const workoutStreak = useMemo(() => {
+    // consecutive workout days completed; rest days do NOT break the streak, missed workout resets it
+    let streak = 0;
+    for (const d of weekDays) {
+      const dk = formatYMD(d);
+      const st = weekStatus[dk];
+      if (!st) break;
+      if (st.hasWorkout) {
+        if (st.workoutDone) streak++;
+        else streak = 0;
+      }
+      if (isSameDay(d, selectedDay)) break;
+    }
+    return streak;
+  }, [weekDays, weekStatus, selectedDay]);
+
+  // Client-derived weekly totals (progress bar always matches visible tasks)
   const derivedWeeklyTotals = useMemo(() => {
     const days = (weeklyOverview?.days as any[]) || [];
     let totalTasks = 0;
@@ -170,7 +208,7 @@ export default function Home() {
     for (const o of days) {
       const { isFriday, hasWorkout, workoutDone, nutritionLogged, habitAllDone, checkinComplete } = deriveDayBooleans(o);
 
-      const dayTaskCount = 1 + 1 + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
+      const dayTaskCount = 1 /* nutrition */ + 1 /* habit */ + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
       totalTasks += dayTaskCount;
 
       const dayCompleteCount =
@@ -196,6 +234,7 @@ export default function Home() {
     return (weeklyOverview.days as ApiDay[]).find((d) => d.dateKey === selectedDateKey);
   }, [weeklyOverview, selectedDateKey]);
 
+  // Hrefs: harden workout route until id is ready
   const workoutIds = selectedStatus.workoutIds || [];
   const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
   const workoutHref = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
@@ -245,7 +284,7 @@ export default function Home() {
           {greeting}, {session?.user?.name || "Athlete"}
         </h2>
 
-        {/* Weekly Progress */}
+        {/* Weekly Progress Bar (derived so it can’t disagree) */}
         {weeklyOverview?.days && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>Weekly Progress</div>
@@ -267,12 +306,55 @@ export default function Home() {
           </div>
         )}
 
-        {/* Challenge Carousel */}
+        {/* Weekly Snapshot (replaces challenge carousel) */}
         <div style={{ display: "flex", overflowX: "auto", gap: 12, marginBottom: 16 }}>
-          <ChallengeBanner title="New Challenge" message="2 Weeks of Energy" href="/challenge" iconLeft="fas fa-crown" accentColor="#ffcc00" />
-          <ChallengeBanner title="Suggested Goal" message="1h30 per week" href="/goal" iconLeft="fas fa-bullseye" accentColor="#4fa3a5" />
-          <ChallengeBanner title="Weekly Snapshot" message="Track your progress" href="/stats" iconLeft="fas fa-chart-line" accentColor="#5b7c99" />
+          {/* Share Progress placeholder */}
+          <div className="glass-card" style={{ minWidth: 220, padding: 16, textAlign: "left" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <i className="fas fa-share-alt" style={{ fontSize: "1.4rem", color: "#ffcc00" }} />
+              <div style={{ fontWeight: 700, fontSize: "1rem" }}>Share Your Progress</div>
+            </div>
+            <div style={{ fontSize: "0.9rem", opacity: 0.85 }}>
+              Soon you’ll be able to export a weekly card with:
+              <br />• Day streak • Workout streak • Workouts completed
+              <br />• Time worked out • Calories burned
+              <br />Perfect to send to your coach or post on socials.
+            </div>
+          </div>
+
+          {/* Day Streak */}
+          <div className="glass-card" style={{ minWidth: 160, padding: 16, textAlign: "center" }}>
+            <i className="fas fa-fire" style={{ fontSize: "1.6rem", color: ringGreenStrong, marginBottom: 8 }} />
+            <div style={{ fontWeight: 700 }}>Day Streak</div>
+            <div style={{ fontSize: "1.2rem" }}>{dayStreak} days</div>
+          </div>
+
+          {/* Workout Streak */}
+          <div className="glass-card" style={{ minWidth: 160, padding: 16, textAlign: "center" }}>
+            <i className="fas fa-dumbbell" style={{ fontSize: "1.6rem", color: accentWorkout, marginBottom: 8 }} />
+            <div style={{ fontWeight: 700 }}>Workout Streak</div>
+            <div style={{ fontSize: "1.2rem" }}>{workoutStreak} days</div>
+          </div>
         </div>
+
+        {/* Weekly Stats (from API weeklyTotals) */}
+        {weeklyOverview?.weeklyTotals && (
+          <div className="glass-card" style={{ padding: 16, marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Weekly Stats</div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.95rem" }}>
+              <span>Workouts Completed</span>
+              <span>{weeklyOverview.weeklyTotals.totalWorkoutsCompleted}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.95rem" }}>
+              <span>Time Worked Out</span>
+              <span>{weeklyOverview.weeklyTotals.totalWorkoutTime} min</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.95rem" }}>
+              <span>Calories Burned</span>
+              <span>{weeklyOverview.weeklyTotals.totalCaloriesBurned} kcal</span>
+            </div>
+          </div>
+        )}
 
         {/* Calendar */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
