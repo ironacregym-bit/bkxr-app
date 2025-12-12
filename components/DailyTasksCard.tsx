@@ -33,7 +33,7 @@ export default function DailyTasksCard({
   userCalorieTarget = 2000,
   userProteinTarget = 150
 }: Props) {
-  const isFriday = typeof dayLabel === "string" && dayLabel.toLowerCase().startsWith("fri");
+  const isFriday = dayLabel.toLowerCase().startsWith("fri");
 
   const rowStyle = (done: boolean, accent: string): React.CSSProperties => ({
     display: "flex",
@@ -48,44 +48,45 @@ export default function DailyTasksCard({
     border: `1px solid ${done ? "rgba(100,195,122,0.35)" : "rgba(255,255,255,0.12)"}`,
     color: "#fff",
     boxShadow: done
-      ? "0 0 12px rgba(100,195,122,0.5), 0 4px 20px rgba(0,0,0,0.35)"
-      : `0 0 10px ${accent}33, 0 4px 16px rgba(0,0,0,0.35)`,
+      ? "0 0 12px rgba(100,195,122,0.5)"
+      : `0 0 10px ${accent}33`,
     cursor: "pointer",
-    transition: "transform .18s ease, box-shadow .18s ease, border-color .18s ease"
+    transition: "transform .18s ease, box-shadow .18s ease",
   });
 
   const iconWrap: React.CSSProperties = {
     display: "inline-flex",
     alignItems: "center",
     gap: 8,
-    fontWeight: 600
+    fontWeight: 600,
   };
 
   const valueStyle: React.CSSProperties = {
     opacity: 0.9,
-    fontWeight: 600
+    fontWeight: 600,
   };
 
   const onHover = (e: React.MouseEvent<HTMLDivElement>) => {
     (e.currentTarget.style.transform as any) = "scale(1.02)";
+    (e.currentTarget.style.boxShadow as any) = "0 0 18px rgba(255,138,42,0.6)";
   };
   const onLeave = (e: React.MouseEvent<HTMLDivElement>) => {
     (e.currentTarget.style.transform as any) = "scale(1)";
+    (e.currentTarget.style.boxShadow as any) = "";
   };
 
   return (
     <div style={{ marginBottom: 20 }}>
-      <div style={{ fontWeight: 800, fontSize: "1.15rem", marginBottom: 12, letterSpacing: 0.2 }}>
+      <div style={{ fontWeight: 800, fontSize: "1.15rem", marginBottom: 12 }}>
         {dayLabel} Tasks
       </div>
 
       {/* Nutrition */}
-      <Link href={hrefs.nutrition} aria-label="Open Nutrition">
+      <Link href={hrefs.nutrition}>
         <div
           style={rowStyle(nutritionLogged, "#4fa3a5")}
           onMouseEnter={onHover}
           onMouseLeave={onLeave}
-          className="futuristic-card"
         >
           <span style={iconWrap}>
             <i className="fas fa-utensils" style={{ color: "#4fa3a5" }} />
@@ -93,7 +94,7 @@ export default function DailyTasksCard({
           </span>
           <span style={valueStyle}>
             {nutritionSummary
-              ? `${nutritionSummary.calories} / ${userCalorieTarget} kcal  |  ${nutritionSummary.protein} / ${userProteinTarget} p`
+              ? `${nutritionSummary.calories} / ${userCalorieTarget} kcal | ${nutritionSummary.protein} / ${userProteinTarget} p`
               : "Not logged"}
           </span>
         </div>
@@ -101,12 +102,11 @@ export default function DailyTasksCard({
 
       {/* Workout */}
       {hasWorkout && (
-        <Link href={hrefs.workout} aria-label="Open Workout">
+        <Link href={hrefs.workout}>
           <div
             style={rowStyle(workoutDone, "#5b7c99")}
             onMouseEnter={onHover}
             onMouseLeave={onLeave}
-            className="futuristic-card"
           >
             <span style={iconWrap}>
               <i className="fas fa-dumbbell" style={{ color: "#5b7c99" }} />
@@ -122,12 +122,11 @@ export default function DailyTasksCard({
       )}
 
       {/* Habits */}
-      <Link href={hrefs.habit} aria-label="Open Daily Habit">
+      <Link href={hrefs.habit}>
         <div
           style={rowStyle(habitAllDone, "#9b6fa3")}
           onMouseEnter={onHover}
           onMouseLeave={onLeave}
-          className="futuristic-card"
         >
           <span style={iconWrap}>
             <i className="fas fa-check-circle" style={{ color: "#9b6fa3" }} />
@@ -141,12 +140,11 @@ export default function DailyTasksCard({
 
       {/* Weekly Check-In */}
       {isFriday && (
-        <Link href={hrefs.checkin} aria-label="Open Weekly Check-In">
+        <Link href={hrefs.checkin}>
           <div
             style={rowStyle(checkinComplete, "#c9a34e")}
             onMouseEnter={onHover}
             onMouseLeave={onLeave}
-            className="futuristic-card"
           >
             <span style={iconWrap}>
               <i className="fas fa-clipboard-list" style={{ color: "#c9a34e" }} />
