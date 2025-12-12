@@ -298,7 +298,6 @@ export default function Home() {
             title="Share Your Progress"
             message={
               <span style={{ whiteSpace: "nowrap" }}>
-                Export a weekly card with streaks, workouts, time & calories.
               </span>
             }
             href="#"
