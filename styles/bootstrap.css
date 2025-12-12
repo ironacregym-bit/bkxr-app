@@ -22,8 +22,7 @@ body {
   position: relative;
 }
 
-.futuristic-card a,
-.futuristic-card a:visited {
+a{
   text-decoration: none !important;
 }
 
