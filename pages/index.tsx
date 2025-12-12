@@ -310,14 +310,19 @@ export default function Home() {
                 >
                   {d.getDate()}
                 </div>
-                <div className="bxkr-dots">
-                  {status.hasWorkout && !status.workoutDone && (
-                    <span className="bxkr-dot" style={{ color: accentWorkout, backgroundColor: accentWorkout }} />
-                  )}
-                  {status.isFriday && !status.checkinComplete && (
-                    <span className="bxkr-dot" style={{ color: accentCheckin, backgroundColor: accentCheckin }} />
-                  )}
-                </div>
+                  <div className="bxkr-dots">
+                    {status.hasWorkout && (
+                      <span
+                        className="bxkr-dot"
+                        style={{ color: accentWorkout, backgroundColor: accentWorkout }}
+                      >
+                        {status.workoutDone ? "🔥" : ""}
+                      </span>
+                    )}
+                    {status.isFriday && !status.checkinComplete && (
+                      <span className="bxkr-dot" style={{ color: accentCheckin, backgroundColor: accentCheckin }} />
+                    )}
+                  </div>
               </div>
             );
           })}
