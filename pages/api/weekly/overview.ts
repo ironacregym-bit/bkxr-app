@@ -41,13 +41,17 @@ const NUTRITION_COLLECTION = "nutrition_logs";
 const WORKOUTS_COLLECTION = "workouts";
 const COMPLETIONS_COLLECTION = "workoutCompletions";
 
-// Helpers
+// ===== Helpers =====
 function isYMD(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
-// Local YYYY-MM-DD to avoid timezone drift vs ISO
+// Local YYYY-MM-DD to avoid ISO/BST drift
 function formatYMD(d: Date): string {
   return d.toLocaleDateString("en-CA");
+}
+function parseYMD(ymd: string): Date {
+  const [y, m, dd] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, dd, 0, 0, 0, 0);
 }
 function startOfAlignedWeek(d: Date): Date {
   const day = d.getDay();
@@ -74,10 +78,8 @@ function fridayOfWeek(d: Date): Date {
 function buildDocId(email: string, ymd: string): string {
   return `${email}__${ymd}`;
 }
-// Parse YYYY-MM-DD safely as local date
-function parseYMD(ymd: string): Date {
-  const [y, m, dd] = ymd.split("-").map(Number);
-  return new Date(y, m - 1, dd, 0, 0, 0, 0);
+function inRange(day: Date, start: Date, end: Date) {
+  return day >= start && day <= end;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -94,7 +96,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const weekQ = String(req.query.week || formatYMD(new Date()));
     if (!isYMD(weekQ)) return res.status(400).json({ error: "Invalid week format. Use YYYY-MM-DD." });
 
-    // Use local parsing to avoid ISO/Z off-by-one in BST
     const weekDate = parseYMD(weekQ);
     const weekStart = startOfAlignedWeek(weekDate);
     const weekEnd = endOfAlignedWeek(weekDate);
@@ -112,10 +113,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const weekDays: Date[] = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(weekStart);
       d.setDate(weekStart.getDate() + i);
+      d.setHours(0, 0, 0, 0);
       return d;
     });
 
-    // HABITS (top-level doc per day using buildDocId)
+    // ===== Habits (daily doc by buildDocId) =====
     const habitDocRefs = weekDays.map((d) =>
       firestore.collection(HABITS_COLLECTION).doc(buildDocId(userEmail, formatYMD(d)))
     );
@@ -138,25 +140,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
-    // CHECK-IN (this Friday + last Friday)
+    // ===== Check-ins (Friday only, with last Friday deltas) =====
     const checkinDocRef = firestore.collection(CHECKINS_COLLECTION).doc(buildDocId(userEmail, fridayYMD));
     const checkinSnap = await checkinDocRef.get();
-    const checkinComplete = checkinSnap.exists;
     const currentCheckin = checkinSnap.exists ? checkinSnap.data() : null;
 
     const lastCheckinRef = firestore.collection(CHECKINS_COLLECTION).doc(buildDocId(userEmail, lastFridayYMD));
     const lastCheckinSnap = await lastCheckinRef.get();
     const lastCheckin = lastCheckinSnap.exists ? lastCheckinSnap.data() : null;
 
-    // NUTRITION (presence/results per day)
+    // ===== Nutrition (presence + totals per day) =====
     const nutritionMap: Record<string, { logged: boolean; calories: number; protein: number }> = {};
     for (const d of weekDays) {
       const ymd = formatYMD(d);
-      const snap = await firestore
-        .collection(NUTRITION_COLLECTION)
-        .doc(userEmail)
-        .collection(ymd)
-        .get();
+      const snap = await firestore.collection(NUTRITION_COLLECTION).doc(userEmail).collection(ymd).get();
       if (snap.empty) {
         nutritionMap[ymd] = { logged: false, calories: 0, protein: 0 };
       } else {
@@ -171,16 +168,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // WORKOUTS for the week (scope to user)
-    const workoutsSnap = await firestore
-      .collection(WORKOUTS_COLLECTION)
-      .where("user_email", "==", userEmail)
-      .where("date", ">=", weekStart)
-      .where("date", "<=", weekEnd)
-      .get();
+    // ===== Workouts for the week (scope to user; range fallback if index missing) =====
+    let workoutsSnap: any;
+    try {
+      workoutsSnap = await firestore
+        .collection(WORKOUTS_COLLECTION)
+        .where("user_email", "==", userEmail)
+        .where("date", ">=", weekStart)
+        .where("date", "<=", weekEnd)
+        .get();
+    } catch (e) {
+      // fallback: filter in memory
+      const allByUser = await firestore.collection(WORKOUTS_COLLECTION).where("user_email", "==", userEmail).get();
+      const filteredDocs = allByUser.docs.filter((doc) => {
+        const w = doc.data() as any;
+        const dt = w.date?.toDate ? w.date.toDate() : new Date(w.date);
+        return inRange(dt, weekStart, weekEnd);
+      });
+      workoutsSnap = { docs: filteredDocs };
+    }
 
     const workoutsByDay = new Map<string, { id: string; name?: string }[]>();
-    workoutsSnap.docs.forEach((doc) => {
+    const allWeekWorkoutIds: string[] = [];
+    (workoutsSnap.docs || []).forEach((doc: any) => {
       const w = doc.data() as any;
       const d = w.date?.toDate ? w.date.toDate() : new Date(w.date);
       const dk = formatYMD(d);
@@ -189,58 +199,85 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const arr = workoutsByDay.get(dk) || [];
       arr.push({ id, name });
       workoutsByDay.set(dk, arr);
+      if (id) allWeekWorkoutIds.push(id);
     });
 
-    // COMPLETIONS for the week (tolerate both completed_date and date_completed)
-    // Try completed_date first; if empty, fallback to date_completed
-    const completionsPrimaryQ = firestore
-      .collection(COMPLETIONS_COLLECTION)
-      .where("user_email", "==", userEmail)
-      .where("completed_date", ">=", weekStart)
-      .where("completed_date", "<=", weekEnd);
-
-    let completionsSnap = await completionsPrimaryQ.get();
-
-    if (completionsSnap.empty) {
-      const completionsFallbackQ = firestore
+    // ===== Completions for THIS WEEK (for weekly totals only) =====
+    let completionsWeekSnap: any;
+    try {
+      completionsWeekSnap = await firestore
         .collection(COMPLETIONS_COLLECTION)
         .where("user_email", "==", userEmail)
-        .where("date_completed", ">=", weekStart)
-        .where("date_completed", "<=", weekEnd);
-      completionsSnap = await completionsFallbackQ.get();
+        .where("completed_date", ">=", weekStart)
+        .where("completed_date", "<=", weekEnd)
+        .get();
+
+      if (completionsWeekSnap.empty) {
+        completionsWeekSnap = await firestore
+          .collection(COMPLETIONS_COLLECTION)
+          .where("user_email", "==", userEmail)
+          .where("date_completed", ">=", weekStart)
+          .where("date_completed", "<=", weekEnd)
+          .get();
+      }
+    } catch (e) {
+      const allByUser = await firestore.collection(COMPLETIONS_COLLECTION).where("user_email", "==", userEmail).get();
+      const filteredDocs = allByUser.docs.filter((doc) => {
+        const c = doc.data() as any;
+        const dt = c.completed_date?.toDate?.() || c.date_completed?.toDate?.() || null;
+        return dt ? inRange(dt, weekStart, weekEnd) : false;
+      });
+      completionsWeekSnap = { docs: filteredDocs };
     }
 
-    const completionsByWorkoutId = new Map<
+    // ===== Completions by workout_id (ANY DAY) for “done” state =====
+    // We don’t apply a date range here — if a workout has a completion anywhere in history, it’s counted done.
+    // For efficiency, we still filter by user_email.
+    const completionsAllUserSnap = await firestore
+      .collection(COMPLETIONS_COLLECTION)
+      .where("user_email", "==", userEmail)
+      .get();
+
+    const completionsByWorkoutIdAnyDay = new Map<
       string,
-      { calories_burned?: number; duration?: number; weight_completed_with?: string | number; completedAt?: Date }
+      { calories_burned?: number; duration?: number; weight_completed_with?: string | number; completedAt?: Date }[]
     >();
 
-    completionsSnap.docs.forEach((doc) => {
+    (completionsAllUserSnap.docs || []).forEach((doc: any) => {
       const c = doc.data() as any;
       const id = String(c.workout_id || "");
       if (!id) return;
       const completedAt: Date | undefined =
-        c.completed_date?.toDate?.() ||
-        c.date_completed?.toDate?.() ||
-        undefined;
-      completionsByWorkoutId.set(id, {
+        c.completed_date?.toDate?.() || c.date_completed?.toDate?.() || undefined;
+      const row = {
         calories_burned: typeof c.calories_burned === "number" ? c.calories_burned : undefined,
         duration: typeof c.duration === "number" ? c.duration : undefined,
         weight_completed_with:
           c.weight_completed_with ??
-          c.weight_compelted_with ?? // tolerate legacy typo
+          c.weight_compelted_with /* legacy typo */ ??
           c.weight_used ??
           undefined,
         completedAt
-      });
+      };
+      const arr = completionsByWorkoutIdAnyDay.get(id) || [];
+      arr.push(row);
+      completionsByWorkoutIdAnyDay.set(id, arr);
     });
 
-    // Aggregate weekly totals
+    // ===== Aggregate weekly totals =====
     let totalTasks = 0;
     let completedTasks = 0;
     let totalWorkoutsCompleted = 0;
     let totalWorkoutTime = 0;
     let totalCaloriesBurned = 0;
+
+    // Precompute weekly sums from THIS WEEK completions
+    (completionsWeekSnap.docs || []).forEach((doc: any) => {
+      const c = doc.data() as any;
+      totalWorkoutsCompleted += 1;
+      totalWorkoutTime += Number(c.duration || 0);
+      totalCaloriesBurned += Number(c.calories_burned || 0);
+    });
 
     const days: DayOverview[] = weekDays.map((d) => {
       const ymd = formatYMD(d);
@@ -252,38 +289,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Nutrition
       const nutritionInfo = nutritionMap[ymd] || { logged: false, calories: 0, protein: 0 };
 
-      // Workouts
+      // Workouts scheduled on this day
       const todaysWorkouts = workoutsByDay.get(ymd) || [];
       const workoutIds = todaysWorkouts.map((w) => w.id);
       const hasWorkout = todaysWorkouts.length > 0;
 
-      // Workout completion by workout_id join (reliable vs date equality)
-      const completion = workoutIds.map((id) => completionsByWorkoutId.get(id)).find(Boolean);
-      const workoutDone = hasWorkout && !!completion;
+      // === WorkoutDone: ANY-DAY completion by workout_id ===
+      const anyDayCompletionArray = workoutIds
+        .map((id) => completionsByWorkoutIdAnyDay.get(id))
+        .filter(Boolean) as Array<
+        { calories_burned?: number; duration?: number; weight_completed_with?: string | number; completedAt?: Date }[]
+      >;
 
-      // Workout summary
+      const workoutDone = hasWorkout && anyDayCompletionArray.length > 0;
+
+      // Choose the most recent completion (if any) to surface in the summary
       let workoutCalories = 0;
       let workoutDuration = 0;
-      let weightUsed: string | undefined = undefined;
-
-      if (completion) {
-        workoutCalories += Number(completion.calories_burned || 0);
-        workoutDuration += Number(completion.duration || 0);
-        if (completion.weight_completed_with != null) {
+      let weightUsed: string | undefined;
+      if (workoutDone) {
+        const flat = ([] as any[]).concat(...anyDayCompletionArray);
+        flat.sort((a, b) => {
+          const ta = a.completedAt?.getTime?.() ?? 0;
+          const tb = b.completedAt?.getTime?.() ?? 0;
+          return tb - ta;
+        });
+        const latest = flat[0] || {};
+        workoutCalories = Number(latest.calories_burned || 0);
+        workoutDuration = Number(latest.duration || 0);
+        if (latest.weight_completed_with != null) {
           weightUsed =
-            typeof completion.weight_completed_with === "number"
-              ? `${completion.weight_completed_with}kg`
-              : String(completion.weight_completed_with);
+            typeof latest.weight_completed_with === "number"
+              ? `${latest.weight_completed_with}kg`
+              : String(latest.weight_completed_with);
         }
-        totalWorkoutsCompleted += 1;
-        totalWorkoutTime += workoutDuration;
-        totalCaloriesBurned += workoutCalories;
       }
 
-      // Check-in for Friday only
-      const checkinForFriday = isFriday && (currentCheckin?.weight != null || currentCheckin?.bodyFat != null);
-      const checkinCompleteForDay = isFriday ? Boolean(checkinComplete && checkinForFriday) : false;
-
+      // Check-in (Friday only)
+      const checkinCompleteForDay = isFriday && (currentCheckin?.weight != null || currentCheckin?.bodyFat != null);
       const weightChange =
         currentCheckin?.weight != null && lastCheckin?.weight != null
           ? ((currentCheckin.weight - lastCheckin.weight) / lastCheckin.weight) * 100
@@ -293,11 +336,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? currentCheckin.bodyFat - lastCheckin.bodyFat
           : undefined;
 
-      // Day tasks: nutrition + habit + (hasWorkout?1:0) + (isFriday?1:0)
-      const dayTasks = 1 + 1 + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
+      // Tasks & completes — EXACTLY what UI shows
+      const dayTasks = 1 /* nutrition */ + 1 /* habit */ + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
       totalTasks += dayTasks;
 
-      // Day completes: same booleans used in UI
       const dayCompleted =
         (nutritionInfo.logged ? 1 : 0) +
         (habitInfo.allDone ? 1 : 0) +
