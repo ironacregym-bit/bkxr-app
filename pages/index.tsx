@@ -22,6 +22,7 @@ export const getServerSideProps: GetServerSideProps = async (
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
+/* ---- helpers ---- */
 function getWeek(): Date[] {
   const today = new Date();
   const day = today.getDay();
@@ -54,34 +55,100 @@ function startOfAlignedWeek(d: Date) {
   return s;
 }
 
+type ApiDay = {
+  dateKey: string;
+  hasWorkout?: boolean;
+  workoutDone?: boolean;
+  nutritionLogged?: boolean;
+  habitAllDone?: boolean;
+  isFriday?: boolean;
+  checkinComplete?: boolean;
+  nutritionSummary?: { calories: number; protein: number };
+  workoutSummary?: { calories: number; duration: number; weightUsed?: string };
+  habitSummary?: { completed: number; total: number };
+  checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number };
+  workoutIds?: string[];
+};
+
+type DayStatus = {
+  dateKey: string;
+  hasWorkout: boolean;
+  workoutDone: boolean;
+  nutritionLogged: boolean;
+  habitAllDone: boolean;
+  isFriday: boolean;
+  checkinComplete: boolean;
+  allDone: boolean;
+  workoutIds: string[];
+};
+
 export default function Home() {
   const { data: session, status } = useSession();
-  const weekDays = useMemo(() => getWeek(), []);
-  const today = new Date();
-  const [selectedDay, setSelectedDay] = useState<Date>(today);
 
-  const greeting =
-    today.getHours() < 12 ? "Good Morning" : today.getHours() < 18 ? "Good Afternoon" : "Good Evening";
+  const weekDays = useMemo(() => getWeek(), []);
+  const [selectedDay, setSelectedDay] = useState<Date>(new Date());
+
+  const greeting = (() => {
+    const h = new Date().getHours();
+    return h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening";
+  })();
   const selectedDateKey = formatYMD(selectedDay);
   const weekStartKey = useMemo(() => formatYMD(startOfAlignedWeek(new Date())), []);
 
-  const { data: weeklyOverview } = useSWR(`/api/weekly/overview?week=${weekStartKey}`, fetcher);
+  const { data: weeklyOverview, isLoading: overviewLoading } = useSWR(
+    `/api/weekly/overview?week=${weekStartKey}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
 
-  const [weekStatus, setWeekStatus] = useState<Record<string, any>>({});
+  const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
+  const [weekLoading, setWeekLoading] = useState(false);
+
+  // Trust API booleans; do not infer nutrition from summary
+  const deriveDayBooleans = (o: any) => {
+    const isFriday = Boolean(o.isFriday ?? new Date(o.dateKey + "T00:00:00").getDay() === 5);
+    const hasWorkout = Boolean(o.hasWorkout) || Boolean(o.workoutIds?.length) || Boolean(o.workoutSummary);
+    const workoutDone =
+      Boolean(o.workoutDone) ||
+      Boolean(o.workoutSummary && (o.workoutSummary.calories || o.workoutSummary.duration || o.workoutSummary.weightUsed));
+    const nutritionLogged = Boolean(o.nutritionLogged);
+    const habitAllDone =
+      Boolean(o.habitAllDone) ||
+      (o.habitSummary ? o.habitSummary.completed >= o.habitSummary.total && o.habitSummary.total > 0 : false);
+    const checkinComplete = Boolean(o.checkinComplete) || Boolean(o.checkinSummary);
+
+    const allDone =
+      (!hasWorkout || workoutDone) &&
+      nutritionLogged &&
+      habitAllDone &&
+      (!isFriday || checkinComplete);
+
+    return { isFriday, hasWorkout, workoutDone, nutritionLogged, habitAllDone, checkinComplete, allDone };
+  };
+
   useEffect(() => {
-    if (!weeklyOverview?.days) return;
-    const statuses: Record<string, any> = {};
-    for (const o of weeklyOverview.days) {
-      const allDone =
-        (!o.hasWorkout || o.workoutDone) &&
-        o.nutritionLogged &&
-        o.habitAllDone &&
-        (!o.isFriday || o.checkinComplete);
-      statuses[o.dateKey] = { ...o, allDone };
+    if (!weeklyOverview?.days?.length) return;
+    setWeekLoading(true);
+    const statuses: Record<string, DayStatus> = {};
+    for (const o of weeklyOverview.days as ApiDay[]) {
+      const b = deriveDayBooleans(o);
+      statuses[o.dateKey] = {
+        dateKey: o.dateKey,
+        hasWorkout: b.hasWorkout,
+        workoutDone: b.workoutDone,
+        nutritionLogged: b.nutritionLogged,
+        habitAllDone: b.habitAllDone,
+        isFriday: b.isFriday,
+        checkinComplete: b.checkinComplete,
+        allDone: b.allDone,
+        workoutIds: Array.isArray(o.workoutIds) ? o.workoutIds : [],
+      };
     }
     setWeekStatus(statuses);
+    setWeekLoading(false);
   }, [weeklyOverview]);
 
+  // Streaks (Mon -> selected day)
   const dayStreak = useMemo(() => {
     let streak = 0;
     for (const d of weekDays) {
@@ -108,13 +175,47 @@ export default function Home() {
     return streak;
   }, [weekDays, weekStatus, selectedDay]);
 
-  const derivedWeeklyTotals = weeklyOverview?.weeklyTotals || {
-    totalWorkoutsCompleted: 0,
-    totalWorkoutTime: 0,
-    totalCaloriesBurned: 0,
-  };
+  // Weekly progress derived from the visible tasks so it can't disagree
+  const derivedWeeklyTotals = useMemo(() => {
+    const days = (weeklyOverview?.days as any[]) || [];
+    let totalTasks = 0;
+    let completedTasks = 0;
+    for (const o of days) {
+      const { isFriday, hasWorkout, workoutDone, nutritionLogged, habitAllDone, checkinComplete } = deriveDayBooleans(o);
+      totalTasks += 1 + 1 + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
+      completedTasks +=
+        (nutritionLogged ? 1 : 0) +
+        (habitAllDone ? 1 : 0) +
+        (hasWorkout && workoutDone ? 1 : 0) +
+        (isFriday && checkinComplete ? 1 : 0);
+    }
+    return { totalTasks, completedTasks };
+  }, [weeklyOverview]);
 
-  // Carousel logic
+  // Selected-day data
+  const selectedDayData: ApiDay | undefined = useMemo(() => {
+    if (!weeklyOverview?.days) return undefined;
+    return (weeklyOverview.days as ApiDay[]).find((d) => d.dateKey === selectedDateKey);
+  }, [weeklyOverview, selectedDateKey]);
+
+  // Hrefs and link hardening
+  const selectedStatus = weekStatus[selectedDateKey] || ({} as DayStatus);
+  const hasWorkoutToday = Boolean(selectedStatus.hasWorkout);
+  const workoutIds = selectedStatus.workoutIds || [];
+  const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
+  const workoutHref = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
+  const nutritionHref = `/nutrition?date=${selectedDateKey}`;
+  const habitHref = `/habit?date=${selectedDateKey}`;
+  const checkinHref = `/checkin`;
+
+  // Accent colours
+  const ringGreenStrong = "#64c37a";
+  const ringGreenMuted = "#4ea96a";
+  const accentMicro = "#d97a3a";
+  const accentWorkout = "#5b7c99";
+  const accentCheckin = "#c9a34e";
+
+  /* ==== Carousel state and handlers ==== */
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const [slideIndex, setSlideIndex] = useState(0);
   const goToSlide = (idx: number) => {
@@ -123,92 +224,143 @@ export default function Home() {
     el.scrollTo({ left: idx * el.clientWidth, behavior: "smooth" });
     setSlideIndex(idx);
   };
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const idx = Math.round(el.scrollLeft / Math.max(el.clientWidth, 1));
+      if (idx !== slideIndex) setSlideIndex(idx);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [slideIndex]);
 
   return (
     <>
       <Head>
         <title>BXKR</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
-      <main className="container py-3" style={{ paddingBottom: "70px", color: "#fff" }}>
-        {/* Greeting */}
-        <h2 style={{ fontWeight: 700 }}>{greeting}, {session?.user?.name || "Athlete"}</h2>
 
-        {/* Weekly Progress */}
-        {weeklyOverview && (
+      <main className="container py-3" style={{ paddingBottom: "70px", color: "#fff" }}>
+        {/* Header */}
+        <div className="d-flex justify-content-between mb-3 align-items-center">
+          <div className="d-flex align-items-center gap-2">
+            {session?.user?.image && (
+              <img src={session.user.image} alt="" className="rounded-circle" style={{ width: 36, height: 36, objectFit: "cover" }} />
+            )}
+            <div className="fw-semibold">{session?.user?.name || "Athlete"}</div>
+            {(weekLoading || overviewLoading) && <div className="inline-spinner" />}
+          </div>
+          {status === "authenticated" ? (
+            <button className="btn btn-link text-light p-0" onClick={() => signOut()}>Sign out</button>
+          ) : (
+            <button className="btn btn-link text-light p-0" onClick={() => signIn("google")} style={{ background: "transparent", border: "none", textDecoration: "underline" }}>
+              Sign in
+            </button>
+          )}
+        </div>
+
+        {/* Greeting */}
+        <h2 className="mb-3" style={{ fontWeight: 700, fontSize: "1.6rem" }}>
+          {greeting}, {session?.user?.name || "Athlete"}
+        </h2>
+
+        {/* Weekly Progress (derived so it can’t disagree) */}
+        {weeklyOverview?.days && (
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 600 }}>Weekly Progress</div>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Weekly Progress</div>
             <div style={{ background: "#333", borderRadius: 8, overflow: "hidden", height: 12 }}>
               <div
                 style={{
-                  width: `${(weeklyOverview.completedTasks / weeklyOverview.totalTasks) * 100}%`,
-                  background: "#64c37a",
+                  width:
+                    derivedWeeklyTotals.totalTasks > 0
+                      ? `${(derivedWeeklyTotals.completedTasks / derivedWeeklyTotals.totalTasks) * 100}%`
+                      : "0%",
+                  background: ringGreenStrong,
                   height: "100%"
                 }}
               />
             </div>
-            <div style={{ fontSize: "0.85rem" }}>
-              {weeklyOverview.completedTasks} / {weeklyOverview.totalTasks} tasks completed
+            <div style={{ fontSize: "0.85rem", marginTop: 4 }}>
+              {derivedWeeklyTotals.completedTasks} / {derivedWeeklyTotals.totalTasks} tasks completed
             </div>
           </div>
         )}
 
-        {/* Carousel */}
-        <div className="bxkr-carousel" ref={carouselRef}>
-          {/* Slide 1: Share */}
+        {/* ===== Full-width mobile carousel ===== */}
+        <div className="bxkr-carousel" ref={carouselRef} aria-label="Weekly banners carousel">
+          {/* Slide 1: Share Your Progress (title + disabled pill only) */}
           <section className="bxkr-slide">
             <ChallengeBanner
               title="Share Your Progress"
-              message=""
+              message=""                 /* no wording */
               href="#"
               iconLeft="fas fa-share-alt"
-              accentColor="#ffb347" // softened orange
-              extraContent={<button className="bxkr-btn" disabled>Coming Soon</button>}
+              accentColor="#ffb347"
+              background="linear-gradient(90deg, rgba(217,122,58,.38), rgba(255,179,71,.32))"
+              extraContent={<button className="bxkr-btn" disabled>Coming soon</button>}
               style={{ margin: 0 }}
             />
           </section>
 
-          {/* Slide 2: Streaks */}
+          {/* Slide 2: Streaks (Strava-style three columns) */}
           <section className="bxkr-slide">
             <ChallengeBanner
               title="Streaks"
               message={
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem" }}>
-                  <div style={{ textAlign: "center", flex: 1 }}>
-                    <strong>Day</strong><br />{dayStreak}
-                  </div>
-                  <div style={{ textAlign: "center", flex: 1 }}>
-                    <strong>Workout</strong><br />{workoutStreak}
+                <div className="challenge-banner-message">
+                  <div className="stats-row">
+                    <div className="stats-col">
+                      <strong>Day</strong>
+                      {dayStreak}
+                    </div>
+                    <div className="stats-col">
+                      <strong>Workout</strong>
+                      {workoutStreak}
+                    </div>
+                    <div className="stats-col">
+                      <strong>—</strong>
+                      {/* reserved / spacer to keep three equal columns */}
+                    </div>
                   </div>
                 </div>
               }
               href="#"
               iconLeft="fas fa-fire"
               accentColor="#64c37a"
+              background="linear-gradient(90deg, rgba(79,163,165,.28), rgba(100,195,122,.24))"
               showButton={false}
               style={{ margin: 0 }}
             />
           </section>
 
-          {/* Slide 3: Weekly Snapshot */}
+          {/* Slide 3: Weekly Snapshot (three columns) */}
           <section className="bxkr-slide">
             <ChallengeBanner
               title="Weekly Snapshot"
               message={
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem" }}>
-                  <div style={{ textAlign: "center", flex: 1 }}>
-                    <strong>Workouts</strong><br />{derivedWeeklyTotals.totalWorkoutsCompleted}
-                  </div>
-                  <div style={{ textAlign: "center", flex: 1 }}>
-                    <strong>Time</strong><br />{derivedWeeklyTotals.totalWorkoutTime}m
-                  </div>
-                  <div style={{ textAlign: "center", flex: 1 }}>
-                    <strong>Calories</strong><br />{derivedWeeklyTotals.totalCaloriesBurned} kcal
+                <div className="challenge-banner-message">
+                  <div className="stats-row">
+                    <div className="stats-col">
+                      <strong>Workouts</strong>
+                      {weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0}
+                    </div>
+                    <div className="stats-col">
+                      <strong>Time</strong>
+                      {(weeklyOverview?.weeklyTotals?.totalWorkoutTime ?? 0)}m
+                    </div>
+                    <div className="stats-col">
+                      <strong>Calories</strong>
+                      {(weeklyOverview?.weeklyTotals?.totalCaloriesBurned ?? 0)} kcal
+                    </div>
                   </div>
                 </div>
               }
               href="#"
               iconLeft="fas fa-chart-line"
               accentColor="#5b7c99"
+              background="linear-gradient(90deg, rgba(91,124,153,.30), rgba(91,124,153,.18))"
               showButton={false}
               style={{ margin: 0 }}
             />
@@ -216,19 +368,93 @@ export default function Home() {
         </div>
 
         {/* Carousel dots */}
-        <div className="bxkr-carousel-dots">
+        <div className="bxkr-carousel-dots" role="tablist" aria-label="Carousel pagination">
           {[0, 1, 2].map((i) => (
             <button
               key={i}
+              type="button"
               className={`bxkr-carousel-dot ${slideIndex === i ? "active" : ""}`}
+              aria-label={`Go to slide ${i + 1}`}
+              aria-selected={slideIndex === i}
               onClick={() => goToSlide(i)}
             />
           ))}
         </div>
+        {/* ===== /carousel ===== */}
 
         {/* Calendar */}
-        {/* ... keep your existing calendar and DailyTasksCard logic here ... */}
+        <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
+          {weekDays.map((d, i) => {
+            const isSelected = isSameDay(d, selectedDay);
+            const dk = formatYMD(d);
+            const st = weekStatus[dk];
+
+            if (!st) {
+              return (
+                <div key={i} style={{ width: 44 }}>
+                  <div style={{ fontSize: "0.8rem", opacity: 0.6" }}>{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i]}</div>
+                  <div className="bxkr-day-pill" style={{ opacity: 0.5 }}>{d.getDate()}</div>
+                </div>
+              );
+            }
+
+            const ringColor = st.allDone ? (isSelected ? ringGreenStrong : ringGreenMuted) : (isSelected ? accentMicro : "rgba(255,255,255,0.3)");
+            const boxShadow = isSelected ? `0 0 8px ${ringColor}` : (st.allDone ? `0 0 3px ${ringColor}` : "none");
+
+            return (
+              <div key={i} style={{ width: 44, cursor: "pointer" }} onClick={() => setSelectedDay(d)}>
+                <div style={{ fontSize: "0.8rem", color: "#fff", opacity: 0.85, marginBottom: 4 }}>
+                  {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i]}
+                </div>
+                <div
+                  className={`bxkr-day-pill ${st.allDone ? "completed" : ""}`}
+                  style={{ boxShadow, fontWeight: isSelected ? 600 : 400, borderColor: st.allDone ? undefined : ringColor }}
+                >
+                  <span className={`bxkr-day-content ${st.allDone ? (isSelected ? "state-num" : "state-flame") : "state-num"}`}>
+                    {st.allDone && !isSelected ? (
+                      <i className="fas fa-fire" style={{ color: ringGreenStrong, textShadow: `0 0 8px ${ringGreenStrong}`, fontSize: "1rem", lineHeight: 1 }} />
+                    ) : (
+                      d.getDate()
+                    )}
+                  </span>
+                </div>
+                <div className="bxkr-dots">
+                  {st.hasWorkout && (
+                    <span className="bxkr-dot" style={{ color: accentWorkout, backgroundColor: accentWorkout }} />
+                  )}
+                  {st.isFriday && !st.checkinComplete && (
+                    <span className="bxkr-dot" style={{ color: accentCheckin, backgroundColor: accentCheckin }} />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Daily Tasks Card */}
+        {selectedDayData && (
+          <DailyTasksCard
+            dayLabel={`${selectedDay.toLocaleDateString(undefined, { weekday: "long" })}, ${selectedDay.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`}
+            nutritionSummary={selectedDayData.nutritionSummary}
+            nutritionLogged={Boolean(selectedStatus.nutritionLogged)}
+            workoutSummary={selectedDayData.workoutSummary}
+            hasWorkout={Boolean(selectedStatus.hasWorkout)}
+            workoutDone={Boolean(selectedStatus.workoutDone)}
+            habitSummary={selectedDayData.habitSummary}
+            habitAllDone={Boolean(selectedStatus.habitAllDone)}
+            checkinSummary={selectedDayData.checkinSummary}
+            checkinComplete={Boolean(selectedStatus.checkinComplete)}
+            hrefs={{ nutrition: nutritionHref, workout: workoutHref, habit: habitHref, checkin: checkinHref }}
+          />
+        )}
+
+        {hasWorkoutToday && !hasWorkoutId && (
+          <div className="text-center" style={{ opacity: 0.8, fontSize: "0.9rem", marginTop: 8 }}>
+            Loading workout details… <span className="inline-spinner" />
+          </div>
+        )}
       </main>
+
       <BottomNav />
       <AddToHomeScreen />
     </>
