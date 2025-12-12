@@ -12,6 +12,66 @@
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/main/LICENSE)
  */
 
+/* ===== Carousel (full-width banners with snap) ===== */
+.bxkr-carousel {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  gap: 0;                 /* each slide spans full width */
+  margin: 0 0 8px 0;
+}
+.bxkr-carousel::-webkit-scrollbar { display: none; }
+
+.bxkr-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  padding: 0 2px;         /* tiny breathing room to avoid clipping glow */
+}
+
+/* On larger screens, center slides and slightly limit width for aesthetics */
+@media (min-width: 576px) {
+  .bxkr-slide {
+    flex: 0 0 92%;
+    margin: 0 auto;
+  }
+}
+@media (min-width: 768px) {
+  .bxkr-slide {
+    flex: 0 0 700px;      /* cap width for tablet/desktop */
+  }
+}
+
+/* Dots */
+.bxkr-carousel-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+.bxkr-carousel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.35);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: transform .18s ease, background .18s ease;
+}
+.bxkr-carousel-dot.active {
+  background: #ff9a3a;            /* matches your amber accents */
+  transform: scale(1.25);
+}
+
+/* Optional: make ChallengeBanner content not wrap too early on small screens */
+@media (max-width: 400px) {
+  .challenge-banner-message {
+    white-space: nowrap;
+  }
+}
+
 .challenge-banner button.bxkr-btn[disabled] {
   opacity: 0.6;
   cursor: not-allowed;
