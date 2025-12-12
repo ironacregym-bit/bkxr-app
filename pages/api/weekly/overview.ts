@@ -13,7 +13,7 @@ type DayOverview = {
   habitAllDone: boolean;
   habitSummary?: { completed: number; total: number };
   checkinComplete: boolean;
-  checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number n
+  checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number
   hasWorkout: boolean;
   workoutDone: boolean;
   workoutIds: string[];
