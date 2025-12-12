@@ -290,48 +290,73 @@ export default function Home() {
           </div>
         )}
 
-        {/* Scrollable ChallengeBanner-style section */}
+
+        {/* Scrollable ChallengeBanner-style section (slightly wider, content across) */}
         <div style={{ display: "flex", overflowX: "auto", gap: 12, marginBottom: 16 }}>
-          {/* Banner 1: Share Your Progress */}
+          {/* Banner 1: Share Your Progress (disabled button) */}
           <ChallengeBanner
             title="Share Your Progress"
-            message="Export a weekly card with streaks, workouts, time & calories."
+            message={
+              <span style={{ whiteSpace: "nowrap" }}>
+                Export a weekly card with streaks, workouts, time & calories.
+              </span>
+            }
             href="#"
             iconLeft="fas fa-share-alt"
             accentColor="#ffcc00"
+            // Replace the default button with a disabled pill
             extraContent={
-              <button className="bxkr-btn" disabled style={{ marginTop: 8 }}>Coming Soon</button>
+              <button className="bxkr-btn" disabled style={{ marginLeft: 6 }}>Coming Soon</button>
             }
+            // Slightly wider banner (like your original)
+            style={{ minWidth: 260, maxWidth: 280 }}
           />
-
-          {/* Banner 2: Streaks */}
+        
+          {/* Banner 2: Streaks (no button) */}
           <ChallengeBanner
             title="Streaks"
-            message={`Day Streak: ${dayStreak} days | Workout Streak: ${workoutStreak} days`}
-            href="#"
+            message={
+              <span style={{ whiteSpace: "nowrap" }}>
+                <strong>Day Streak:</strong> {dayStreak} days &nbsp;|&nbsp; 
+                <strong>Workout Streak:</strong> {workoutStreak} days
+              </span>
+            }
+            href="#"                    // keeps consistent layout; click does nothing
             iconLeft="fas fa-fire"
             accentColor="#64c37a"
+            showButton={false}          // ⬅ removes Start button
+            style={{ minWidth: 260, maxWidth: 280 }}
           />
-
-          {/* Banner 3: Weekly Snapshot */}
+        
+          {/* Banner 3: Weekly Snapshot (no button) */}
           {weeklyOverview?.weeklyTotals && (
             <ChallengeBanner
               title="Weekly Snapshot"
               message={
-                <>
-                  <div style={{ fontSize: "0.85rem", lineHeight: "1.4" }}>
-                    <strong>Workouts:</strong> {weeklyOverview.weeklyTotals.totalWorkoutsCompleted}<br />
-                    <strong>Time:</strong> {weeklyOverview.weeklyTotals.totalWorkoutTime} mins<br />
-                    <strong>Calories:</strong> {weeklyOverview.weeklyTotals.totalCaloriesBurned} kcal
+                <div style={{ fontSize: "0.85rem", lineHeight: 1.35 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span><strong>Workouts Completed</strong></span>
+                    <span>{weeklyOverview.weeklyTotals.totalWorkoutsCompleted}</span>
                   </div>
-                </>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span><strong>Time Worked Out</strong></span>
+                    <span>{weeklyOverview.weeklyTotals.totalWorkoutTime} mins</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span><strong>Calories Burned</strong></span>
+                    <span>{weeklyOverview.weeklyTotals.totalCaloriesBurned} kcal</span>
+                  </div>
+                </div>
               }
               href="#"
               iconLeft="fas fa-chart-line"
               accentColor="#5b7c99"
-            />
+              showButton={false}         // ⬅ removes Start button
+              style={{ minWidth: 260, maxWidth: 280 }}
+          />
           )}
         </div>
+
 
         {/* Calendar */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
