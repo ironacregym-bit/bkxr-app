@@ -359,6 +359,7 @@ export default function Home() {
           ))}
         </div>
 
+       
         {/* Calendar */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
           {weekDays.map((d, i) => {
@@ -369,8 +370,12 @@ export default function Home() {
             if (!st) {
               return (
                 <div key={i} style={{ width: 44 }}>
-                  <div style={{ fontSize: "0.8rem", opacity: 0.6 }}>{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i]}</div>
-                  <div className="bxkr-day-pill" style={{ opacity: 0.5 }}>{d.getDate()}</div>
+                  <div style={{ fontSize: "0.8rem", opacity: 0.6 }}>
+                    {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i]}
+                  </div>
+                  <div className="bxkr-day-pill" style={{ opacity: 0.5 }}>
+                    {d.getDate()}
+                  </div>
                 </div>
               );
             }
@@ -387,7 +392,22 @@ export default function Home() {
                   className={`bxkr-day-pill ${st.allDone ? "completed" : ""}`}
                   style={{ boxShadow, fontWeight: isSelected ? 600 : 400, borderColor: st.allDone ? undefined : ringColor }}
                 >
-                  <span className={`bxkr-day-content ${st.allDone ? (isSelected ? "state-num" : "state-flame") :
+                  <span className={`bxkr-day-content ${st.allDone ? (isSelected ? "state-num" : "state-flame") : "state-num"}`}>
+                    {st.allDone && !isSelected ? (
+                      <i
+                        className="fas fa-fire"
+                        style={{
+                          color: "#64c37a",
+                          textShadow: `0 0 8px #64c37a`,
+                          fontSize: "1rem",
+                          lineHeight: 1
+                        }}
+                      />
+                    ) : (
+                      d.getDate()
+                    )}
+                  </span>
+                </div>
               </div>
             );
           })}
@@ -396,7 +416,12 @@ export default function Home() {
         {/* Daily Tasks Card */}
         {selectedDayData && (
           <DailyTasksCard
-            dayLabel={`${selectedDay.toLocaleDateString(undefined, { weekday: "long" })}, ${selectedDay.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`}
+            dayLabel={`${selectedDay.toLocaleDateString(undefined, {
+              weekday: "long",
+            })}, ${selectedDay.toLocaleDateString(undefined, {
+              day: "numeric",
+              month: "short",
+            })}`}
             nutritionSummary={selectedDayData.nutritionSummary}
             nutritionLogged={Boolean(selectedStatus.nutritionLogged)}
             workoutSummary={selectedDayData.workoutSummary}
