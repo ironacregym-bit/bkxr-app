@@ -14,229 +14,114 @@
 
 
 /* ===== Body & Typography ===== */
+
 body {
   background: linear-gradient(135deg, #1a1a1a, #2e1a0f);
-  color: #fff;
   font-family: 'Inter', sans-serif;
-  min-height: 100vh;
-  position: relative;
+  color: #fff;
 }
 
-a{
-  text-decoration: none !important;
+.bxkr-container {
+  padding: 16px;
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: url('/BXKRLogoNoBG.jpg') no-repeat center;
-  background-size: 40%;
-  opacity: 0.03;
-  z-index: -1;
-}
-
-/* ===== Carousel ===== */
-.bxkr-carousel {
-  display: flex;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  gap: 0;
-  margin: 0 0 8px 0;
-}
-.bxkr-carousel::-webkit-scrollbar {
-  display: none;
-}
-.bxkr-slide {
-  flex: 0 0 100%;
-  scroll-snap-align: start;
-  padding: 0 2px;
-}
-@media (min-width: 576px) {
-  .bxkr-slide {
-    flex: 0 0 92%;
-    margin: 0 auto;
-  }
-}
-@media (min-width: 768px) {
-  .bxkr-slide {
-    flex: 0 0 700px;
-  }
-}
-
-/* ===== Carousel Dots ===== */
-.bxkr-carousel-dots {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  margin: 6px 0 12px;
-}
-.bxkr-carousel-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.35);
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  transition: transform 0.18s ease, background 0.18s ease;
-}
-.bxkr-carousel-dot.active {
-  background: #ff8a2a; /* Neon Orange */
-  transform: scale(1.25);
-}
-
-/* ===== Challenge Banner ===== */
-.challenge-banner-message {
-  font-size: 0.9rem;
-  line-height: 1.4;
+.bxkr-hero {
+  background: linear-gradient(135deg, #ff8a2a, #ff7f32);
+  border-radius: 20px;
+  padding: 20px;
   text-align: center;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 20px rgba(255,138,42,0.4);
 }
-.challenge-banner-message .stats-row {
+.hero-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+.hero-stats {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 12px;
+}
+.hero-stat span {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+.hero-stat strong {
+  font-size: 1.4rem;
+}
+
+.bxkr-calendar {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  margin-bottom: 20px;
 }
-.challenge-banner-message .stats-col {
-  flex: 1;
+.calendar-day {
   text-align: center;
+  cursor: pointer;
 }
-.challenge-banner-message .stats-col strong {
-  display: block;
-  font-size: 0.85rem;
-  margin-bottom: 4px;
+.calendar-icon img {
+  width: 32px;
+  height: 32px;
+  transition: transform 0.2s ease;
+}
+.calendar-day:hover .calendar-icon img {
+  transform: scale(1.2);
 }
 
-/* ===== Calendar Pills ===== */
-.bxkr-day-pill {
-  width: 28px;
-  height: 28px;
-  margin: 4px auto;
+.bxkr-tasks .task-card {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  box-sizing: border-box;
-  border: 1px solid rgba(255,255,255,0.3);
-  backdrop-filter: blur(6px);
-  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s, border 0.2s;
-}
-.bxkr-day-pill.completed {
-  border-color: #64c37a;
-  box-shadow: 0 0 8px rgba(100,195,122,0.8);
-  background: rgba(100,195,122,0.08);
-}
-.bxkr-day-pill.completed:hover {
-  box-shadow: 0 0 14px rgba(100,195,122,1);
-  transform: scale(1.08);
-}
-.bxkr-day-content.state-flame,
-.bxkr-day-content.state-num {
-  animation: bxkr-pop-in .18s ease;
-}
-@keyframes bxkr-pop-in {
-  0% { transform: scale(0.6); opacity: 0; }
-  100% { transform: scale(1.0); opacity: 1; }
-}
-
-/* ===== Daily Tasks Card ===== */
-.futuristic-card {
   background: rgba(255,255,255,0.05);
   border-radius: 16px;
   padding: 14px 18px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  transition: transform .18s ease, box-shadow .18s ease;
-}
-.futuristic-card:hover {
-  transform: scale(1.02);
-  box-shadow: 0 0 18px rgba(255,138,42,0.6); /* Neon Orange glow */
-}
-
-/* ===== Buttons ===== */
-.bxkr-btn,
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px 18px;
-  border-radius: 999px;
-  border: none;
+  margin-bottom: 12px;
+  text-decoration: none;
   color: #fff;
-  background: linear-gradient(135deg, #ff7f32, #ff9a3a);
-  box-shadow: 0 0 12px rgba(255,127,50,0.6);
-  font-weight: 600;
-  transition: box-shadow .2s ease, transform .2s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.bxkr-btn:hover,
-.btn-primary:hover {
-  box-shadow: 0 0 18px rgba(255,127,50,0.8);
-  transform: scale(1.05);
+.task-card:hover {
+  transform: scale(1.03);
+  box-shadow: 0 0 18px rgba(255,138,42,0.6);
 }
-.bxkr-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.task-icon {
+  width: 24px;
+  margin-right: 8px;
 }
-
-/* ===== Inline Spinner ===== */
-.inline-spinner {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.25);
-  border-top-color: #ff8a2a;
-  animation: spin .8s linear infinite;
-  margin-left: 8px;
+.task-title {
+  font-weight: 700;
 }
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.task-status {
+  font-size: 0.9rem;
+  opacity: 0.85;
 }
 
-/* ===== Bottom Navigation ===== */
-.bxkr-bottomnav-link {
-  color: #fff !important;
-  text-decoration: none !important;
+.bxkr-bottomnav {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(10px);
+  border-radius: 999px;
+  display: flex;
+  justify-content: space-around;
+  width: 90%;
+  padding: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+.bxkr-bottomnav a {
+  color: #fff;
+  text-decoration: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-width: 56px;
 }
-.bxkr-bottomnav-link i {
-  font-size: 1.6rem;
-  line-height: 1;
-  margin-bottom: 2px;
-}
-.nav-icon:hover {
-  background: rgba(255,127,50,0.15);
-  box-shadow: 0 0 15px rgba(255,127,50,0.8);
-  transform: scale(1.08);
+.bxkr-bottomnav a:hover {
+  color: #ff8a2a;
 }
 
-/* ===== Responsive Rings for Nutrition Page ===== */
-.bxkr-ring {
-  width: 180px;
-  height: 180px;
-  margin: 0 auto;
-}
-@media (max-width: 576px) {
-  .bxkr-ring {
-    width: 100px;
-    height: 100px;
-  }
-}
-@media (max-width: 380px) {
-  .bxkr-ring {
-    width: 80px;
-    height: 80px;
-  }
-}
 
 :root,
 
