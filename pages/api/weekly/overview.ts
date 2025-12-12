@@ -13,7 +13,7 @@ type DayOverview = {
   habitAllDone: boolean;
   habitSummary?: { completed: number; total: number };
   checkinComplete: boolean;
-  checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number };
+  checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number n
   hasWorkout: boolean;
   workoutDone: boolean;
   workoutIds: string[];
@@ -112,7 +112,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       else {
         let calories = 0, protein = 0;
         snap.docs.forEach((doc) => { const data = doc.data(); calories += Number(data.calories || data.total_calories || 0); protein += Number(data.protein || data.total_protein || 0); });
-        nutritionMap[ymd] = { logged: true, calories, protein };
+        nutritionMap[ymd] = { logged: !snap.empty, calories, protein };
       }
     }
 
