@@ -392,7 +392,7 @@ export default function Home() {
             if (!st) {
               return (
                 <div key={i} style={{ width: 44 }}>
-                  <div style={{ fontSize: "0.8rem", opacity: 0.6" }}>{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i]}</div>
+                  <div style={{ fontSize: "0.8rem", opacity: 0.6 }}>{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i]}</div>
                   <div className="bxkr-day-pill" style={{ opacity: 0.5 }}>{d.getDate()}</div>
                 </div>
               );
