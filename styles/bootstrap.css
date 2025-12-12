@@ -12,7 +12,10 @@
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/main/LICENSE)
  */
 
-
+.challenge-banner button.bxkr-btn[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 /* Optional: subtle hover scale and focus ring for task rows */
 .futuristic-card:hover {
   transform: scale(1.02);
