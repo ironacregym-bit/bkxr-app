@@ -22,7 +22,6 @@ export const getServerSideProps: GetServerSideProps = async (
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-/* ---- helpers ---- */
 function getWeek(): Date[] {
   const today = new Date();
   const day = today.getDay();
@@ -104,7 +103,6 @@ export default function Home() {
   const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
   const [weekLoading, setWeekLoading] = useState(false);
 
-  // Trust API booleans; do not infer nutrition from summary
   const deriveDayBooleans = (o: any) => {
     const isFriday = Boolean(o.isFriday ?? new Date(o.dateKey + "T00:00:00").getDay() === 5);
     const hasWorkout = Boolean(o.hasWorkout) || Boolean(o.workoutIds?.length) || Boolean(o.workoutSummary);
@@ -148,7 +146,6 @@ export default function Home() {
     setWeekLoading(false);
   }, [weeklyOverview]);
 
-  // Streaks (Mon -> selected day)
   const dayStreak = useMemo(() => {
     let streak = 0;
     for (const d of weekDays) {
@@ -175,7 +172,6 @@ export default function Home() {
     return streak;
   }, [weekDays, weekStatus, selectedDay]);
 
-  // Weekly progress derived from the visible tasks so it can't disagree
   const derivedWeeklyTotals = useMemo(() => {
     const days = (weeklyOverview?.days as any[]) || [];
     let totalTasks = 0;
@@ -192,13 +188,11 @@ export default function Home() {
     return { totalTasks, completedTasks };
   }, [weeklyOverview]);
 
-  // Selected-day data
   const selectedDayData: ApiDay | undefined = useMemo(() => {
     if (!weeklyOverview?.days) return undefined;
     return (weeklyOverview.days as ApiDay[]).find((d) => d.dateKey === selectedDateKey);
   }, [weeklyOverview, selectedDateKey]);
 
-  // Hrefs and link hardening
   const selectedStatus = weekStatus[selectedDateKey] || ({} as DayStatus);
   const hasWorkoutToday = Boolean(selectedStatus.hasWorkout);
   const workoutIds = selectedStatus.workoutIds || [];
@@ -208,14 +202,9 @@ export default function Home() {
   const habitHref = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
 
-  // Accent colours
   const ringGreenStrong = "#64c37a";
-  const ringGreenMuted = "#4ea96a";
-  const accentMicro = "#d97a3a";
-  const accentWorkout = "#5b7c99";
-  const accentCheckin = "#c9a34e";
+  const accentMicro = "#ff8a2a"; // Neon Orange
 
-  /* ==== Carousel state and handlers ==== */
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const [slideIndex, setSlideIndex] = useState(0);
   const goToSlide = (idx: number) => {
@@ -242,14 +231,13 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
 
-      <main className="container py-3" style={{ paddingBottom: "70px", color: "#fff" }}>
+      <main className="container py-2" style={{ paddingBottom: "70px", color: "#fff" }}>
         {/* Header */}
-        <div className="d-flex justify-content-between mb-3 align-items-center">
+        <div className="d-flex justify-content-between mb-2 align-items-center">
           <div className="d-flex align-items-center gap-2">
             {session?.user?.image && (
               <img src={session.user.image} alt="" className="rounded-circle" style={{ width: 36, height: 36, objectFit: "cover" }} />
             )}
-            <div className="fw-semibold">{session?.user?.name || "Athlete"}</div>
             {(weekLoading || overviewLoading) && <div className="inline-spinner" />}
           </div>
           {status === "authenticated" ? (
@@ -262,11 +250,11 @@ export default function Home() {
         </div>
 
         {/* Greeting */}
-        <h2 className="mb-3" style={{ fontWeight: 700, fontSize: "1.6rem" }}>
-          {greeting}, {session?.user?.name || "Athlete"}
+        <h2 className="mb-3" style={{ fontWeight: 700, fontSize: "1.4rem" }}>
+          {greeting}
         </h2>
 
-        {/* Weekly Progress (derived so it can’t disagree) */}
+        {/* Weekly Progress */}
         {weeklyOverview?.days && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>Weekly Progress</div>
@@ -277,8 +265,9 @@ export default function Home() {
                     derivedWeeklyTotals.totalTasks > 0
                       ? `${(derivedWeeklyTotals.completedTasks / derivedWeeklyTotals.totalTasks) * 100}%`
                       : "0%",
-                  background: ringGreenStrong,
-                  height: "100%"
+                  background: accentMicro,
+                  height: "100%",
+                  transition: "width .4s ease"
                 }}
               />
             </div>
@@ -288,41 +277,39 @@ export default function Home() {
           </div>
         )}
 
-        {/* ===== Full-width mobile carousel ===== */}
+        {/* Loader for Weekly Snapshot */}
+        {overviewLoading && (
+          <div style={{ textAlign: "center", marginBottom: 12 }}>
+            Loading weekly snapshot… <span className="inline-spinner" />
+          </div>
+        )}
+
+        {/* Carousel */}
         <div className="bxkr-carousel" ref={carouselRef} aria-label="Weekly banners carousel">
-          {/* Slide 1: Share Your Progress (title + disabled pill only) */}
+          {/* Slide 1 */}
           <section className="bxkr-slide">
             <ChallengeBanner
               title="Share Your Progress"
-              message=""                 /* no wording */
+              message=""
               href="#"
               iconLeft="fas fa-share-alt"
-              accentColor="#ffb347"
-              background="linear-gradient(90deg, rgba(217,122,58,.38), rgba(255,179,71,.32))"
+              accentColor={accentMicro}
+              background="linear-gradient(90deg, rgba(255,138,42,.38), rgba(255,179,71,.32))"
               extraContent={<button className="bxkr-btn" disabled>Coming soon</button>}
               style={{ margin: 0 }}
             />
           </section>
 
-          {/* Slide 2: Streaks (Strava-style three columns) */}
+          {/* Slide 2 */}
           <section className="bxkr-slide">
             <ChallengeBanner
               title="Streaks"
               message={
                 <div className="challenge-banner-message">
                   <div className="stats-row">
-                    <div className="stats-col">
-                      <strong>Day</strong>
-                      {dayStreak}
-                    </div>
-                    <div className="stats-col">
-                      <strong>Workout</strong>
-                      {workoutStreak}
-                    </div>
-                    <div className="stats-col">
-                      <strong>—</strong>
-                      {/* reserved / spacer to keep three equal columns */}
-                    </div>
+                    <div className="stats-col"><strong>Day</strong>{dayStreak}</div>
+                    <div className="stats-col"><strong>Workout</strong>{workoutStreak}</div>
+                    <div className="stats-col"><strong>—</strong></div>
                   </div>
                 </div>
               }
@@ -335,25 +322,16 @@ export default function Home() {
             />
           </section>
 
-          {/* Slide 3: Weekly Snapshot (three columns) */}
+          {/* Slide 3 */}
           <section className="bxkr-slide">
             <ChallengeBanner
               title="Weekly Snapshot"
               message={
                 <div className="challenge-banner-message">
                   <div className="stats-row">
-                    <div className="stats-col">
-                      <strong>Workouts</strong>
-                      {weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0}
-                    </div>
-                    <div className="stats-col">
-                      <strong>Time</strong>
-                      {(weeklyOverview?.weeklyTotals?.totalWorkoutTime ?? 0)}m
-                    </div>
-                    <div className="stats-col">
-                      <strong>Calories</strong>
-                      {(weeklyOverview?.weeklyTotals?.totalCaloriesBurned ?? 0)} kcal
-                    </div>
+                    <div className="stats-col"><strong>Workouts</strong>{weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0}</div>
+                    <div className="stats-col"><strong>Time</strong>{(weeklyOverview?.weeklyTotals?.totalWorkoutTime ?? 0)}m</div>
+                    <div className="stats-col"><strong>Calories</strong>{(weeklyOverview?.weeklyTotals?.totalCaloriesBurned ?? 0)} kcal</div>
                   </div>
                 </div>
               }
@@ -380,7 +358,6 @@ export default function Home() {
             />
           ))}
         </div>
-        {/* ===== /carousel ===== */}
 
         {/* Calendar */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
@@ -398,7 +375,7 @@ export default function Home() {
               );
             }
 
-            const ringColor = st.allDone ? (isSelected ? ringGreenStrong : ringGreenMuted) : (isSelected ? accentMicro : "rgba(255,255,255,0.3)");
+            const ringColor = st.allDone ? (isSelected ? ringGreenStrong : ringGreenStrong) : (isSelected ? accentMicro : "rgba(255,255,255,0.3)");
             const boxShadow = isSelected ? `0 0 8px ${ringColor}` : (st.allDone ? `0 0 3px ${ringColor}` : "none");
 
             return (
@@ -418,14 +395,6 @@ export default function Home() {
                     )}
                   </span>
                 </div>
-                <div className="bxkr-dots">
-                  {st.hasWorkout && (
-                    <span className="bxkr-dot" style={{ color: accentWorkout, backgroundColor: accentWorkout }} />
-                  )}
-                  {st.isFriday && !st.checkinComplete && (
-                    <span className="bxkr-dot" style={{ color: accentCheckin, backgroundColor: accentCheckin }} />
-                  )}
-                </div>
               </div>
             );
           })}
@@ -434,7 +403,12 @@ export default function Home() {
         {/* Daily Tasks Card */}
         {selectedDayData && (
           <DailyTasksCard
-            dayLabel={`${selectedDay.toLocaleDateString(undefined, { weekday: "long" })}, ${selectedDay.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`}
+            dayLabel={`${selectedDay.toLocaleDateString(undefined, {
+              weekday: "long",
+            })}, ${selectedDay.toLocaleDateString(undefined, {
+              day: "numeric",
+              month: "short",
+            })}`}
             nutritionSummary={selectedDayData.nutritionSummary}
             nutritionLogged={Boolean(selectedStatus.nutritionLogged)}
             workoutSummary={selectedDayData.workoutSummary}
@@ -444,19 +418,36 @@ export default function Home() {
             habitAllDone={Boolean(selectedStatus.habitAllDone)}
             checkinSummary={selectedDayData.checkinSummary}
             checkinComplete={Boolean(selectedStatus.checkinComplete)}
-            hrefs={{ nutrition: nutritionHref, workout: workoutHref, habit: habitHref, checkin: checkinHref }}
+            hrefs={{
+              nutrition: nutritionHref,
+              workout: workoutHref,
+              habit: habitHref,
+              checkin: checkinHref,
+            }}
           />
         )}
 
+        {/* Workout loading fallback */}
         {hasWorkoutToday && !hasWorkoutId && (
-          <div className="text-center" style={{ opacity: 0.8, fontSize: "0.9rem", marginTop: 8 }}>
+          <div
+            className="text-center"
+            style={{
+              opacity: 0.8,
+              fontSize: "0.9rem",
+              marginTop: 8,
+            }}
+          >
             Loading workout details… <span className="inline-spinner" />
           </div>
         )}
       </main>
 
+      {/* Bottom Navigation */}
       <BottomNav />
+
+      {/* Add to Home Screen Prompt */}
       <AddToHomeScreen />
     </>
   );
 }
+
