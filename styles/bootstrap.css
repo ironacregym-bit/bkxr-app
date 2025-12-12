@@ -22,6 +22,11 @@ body {
   position: relative;
 }
 
+.futuristic-card a,
+.futuristic-card a:visited {
+  text-decoration: none !important;
+}
+
 body::before {
   content: "";
   position: fixed;
