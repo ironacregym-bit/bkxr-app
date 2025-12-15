@@ -103,7 +103,7 @@ export default function CreateWorkoutPage() {
 
   // --- Load exercises for dropdown ---
   const { data: exData } = useSWR<{ exercises: Array<{ id: string; exercise_name: string; type: string }> }>(
-    "/api/exercises/index?limit=500",
+    "/api/exercises/?limit=500",
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 }
   );
