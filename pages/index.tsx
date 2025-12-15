@@ -285,44 +285,6 @@ export default function Home() {
         )}
 
         {/* Carousel */}
-        <div className="bxkr-carousel" ref={carouselRef} aria-label="Weekly banners carousel">
-          {/* Slide 1 */}
-          <section className="bxkr-slide">
-            <ChallengeBanner
-              title="Share Your Progress"
-              message=""
-              href="#"
-              iconLeft="fas fa-share-alt"
-              accentColor="#ff8a2a"
-              background="linear-gradient(90deg, rgba(217,122,58,.38), rgba(255,179,71,.32))"
-              extraContent={<button className="bxkr-btn" disabled>Coming soon</button>}
-              style={{ margin: 0 }}
-            />
-          </section>
-
-          {/* Slide 2 */}
-          <section className="bxkr-slide">
-            <ChallengeBanner
-              title="Streaks"
-              message={
-                <div className="challenge-banner-message">
-                  <div className="stats-row">
-                    <div className="stats-col"><strong>Day</strong>{dayStreak}</div>
-                    <div className="stats-col"><strong>Workout</strong>{workoutStreak}</div>
-                    <div className="stats-col"><strong>—</strong></div>
-                  </div>
-                </div>
-              }
-              href="#"
-              iconLeft="fas fa-fire"
-              accentColor="#64c37a"
-              background="linear-gradient(90deg, rgba(79,163,165,.28), rgba(100,195,122,.24))"
-              showButton={false}
-              style={{ margin: 0 }}
-            />
-          </section>
-
-          {/* Slide 3 */}
           <section className="bxkr-slide">
             <ChallengeBanner
               title="Weekly Snapshot"
@@ -343,23 +305,7 @@ export default function Home() {
               style={{ margin: 0 }}
             />
           </section>
-        </div>
-
-        {/* Carousel dots */}
-        <div className="bxkr-carousel-dots" role="tablist" aria-label="Carousel pagination">
-          {[0, 1, 2].map((i) => (
-            <button
-              key={i}
-              type="button"
-              className={`bxkr-carousel-dot ${slideIndex === i ? "active" : ""}`}
-              aria-label={`Go to slide ${i + 1}`}
-              aria-selected={slideIndex === i}
-              onClick={() => goToSlide(i)}
-            />
-          ))}
-        </div>
-
-       
+      
         {/* Calendar */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
           {weekDays.map((d, i) => {
