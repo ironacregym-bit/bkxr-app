@@ -1,7 +1,7 @@
 
 // pages/api/exercises/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { adminDb as db } from '../../../lib/firebaseAdmin';
+import { adminDb as db } from '../../../lib/firestoreClient';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { q, limit } = req.query as { q?: string; limit?: string };
