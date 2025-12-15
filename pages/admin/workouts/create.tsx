@@ -668,4 +668,4 @@ export default function CreateWorkoutPage() {
       <BottomNav />
     </>
    );
-
+}
