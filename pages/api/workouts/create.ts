@@ -1,7 +1,7 @@
 
 // pages/api/workouts/create.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { db, Timestamp } from '../../../lib/firebaseAdmin';
+import { adminDb as db, Timestamp } from '../../../lib/firebaseAdmin';
 import {
   WorkoutCreatePayload, RoundOut, ExerciseItemOut, WorkoutTemplateDTO, KBStyle
 } from '../../../types/workouts';
