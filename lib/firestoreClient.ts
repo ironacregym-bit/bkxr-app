@@ -1,11 +1,12 @@
 
-import { Firestore } from "@google-cloud/firestore";
+// lib/firestoreClient.ts
+import { Firestore, Timestamp, FieldValue } from "@google-cloud/firestore";
 
 // Normalize private key from Vercel env (convert escaped \n to real newlines)
 function normalizeKey(key?: string): string {
   if (!key) return '';
   return key
-    .replace(/\\n/g, '\n')          // convert escaped newlines
+    .replace(/\\n/g, '\n')    .replace(/\\n/g, '\n')          // convert escaped newlines
     .replace(/^"+|"+$/g, '')        // remove accidental quotes
     .trim();
 }
@@ -19,3 +20,5 @@ const firestore = new Firestore({
 });
 
 export default firestore;
+// Convenience exports if you need them elsewhere
+
