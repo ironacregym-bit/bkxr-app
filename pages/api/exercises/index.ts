@@ -1,7 +1,7 @@
 
 // pages/api/exercises/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { adminDb as db } from '../../../lib/firestoreClient';
+import firestore from '../../../lib/firestoreClient';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { q, limit } = req.query as { q?: string; limit?: string };
@@ -9,14 +9,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const n = Math.min(Number(limit || 500), 1000); // cap to 1000
 
-    let query = db.collection('exercises');
-
-    // Optional search by name/type (prefix-based; case-insensitive client-side)
-    // Firestore doesn't support contains without indexing; keep simple server-side sort + client-side filter
-    const snap = await query.orderBy('exercise_name').limit(n).get();
+    // Use your Firestore client
+    const snap = await firestore
+      .collection('exercises')
+      .orderBy('exercise_name')
+      .limit(n)
+      .get();
 
     const exercises = snap.docs.map((d) => {
-      const x = d.data();
+      const x = d.data() as any;
       return {
         id: d.id,
         exercise_name: x.exercise_name || '',
@@ -27,8 +28,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
-    // Client-side filter if q is present
-       const filtered = q
+    // Optional simple filter (case-insensitive)
+    const filtered = q
       ? exercises.filter((e) =>
           (e.exercise_name || '').toLowerCase().includes(q.toLowerCase()) ||
           (e.type || '').toLowerCase().includes(q.toLowerCase())
@@ -36,8 +37,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       : exercises;
 
     return res.status(200).json({ exercises: filtered });
-  } catch (err: any) {
+   } catch (err: any) {
     console.error('exercises/index error', err);
     return res.status(500).json({ error: 'Failed to list exercises' });
   }
-}
+
