@@ -1,402 +1,361 @@
 
 import Head from "next/head";
-import useSWR from "swr";
 import Link from "next/link";
+import useSWR from "swr";
 import { useSession } from "next-auth/react";
+import { useMemo } from "react";
 import BottomNav from "../components/BottomNav";
-import { useState } from "react";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-function getWeekDays(start: Date) {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    return d;
-  });
+// ---- helpers -------------------------------------------------
+const ACCENT = "#ff8a2a";
+const SOFT_BG = "rgba(255,255,255,0.05)";
+const CARD: React.CSSProperties = {
+  background: SOFT_BG,
+  borderRadius: 16,
+  padding: 16,
+  backdropFilter: "blur(10px)",
+  boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+};
+
+function startOfDay(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+const DAY_INDEX = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+function nextDateForDayName(dayName: string, from: Date) {
+  const idx = DAY_INDEX.indexOf(dayName.toLowerCase());
+  if (idx < 0) return null;
+  const fromIdx = from.getDay();
+  const diff = (idx - fromIdx + 7) % 7; // 0=today, 1=tomorrow, ...
+  const target = new Date(from);
+  target.setDate(from.getDate() + diff);
+  target.setHours(0, 0, 0, 0);
+  return target;
 }
 
-export default function WorkoutPage() {
+// Create tiny bar “charts” with plain divs (no extra packages)
+function Bars({
+  values,
+  max,
+  color,
+  height = 48,
+}: {
+  values: number[];
+  max: number;
+  color: string;
+  height?: number;
+}) {
+  const safeMax = Math.max(1, max, ...values);
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "flex-end", height }}>
+      {values.map((v, i) => (
+        <div
+          key={i}
+          title={`${v}`}
+          style={{
+            width: 10,
+            height: Math.max(4, Math.round((v / safeMax) * height)),
+            borderRadius: 6,
+            background: color,
+            boxShadow: `0 0 10px ${color}77`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ---- page ----------------------------------------------------
+export default function Train() {
   const { data: session } = useSession();
-  const today = new Date();
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const userEmail = session?.user?.email;
 
-  const initialMonday = new Date(today);
-  const dayOfWeek = today.getDay();
-  initialMonday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-  initialMonday.setHours(0, 0, 0, 0);
-
-  const [weekStart, setWeekStart] = useState<Date>(initialMonday);
-  const [selectedDay, setSelectedDay] = useState<Date>(today);
-
-  const getDayName = (date: Date) =>
-    date.toLocaleDateString(undefined, { weekday: "long" });
-
-  const { data: profileData } = useSWR(
-    session?.user?.email
-      ? `/api/profile?email=${encodeURIComponent(session.user.email)}`
-      : null,
+  // profile (for future location-based actions, not strictly required here)
+  const { data: profile } = useSWR(
+    userEmail ? `/api/profile?email=${encodeURIComponent(userEmail)}` : null,
     fetcher
   );
-  const userLocation: string | undefined = profileData?.location || undefined;
 
+  // programmed workouts (supports both: old day_name and newer date-based)
   const { data: workoutsData } = useSWR("/api/workouts", fetcher);
-  const todaysWorkout = (workoutsData?.workouts || []).find(
-    (w: any) => (w.day_name || "").toLowerCase() === getDayName(today).toLowerCase()
-  );
 
+  // workout completions (used for next workout + history + calories chart)
   const { data: completionData } = useSWR(
-    session?.user?.email
-      ? `/api/completions/history?email=${encodeURIComponent(session.user.email)}`
-      : null,
+    userEmail ? `/api/completions/history?email=${encodeURIComponent(userEmail)}` : null,
     fetcher
   );
 
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-  weekEnd.setHours(23, 59, 59, 999);
-
-  const fromISO = weekStart.toISOString();
-  const toISO = weekEnd.toISOString();
-
-  const { data: calendarData, isLoading: calendarLoading, error: calendarError } = useSWR(
-    userLocation
-      ? `/api/schedule/upcoming?location=${encodeURIComponent(userLocation)}&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`
-      : null,
+  // check-ins series for weight/bodyFat (optional; hide charts if not present)
+  const { data: checkinSeries } = useSWR(
+    userEmail ? `/api/checkins/series?email=${encodeURIComponent(userEmail)}&period=90d` : null,
     fetcher
   );
 
-  const normalizeDate = (d: Date) => {
-    const n = new Date(d);
-    n.setHours(0, 0, 0, 0);
-    return n.getTime();
-  };
+  // ---- derive: completed set
+  const completedIds = useMemo(() => {
+    const arr = completionData?.history ?? [];
+    return new Set(arr.map((h: any) => h.workout_id).filter(Boolean));
+  }, [completionData]);
 
-  const sessionsForDay =
-    calendarData?.sessions?.filter((s: any) => {
-      if (!s.start_time) return false;
-      const start = new Date(s.start_time);
-      return normalizeDate(start) === normalizeDate(selectedDay);
-    }) || [];
+  // ---- derive: next workout (not completed)
+  const nextWorkout = useMemo(() => {
+    const list: any[] = workoutsData?.workouts ?? [];
+    if (!list.length) return null;
 
-  const isPastDay = (date: Date) => {
-    const todayMidnight = new Date();
-    todayMidnight.setHours(0, 0, 0, 0);
-    return date < todayMidnight;
-  };
+    // Normalize each workout to a comparable date and sort upcoming first
+    const normalized = list
+      .map((w) => {
+        // prefer explicit timestamp/date if available
+        if (w.date) {
+          const dt = new Date(w.date);
+          dt.setHours(0, 0, 0, 0);
+          return { ...w, _date: dt };
+        }
+        if (w.day_name) {
+          const dt = nextDateForDayName(w.day_name, today);
+          return { ...w, _date: dt };
+        }
+        return { ...w, _date: null };
+      })
+      .filter((w) => w._date instanceof Date);
 
-  const weekDays = getWeekDays(weekStart);
+    // sort by date asc
+    normalized.sort((a, b) => (a._date as Date).getTime() - (b._date as Date).getTime());
 
-  const daysWithSession = weekDays.map((d) => {
-    return (calendarData?.sessions || []).some((s: any) => {
-      if (!s.start_time) return false;
-      const start = new Date(s.start_time);
-      return (
-        start.getFullYear() === d.getFullYear() &&
-        start.getMonth() === d.getMonth() &&
-        start.getDate() === d.getDate()
-      );
-    });
-  });
-
-  async function handleBook(sessionId: string) {
-    if (!session?.user?.email) {
-      alert("Please sign in to book a session.");
-      return;
+    // find the first upcoming not-completed (today counts as upcoming)
+    for (const w of normalized) {
+      const isUpcoming = (w._date as Date).getTime() >= today.getTime();
+      if (isUpcoming && !completedIds.has(w.id)) return w;
+      // fallback: if today matches and not completed yet, return it
+      if (isSameDay(w._date as Date, today) && !completedIds.has(w.id)) return w;
     }
-    try {
-      const res = await fetch("/api/bookings/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session_id: sessionId,
-          user_email: session.user.email,
-        }),
-      });
-      if (!res.ok) {
-        const problem = await res.json().catch(() => ({}));
-        throw new Error(problem?.error || "Booking failed");
-      }
-      alert("✅ Booked successfully!");
-    } catch (e: any) {
-      console.error("Booking error:", e?.message || e);
-      alert("❌ Failed to book session.");
+    // otherwise, if everything upcoming is completed, pick the next by date
+    return normalized.find((w) => (w._date as Date).getTime() >= today.getTime()) ?? null;
+  }, [workoutsData, completedIds, today]);
+
+  // ---- derive: history preview
+  const historyPreview = useMemo(() => {
+    const arr: any[] = completionData?.history ?? [];
+    // newest first
+    return [...arr].sort((a, b) => +new Date(b.completed_date) - +new Date(a.completed_date)).slice(0, 3);
+  }, [completionData]);
+
+  // ---- derive: simple progress series
+  // calories by week (last 8 entries bucketed by week number)
+  const caloriesBars = useMemo(() => {
+    const hist: any[] = completionData?.history ?? [];
+    if (!hist.length) return { values: [], max: 0 };
+    // Bucket by ISO week (year-week)
+    const byWeek = new Map<string, number>();
+    for (const h of hist) {
+      const d = new Date(h.completed_date);
+      const year = d.getUTCFullYear();
+      // ISO week
+      const tmp = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+      const dayNum = (tmp.getUTCDay() + 6) % 7;
+      tmp.setUTCDate(tmp.getUTCDate() - dayNum + 3);
+      const firstThursday = tmp.getTime();
+      const jan4 = new Date(Date.UTC(year, 0, 4));
+      const jan4DayNum = (jan4.getUTCDay() + 6) % 7;
+      jan4.setUTCDate(jan4.getUTCDate() - jan4DayNum + 3);
+      const week = 1 + Math.round((firstThursday - jan4.getTime()) / 604800000);
+      const key = `${year}-W${String(week).padStart(2, "0")}`;
+      byWeek.set(key, (byWeek.get(key) ?? 0) + (h.calories_burned || 0));
     }
-  }
+    const ordered = Array.from(byWeek.entries())
+      .sort(([a], [b]) => (a > b ? 1 : -1))
+      .slice(-8);
+    const values = ordered.map(([, v]) => Math.round(v));
+    const max = Math.max(0, ...values);
+    return { values, max };
+  }, [completionData]);
 
-  function shiftWeek(days: number) {
-    const newStart = new Date(weekStart);
-    newStart.setDate(newStart.getDate() + days);
-    setWeekStart(newStart);
-    setSelectedDay(newStart);
-  }
+  // weight/bodyFat series: expect checkinSeries like [{date, weight, bodyFat}]
+  const weightSeries = useMemo<number[]>(() => {
+    const arr: any[] = checkinSeries?.series ?? [];
+    return arr.map((p) => p.weight).filter((n) => typeof n === "number").slice(-12);
+  }, [checkinSeries]);
+  const bodyFatSeries = useMemo<number[]>(() => {
+    const arr: any[] = checkinSeries?.series ?? [];
+    return arr.map((p) => p.bodyFat).filter((n) => typeof n === "number").slice(-12);
+  }, [checkinSeries]);
 
+  // ---- UI ----------------------------------------------------
   return (
     <>
       <Head>
-        <title>BXKR</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>BXKR · Train</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      <main
-        className="container py-3"
-        style={{
-          paddingBottom: "70px",
-          background: "linear-gradient(135deg, #1a1a1a 0%, #2e1a0f 100%)",
-          color: "#fff",
-          borderRadius: "12px",
-        }}
-      >
-        {/* Today’s Workout */}
-        <div
-          style={{
-            background: "rgba(255,255,255,0.05)",
-            borderRadius: "16px",
-            padding: "16px",
-            backdropFilter: "blur(10px)",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-            marginBottom: "24px",
-          }}
-        >
-          <div className="d-flex justify-content-between align-items-center flex-wrap">
+      <main className="container py-3" style={{ paddingBottom: 80, color: "#fff" }}>
+        {/* Header / CTA row */}
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h1 className="m-0" style={{ fontWeight: 800, fontSize: "1.3rem" }}>Train</h1>
+          <Link href="/schedule" className="btn btn-outline-light btn-sm" style={{ borderRadius: 24 }}>
+            Schedule
+          </Link>
+        </div>
+
+        {/* Next Workout (not completed) */}
+        <section style={{ ...CARD, marginBottom: 16 }}>
+          <div className="d-flex justify-content-between align-items-start flex-wrap">
             <div className="mb-2">
-              <div className="text-muted small">Today</div>
-              {todaysWorkout ? (
-                <h5 className="mb-0">{todaysWorkout.workout_name}</h5>
-              ) : (
-                <h5 className="mb-0">Rest Day</h5>
+              <div className="text-muted small">Next Workout</div>
+              <h5 className="mb-1" style={{ fontWeight: 700 }}>
+                {nextWorkout?.workout_name || nextWorkout?.name || "No programmed workout"}
+              </h5>
+              {nextWorkout?._date && (
+                <div className="small text-muted">
+                  {(nextWorkout._date as Date).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" })}
+                </div>
               )}
             </div>
             <div className="text-end mb-2">
-              <div className="text-muted small">Location</div>
-              {userLocation ? (
-                <div className="fw-semibold">{userLocation}</div>
+              {nextWorkout ? (
+                <Link
+                  href={`/workout/${nextWorkout.id}`}
+                  className="btn btn-sm"
+                  style={{
+                    borderRadius: 24,
+                    fontWeight: 700,
+                    color: "#fff",
+                    background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                    boxShadow: `0 0 14px ${ACCENT}88`,
+                  }}
+                >
+                  Start Workout
+                </Link>
               ) : (
-                <Link href="/profile">Set your location</Link>
+                <Link href="/schedule" className="btn btn-outline-light btn-sm" style={{ borderRadius: 24 }}>
+                  Book Session
+                </Link>
               )}
             </div>
           </div>
+          {nextWorkout?.notes && <p className="mb-0 mt-2" style={{ opacity: 0.9 }}>{nextWorkout.notes}</p>}
+        </section>
 
-          {todaysWorkout && (
-            <div className="mt-2">
-              <p className="mb-2">{todaysWorkout.notes || "Workout details"}</p>
-              <Link
-                href={`/workout/${todaysWorkout.id}`}
-                className="btn btn-primary btn-sm"
-                style={{
-                  backgroundColor: "#ff7f32",
-                  borderRadius: "24px",
-                  fontWeight: 600,
-                }}
-              >
-                Start Workout
-              </Link>
-            </div>
-          )}
-          {!todaysWorkout && (
-            <div className="mt-2">
-              <p className="mb-2">No programmed workout today. Book a gym session instead:</p>
-              <a
-                href={`https://wa.me/${process.env.NEXT_PUBLIC_TRAINER_PHONE || process.env.TRAINER_PHONE}?text=Hi%20Coach%2C%20I%27d%20like%20to%20book%20a%20session`}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-outline-light btn-sm"
-                style={{ borderRadius: "24px" }}
-              >
-                Book Gym Session
-              </a>
-            </div>
-          )}
-        </div>
-
-        {/* Week Navigation */}
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <button className="btn btn-outline-light btn-sm" onClick={() => shiftWeek(-7)}>
-            ← Previous
-          </button>
-          <div className="fw-bold">
-            {weekStart.toLocaleDateString()} – {weekEnd.toLocaleDateString()}
+        {/* Progress (Charts) */}
+        <section style={{ ...CARD, marginBottom: 16 }}>
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <h6 className="m-0" style={{ fontWeight: 700 }}>Progress</h6>
+            <div className="small text-muted">Week · Month · All</div>
           </div>
-          <button className="btn btn-outline-light btn-sm" onClick={() => shiftWeek(7)}>
-            Next →
-          </button>
-        </div>
+          <div className="row g-3">
+            <div className="col-4">
+              <div className="small text-muted mb-1">Calories (weekly)</div>
+              {caloriesBars.values.length ? (
+                <Bars values={caloriesBars.values} max={caloriesBars.max} color={`${ACCENT}`} />
+              ) : (
+                <div className="small text-muted">No data yet</div>
+              )}
+            </div>
+            <div className="col-4">
+              <div className="small text-muted mb-1">Weight</div>
+              {weightSeries.length ? (
+                <Bars values={weightSeries} max={Math.max(...weightSeries)} color="#64c37a" />
+              ) : (
+                <div className="small text-muted">Connect check-ins</div>
+              )}
+            </div>
+            <div className="col-4">
+              <div className="small text-muted mb-1">% Body Fat</div>
+              {bodyFatSeries.length ? (
+                <Bars values={bodyFatSeries} max={Math.max(...bodyFatSeries)} color="#5b7c99" />
+              ) : (
+                <div className="small text-muted">Connect check-ins</div>
+              )}
+            </div>
+          </div>
+        </section>
 
-        {/* Calendar Navigation */}
-        <h4 className="mb-3 text-center">Select a Day</h4>
-        <div className="d-flex justify-content-between text-center mb-4">
-          {weekDays.map((d, i) => {
-            const isSelected =
-              d.getDate() === selectedDay.getDate() &&
-              d.getMonth() === selectedDay.getMonth() &&
-              d.getFullYear() === selectedDay.getFullYear();
-            const isToday =
-              d.getDate() === today.getDate() &&
-              d.getMonth() === today.getMonth() &&
-              d.getFullYear() === today.getFullYear();
-            const hasSession = daysWithSession[i];
-
-            const pillStyle = {
-              width: "32px",
-              height: "32px",
-              margin: "4px auto",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: "50%",
-              background: isSelected
-                ? "#ff7f32"
-                : isToday
-                ? "#ffc107"
-                : hasSession
-                ? "rgba(255,255,255,0.15)"
-                : "transparent",
-              color: "#fff",
-              fontWeight: 600,
-            };
-
-            return (
-              <div
-                key={i}
-                style={{ width: "40px", cursor: "pointer" }}
-                onClick={() => setSelectedDay(d)}
-              >
-                <div className="fw-bold">{d.toLocaleDateString(undefined, { weekday: "short" })}</div>
-                <div style={pillStyle}>{d.getDate()}</div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Sessions for Selected Day */}
-        <h4 className="mb-3 text-center">{getDayName(selectedDay)}’s Sessions</h4>
-        <div
-          style={{
-            background: "rgba(255,255,255,0.05)",
-            borderRadius: "16px",
-            padding: "16px",
-            backdropFilter: "blur(10px)",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-            marginBottom: "24px",
-          }}
-        >
-          {calendarLoading && <div className="alert alert-secondary">Loading sessions…</div>}
-          {calendarError && <div className="alert alert-danger">Failed to load sessions.</div>}
-
-          {sessionsForDay.length > 0 ? (
-            sessionsForDay.map((s: any) => {
-              const start = new Date(s.start_time);
-              const end = s.end_time ? new Date(s.end_time) : null;
-              const full =
-                s.max_attendance && s.current_attendance
-                  ? s.current_attendance >= s.max_attendance
-                  : false;
-              const disabled = full || isPastDay(start);
-
-              return (
-                <div
-                  key={s.id}
-                  style={{
-                    background: "rgba(255,255,255,0.05)",
-                    borderRadius: "12px",
-                    padding: "12px",
-                    marginBottom: "12px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <div>
-                    <div className="fw-semibold">{s.class_name} @ {s.gym_name}</div>
-                    <div className="small text-muted">
-                      {start.toLocaleString()} {end ? `– ${end.toLocaleTimeString()}` : ""}
-                    </div>
-                    <div className="small text-muted">{s.location}</div>
-                    {s.coach_name && <div className="small text-muted">Coach: {s.coach_name}</div>}
-                  </div>
-                  <div className="text-end">
-                    {s.max_attendance && (
-                      <div className="small">{s.current_attendance || 0}/{s.max_attendance}</div>
-                    )}
-                    <button
-                      className={`btn btn-sm mt-2 ${disabled ? "btn-secondary" : "btn-primary"}`}
-                      style={{
-                        backgroundColor: disabled ? "#555" : "#ff7f32",
-                        borderRadius: "24px",
-                        fontWeight: 600,
-                        color: "#fff",
-                      }}
-                      disabled={disabled}
-                      onClick={() => handleBook(s.id)}
-                    >
-                      {disabled ? (full ? "Full" : "Past") : "Book"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            !calendarLoading && !calendarError && <p className="mb-0">No sessions for this day.</p>
-          )}
-        </div>
-
-        {/* Tiles Section */}
-        <div className="row gx-3 mb-4">
-          <div className="col-6">
-            <div
-              style={{
-                background: "rgba(255,255,255,0.05)",
-                borderRadius: "16px",
-                padding: "16px",
-                backdropFilter: "blur(10px)",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-                textAlign: "center",
-              }}
-            >
-              <h6 className="mb-3">Workout History</h6>
-              {completionData?.history?.length > 0 ? (
-                completionData.history.slice(0, 3).map((c: any, idx: number) => (
+        {/* Tiles */}
+        <section className="row gx-3">
+          {/* Workout History */}
+          <div className="col-12 col-md-6 mb-3">
+            <div style={{ ...CARD, height: "100%" }}>
+              <h6 className="mb-3" style={{ fontWeight: 700 }}>Workout History</h6>
+              {historyPreview.length ? (
+                historyPreview.map((c: any, idx: number) => (
                   <div key={idx} className="mb-2">
-                    <small>{new Date(c.completed_date).toLocaleDateString()}</small>
-                    <div>{c.calories_burned} cal | {c.sets_completed} sets</div>
+                    <small className="text-muted">
+                      {new Date(c.completed_date).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                    </small>
+                    <div>{Math.round(c.calories_burned || 0)} kcal · {c.sets_completed || 0} sets</div>
+                    {c.weight_completed_with && <div className="small text-muted">Weight used: {c.weight_completed_with}</div>}
                   </div>
                 ))
               ) : (
-                <p>No history yet.</p>
+                <div className="text-muted">No history yet</div>
               )}
-              <button
-                className="btn btn-outline-light btn-sm mt-2"
-                style={{ borderRadius: "24px" }}
-              >
+              <Link href="/history" className="btn btn-outline-light btn-sm mt-2" style={{ borderRadius: 24 }}>
                 View More
-              </button>
+              </Link>
             </div>
           </div>
 
-          <div className="col-6">
-            <div
-              style={{
-                background: "rgba(255,255,255,0.05)",
-                borderRadius: "16px",
-                padding: "16px",
-                backdropFilter: "blur(10px)",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-                textAlign: "center",
-              }}
-            >
-              <h6 className="mb-3">Benchmarks</h6>
-              <p>No benchmarks yet.</p>
-              <button
-                className="btn btn-outline-light btn-sm mt-2"
-                style={{ borderRadius: "24px" }}
-              >
-                Add Result
-              </button>
-            </div>
+          {/* Benchmarks */}
+          <BenchmarksCard email={userEmail} />
+        </section>
+
+        {/* Exercise Library */}
+        <section style={{ ...CARD, marginTop: 4 }}>
+          <div className="d-flex justify-content-between align-items-center">
+            <h6 className="m-0" style={{ fontWeight: 700 }}>Exercise Library</h6>
+            <Link href="/exercises" className="btn btn-outline-light btn-sm" style={{ borderRadius: 24 }}>
+              Browse
+            </Link>
           </div>
-        </div>
+          <div className="small text-muted mt-2">Boxing · Kettlebell · Strength · Mobility</div>
+        </section>
       </main>
 
       <BottomNav />
     </>
   );
 }
+
+// ---- Benchmarks (soft-fail if API missing) -------------------
+function BenchmarksCard({ email }: { email?: string | null }) {
+  const { data, error } = useSWR(
+    email ? `/api/benchmarks/latest?email=${encodeURIComponent(email)}` : null,
+    fetcher
+  );
+  const has = data?.results?.length;
+
+  return (
+    <div className="col-12 col-md-6 mb-3">
+      <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 16, padding: 16, backdropFilter: "blur(10px)", boxShadow: "0 4px 20px rgba(0,0,0,0.4)", height: "100%" }}>
+        <h6 className="mb-3" style={{ fontWeight: 700 }}>Benchmarks</h6>
+        {has ? (
+          <div>
+            {data.results.slice(0, 3).map((r: any, i: number) => (
+              <div key={i} className="mb-2">
+                <div className="fw-semibold">{r.name}</div>
+                <div className="small text-muted">{r.value} {r.unit} · {new Date(r.date).toLocaleDateString()}</div>
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="text-muted">Can’t load benchmarks</div>
+        ) : (
+          <div className="text-muted">No benchmarks yet</div>
+        )}
+        <div className="mt-2 d-flex gap-2">
+          <Link href="/benchmarks" className="btn btn-outline-light btn-sm" style={{ borderRadius: 24 }}>View</Link>
+          <Link href="/benchmarks/new" className="btn btn-sm" style={{ borderRadius: 24, color: "#fff", background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, boxShadow: `0 0 14px ${ACCENT}88` }}>
+            Add Result
+          </Link>
+        </div>
+      </div>
+       </div>
+  );
+
