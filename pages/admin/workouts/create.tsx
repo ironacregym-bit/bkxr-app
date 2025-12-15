@@ -6,12 +6,15 @@ import Head from "next/head";
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
+import useSWR from "swr";
 import BottomNav from "../../../components/BottomNav";
 import type {
   WorkoutCreatePayload,
   KBStyle,
   BoxingAction,
 } from "../../../types/workouts";
+
+const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 const ACCENT = "#FF8A2A";
 const CARD: React.CSSProperties = {
@@ -35,7 +38,7 @@ const roundLabels = [
   "Load", // Kettlebell (6..10)
 ];
 
-// --- Boxing shorthand mapping (expand "1-2-slip" → actions[]) ---
+// --- Boxing shorthand mapping (includes DUCK) ---
 const BOXING_CODE_MAP: Record<string, BoxingAction> = {
   "1": { kind: "punch", code: "jab" },
   "2": { kind: "punch", code: "cross" },
@@ -45,11 +48,12 @@ const BOXING_CODE_MAP: Record<string, BoxingAction> = {
   "6": { kind: "punch", code: "rear_uppercut" },
   jab: { kind: "punch", code: "jab" },
   cross: { kind: "punch", code: "cross" },
-  hook: { kind: "punch", code: "hook" }, // generic
-  uppercut: { kind: "punch", code: "uppercut" }, // generic
+  hook: { kind: "punch", code: "hook" }, // generic hook
+  uppercut: { kind: "punch", code: "uppercut" }, // generic uppercut
   slip: { kind: "defence", code: "slip" },
   roll: { kind: "defence", code: "roll" },
   parry: { kind: "defence", code: "parry" },
+  duck: { kind: "defence", code: "duck" }, // ✅ added duck
 };
 
 function expandComboShorthand(name: string | undefined, input: string) {
@@ -58,7 +62,7 @@ function expandComboShorthand(name: string | undefined, input: string) {
   const actions: BoxingAction[] = parts
     .filter(Boolean)
     .map((p) => {
-      // support "x2" suffix for doubles e.g., "jabx2"
+      // support "xN" suffix (e.g., "jabx2")
       const m = p.match(/^([a-z0-9]+)x(\d+)$/);
       if (m) {
         const base = BOXING_CODE_MAP[m[1]];
@@ -71,9 +75,7 @@ function expandComboShorthand(name: string | undefined, input: string) {
       return { ...base };
     });
 
-  if (!actions.length) {
-    throw new Error("Combo must contain at least one action");
-  }
+  if (!actions.length) throw new Error("Combo must contain at least one action");
 
   return {
     name: name || undefined,
@@ -98,6 +100,14 @@ export default function CreateWorkoutPage() {
   const router = useRouter();
   const role = (session?.user as any)?.role || "user";
   const ownerEmail = session?.user?.email || "";
+
+  // --- Load exercises for dropdown ---
+  const { data: exData } = useSWR<{ exercises: Array<{ id: string; exercise_name: string; type: string }> }>(
+    "/api/exercises/index?limit=500",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
+  const exercises = exData?.exercises || [];
 
   // --- Template metadata ---
   const [visibility, setVisibility] = useState<"global" | "private">("global");
@@ -129,9 +139,7 @@ export default function CreateWorkoutPage() {
     Array.from({ length: 5 }, (_, i) => ({
       label: roundLabels[5 + i],
       style: "AMRAP",
-      items: [
-        { exercise_id: "", order: 1, reps: "", time_s: undefined, weight_kg: undefined },
-      ],
+      items: [{ exercise_id: "", order: 1, reps: "" }],
       is_benchmark_component: false,
     }))
   );
@@ -140,11 +148,7 @@ export default function CreateWorkoutPage() {
   const [saving, setSaving] = useState<boolean>(false);
 
   if (status === "loading") {
-    return (
-      <div className="container py-4">
-        Checking access…
-      </div>
-    );
+    return <div className="container py-4">Checking access…</div>;
   }
   if (!session || (role !== "admin" && role !== "gym")) {
     return (
@@ -205,6 +209,8 @@ export default function CreateWorkoutPage() {
         current.time_s = value ? Number(value) : undefined;
       } else if (field === "weight_kg") {
         current.weight_kg = value ? Number(value) : undefined;
+      } else if (field === "rest_s") {
+        current.rest_s = value ? Number(value) : undefined;
       } else {
         (current as any)[field] = value;
       }
@@ -220,11 +226,21 @@ export default function CreateWorkoutPage() {
       return next;
     });
   }
+  function selectKbExercise(roundIndex: number, idx: number, exerciseId: string) {
+    setKbRounds((prev) => {
+      const next = [...prev];
+      const items = [...next[roundIndex].items];
+      const current = { ...items[idx], exercise_id: exerciseId };
+      items[idx] = current;
+      next[roundIndex] = { ...next[roundIndex], items };
+      return next;
+    });
+  }
 
   // --- Validation ---
   function validateForm(): string | null {
     if (!workoutName.trim()) return "Workout name is required.";
-    // Boxing rounds: each combo must have at least one action after expansion
+    // Boxing rounds: each combo must expand to ≥1 action
     for (let r = 0; r < boxingRounds.length; r++) {
       for (let c = 0; c < 3; c++) {
         const seq = boxingRounds[r].combos[c].sequence.trim();
@@ -259,7 +275,6 @@ export default function CreateWorkoutPage() {
     setSaving(true);
     setStatusMsg("Saving workout…");
 
-    // Build payload that matches /api/workouts/create
     const payload: WorkoutCreatePayload = {
       visibility,
       owner_email: visibility === "private" ? ownerEmail : undefined,
@@ -276,14 +291,14 @@ export default function CreateWorkoutPage() {
             expandComboShorthand(r.combos[0].name, r.combos[0].sequence),
             expandComboShorthand(r.combos[1].name, r.combos[1].sequence),
             expandComboShorthand(r.combos[2].name, r.combos[2].sequence),
-          ] as any, // matches [BoxingCombo, BoxingCombo, BoxingCombo]
+          ] as any,
         })),
       },
       kettlebell: {
         rounds: kbRounds.map((r, idx) => ({
           name: r.label || `Kettlebells Round ${idx + 1}`,
           style: r.style,
-          order: idx + 6, // continue after boxing 1..5
+          order: idx + 6,
           items: r.items.map((it) => ({
             exercise_id: it.exercise_id.trim(),
             order: it.order,
@@ -309,7 +324,7 @@ export default function CreateWorkoutPage() {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data?.workout_id) {
         setStatusMsg("Workout created successfully!");
-        setTimeout(() => router.push(`/workouts/${data.workout_id}`), 1000);
+        setTimeout(() => router.push(`/workouts/${data.workout_id}`), 800);
       } else {
         setStatusMsg(`Error: ${data?.error || "Failed to create workout template"}`);
       }
@@ -347,11 +362,7 @@ export default function CreateWorkoutPage() {
         <h2 className="mb-4 text-center">Create Workout</h2>
 
         {statusMsg && (
-          <div
-            className={`alert ${
-              statusMsg.startsWith("Error") ? "alert-danger" : "alert-info"
-            }`}
-          >
+          <div className={`alert ${statusMsg.startsWith("Error") ? "alert-danger" : "alert-info"}`}>
             {statusMsg}
           </div>
         )}
@@ -369,9 +380,7 @@ export default function CreateWorkoutPage() {
                 <option value="global">Global (everyone)</option>
                 <option value="private">Private (owner only)</option>
               </select>
-              {visibility === "private" && (
-                <small className="text-muted">Owner: {ownerEmail || "(unknown)"}</small>
-              )}
+              {visibility === "private" && <small className="text-muted">Owner: {ownerEmail || "(unknown)"}</small>}
             </div>
             <div className="col-12 col-md-4">
               <label className="form-label">Focus</label>
@@ -441,7 +450,9 @@ export default function CreateWorkoutPage() {
         {boxingRounds.map((round, i) => (
           <div key={`box-${i}`} className="card p-3 mb-3">
             <h6 className="fw-bold mb-2">Round {i + 1} – {round.label} (Boxing)</h6>
-            <small className="text-muted mb-2">Use shorthand like <code>1-2-slip</code>, <code>jabx2-cross</code></small>
+            <small className="text-muted mb-2">
+              Use shorthand like <code>1-2-slip</code>, <code>jabx2-cross</code>, <code>1-2-duck</code>
+            </small>
             {round.combos.map((combo, idx) => (
               <div className="row g-2 mb-2" key={`box-${i}-c-${idx}`}>
                 <div className="col-12 col-md-4">
@@ -457,7 +468,7 @@ export default function CreateWorkoutPage() {
                     className="form-control"
                     value={combo.sequence}
                     onChange={(e) => updateCombo(i, idx, "sequence", e.target.value)}
-                    placeholder="Sequence (e.g., 1-2-slip)"
+                    placeholder="Sequence (e.g., 1-2-slip, 1-2-duck)"
                   />
                 </div>
               </div>
@@ -511,92 +522,130 @@ export default function CreateWorkoutPage() {
                 </button>
               </div>
 
-              {round.items.map((it, idx) => (
-                <div key={`kb-${i}-it-${idx}`} className="row g-2 mb-2">
-                  <div className="col-12 col-md-3">
-                    <input
-                      className="form-control"
-                      value={it.exercise_id}
-                      onChange={(e) => updateKbItem(i, idx, "exercise_id", e.target.value)}
-                      placeholder="exercise_id (e.g., e1)"
-                    />
+              {round.items.map((it, idx) => {
+                const selectedOption = exercises.find((e) => e.id === it.exercise_id);
+                return (
+                  <div key={`kb-${i}-it-${idx}`} className="row g-2 mb-2">
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">Exercise</label>
+                      <select
+                        className="form-select"
+                        value={it.exercise_id}
+                        onChange={(e) => selectKbExercise(i, idx, e.target.value)}
+                      >
+                        <option value="">— Select exercise —</option>
+                        {exercises.map((e) => (
+                          <option key={e.id} value={e.id}>
+                            {e.exercise_name} {e.type ? `• ${e.type}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <small className="text-muted">
+                        {selectedOption ? `Selected: ${selectedOption.exercise_name}` : "Or type ID below"}
+                      </small>
+                    </div>
+
+                    <div className="col-12 col-md-3">
+                      <label className="form-label">Manual ID (optional)</label>
+                      <input
+                        className="form-control"
+                        value={it.exercise_id}
+                        onChange={(e) => updateKbItem(i, idx, "exercise_id", e.target.value)}
+                        placeholder="exercise_id (e.g., e1)"
+                      />
+                    </div>
+
+                    <div className="col-6 col-md-2">
+                      <label className="form-label">Order</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        min={1}
+                        value={it.order}
+                        onChange={(e) => updateKbItem(i, idx, "order", e.target.value)}
+                        placeholder="Order"
+                      />
+                    </div>
+
+                    <div className="col-6 col-md-3">
+                      <label className="form-label">Reps</label>
+                      <input
+                        className="form-control"
+                        value={it.reps || ""}
+                        onChange={(e) => updateKbItem(i, idx, "reps", e.target.value)}
+                        placeholder="e.g., 10 or 1-2-3-4-5"
+                      />
+                    </div>
+
+                    <div className="col-6 col-md-2">
+                      <label className="form-label">Time (s)</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        min={0}
+                        value={it.time_s ?? ""}
+                        onChange={(e) => updateKbItem(i, idx, "time_s", e.target.value)}
+                        placeholder="e.g., 60"
+                      />
+                    </div>
+
+                    <div className="col-6 col-md-2">
+                      <label className="form-label">Weight (kg)</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        min={0}
+                        value={it.weight_kg ?? ""}
+                        onChange={(e) => updateKbItem(i, idx, "weight_kg", e.target.value)}
+                        placeholder="e.g., 24"
+                      />
+                    </div>
+
+                    <div className="col-6 col-md-2">
+                      <label className="form-label">Tempo</label>
+                      <input
+                        className="form-control"
+                        value={it.tempo || ""}
+                        onChange={(e) => updateKbItem(i, idx, "tempo", e.target.value)}
+                        placeholder="e.g., 3-1-1"
+                      />
+                    </div>
+
+                    <div className="col-6 col-md-2">
+                      <label className="form-label">Rest (s)</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        min={0}
+                        value={it.rest_s ?? ""}
+                        onChange={(e) => updateKbItem(i, idx, "rest_s", e.target.value)}
+                        placeholder="e.g., 30"
+                      />
+                    </div>
+
+                    <div className="col-12 col-md-3">
+                      <label className="form-label">Notes</label>
+                      <input
+                        className="form-control"
+                        value={it.notes || ""}
+                        onChange={(e) => updateKbItem(i, idx, "notes", e.target.value)}
+                        placeholder="Optional notes"
+                      />
+                    </div>
+
+                    <div className="col-12 col-md-2 d-flex align-items-end">
+                      <button
+                        type="button"
+                        className="btn btn-outline-light btn-sm"
+                        style={{ borderRadius: 24 }}
+                        onClick={() => removeKbItem(i, idx)}
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
-                  <div className="col-6 col-md-2">
-                    <input
-                      className="form-control"
-                      type="number"
-                      min={1}
-                      value={it.order}
-                      onChange={(e) => updateKbItem(i, idx, "order", e.target.value)}
-                      placeholder="Order"
-                    />
-                  </div>
-                  <div className="col-6 col-md-2">
-                    <input
-                      className="form-control"
-                      value={it.reps || ""}
-                      onChange={(e) => updateKbItem(i, idx, "reps", e.target.value)}
-                      placeholder="Reps (e.g., 10)"
-                    />
-                  </div>
-                  <div className="col-6 col-md-2">
-                    <input
-                      className="form-control"
-                      type="number"
-                      min={0}
-                      value={it.time_s ?? ""}
-                      onChange={(e) => updateKbItem(i, idx, "time_s", e.target.value)}
-                      placeholder="Time (s)"
-                    />
-                  </div>
-                  <div className="col-6 col-md-2">
-                    <input
-                      className="form-control"
-                      type="number"
-                      min={0}
-                      value={it.weight_kg ?? ""}
-                      onChange={(e) => updateKbItem(i, idx, "weight_kg", e.target.value)}
-                      placeholder="Weight (kg)"
-                    />
-                  </div>
-                  <div className="col-6 col-md-2">
-                    <input
-                      className="form-control"
-                      value={it.tempo || ""}
-                      onChange={(e) => updateKbItem(i, idx, "tempo", e.target.value)}
-                      placeholder="Tempo"
-                    />
-                  </div>
-                  <div className="col-6 col-md-2">
-                    <input
-                      className="form-control"
-                      type="number"
-                      min={0}
-                      value={it.rest_s ?? ""}
-                      onChange={(e) => updateKbItem(i, idx, "rest_s", e.target.value)}
-                      placeholder="Rest (s)"
-                    />
-                  </div>
-                  <div className="col-12 col-md-3">
-                    <input
-                      className="form-control"
-                      value={it.notes || ""}
-                      onChange={(e) => updateKbItem(i, idx, "notes", e.target.value)}
-                      placeholder="Notes"
-                    />
-                  </div>
-                  <div className="col-12 col-md-2 d-flex align-items-center">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light btn-sm"
-                      style={{ borderRadius: 24 }}
-                      onClick={() => removeKbItem(i, idx)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
@@ -618,6 +667,5 @@ export default function CreateWorkoutPage() {
 
       <BottomNav />
     </>
-  );
-}
+   );
 
