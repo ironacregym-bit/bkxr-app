@@ -541,7 +541,7 @@ export default function CheckInPage() {
         )}
       </main>
 
-      <Bottom      <BottomNav />
+      <BottomNav />
     </>
   );
 }
