@@ -1,106 +1,158 @@
 
+// pages/habits.tsx
 "use client";
 
 import Head from "next/head";
+import Link from "next/link";
 import { useRouter } from "next/router";
-import useSWR, { mutate as globalMutate } from "swr";
+import { useSession, getSession } from "next-auth/react";
+import type { GetServerSideProps, GetServerSidePropsContext } from "next";
+import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../components/BottomNav";
 
-const fetcher = (u: string) => fetch(u).then((r) => r.json());
-
-// Fields config (matches your API allowed fields)
-const FIELD_DEFS = [
-  { key: "step_count", label: "Step Count" },
-  { key: "macros_filled", label: "Macros Filled" },
-  { key: "assigned_workouts_completed", label: "Workout Completed" },
-  { key: "time_outside", label: "Time Outside" },
-  { key: "2l_water", label: "2L Water" },
-] as const;
-
-type HabitKey = typeof FIELD_DEFS[number]["key"];
-type HabitEntry = Partial<Record<HabitKey, boolean>> & {
-  id?: string;
-  user_email?: string;
-  date?: any;
+export const getServerSideProps: GetServerSideProps = async (
+  context: GetServerSidePropsContext
+) => {
+  const session = await getSession(context);
+  if (!session) {
+    return { redirect: { destination: "/landing", permanent: false } };
+  }
+  return { props: {} };
 };
 
-export default function HabitPage() {
+const fetcher = (u: string) => fetch(u).then((r) => r.json());
+
+function formatYMD(d: Date) {
+  const n = new Date(d);
+  n.setHours(0, 0, 0, 0);
+  return n.toISOString().slice(0, 10);
+}
+
+// Daily habit definitions (new wording)
+const HABITS = [
+  { key: "steps", label: "7,000 Steps Completed" },
+  { key: "macros_filled", label: "Macros Logged Today" },
+  { key: "workout_done", label: "Scheduled Workout Done" },
+  { key: "time_outside", label: "15 Minutes Outdoors" },
+  { key: "water", label: "2 Litres of Water" },
+];
+
+// shallow equality for habit booleans
+function equalHabitState(a: Record<string, boolean>, b: Record<string, boolean>) {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    if (Boolean(a[k]) !== Boolean(b[k])) return false;
+  }
+  return true;
+}
+
+export default function HabitsPage() {
+  const { data: session } = useSession();
   const router = useRouter();
-  const date =
-    (router.query.date as string) || new Date().toISOString().slice(0, 10);
+  const today = new Date();
+  const date = formatYMD(today);
 
-  const { data, isLoading } = useSWR(`/api/habits/logs?date=${date}`, fetcher, {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-    dedupingInterval: 60_000,
-  });
+  // Load today’s habits (adjust the URL if your API route name differs)
+  const { data, error, isLoading, mutate } = useSWR(
+    `/api/habits/daily?date=${encodeURIComponent(date)}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
 
-  const serverEntry: HabitEntry = data?.entry || {};
-  const [form, setForm] = useState<Record<HabitKey, boolean>>({
-    step_count: !!serverEntry.step_count,
-    macros_filled: !!serverEntry.macros_filled,
-    assigned_workouts_completed: !!serverEntry.assigned_workouts_completed,
-    time_outside: !!serverEntry.time_outside,
-    "2l_water": !!serverEntry["2l_water"],
-  });
-  const [submitting, setSubmitting] = useState(false);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
+  // last saved values → normalised record of booleans
+  const lastSaved: Record<string, boolean> = useMemo(() => {
+    const src = data?.entry || {};
+    const out: Record<string, boolean> = {};
+    for (const h of HABITS) out[h.key] = !!src[h.key];
+    return out;
+  }, [data]);
 
-  // Keep local form in sync when SWR entry changes (e.g., from other device)
+  // local form state
+  const [form, setForm] = useState<Record<string, boolean>>({});
   useEffect(() => {
-    setForm({
-      step_count: !!serverEntry.step_count,
-      macros_filled: !!serverEntry.macros_filled,
-      assigned_workouts_completed: !!serverEntry.assigned_workouts_completed,
-      time_outside: !!serverEntry.time_outside,
-      "2l_water": !!serverEntry["2l_water"],
-    });
-  }, [
-    serverEntry.step_count,
-    serverEntry.macros_filled,
-    serverEntry.assigned_workouts_completed,
-    serverEntry.time_outside,
-    serverEntry["2l_water"],
-  ]);
+    setForm(lastSaved);
+  }, [lastSaved]);
 
-  const dirty = useMemo(() => {
-    // Compare local form vs server entry booleans
-    return FIELD_DEFS.some((f) => {
-      const current = !!form[f.key];
-      const server = !!serverEntry[f.key];
-      return current !== server;
-    });
-  }, [form, serverEntry]);
+  // dirty flag
+  const dirty = useMemo(() => !equalHabitState(form, lastSaved), [form, lastSaved]);
 
-  function onToggle(key: HabitKey) {
+  // success pill timing
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (!savedAt) return;
+    const t = setTimeout(() => setSavedAt(null), 2500);
+    return () => clearTimeout(t);
+  }, [savedAt]);
+
+  // optional auto-save
+  const [autoSave, setAutoSave] = useState(true);
+  useEffect(() => {
+    if (!autoSave || !dirty) return;
+    const t = setTimeout(() => {
+      (async () => {
+        try {
+          const optimistic = { entry: { ...(data?.entry || {}), ...form } };
+          mutate(optimistic, false);
+
+          const res = await fetch(`/api/habits/daily?date=${encodeURIComponent(date)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(form),
+          });
+
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            console.warn(j?.error || "Auto-save failed");
+            mutate(); // rollback to server truth
+            return;
+          }
+
+          const json = await res.json();
+          mutate(json, false);
+          setSavedAt(Date.now());
+        } catch (e) {
+          console.error(e);
+          mutate(); // rollback
+        }
+      })();
+    }, 600); // debounce
+
+    return () => clearTimeout(t);
+  }, [autoSave, dirty, form, date]);
+
+  function onToggle(key: string) {
     setForm((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (submitting || !dirty) return;
-    setSubmitting(true);
+    if (!dirty) return;
+
     try {
-      // Send only changed fields is possible; but your API will merge fields safely,
-      // so we can send the whole object without schema surprises.
-      const res = await fetch(`/api/habits/logs?date=${date}`, {
+      const optimistic = { entry: { ...(data?.entry || {}), ...form } };
+      mutate(optimistic, false);
+
+      const res = await fetch(`/api/habits/daily?date=${encodeURIComponent(date)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      const json = await res.json();
+
       if (!res.ok) {
-        alert(json?.error || "Failed to save daily habits");
-      } else {
-        // Update SWR cache and give user feedback
-        globalMutate(`/api/habits/logs?date=${date}`);
-        setSavedAt(Date.now());
+        const j = await res.json().catch(() => ({}));
+        alert(j?.error || "Failed to save habits");
+        mutate(); // rollback
+        return;
       }
+
+      const json = await res.json();
+      mutate(json, false);
+      setSavedAt(Date.now());
     } catch (err) {
-      alert("Network error while saving habits");
-    } finally {
-      setSubmitting(false);
+      console.error(err);
+      alert("Network error saving habits");
+      mutate(); // refetch server truth
     }
   }
 
@@ -108,79 +160,14 @@ export default function HabitPage() {
     <>
       <Head>
         <title>Daily Habits • BXKR</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <style>{`
-          @keyframes spin { to { transform: rotate(360deg); } }
-
-          .glass-card {
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.12);
-            border-radius: 16px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.35);
-            backdrop-filter: blur(10px);
-          }
-          .bxkr-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 10px 18px;
-            border-radius: 999px;
-            border: none;
-            color: #fff;
-            background: linear-gradient(135deg, #ff7a00, #ff9a3a);
-            box-shadow: 0 0 12px rgba(255,122,0,0.6);
-            transition: box-shadow .2s ease, transform .2s ease, opacity .2s ease;
-          }
-          .bxkr-btn:hover {
-            box-shadow: 0 0 18px rgba(255,122,0,0.9);
-            transform: translateY(-1px);
-          }
-          .bxkr-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-          }
-          .inline-spinner {
-            width: 18px; height: 18px; border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.25);
-            border-top-color: #ff8a2a;
-            animation: spin .8s linear infinite;
-            margin-left: 8px;
-          }
-          .habit-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 14px;
-            margin-bottom: 12px;
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-          }
-          .check {
-            width: 22px; height: 22px;
-            accent-color: #ff8a2a;
-            cursor: pointer;
-          }
-          .pill-success {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 12px;
-            border-radius: 999px;
-            color: #0d1a12;
-            background: #64c37a;
-            box-shadow: 0 0 10px rgba(100,195,122,0.5);
-            font-weight: 600;
-            font-size: 0.85rem;
-          }
-        `}</style>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
       <main
         className="container py-3"
         style={{
           paddingBottom: "70px",
-          background: "linear-gradient(135deg,#101317,#1f1a14)",
+          background: "linear-gradient(135deg,#1a1a1a,#2c2c2c)",
           color: "#fff",
           borderRadius: 12,
           minHeight: "100vh",
@@ -207,7 +194,7 @@ export default function HabitPage() {
           </div>
         </div>
 
-        {/* Success pill after save */}
+        {/* Success pill */}
         {savedAt && (
           <div className="mb-3">
             <span className="pill-success">
@@ -218,46 +205,49 @@ export default function HabitPage() {
 
         {/* Form */}
         <form onSubmit={onSubmit}>
-          <div className="glass-card p-3">
-            {isLoading ? (
-              <div className="text-light-50">Loading habits…</div>
+          <div className="habit-card">
+            {error ? (
+              <div className="text-muted">Failed to load habits</div>
+            ) : isLoading ? (
+              <div className="text-muted">Loading habits…</div>
             ) : (
-              FIELD_DEFS.map((f) => (
-                <div className="habit-row" key={f.key}>
-                  <span style={{ fontWeight: 600 }}>{f.label}</span>
+              HABITS.map((h) => (
+                <div className="habit-row" key={h.key}>
+                  <span className="habit-label">{h.label}</span>
                   <input
                     type="checkbox"
-                    className="check"
-                    checked={!!form[f.key]}
-                    onChange={() => onToggle(f.key)}
+                    className="habit-check"
+                    checked={!!form[h.key]}
+                    onChange={() => onToggle(h.key)}
                   />
                 </div>
               ))
             )}
 
-            <div className="d-flex justify-content-end mt-2">
-              <button
-                type="submit"
-                className="bxkr-btn"
-                disabled={submitting || !dirty}
-                aria-disabled={submitting || !dirty}
-                title={!dirty ? "No changes to save" : "Save changes"}
-              >
-                {submitting ? (
-                  <>
-                    <span>Saving</span>
-                    <div className="inline-spinner" />
-                  </>
-                ) : (
-                  <>
-                    <i className="fas fa-save me-2" />
-                    Save
-                  </>
-                )}
+            <div className="d-flex justify-content-between mt-3">
+              <label className="form-check form-switch">
+                <input
+                  type="checkbox"
+                  className="form-check-input"
+                  checked={autoSave}
+                  onChange={(e) => setAutoSave(e.target.checked)}
+                />
+                <span className="ms-2">Auto‑save</span>
+              </label>
+
+              <button type="submit" className="bxkr-btn" disabled={!dirty}>
+                Save Daily Habits
               </button>
             </div>
           </div>
-        </form>
+        </form        </form>
+
+        <div className="mt-3 text-center">
+          /train
+            <i className="fa-solid fa-dumbbell nav-icon" aria-hidden="true" />
+            <span>Back to Train</span>
+          </Link>
+        </div>
       </main>
 
       <BottomNav />
