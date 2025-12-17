@@ -1,5 +1,4 @@
 
-// /pages/api/checkins/weekly.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { getServerSession } from "next-auth";
@@ -35,6 +34,17 @@ function buildDocId(email: string, ymd: string): string {
 }
 
 const COLLECTION = "check_ins";
+
+// Basic server-side validation for image data URLs to avoid oversized docs
+function isValidImageDataUrl(s: unknown): s is string {
+  if (typeof s !== "string") return false;
+  // Accept JPEG/PNG/WebP; you can add more as needed
+  return s.startsWith("data:image/jpeg") ||
+         s.startsWith("data:image/png") ||
+         s.startsWith("data:image/webp");
+}
+// Firestore doc hard limit ~1MiB; keep photos conservative per field
+const MAX_DATAURL_LEN = 900_000; // ~900 KB per photo (client compresses to keep below this)
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
@@ -74,9 +84,61 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === "POST") {
-    // We avoid schema assumptions; we merge provided fields.
-    // If you want to restrict fields, we can later add an ALLOWED_FIELDS filter.
     const body = (req.body || {}) as Record<string, any>;
+
+    // ---- Normalise & validate the new fields (non-breaking)
+    // Coerce to strings where your sample shows strings
+    const averge_hours_of_sleep =
+      body.averge_hours_of_sleep != null ? String(body.averge_hours_of_sleep) : undefined;
+    const body_fat_pct =
+      body.body_fat_pct != null ? String(body.body_fat_pct) : undefined;
+    const energy_levels =
+      body.energy_levels != null ? String(body.energy_levels) : undefined;
+    const stress_levels =
+      body.stress_levels != null ? String(body.stress_levels) : undefined;
+    const calories_difficulty =
+      body.calories_difficulty != null ? String(body.calories_difficulty) : undefined;
+
+    const weekly_goals_achieved =
+      body.weekly_goals_achieved != null ? !!body.weekly_goals_achieved : undefined;
+    const next_week_goals =
+      body.next_week_goals != null ? String(body.next_week_goals) : undefined;
+    const notes = body.notes != null ? String(body.notes) : undefined;
+
+    const weight =
+      body.weight != null
+        ? typeof body.weight === "number"
+          ? body.weight
+          : Number(body.weight)
+        : undefined;
+
+    // Progress photos (data URLs); keep conservative server-side checks
+    let progress_photo_front =
+      body.progress_photo_front && isValidImageDataUrl(body.progress_photo_front)
+        ? String(body.progress_photo_front)
+        : undefined;
+    let progress_photo_side =
+      body.progress_photo_side && isValidImageDataUrl(body.progress_photo_side)
+        ? String(body.progress_photo_side)
+        : undefined;
+    let progress_photo_back =
+      body.progress_photo_back && isValidImageDataUrl(body.progress_photo_back)
+        ? String(body.progress_photo_back)
+        : undefined;
+
+    // Size guards (if too large, drop with a warning; client compresses already)
+    if (progress_photo_front && progress_photo_front.length > MAX_DATAURL_LEN) {
+      console.warn(`[checkins] front photo too large (${progress_photo_front.length}). Dropping.`);
+      progress_photo_front = undefined;
+    }
+    if (progress_photo_side && progress_photo_side.length > MAX_DATAURL_LEN) {
+      console.warn(`[checkins] side photo too large (${progress_photo_side.length}). Dropping.`);
+      progress_photo_side = undefined;
+    }
+    if (progress_photo_back && progress_photo_back.length > MAX_DATAURL_LEN) {
+      console.warn(`[checkins] back photo too large (${progress_photo_back.length}). Dropping.`);
+      progress_photo_back = undefined;
+    }
 
     try {
       await firestore.runTransaction(async (tx) => {
@@ -87,15 +149,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ...base,
           id: docId,
           user_email: userEmail,
-          week_friday_date: friday, // Firestore Timestamp on write via SDK
+          week_friday_date: friday, // Firestore will store JS Date nicely
           week_friday_ymd: fridayYMD,
           updated_at: new Date(),
-          // Merge user-provided fields (notes, mood, sleep_hours, etc.)
-          ...body,
+
+          // Merge normalized fields (only include when provided to avoid clobbering)
+          ...(averge_hours_of_sleep !== undefined && { averge_hours_of_sleep }),
+          ...(body_fat_pct !== undefined && { body_fat_pct }),
+          ...(energy_levels !== undefined && { energy_levels }),
+          ...(stress_levels !== undefined && { stress_levels }),
+          ...(calories_difficulty !== undefined && { calories_difficulty }),
+          ...(weekly_goals_achieved !== undefined && { weekly_goals_achieved }),
+          ...(next_week_goals !== undefined && { next_week_goals }),
+          ...(notes !== undefined && { notes }),
+          ...(weight !== undefined && { weight }),
+
+          ...(progress_photo_front !== undefined && { progress_photo_front }),
+          ...(progress_photo_side !== undefined && { progress_photo_side }),
+          ...(progress_photo_back !== undefined && { progress_photo_back }),
         };
 
         if (!snap.exists) {
           (next as any).created_at = new Date();
+          // For compatibility with earlier code that stored a completion timestamp
+          (next as any).date_completed = new Date();
         }
 
         tx.set(docRef, next, { merge: true });
@@ -110,5 +187,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   res.setHeader("Allow", "GET, POST");
-  return res.status(405).json({ error: "Method not allowed" });
-}
+  return res.status  return res.status(405).json({ error: "Method not allowed" });
+
