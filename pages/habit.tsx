@@ -241,13 +241,6 @@ export default function HabitsPage() {
             </div>
           </div>
         </form>
-
-        <div className="mt-3 text-center">
-          /train
-            <i className="fa-solid fa-dumbbell nav-icon" aria-hidden="true" />
-            <span>Back to Train</span>
-          </Link>
-        </div>
       </main>
 
       <BottomNav />
