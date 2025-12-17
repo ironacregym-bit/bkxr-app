@@ -1,4 +1,5 @@
 
+// /pages/api/checkins/weekly.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { getServerSession } from "next-auth";
@@ -38,13 +39,15 @@ const COLLECTION = "check_ins";
 // Basic server-side validation for image data URLs to avoid oversized docs
 function isValidImageDataUrl(s: unknown): s is string {
   if (typeof s !== "string") return false;
-  // Accept JPEG/PNG/WebP; you can add more as needed
-  return s.startsWith("data:image/jpeg") ||
-         s.startsWith("data:image/png") ||
-         s.startsWith("data:image/webp");
+  // Accept JPEG/PNG/WebP; add more types if needed
+  return (
+    s.startsWith("data:image/jpeg") ||
+    s.startsWith("data:image/png") ||
+    s.startsWith("data:image/webp")
+  );
 }
 // Firestore doc hard limit ~1MiB; keep photos conservative per field
-const MAX_DATAURL_LEN = 900_000; // ~900 KB per photo (client compresses to keep below this)
+const MAX_DATAURL_LEN = 900_000; // ~900 KB per photo (client compresses already)
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
@@ -86,8 +89,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === "POST") {
     const body = (req.body || {}) as Record<string, any>;
 
-    // ---- Normalise & validate the new fields (non-breaking)
-    // Coerce to strings where your sample shows strings
+    // ---- Normalise & validate fields per your sample
     const averge_hours_of_sleep =
       body.averge_hours_of_sleep != null ? String(body.averge_hours_of_sleep) : undefined;
     const body_fat_pct =
@@ -112,7 +114,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           : Number(body.weight)
         : undefined;
 
-    // Progress photos (data URLs); keep conservative server-side checks
+    // Progress photos (data URLs)
     let progress_photo_front =
       body.progress_photo_front && isValidImageDataUrl(body.progress_photo_front)
         ? String(body.progress_photo_front)
@@ -128,15 +130,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Size guards (if too large, drop with a warning; client compresses already)
     if (progress_photo_front && progress_photo_front.length > MAX_DATAURL_LEN) {
-      console.warn(`[checkins] front photo too large (${progress_photo_front.length}). Dropping.`);
+      console.warn(
+        `[checkins] front photo too large (${progress_photo_front.length}). Dropping.`
+      );
       progress_photo_front = undefined;
     }
     if (progress_photo_side && progress_photo_side.length > MAX_DATAURL_LEN) {
-      console.warn(`[checkins] side photo too large (${progress_photo_side.length}). Dropping.`);
+      console.warn(
+        `[checkins] side photo too large (${progress_photo_side.length}). Dropping.`
+      );
       progress_photo_side = undefined;
     }
     if (progress_photo_back && progress_photo_back.length > MAX_DATAURL_LEN) {
-      console.warn(`[checkins] back photo too large (${progress_photo_back.length}). Dropping.`);
+      console.warn(
+        `[checkins] back photo too large (${progress_photo_back.length}). Dropping.`
+      );
       progress_photo_back = undefined;
     }
 
@@ -149,11 +157,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ...base,
           id: docId,
           user_email: userEmail,
-          week_friday_date: friday, // Firestore will store JS Date nicely
+          week_friday_date: friday, // stored as JS Date by client SDK
           week_friday_ymd: fridayYMD,
           updated_at: new Date(),
 
-          // Merge normalized fields (only include when provided to avoid clobbering)
+          // Only include when provided to avoid clobbering previous values
           ...(averge_hours_of_sleep !== undefined && { averge_hours_of_sleep }),
           ...(body_fat_pct !== undefined && { body_fat_pct }),
           ...(energy_levels !== undefined && { energy_levels }),
@@ -171,21 +179,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         if (!snap.exists) {
           (next as any).created_at = new Date();
-          // For compatibility with earlier code that stored a completion timestamp
-          (next as any).date_completed = new Date();
+          (next as any).date_completed = new Date(); // compatibility with earlier reads
         }
 
         tx.set(docRef, next, { merge: true });
       });
 
       const saved = (await docRef.get()).data() || null;
-      return res.status(200).json({ ok: true, entry: saved, entries: saved ? [saved] : [] });
+      return res
+        .status(200)
+        .json({ ok: true, entry: saved, entries: saved ? [saved] : [] });
     } catch (err: any) {
       console.error("POST check-in error:", err?.message || err);
       return res.status(500).json({ error: "Failed to upsert check-in" });
     }
   }
 
-  res.setHeader("Allow", "GET, POST");
-  return res.status  return res.status(405).json({ error: "Method not allowed" });
+  res.setHeader("Allow  res.setHeader("Allow", "GET, POST");
+  return res.status(405).json({ error: "Method not allowed" });
 
