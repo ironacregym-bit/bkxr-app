@@ -14,7 +14,7 @@ type DayOverview = {
   habitAllDone: boolean;
   habitSummary?: { completed: number; total: number };
   checkinComplete: boolean;
-  checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number };
+  checkinSummary?: { weight: number; body_fat_pct: number; weightChange?: number; bfChange?: number };
   hasWorkout: boolean;
   workoutDone: boolean;
   workoutIds: string[];
@@ -318,14 +318,14 @@ export default async function handler(
       }
 
       // Check-in (Friday only)
-      const checkinCompleteForDay = isFriday && (currentCheckin?.weight != null || currentCheckin?.bodyFat != null);
+      const checkinCompleteForDay = isFriday && (currentCheckin?.weight != null || currentCheckin?.body_fat_pct != null);
       const weightChange =
         currentCheckin?.weight != null && lastCheckin?.weight != null
           ? ((currentCheckin.weight - lastCheckin.weight) / lastCheckin.weight) * 100
           : undefined;
       const bfChange =
-        currentCheckin?.bodyFat != null && lastCheckin?.bodyFat != null
-          ? currentCheckin.bodyFat - lastCheckin.bodyFat
+        currentCheckin?.body_fat_pct != null && lastCheckin?.body_fat_pct != null
+          ? currentCheckin.body_fat_pct - lastCheckin.body_fat_pct
           : undefined;
 
       // Tasks & completes – exactly what UI shows
@@ -351,7 +351,7 @@ export default async function handler(
           isFriday && checkinCompleteForDay
             ? {
                 weight: currentCheckin?.weight || 0,
-                bodyFat: currentCheckin?.bodyFat || 0,
+                body_fat_pct: currentCheckin?.body_fat_pct || 0,
                 weightChange,
                 bfChange
               }
