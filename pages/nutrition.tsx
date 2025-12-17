@@ -194,7 +194,6 @@ export default function NutritionPage() {
         className="container py-3"
         style={{
           paddingBottom: "90px",
-          background: "linear-gradient(135deg, #1a1a1a 0%, #2e1a0f 100%)",
           color: "#fff",
           borderRadius: "12px",
         }}
