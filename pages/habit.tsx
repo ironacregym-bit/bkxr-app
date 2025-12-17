@@ -9,6 +9,7 @@ import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import BxkrBanner from "../components/BxkrBanner";
 
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
@@ -29,9 +30,9 @@ function formatYMD(d: Date) {
 }
 
 /**
- * Habit keys must match the API's ALLOWED_FIELDS:
+ * Habit keys must match the API's ALLOWED_FIELDS in /api/habits/logs:
  *  "step_count", "macros_filled", "assigned_workouts_completed", "time_outside", "2l_water"
- * Labels are UX-optimised.
+ * Labels are UX-optimised, and we keep synonyms to read legacy docs.
  */
 const HABITS: Array<{ key: string; label: string; synonyms?: string[] }> = [
   { key: "step_count", label: "7,000 Steps Completed", synonyms: ["steps"] },
@@ -50,7 +51,7 @@ function equalHabitState(a: Record<string, boolean>, b: Record<string, boolean>)
   return true;
 }
 
-// Read a value from entry supporting synonyms for backwards compatibility
+// Read a value supporting synonyms for backwards compatibility
 function readBool(entry: any, primaryKey: string, synonyms: string[] = []) {
   if (entry == null) return false;
   if (entry[primaryKey] != null) return !!entry[primaryKey];
@@ -66,14 +67,14 @@ export default function HabitsPage() {
   const today = new Date();
   const date = formatYMD(today);
 
-  // ✅ Use the route you actually have: /api/habits/logs
+  // ✅ Use the route you have: /api/habits/logs
   const { data, error, isLoading, mutate } = useSWR(
     `/api/habits/logs?date=${encodeURIComponent(date)}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 30_000 }
   );
 
-  // last saved values → normalised record of booleans
+  // Normalised last-saved values
   const lastSaved: Record<string, boolean> = useMemo(() => {
     const src = data?.entry || {};
     const out: Record<string, boolean> = {};
@@ -83,58 +84,21 @@ export default function HabitsPage() {
     return out;
   }, [data]);
 
-  // local form state
+  // Local form and dirty state
   const [form, setForm] = useState<Record<string, boolean>>({});
   useEffect(() => {
     setForm(lastSaved);
   }, [lastSaved]);
 
-  // dirty flag
   const dirty = useMemo(() => !equalHabitState(form, lastSaved), [form, lastSaved]);
 
-  // success pill timing
+  // Success banner timing (like check-in UX)
   const [savedAt, setSavedAt] = useState<number | null>(null);
   useEffect(() => {
     if (!savedAt) return;
     const t = setTimeout(() => setSavedAt(null), 2500);
     return () => clearTimeout(t);
   }, [savedAt]);
-
-  // optional auto-save
-  const [autoSave, setAutoSave] = useState(true);
-  useEffect(() => {
-    if (!autoSave || !dirty) return;
-    const t = setTimeout(() => {
-      (async () => {
-        try {
-          const optimistic = { entry: { ...(data?.entry || {}), ...form } };
-          mutate(optimistic, false);
-
-          const res = await fetch(`/api/habits/logs?date=${encodeURIComponent(date)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(form), // keys now match ALLOWED_FIELDS
-          });
-
-          if (!res.ok) {
-            const j = await res.json().catch(() => ({}));
-            console.warn(j?.error || "Auto-save failed");
-            mutate(); // rollback to server truth
-            return;
-          }
-
-          const json = await res.json();
-          mutate(json, false);
-          setSavedAt(Date.now());
-        } catch (e) {
-          console.error(e);
-          mutate(); // rollback
-        }
-      })();
-    }, 600); // debounce
-
-    return () => clearTimeout(t);
-  }, [autoSave, dirty, form, date]);
 
   function onToggle(key: string) {
     setForm((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -145,25 +109,26 @@ export default function HabitsPage() {
     if (!dirty) return;
 
     try {
+      // Optimistic UI
       const optimistic = { entry: { ...(data?.entry || {}), ...form } };
       mutate(optimistic, false);
 
       const res = await fetch(`/api/habits/logs?date=${encodeURIComponent(date)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(form), // keys match ALLOWED_FIELDS
       });
 
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         alert(j?.error || "Failed to save habits");
-        mutate(); // rollback
+        mutate(); // rollback to server truth
         return;
       }
 
       const json = await res.json();
       mutate(json, false);
-      setSavedAt(Date.now());
+      setSavedAt(Date.now()); // trigger green banner
     } catch (err) {
       console.error(err);
       alert("Network error saving habits");
@@ -182,6 +147,7 @@ export default function HabitsPage() {
         className="container py-3"
         style={{
           paddingBottom: "70px",
+          background: "linear-gradient(135deg,#1a1a1a,#2c2c2c)",
           color: "#fff",
           borderRadius: 12,
           minHeight: "100vh",
@@ -208,12 +174,17 @@ export default function HabitsPage() {
           </div>
         </div>
 
-        {/* Success pill */}
+        {/* ✅ Green success banner (same component pattern as check-in) */}
         {savedAt && (
           <div className="mb-3">
-            <span className="pill-success">
-              <i className="fas fa-check" /> Saved
-            </span>
+            <BxkrBanner
+              title="All set"
+              message="Your daily habits have been saved for today."
+              href="/train"
+              iconLeft="fas fa-check-circle"
+              accentColor="#64c37a"
+              buttonText="Back to Train"
+            />
           </div>
         )}
 
@@ -238,17 +209,7 @@ export default function HabitsPage() {
               ))
             )}
 
-            <div className="d-flex justify-content-between mt-3">
-              <label className="form-check form-switch">
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  checked={autoSave}
-                  onChange={(e) => setAutoSave(e.target.checked)}
-                />
-                <span className="ms-2">Auto‑save</span>
-              </label>
-
+            <div className="d-flex justify-content-end mt-3">
               <button type="submit" className="bxkr-btn" disabled={!dirty}>
                 Save Daily Habits
               </button>
@@ -257,7 +218,7 @@ export default function HabitsPage() {
         </form>
       </main>
 
-      <BottomNav />
+     <BottomNav />
     </>
   );
 }
