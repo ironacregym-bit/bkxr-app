@@ -290,6 +290,7 @@ body::before {
   box-shadow: 0 0 10px rgba(100,195,122,0.5);
   font-weight: 600;
   font-size: 0.85rem;
+}
 
 :root,
 
