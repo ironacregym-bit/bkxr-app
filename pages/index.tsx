@@ -54,6 +54,10 @@ function startOfAlignedWeek(d: Date) {
   return s;
 }
 
+/** 
+ * 🔄 API day payload from /api/weekly/overview.
+ * NOTE: we now use `body_fat_pct` (numeric) in checkinSummary.
+ */
 type ApiDay = {
   dateKey: string;
   hasWorkout?: boolean;
@@ -65,7 +69,8 @@ type ApiDay = {
   nutritionSummary?: { calories: number; protein: number };
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
   habitSummary?: { completed: number; total: number };
-  checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number };
+  // CHANGED: body_fat_pct instead of bodyFat
+  checkinSummary?: { weight: number; body_fat_pct: number; weightChange?: number; bfChange?: number };
   workoutIds?: string[];
 };
 
@@ -207,10 +212,11 @@ export default function Home() {
   const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
   const workoutHref = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
   const nutritionHref = `/nutrition?date=${selectedDateKey}`;
-  const habitHref = `/habit?date=${selectedDateKey}`;
+  // 🔧 Fix 404: habits page is /habits.tsx
+  const habitHref = `/habits?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
 
-  const accentMicro = "#ff8a2a"; // Neon Orange
+  const accentMicro = "#ff8a2a";
 
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -230,6 +236,24 @@ export default function Home() {
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
   }, [slideIndex]);
+
+  // ✅ Normalise check-in summary for downstream components:
+  //    Provide both body_fat_pct (new) and bodyFat (legacy) so DailyTasksCard keeps working.
+  const checkinSummaryNormalized = useMemo(() => {
+    const s = selectedDayData?.checkinSummary as
+      | { weight?: number; body_fat_pct?: number; bodyFat?: number; weightChange?: number; bfChange?: number }
+      | undefined;
+    if (!s) return undefined;
+    const body_fat_pct = typeof s.body_fat_pct === "number" ? s.body_fat_pct
+                        : typeof s.bodyFat === "number" ? s.bodyFat
+                        : 0;
+    return {
+      ...s,
+      body_fat_pct,
+      // legacy alias for components still reading `bodyFat`
+      bodyFat: (s as any).bodyFat ?? body_fat_pct,
+    };
+  }, [selectedDayData]);
 
   return (
     <>
@@ -284,28 +308,28 @@ export default function Home() {
           </div>
         )}
 
-        {/* Carousel */}
-          <section className="bxkr-slide">
-            <ChallengeBanner
-              title="Weekly Snapshot"
-              message={
-                <div className="challenge-banner-message">
-                  <div className="stats-row">
-                    <div className="stats-col"><strong>Workouts</strong>{weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0}</div>
-                    <div className="stats-col"><strong>Time</strong>{(weeklyOverview?.weeklyTotals?.totalWorkoutTime ?? 0)}m</div>
-                    <div className="stats-col"><strong>Calories</strong>{(weeklyOverview?.weeklyTotals?.totalCaloriesBurned ?? 0)} kcal</div>
-                  </div>
+        {/* Snapshot banner (unchanged) */}
+        <section className="bxkr-slide">
+          <ChallengeBanner
+            title="Weekly Snapshot"
+            message={
+              <div className="challenge-banner-message">
+                <div className="stats-row">
+                  <div className="stats-col"><strong>Workouts</strong>{weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0}</div>
+                  <div className="stats-col"><strong>Time</strong>{(weeklyOverview?.weeklyTotals?.totalWorkoutTime ?? 0)}m</div>
+                  <div className="stats-col"><strong>Calories</strong>{(weeklyOverview?.weeklyTotals?.totalCaloriesBurned ?? 0)} kcal</div>
                 </div>
-              }
-              href="#"
-              iconLeft="fas fa-chart-line"
-              accentColor="#5b7c99"
-              background="linear-gradient(90deg, rgba(91,124,153,.30), rgba(91,124,153,.18))"
-              showButton={false}
-              style={{ margin: 0 }}
-            />
-          </section>
-      
+              </div>
+            }
+            href="#"
+            iconLeft="fas fa-chart-line"
+            accentColor="#5b7c99"
+            background="linear-gradient(90deg, rgba(91,124,153,.30), rgba(91,124,153,.18))"
+            showButton={false}
+            style={{ margin: 0 }}
+          />
+        </section>
+
         {/* Calendar */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
           {weekDays.map((d, i) => {
@@ -375,7 +399,8 @@ export default function Home() {
             workoutDone={Boolean(selectedStatus.workoutDone)}
             habitSummary={selectedDayData.habitSummary}
             habitAllDone={Boolean(selectedStatus.habitAllDone)}
-            checkinSummary={selectedDayData.checkinSummary}
+            // 👇 pass the normalised summary so components can read body_fat_pct or bodyFat
+            checkinSummary={checkinSummaryNormalized as any}
             checkinComplete={Boolean(selectedStatus.checkinComplete)}
             hrefs={{
               nutrition: nutritionHref,
@@ -409,3 +434,4 @@ export default function Home() {
     </>
   );
 }
+
