@@ -3,7 +3,6 @@
 "use client";
 
 import Head from "next/head";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import { useSession, getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
@@ -29,13 +28,17 @@ function formatYMD(d: Date) {
   return n.toISOString().slice(0, 10);
 }
 
-// Daily habit definitions (new wording)
-const HABITS = [
-  { key: "steps", label: "7,000 Steps Completed" },
+/**
+ * Habit keys must match the API's ALLOWED_FIELDS:
+ *  "step_count", "macros_filled", "assigned_workouts_completed", "time_outside", "2l_water"
+ * Labels are UX-optimised.
+ */
+const HABITS: Array<{ key: string; label: string; synonyms?: string[] }> = [
+  { key: "step_count", label: "7,000 Steps Completed", synonyms: ["steps"] },
   { key: "macros_filled", label: "Macros Logged Today" },
-  { key: "workout_done", label: "Scheduled Workout Done" },
+  { key: "assigned_workouts_completed", label: "Scheduled Workout Done", synonyms: ["workout_done"] },
   { key: "time_outside", label: "15 Minutes Outdoors" },
-  { key: "water", label: "2 Litres of Water" },
+  { key: "2l_water", label: "2 Litres of Water", synonyms: ["water"] },
 ];
 
 // shallow equality for habit booleans
@@ -47,15 +50,25 @@ function equalHabitState(a: Record<string, boolean>, b: Record<string, boolean>)
   return true;
 }
 
+// Read a value from entry supporting synonyms for backwards compatibility
+function readBool(entry: any, primaryKey: string, synonyms: string[] = []) {
+  if (entry == null) return false;
+  if (entry[primaryKey] != null) return !!entry[primaryKey];
+  for (const s of synonyms) {
+    if (entry[s] != null) return !!entry[s];
+  }
+  return false;
+}
+
 export default function HabitsPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const today = new Date();
   const date = formatYMD(today);
 
-  // Load today’s habits (adjust the URL if your API route name differs)
+  // ✅ Use the route you actually have: /api/habits/logs
   const { data, error, isLoading, mutate } = useSWR(
-    `/api/habits/daily?date=${encodeURIComponent(date)}`,
+    `/api/habits/logs?date=${encodeURIComponent(date)}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 30_000 }
   );
@@ -64,7 +77,9 @@ export default function HabitsPage() {
   const lastSaved: Record<string, boolean> = useMemo(() => {
     const src = data?.entry || {};
     const out: Record<string, boolean> = {};
-    for (const h of HABITS) out[h.key] = !!src[h.key];
+    for (const h of HABITS) {
+      out[h.key] = readBool(src, h.key, h.synonyms || []);
+    }
     return out;
   }, [data]);
 
@@ -95,10 +110,10 @@ export default function HabitsPage() {
           const optimistic = { entry: { ...(data?.entry || {}), ...form } };
           mutate(optimistic, false);
 
-          const res = await fetch(`/api/habits/daily?date=${encodeURIComponent(date)}`, {
+          const res = await fetch(`/api/habits/logs?date=${encodeURIComponent(date)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(form),
+            body: JSON.stringify(form), // keys now match ALLOWED_FIELDS
           });
 
           if (!res.ok) {
@@ -133,7 +148,7 @@ export default function HabitsPage() {
       const optimistic = { entry: { ...(data?.entry || {}), ...form } };
       mutate(optimistic, false);
 
-      const res = await fetch(`/api/habits/daily?date=${encodeURIComponent(date)}`, {
+      const res = await fetch(`/api/habits/logs?date=${encodeURIComponent(date)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -167,7 +182,6 @@ export default function HabitsPage() {
         className="container py-3"
         style={{
           paddingBottom: "70px",
-          background: "linear-gradient(135deg,#1a1a1a,#2c2c2c)",
           color: "#fff",
           borderRadius: 12,
           minHeight: "100vh",
