@@ -238,7 +238,59 @@ body::before {
   }
 }
 
+/* ===== Daily Habits (BXKR Styling) ===== */
 
+/* Habits container */
+.habit-card {
+  background: rgba(255,255,255,0.05);
+  padding: 18px 20px;
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  margin-bottom: 18px;
+}
+
+/* Each habit row */
+.habit-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.habit-row:last-child {
+  border-bottom: none;
+}
+
+/* Habit label text */
+.habit-label {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #fff;
+}
+
+/* BXKR checkbox styling */
+.habit-check {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  accent-color: #FF8A2A; /* Neon Orange */
+  transform: scale(1.08);
+}
+
+/* Success “Saved” pill */
+.pill-success {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: #0d1a12;
+  background: #64c37a;
+  box-shadow: 0 0 10px rgba(100,195,122,0.5);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
 
 :root,
 [data-bs-theme=light] {
