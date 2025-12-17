@@ -65,7 +65,7 @@ type ApiDay = {
   nutritionSummary?: { calories: number; protein: number };
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
   habitSummary?: { completed: number; total: number };
-  checkinSummary?: { weight: number; body_fat_pct: number; weightChange?: number; bfChange?: number };
+  checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number };
   workoutIds?: string[];
 };
 
