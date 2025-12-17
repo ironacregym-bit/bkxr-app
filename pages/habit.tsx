@@ -240,7 +240,7 @@ export default function HabitsPage() {
               </button>
             </div>
           </div>
-        </form        </form>
+        </form>
 
         <div className="mt-3 text-center">
           /train
