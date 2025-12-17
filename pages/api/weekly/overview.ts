@@ -1,4 +1,5 @@
 
+// /pages/api/weekly/overview.ts (or your file path)
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { getServerSession } from "next-auth";
@@ -82,6 +83,14 @@ function buildDocId(email: string, ymd: string): string {
 function inRange(day: Date, start: Date, end: Date) {
   return day >= start && day <= end;
 }
+function numOrUndefined(v: any): number | undefined {
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -152,13 +161,19 @@ export default async function handler(
     const lastCheckinSnap = await firestore.collection(CHECKINS_COLLECTION).doc(buildDocId(userEmail, lastFridayYMD)).get();
     const lastCheckin = lastCheckinSnap.exists ? lastCheckinSnap.data() : null;
 
+    // Parse numeric fields safely
+    const currentWeight = numOrUndefined(currentCheckin?.weight);
+    const lastWeight = numOrUndefined(lastCheckin?.weight);
+    const currentBodyFat = numOrUndefined(currentCheckin?.body_fat_pct);
+    const lastBodyFat = numOrUndefined(lastCheckin?.body_fat_pct);
+
     /** ===== NUTRITION per day (presence + sums) ===== */
     const nutritionMap: Record<string, { logged: boolean; calories: number; protein: number }> = {};
     for (const d of weekDays) {
       const ymd = formatYMD(d);
       const snap = await firestore.collection(NUTRITION_COLLECTION).doc(userEmail).collection(ymd).get();
 
-      // FIX: logged is true ONLY when there is at least one entry for that day
+      // logged is true ONLY when there is at least one entry for that day
       if (snap.empty) {
         nutritionMap[ymd] = { logged: false, calories: 0, protein: 0 };
       } else {
@@ -288,7 +303,7 @@ export default async function handler(
       // Habits
       const habitInfo = habitMap[ymd] || { allDone: false, completed: 0, total: 5 };
 
-      // Nutrition (FIXED: only true when subcollection has docs)
+      // Nutrition
       const nutritionInfo = nutritionMap[ymd] || { logged: false, calories: 0, protein: 0 };
 
       // Workouts scheduled on this day
@@ -317,15 +332,17 @@ export default async function handler(
         }
       }
 
-      // Check-in (Friday only)
-      const checkinCompleteForDay = isFriday && (currentCheckin?.weight != null || currentCheckin?.body_fat_pct != null);
+      // ✅ Check-in completion keyed ONLY on body_fat_pct being present & numeric, and Friday
+      const checkinCompleteForDay = isFriday && currentBodyFat !== undefined;
+
       const weightChange =
-        currentCheckin?.weight != null && lastCheckin?.weight != null
-          ? ((currentCheckin.weight - lastCheckin.weight) / lastCheckin.weight) * 100
+        currentWeight !== undefined && lastWeight !== undefined
+          ? ((currentWeight - lastWeight) / lastWeight) * 100
           : undefined;
+
       const bfChange =
-        currentCheckin?.body_fat_pct != null && lastCheckin?.body_fat_pct != null
-          ? currentCheckin.body_fat_pct - lastCheckin.body_fat_pct
+        currentBodyFat !== undefined && lastBodyFat !== undefined
+          ? currentBodyFat - lastBodyFat
           : undefined;
 
       // Tasks & completes – exactly what UI shows
@@ -350,8 +367,8 @@ export default async function handler(
         checkinSummary:
           isFriday && checkinCompleteForDay
             ? {
-                weight: currentCheckin?.weight || 0,
-                body_fat_pct: currentCheckin?.body_fat_pct || 0,
+                weight: currentWeight ?? 0,
+                body_fat_pct: currentBodyFat ?? 0,
                 weightChange,
                 bfChange
               }
@@ -385,6 +402,6 @@ export default async function handler(
     return res.status(200).json(payload);
   } catch (err: any) {
     console.error("[weekly/overview] error:", err?.message || err);
-    return res.status(500).json({ error: "Failed to build weekly overview" });
+    return res.status(500).json({ error:    return res.status(500).json({ error: "Failed to build weekly overview" });
   }
 }
