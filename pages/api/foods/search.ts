@@ -89,3 +89,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error(err);
     res.status(500).json({ foods: [] })
   }
+}
