@@ -87,5 +87,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(200).json({ foods });
   } catch (err) {
     console.error(err);
-    res.status(    res.status(500).json({ foods: [] });
+    res.status(500.json({ foods: [] });
   }
