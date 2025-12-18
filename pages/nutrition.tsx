@@ -276,21 +276,15 @@ export default function NutritionPage() {
 
         // Use ZXing decoder on the existing video element
         const controls = await reader.decodeFromVideoDevice(
-          null,
+          undefined,              // ← was `null`
           videoRef.current!,
           (result, err) => {
-            if (!mounted) return;
             if (result && !scannedOnce.current) {
               scannedOnce.current = true;
               const code = result.getText();
-
-              // 👉 Populate the textbox with the scanned code
               setBarcodeInput(code);
-
-              // Keep the modal open and auto lookup; show result below input
               void handleBarcode(code, { keepOpen: true });
             }
-            // ignore NotFoundException bursts while scanning
           }
         );
 
