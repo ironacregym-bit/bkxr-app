@@ -13,6 +13,7 @@
  */
 
 
+
 /* ===== Body & Typography ===== */
 body {
   background: linear-gradient(135deg, #1a1a1a, #2c2c2c);
@@ -291,6 +292,117 @@ body::before {
   font-weight: 600;
   font-size: 0.85rem;
 }
+
+/* ===== BXKR Theme tokens & utilities (appended) ===== */
+:root{
+  --bxkr-bg:#0b0f14;
+  --bxkr-bg-elev:#121823;
+  --bxkr-card:rgba(18,24,35,0.6);
+  --bxkr-card-border:rgba(255,255,255,0.08);
+  --bxkr-text:#e9eef6;
+  --bxkr-text-dim:#9fb0c3;
+  --bxkr-accent:#ff7a1a;
+  --bxkr-accent-600:#ff6a00;
+  --bxkr-accent-700:#ff5a00;
+  --bxkr-success:#1ecb7d;
+  --bxkr-danger:#ff4d4f;
+  --bxkr-shadow:0 10px 30px rgba(0,0,0,0.35);
+  --bxkr-glow:0 0 16px rgba(255,122,26,0.35);
+  --bxkr-blur:12px;
+}
+
+/* Glass cards */
+.bxkr-card{
+  background:var(--bxkr-card);
+  border:1px solid var(--bxkr-card-border);
+  box-shadow:var(--bxkr-shadow);
+  backdrop-filter:blur(var(--bxkr-blur));
+  -webkit-backdrop-filter:blur(var(--bxkr-blur));
+  border-radius:18px;
+}
+.card.bxkr-card .card-header{border-bottom:1px solid var(--bxkr-card-border);background:transparent;}
+.card.bxkr-card .card-footer{border-top:1px solid var(--bxkr-card-border);background:transparent;}
+
+/* Buttons */
+.btn-bxkr{
+  border-radius:999px;
+  background:linear-gradient(135deg,var(--bxkr-accent),var(--bxkr-accent-600));
+  color:#0b0f14;
+  border:none;
+  font-weight:600;
+  box-shadow:var(--bxkr-glow);
+}
+.btn-bxkr:hover,.btn-bxkr:focus{
+  filter:brightness(1.05);
+  box-shadow:0 0 22px rgba(255,122,26,0.55);
+  color:#0b0f14;
+}
+.btn-bxkr-outline{
+  border-radius:999px;
+  background:transparent;
+  color:var(--bxkr-accent);
+  border:1px solid var(--bxkr-accent);
+}
+.btn-bxkr-outline:hover{background:rgba(255,122,26,0.1);}
+
+/* Inputs */
+.form-control, .form-select{
+  background:rgba(255,255,255,0.04);
+  border:1px solid var(--bxkr-card-border);
+  color:var(--bxkr-text);
+  border-radius:14px;
+}
+.form-control:focus, .form-select:focus{
+  border-color:var(--bxkr-accent);
+  box-shadow:0 0 0 .25rem rgba(255,122,26,0.18);
+}
+
+/* Badges / chips */
+.bxkr-chip{
+  background:rgba(255,255,255,0.06);
+  border:1px solid var(--bxkr-card-border);
+  color:var(--bxkr-text);
+  padding:.35rem .7rem;
+  border-radius:999px;
+}
+
+/* Bottom nav glow container (optional if you have a class) */
+.bottom-nav{
+  background:rgba(10,14,20,0.65);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  border-top:1px solid var(--bxkr-card-border);
+}
+.bottom-nav .nav-link{
+  color:var(--bxkr-text-dim);
+}
+.bottom-nav .nav-link.active, .bottom-nav .nav-link:focus, .bottom-nav .nav-link:hover{
+  color:var(--bxkr-accent);
+  text-shadow:0 0 10px rgba(255,122,26,0.5);
+}
+
+/* Utility */
+.text-dim{color:var(--bxkr-text-dim)!important;}
+.bg-elev{background:var(--bxkr-bg-elev)!important;}
+
+/* ===== Simple modal for scanner ===== */
+.bxkr-modal{
+  position:fixed; inset:0; z-index:1055;
+  display:flex; align-items:center; justify-content:center;
+}
+.bxkr-modal-backdrop{
+  position:absolute; inset:0; background:rgba(0,0,0,0.55);
+  backdrop-filter: blur(2px);
+}
+.bxkr-modal-dialog{
+  position:relative; width:100%; max-width:520px; padding:16px;
+}
+
+/* Scanner */
+.scanner-box{ position:relative; border-radius:16px; overflow:hidden; }
+.scanner-video{ width:100%; height:auto; background:#000; }
+.scanner-hint{ padding:8px; text-align:center; font-size:.9rem; }
+
 
 :root,
 [data-bs-theme=light] {
