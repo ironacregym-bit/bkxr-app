@@ -275,7 +275,7 @@ export default function NutritionPage() {
         }
 
         // Use ZXing decoder on the existing video element
-        const controls: IScannerControls = await reader.decodeFromVideoDevice(
+        const controls = await reader.decodeFromVideoDevice(
           null,
           videoRef.current!,
           (result, err) => {
