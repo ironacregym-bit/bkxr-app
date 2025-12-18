@@ -60,8 +60,12 @@ export default function NutritionPage() {
   const [barcodeInput, setBarcodeInput] = useState("");
   const [scanning, setScanning] = useState(false);
   const [hasCamera, setHasCamera] = useState(true);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupResult, setLookupResult] = useState<any | null>(null);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const codeReaderRef = useRef<any>(null);
+  const scannedOnce = useRef(false);
 
   // Fetch logs for selected date
   const { data: logsData } = useSWR(
@@ -200,20 +204,31 @@ export default function NutritionPage() {
     setScannerOpen(true);
     setScanError(null);
     setHasCamera(true);
+    setLookupResult(null);
+    setLookupLoading(false);
+    scannedOnce.current = false;
+  };
+
+  const stopTracks = () => {
+    try {
+      const v = videoRef.current;
+      v?.srcObject && (v.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+      if (v) v.srcObject = null;
+    } catch (_) {}
   };
 
   const closeScanner = () => {
     setScannerOpen(false);
     setScanning(false);
     setScanError(null);
+    setLookupLoading(false);
+    scannedOnce.current = false;
     try {
       if (codeReaderRef.current) {
         codeReaderRef.current.reset();
       }
-      const v = videoRef.current;
-      v?.srcObject && (v.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
-      if (v) v.srcObject = null;
     } catch (_) {}
+    stopTracks();
   };
 
   useEffect(() => {
@@ -227,70 +242,110 @@ export default function NutritionPage() {
       }
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const hasVideo = devices.some((d) => d.kind === "videoinput");
-        if (!hasVideo) {
+        const cameras = devices.filter((d) => d.kind === "videoinput");
+        if (!cameras.length) {
           setHasCamera(false);
           return;
         }
 
         setScanning(true);
-        const { BrowserMultiFormatReader } = await import("@zxing/browser");
+        const { BrowserMultiFormatReader, IScannerControls } = await import("@zxing/browser");
         const reader = new BrowserMultiFormatReader();
         codeReaderRef.current = reader;
 
-        // Start decoding from default camera
-        await reader.decodeFromVideoDevice(
-          undefined,
+        // Prefer back camera on mobile
+        const constraints: MediaStreamConstraints = {
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        if (!mounted) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        // Attach the stream to the video element manually (helps on iOS Safari)
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+
+        // Use ZXing decoder on the existing video element
+        const controls: IScannerControls = await reader.decodeFromVideoDevice(
+          null,
           videoRef.current!,
           (result, err) => {
             if (!mounted) return;
-            if (result) {
-              // Got a barcode — close scanner and lookup
+            if (result && !scannedOnce.current) {
+              scannedOnce.current = true;
               const code = result.getText();
-              closeScanner();
-              handleBarcode(code);
+
+              // 👉 Populate the textbox with the scanned code
+              setBarcodeInput(code);
+
+              // Keep the modal open and auto lookup; show result below input
+              void handleBarcode(code, { keepOpen: true });
             }
-            if (err && String(err).includes("NotFoundException")) {
-              // keep scanning
-            }
+            // ignore NotFoundException bursts while scanning
           }
         );
+
+        // When modal closes, stop and reset
+        return () => {
+          controls?.stop();
+        };
       } catch (err: any) {
         console.error("[scanner] error:", err?.message || err);
         setScanError("Unable to access camera. You can enter the barcode manually.");
         setHasCamera(false);
         setScanning(false);
+        stopTracks();
       }
     }
 
-    startScanner();
+    const teardown = startScanner();
     return () => {
+      (async () => {
+        try {
+          if (codeReaderRef.current) codeReaderRef.current.reset();
+        } catch {}
+        stopTracks();
+        (await teardown)?.toString(); // no-op, keeps types happy
+      })();
       mounted = false;
-      try {
-        if (codeReaderRef.current) codeReaderRef.current.reset();
-        const v = videoRef.current;
-        v?.srcObject && (v.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
-        if (v) v.srcObject = null;
-      } catch (_) {}
     };
   }, [scannerOpen]);
 
-  const handleBarcode = async (code: string) => {
+  const handleBarcode = async (code: string, opts: { keepOpen?: boolean } = {}) => {
     try {
+      setLookupLoading(true);
+      setLookupResult(null);
       const res = await fetch(`/api/foods/search?barcode=${encodeURIComponent(code)}`);
       const json = await res.json();
       const found = (json.foods || [])[0];
       if (!found) {
-        alert("No product found for this barcode. You can add a manual food.");
+        setScanError("No product found for this barcode. You can add a manual food.");
+        setLookupLoading(false);
         return;
       }
+      setLookupResult(found);
       setSelectedFood(found);
       setGrams(100);
-      // Auto open the first open meal or breakfast by default
+      // Open a default meal if none is open
       setOpenMeal((prev) => prev || "Breakfast");
+      setLookupLoading(false);
+
+      if (!opts.keepOpen) {
+        closeScanner();
+      }
     } catch (e) {
       console.error(e);
-      alert("Barcode lookup failed. Please try again or enter manually.");
+      setScanError("Barcode lookup failed. Please try again or enter manually.");
+      setLookupLoading(false);
     }
   };
 
@@ -299,8 +354,7 @@ export default function NutritionPage() {
       setScanError("Enter a valid barcode (at least 6 digits).");
       return;
     }
-    await handleBarcode(barcodeInput.trim());
-    closeScanner();
+    await handleBarcode(barcodeInput.trim(), { keepOpen: true });
   };
 
   return (
@@ -553,12 +607,55 @@ export default function NutritionPage() {
             </div>
 
             {hasCamera ? (
-              <div className="scanner-box">
-                <video ref={videoRef} className="scanner-video" autoPlay playsInline muted />
-                <div className="scanner-hint text-dim">
-                  Align the barcode within the frame. {scanning ? "Scanning…" : "Initialising…"}
+              <>
+                <div className="scanner-box mb-2">
+                  <video
+                    ref={videoRef}
+                    className="scanner-video"
+                    autoPlay
+                    playsInline
+                    muted
+                  />
+                  <div className="scanner-hint text-dim">
+                    Align the barcode within the frame. {scanning ? "Scanning…" : "Initialising…"}
+                  </div>
                 </div>
-              </div>
+
+                <div className="d-flex gap-2">
+                  <input
+                    className="form-control"
+                    placeholder="e.g. 5051234567890"
+                    value={barcodeInput}
+                    onChange={(e) => setBarcodeInput(e.target.value)}
+                    inputMode="numeric"
+                  />
+                  <button className="btn btn-bxkr" onClick={lookupManualBarcode} disabled={lookupLoading}>
+                    {lookupLoading ? "Looking up…" : "Lookup"}
+                  </button>
+                </div>
+
+                {scanError && <div className="mt-2 text-danger">{scanError}</div>}
+
+                {lookupResult && (
+                  <div className="bxkr-card p-2 mt-2">
+                    <div className="d-flex align-items-center justify-content-between">
+                      <div className="me-2">
+                        <div className="fw-bold">{lookupResult.name} ({lookupResult.brand})</div>
+                        <div className="small text-dim">{round2(lookupResult.calories)} kcal / 100g</div>
+                      </div>
+                      <button
+                        className="btn btn-bxkr-outline"
+                        onClick={() => {
+                          // Keep selected and close the scanner
+                          closeScanner();
+                        }}
+                      >
+                        Use this
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="mb-2">
                 <div className="mb-2 text-dim">Camera not available. Enter the barcode manually:</div>
@@ -568,8 +665,11 @@ export default function NutritionPage() {
                     placeholder="e.g. 5051234567890"
                     value={barcodeInput}
                     onChange={(e) => setBarcodeInput(e.target.value)}
+                    inputMode="numeric"
                   />
-                  <button className="btn btn-bxkr" onClick={lookupManualBarcode}>Lookup</button>
+                  <button className="btn btn-bxkr" onClick={lookupManualBarcode} disabled={lookupLoading}>
+                    {lookupLoading ? "Looking up…" : "Lookup"}
+                  </button>
                 </div>
                 {scanError && <div className="mt-2 text-danger">{scanError}</div>}
               </div>
