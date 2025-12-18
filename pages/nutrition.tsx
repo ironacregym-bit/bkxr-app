@@ -249,7 +249,7 @@ export default function NutritionPage() {
         }
 
         setScanning(true);
-        const { BrowserMultiFormatReader, IScannerControls } = await import("@zxing/browser");
+        const { BrowserMultiFormatReader } = await import("@zxing/browser");
         const reader = new BrowserMultiFormatReader();
         codeReaderRef.current = reader;
 
