@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/router";
 import useSWR, { mutate } from "swr";
 import { useSession, signIn } from "next-auth/react";
@@ -13,10 +13,10 @@ const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const meals = ["Breakfast", "Lunch", "Dinner", "Snack"];
 
 function round2(n: number | undefined) {
-  return n !== undefined ? n.toFixed(2) : "-";
+  return n !== undefined ? Number(n).toFixed(2) : "-";
 }
 
-// Futuristic color palette
+// Futuristic colour palette
 const COLORS = {
   calories: "#ff7f32", // Neon orange
   protein: "#32ff7f",  // Electric green
@@ -32,18 +32,14 @@ export default function NutritionPage() {
 
   // Date navigation state
   const [selectedDate, setSelectedDate] = useState(new Date());
-
   useEffect(() => {
     if (router.query.date) {
       const parsed = new Date(router.query.date as string);
-      if (!isNaN(parsed.getTime())) {
-        setSelectedDate(parsed);
-      }
+      if (!isNaN(parsed.getTime())) setSelectedDate(parsed);
     }
   }, [router.query.date]);
 
   const formattedDate = useMemo(() => selectedDate.toISOString().slice(0, 10), [selectedDate]);
-
   const goPrevDay = () => setSelectedDate((d) => new Date(d.getTime() - 86400000));
   const goNextDay = () => {
     const tomorrow = new Date(selectedDate.getTime() + 86400000);
@@ -58,6 +54,15 @@ export default function NutritionPage() {
   const [grams, setGrams] = useState(100);
   const [adding, setAdding] = useState(false);
 
+  // Scanner state
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [barcodeInput, setBarcodeInput] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [hasCamera, setHasCamera] = useState(true);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const codeReaderRef = useRef<any>(null);
+
   // Fetch logs for selected date
   const { data: logsData } = useSWR(
     session?.user?.email ? `/api/nutrition/logs?date=${formattedDate}` : null,
@@ -65,7 +70,10 @@ export default function NutritionPage() {
   );
 
   // Fetch user goals
-  const { data: profile } = useSWR(session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email)}` : null, fetcher);
+  const { data: profile } = useSWR(
+    session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email)}` : null,
+    fetcher
+  );
   const goals = {
     calories: profile?.caloric_target || 2000,
     protein: profile?.protein_target || 150,
@@ -145,7 +153,6 @@ export default function NutritionPage() {
   const addEntry = async (meal: string, food: any) => {
     if (!session?.user?.email || !food) return signIn("google");
     setAdding(true);
-
     try {
       const payload = {
         date: formattedDate,
@@ -188,26 +195,127 @@ export default function NutritionPage() {
     mutate(`/api/nutrition/logs?date=${formattedDate}`);
   };
 
+  // ===== Barcode scanning =====
+  const openScanner = async () => {
+    setScannerOpen(true);
+    setScanError(null);
+    setHasCamera(true);
+  };
+
+  const closeScanner = () => {
+    setScannerOpen(false);
+    setScanning(false);
+    setScanError(null);
+    try {
+      if (codeReaderRef.current) {
+        codeReaderRef.current.reset();
+      }
+      const v = videoRef.current;
+      v?.srcObject && (v.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+      if (v) v.srcObject = null;
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function startScanner() {
+      if (!scannerOpen) return;
+      if (typeof navigator === "undefined" || !navigator.mediaDevices) {
+        setHasCamera(false);
+        return;
+      }
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasVideo = devices.some((d) => d.kind === "videoinput");
+        if (!hasVideo) {
+          setHasCamera(false);
+          return;
+        }
+
+        setScanning(true);
+        const { BrowserMultiFormatReader } = await import("@zxing/browser");
+        const reader = new BrowserMultiFormatReader();
+        codeReaderRef.current = reader;
+
+        // Start decoding from default camera
+        await reader.decodeFromVideoDevice(
+          undefined,
+          videoRef.current!,
+          (result, err) => {
+            if (!mounted) return;
+            if (result) {
+              // Got a barcode — close scanner and lookup
+              const code = result.getText();
+              closeScanner();
+              handleBarcode(code);
+            }
+            if (err && String(err).includes("NotFoundException")) {
+              // keep scanning
+            }
+          }
+        );
+      } catch (err: any) {
+        console.error("[scanner] error:", err?.message || err);
+        setScanError("Unable to access camera. You can enter the barcode manually.");
+        setHasCamera(false);
+        setScanning(false);
+      }
+    }
+
+    startScanner();
+    return () => {
+      mounted = false;
+      try {
+        if (codeReaderRef.current) codeReaderRef.current.reset();
+        const v = videoRef.current;
+        v?.srcObject && (v.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+        if (v) v.srcObject = null;
+      } catch (_) {}
+    };
+  }, [scannerOpen]);
+
+  const handleBarcode = async (code: string) => {
+    try {
+      const res = await fetch(`/api/foods/search?barcode=${encodeURIComponent(code)}`);
+      const json = await res.json();
+      const found = (json.foods || [])[0];
+      if (!found) {
+        alert("No product found for this barcode. You can add a manual food.");
+        return;
+      }
+      setSelectedFood(found);
+      setGrams(100);
+      // Auto open the first open meal or breakfast by default
+      setOpenMeal((prev) => prev || "Breakfast");
+    } catch (e) {
+      console.error(e);
+      alert("Barcode lookup failed. Please try again or enter manually.");
+    }
+  };
+
+  const lookupManualBarcode = async () => {
+    if (!barcodeInput || barcodeInput.trim().length < 6) {
+      setScanError("Enter a valid barcode (at least 6 digits).");
+      return;
+    }
+    await handleBarcode(barcodeInput.trim());
+    closeScanner();
+  };
+
   return (
     <>
-      <main
-        className="container py-3"
-        style={{
-          paddingBottom: "90px",
-          color: "#fff",
-          borderRadius: "12px",
-        }}
-      >
+      <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff", borderRadius: "12px" }}>
         {/* Date Navigation */}
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <button className="btn btn-outline-light" onClick={goPrevDay}>
+          <button className="btn btn-bxkr-outline" onClick={goPrevDay}>
             ← Previous
           </button>
           <h2 className="text-center mb-0" style={{ fontWeight: 700 }}>
             Nutrition ({formattedDate})
           </h2>
           <button
-            className="btn btn-outline-light"
+            className="btn btn-bxkr-outline"
             onClick={goNextDay}
             disabled={formattedDate === new Date().toISOString().slice(0, 10)}
           >
@@ -219,16 +327,8 @@ export default function NutritionPage() {
         <div className="row mb-4">
           {/* Left Column */}
           <div className="col-6">
-            <div
-              style={{
-                background: "rgba(255,255,255,0.05)",
-                borderRadius: "16px",
-                padding: "16px",
-                backdropFilter: "blur(10px)",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-              }}
-            >
-              <h5 style={{ marginBottom: "12px" }}>Macros</h5>
+            <div className="bxkr-card p-3">
+              <h5 className="mb-3">Macros</h5>
               <p style={{ color: COLORS.calories }}>Calories: {round2(totals.calories)} / {goals.calories}</p>
               <p style={{ color: COLORS.protein }}>Protein: {round2(totals.protein)} / {goals.protein} g</p>
               <p style={{ color: COLORS.carbs }}>Carbs: {round2(totals.carbs)} / {goals.carbs} g</p>
@@ -313,25 +413,30 @@ export default function NutritionPage() {
           return (
             <div key={meal} className="mb-3">
               <button
-                className="btn btn-outline-light w-100 mb-2 text-start"
-                style={{ borderRadius: "12px", background: "rgba(255,255,255,0.05)" }}
+                className="btn btn-bxkr-outline w-100 mb-2 text-start"
+                style={{ borderRadius: "12px" }}
                 onClick={() => setOpenMeal(isOpen ? null : meal)}
               >
-                {meal} ({mealEntries.length}) -{" "}
-                <span style={{ color: COLORS.calories }}>{round2(mealTotals.calories)} kcal</span> |{" "}
-                <span style={{ color: COLORS.protein }}>{round2(mealTotals.protein)}p</span> |{" "}
-                <span style={{ color: COLORS.carbs }}>{round2(mealTotals.carbs)}c</span> |{" "}
-                <span style={{ color: COLORS.fat }}>{round2(mealTotals.fat)}f</span>
+                {meal} ({mealEntries.length}) —{" "}
+                <span style={{ color: COLORS.calories }}>{round2(mealTotals.calories)} kcal</span>{" "}
+                | <span style={{ color: COLORS.protein }}>{round2(mealTotals.protein)}p</span>{" "}
+                | <span style={{ color: COLORS.carbs }}>{round2(mealTotals.carbs)}c</span>{" "}
+                | <span style={{ color: COLORS.fat }}>{round2(mealTotals.fat)}f</span>
               </button>
 
               {isOpen && (
                 <div className="px-2">
-                  <input
-                    className="form-control mb-2"
-                    placeholder={`Search foods for ${meal}...`}
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
+                  <div className="d-flex gap-2 mb-2">
+                    <input
+                      className="form-control"
+                      placeholder={`Search foods for ${meal}…`}
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                    <button className="btn btn-bxkr" onClick={openScanner}>
+                      Scan barcode
+                    </button>
+                  </div>
 
                   {loadingSearch && <div>Searching…</div>}
 
@@ -339,39 +444,45 @@ export default function NutritionPage() {
                     results.slice(0, 5).map((f) => (
                       <div key={f.id ?? f.code ?? f.name} className="mb-1">
                         {selectedFood?.id === f.id ? (
-                          <div
-                            style={{
-                              background: "rgba(255,255,255,0.05)",
-                              borderRadius: "12px",
-                              padding: "12px",
-                              backdropFilter: "blur(8px)",
-                              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-                            }}
-                          >
-                            <div className="d-flex justify-content-between align-items-center mb-1">
-                              <input
-                                type="number"
-                                className="form-control w-25"
-                                value={grams}
-                                onChange={(e) => setGrams(Number(e.target.value))}
-                              />
-                              <div>
-                                <span style={{ color: COLORS.calories }}>{round2(scaledSelected?.calories)} kcal</span> |{" "}
-                                <span style={{ color: COLORS.protein }}>{round2(scaledSelected?.protein)}p</span> |{" "}
-                                <span style={{ color: COLORS.carbs }}>{round2(scaledSelected?.carbs)}c</span> |{" "}
-                                <span style={{ color: COLORS.fat }}>{round2(scaledSelected?.fat)}f</span>
+                          <div className="bxkr-card p-3">
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <div className="d-flex align-items-center gap-2">
+                                <input
+                                  type="number"
+                                  className="form-control"
+                                  style={{ maxWidth: 100 }}
+                                  value={grams}
+                                  onChange={(e) => setGrams(Number(e.target.value))}
+                                />
+                                {/* Quick presets */}
+                                <div className="d-flex gap-2">
+                                  {[50, 100, 150, 200].map((g) => (
+                                    <button
+                                      key={g}
+                                      className="bxkr-chip"
+                                      onClick={() => setGrams(g)}
+                                    >
+                                      {g}g
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="text-end">
+                                <span style={{ color: COLORS.calories }}>{round2(scaledSelected?.calories)} kcal</span>{" "}
+                                | <span style={{ color: COLORS.protein }}>{round2(scaledSelected?.protein)}p</span>{" "}
+                                | <span style={{ color: COLORS.carbs }}>{round2(scaledSelected?.carbs)}c</span>{" "}
+                                | <span style={{ color: COLORS.fat }}>{round2(scaledSelected?.fat)}f</span>
                               </div>
                             </div>
                             <button
-                              className="btn btn-primary w-100 mb-1"
-                              style={{ backgroundColor: COLORS.calories, borderRadius: "24px", fontWeight: 600 }}
+                              className="btn btn-bxkr w-100 mb-2"
                               onClick={() => addEntry(meal, selectedFood)}
                               disabled={adding}
                             >
-                              Add to {meal}
+                              Add to {meal} {adding && <span className="inline-spinner" />}
                             </button>
                             <div className="fw-bold">
-                              {f.name} ({f.brand}) - {round2(f.calories)} kcal/100g
+                              {f.name} ({f.brand}) — {round2(f.calories)} kcal/100g
                             </div>
                           </div>
                         ) : (
@@ -380,14 +491,14 @@ export default function NutritionPage() {
                             style={{ background: "rgba(255,255,255,0.05)", color: "#fff" }}
                             onClick={() => setSelectedFood(f)}
                           >
-                            {f.name} ({f.brand}) - {round2(f.calories)} kcal/100g
+                            {f.name} ({f.brand}) — {round2(f.calories)} kcal/100g
                           </button>
                         )}
                       </div>
                     ))}
 
                   <button
-                    className="btn btn-outline-light w-100 mb-2"
+                    className="btn btn-bxkr-outline w-100 mb-2"
                     style={{ borderRadius: "12px" }}
                     onClick={() =>
                       setSelectedFood({
@@ -407,23 +518,16 @@ export default function NutritionPage() {
                   {mealEntries.map((e: any) => (
                     <div
                       key={e.id}
-                      style={{
-                        background: "rgba(255,255,255,0.05)",
-                        borderRadius: "12px",
-                        padding: "12px",
-                        marginBottom: "8px",
-                        backdropFilter: "blur(8px)",
-                      }}
-                      className="d-flex justify-content-between align-items-center"
+                      className="bxkr-card p-3 mb-2 d-flex justify-content-between align-items-center"
                     >
                       <div>
                         <div className="fw-bold">{e.food.name} ({e.food.brand})</div>
-                        <div className="small text-muted">{e.grams} g</div>
+                        <div className="small text-dim">{e.grams} g</div>
                         <div className="small">
-                          <span style={{ color: COLORS.calories }}>{round2(e.calories)} kcal</span> |{" "}
-                          <span style={{ color: COLORS.protein }}>{round2(e.protein)}p</span> |{" "}
-                          <span style={{ color: COLORS.carbs }}>{round2(e.carbs)}c</span> |{" "}
-                          <span style={{ color: COLORS.fat }}>{round2(e.fat)}f</span>
+                          <span style={{ color: COLORS.calories }}>{round2(e.calories)} kcal</span>{" "}
+                          | <span style={{ color: COLORS.protein }}>{round2(e.protein)}p</span>{" "}
+                          | <span style={{ color: COLORS.carbs }}>{round2(e.carbs)}c</span>{" "}
+                          | <span style={{ color: COLORS.fat }}>{round2(e.fat)}f</span>
                         </div>
                       </div>
                       <button className="btn btn-link text-danger" onClick={() => removeEntry(e.id)}>
@@ -438,7 +542,44 @@ export default function NutritionPage() {
         })}
       </main>
 
+      {/* Scanner Modal */}
+      {scannerOpen && (
+        <div className="bxkr-modal">
+          <div className="bxkr-modal-backdrop" onClick={closeScanner} />
+          <div className="bxkr-modal-dialog bxkr-card">
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <h5 className="mb-0">Scan barcode</h5>
+              <button className="btn btn-bxkr-outline" onClick={closeScanner}>Close</button>
+            </div>
+
+            {hasCamera ? (
+              <div className="scanner-box">
+                <video ref={videoRef} className="scanner-video" autoPlay playsInline muted />
+                <div className="scanner-hint text-dim">
+                  Align the barcode within the frame. {scanning ? "Scanning…" : "Initialising…"}
+                </div>
+              </div>
+            ) : (
+              <div className="mb-2">
+                <div className="mb-2 text-dim">Camera not available. Enter the barcode manually:</div>
+                <div className="d-flex gap-2">
+                  <input
+                    className="form-control"
+                    placeholder="e.g. 5051234567890"
+                    value={barcodeInput}
+                    onChange={(e) => setBarcodeInput(e.target.value)}
+                  />
+                  <button className="btn btn-bxkr" onClick={lookupManualBarcode}>Lookup</button>
+                </div>
+                {scanError && <div className="mt-2 text-danger">{scanError}</div>}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <BottomNav />
     </>
   );
 }
+
