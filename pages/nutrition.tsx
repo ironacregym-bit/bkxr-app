@@ -169,6 +169,7 @@ export default function NutritionPage() {
         fat: scaledSelected!.fat,
       };
 
+      // Optimistic UI update
       const optimistic = { id: `temp-${Date.now()}`, created_at: new Date().toISOString(), ...payload };
       mutate(
         `/api/nutrition/logs?date=${formattedDate}`,
@@ -183,6 +184,7 @@ export default function NutritionPage() {
       });
       if (!res.ok) throw new Error("Failed to save");
 
+      // Revalidate and reset
       mutate(`/api/nutrition/logs?date=${formattedDate}`);
       setSelectedFood(null);
       setQuery("");
@@ -276,13 +278,18 @@ export default function NutritionPage() {
 
         // Use ZXing decoder on the existing video element
         const controls = await reader.decodeFromVideoDevice(
-          undefined,              // ← was `null`
+          undefined, // TS expects string|undefined, not null
           videoRef.current!,
           (result, err) => {
+            if (!mounted) return;
             if (result && !scannedOnce.current) {
               scannedOnce.current = true;
               const code = result.getText();
+
+              // Populate the textbox with the scanned code
               setBarcodeInput(code);
+
+              // Auto lookup and show result under the input (keep modal open)
               void handleBarcode(code, { keepOpen: true });
             }
           }
@@ -308,7 +315,7 @@ export default function NutritionPage() {
           if (codeReaderRef.current) codeReaderRef.current.reset();
         } catch {}
         stopTracks();
-        (await teardown)?.toString(); // no-op, keeps types happy
+        (await teardown)?.toString(); // no-op
       })();
       mounted = false;
     };
@@ -326,11 +333,16 @@ export default function NutritionPage() {
         setLookupLoading(false);
         return;
       }
-      setLookupResult(found);
+
+      // ✅ Ensure the editor appears by populating results with the found item
+      setResults([found]);
       setSelectedFood(found);
+      setQuery(found.name || found.code || "");
       setGrams(100);
       // Open a default meal if none is open
       setOpenMeal((prev) => prev || "Breakfast");
+
+      setLookupResult(found);
       setLookupLoading(false);
 
       if (!opts.keepOpen) {
@@ -488,6 +500,48 @@ export default function NutritionPage() {
 
                   {loadingSearch && <div>Searching…</div>}
 
+                  {/* ✅ Robust fallback: show editor even if results are empty */}
+                  {selectedFood && results.length === 0 && (
+                    <div className="bxkr-card p-3 mb-2">
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <div className="d-flex align-items-center gap-2">
+                          <input
+                            type="number"
+                            className="form-control"
+                            style={{ maxWidth: 100 }}
+                            value={grams}
+                            onChange={(e) => setGrams(Number(e.target.value))}
+                          />
+                          {/* Quick presets */}
+                          <div className="d-flex gap-2">
+                            {[50, 100, 150, 200].map((g) => (
+                              <button key={g} className="bxkr-chip" onClick={() => setGrams(g)}>
+                                {g}g
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="text-end">
+                          <span style={{ color: COLORS.calories }}>{round2(scaledSelected?.calories)} kcal</span>{" "}
+                          | <span style={{ color: COLORS.protein }}>{round2(scaledSelected?.protein)}p</span>{" "}
+                          | <span style={{ color: COLORS.carbs }}>{round2(scaledSelected?.carbs)}c</span>{" "}
+                          | <span style={{ color: COLORS.fat }}>{round2(scaledSelected?.fat)}f</span>
+                        </div>
+                      </div>
+                      <button
+                        className="btn btn-bxkr w-100 mb-2"
+                        onClick={() => addEntry(meal, selectedFood)}
+                        disabled={adding}
+                      >
+                        Add to {meal} {adding && <span className="inline-spinner" />}
+                      </button>
+                      <div className="fw-bold">
+                        {selectedFood.name} ({selectedFood.brand}) — {round2(selectedFood.calories)} kcal/100g
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Standard results list */}
                   {results.length > 0 &&
                     results.slice(0, 5).map((f) => (
                       <div key={f.id ?? f.code ?? f.name} className="mb-1">
@@ -640,7 +694,7 @@ export default function NutritionPage() {
                       <button
                         className="btn btn-bxkr-outline"
                         onClick={() => {
-                          // Keep selected and close the scanner
+                          // Result already set in state; close the scanner
                           closeScanner();
                         }}
                       >
