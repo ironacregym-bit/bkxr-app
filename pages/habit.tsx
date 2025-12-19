@@ -147,7 +147,6 @@ export default function HabitsPage() {
         className="container py-3"
         style={{
           paddingBottom: "70px",
-          background: "linear-gradient(135deg,#1a1a1a,#2c2c2c)",
           color: "#fff",
           borderRadius: 12,
           minHeight: "100vh",
