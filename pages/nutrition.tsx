@@ -12,16 +12,32 @@ import "react-circular-progressbar/dist/styles.css";
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const meals = ["Breakfast", "Lunch", "Dinner", "Snack"];
 
-function round2(n: number | undefined) {
-  return n !== undefined ? Number(n).toFixed(2) : "-";
+function round2(n: number | undefined | null) {
+  return n !== undefined && n !== null ? Number(n).toFixed(2) : "-";
 }
 
-// Futuristic colour palette
 const COLORS = {
-  calories: "#ff7f32", // Neon orange
-  protein: "#32ff7f",  // Electric green
-  carbs: "#ffc107",    // Amber yellow
-  fat: "#ff4fa3",      // Hot pink
+  calories: "#ff7f32",
+  protein: "#32ff7f",
+  carbs: "#ffc107",
+  fat: "#ff4fa3",
+};
+
+type Food = {
+  id: string;
+  code: string;
+  name: string;
+  brand: string;
+  image: string | null;
+  calories: number; // per 100g
+  protein: number;  // per 100g
+  carbs: number;    // per 100g
+  fat: number;      // per 100g
+  servingSize?: string | null;
+  caloriesPerServing?: number | null;
+  proteinPerServing?: number | null;
+  carbsPerServing?: number | null;
+  fatPerServing?: number | null;
 };
 
 export default function NutritionPage() {
@@ -30,7 +46,7 @@ export default function NutritionPage() {
 
   const [openMeal, setOpenMeal] = useState<string | null>(null);
 
-  // Date navigation state
+  // Date navigation
   const [selectedDate, setSelectedDate] = useState(new Date());
   useEffect(() => {
     if (router.query.date) {
@@ -48,10 +64,11 @@ export default function NutritionPage() {
 
   // Search state
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<Food[]>([]);
   const [loadingSearch, setLoadingSearch] = useState(false);
-  const [selectedFood, setSelectedFood] = useState<any | null>(null);
-  const [grams, setGrams] = useState(100);
+  const [selectedFood, setSelectedFood] = useState<Food | null>(null);
+  const [grams, setGrams] = useState<number>(100);
+  const [usingServing, setUsingServing] = useState<"per100" | "serving">("per100");
   const [adding, setAdding] = useState(false);
 
   // Scanner state
@@ -61,22 +78,20 @@ export default function NutritionPage() {
   const [scanning, setScanning] = useState(false);
   const [hasCamera, setHasCamera] = useState(true);
   const [lookupLoading, setLookupLoading] = useState(false);
-  const [lookupResult, setLookupResult] = useState<any | null>(null);
+  const [lookupResult, setLookupResult] = useState<Food | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const codeReaderRef = useRef<any>(null);
   const scannedOnce = useRef(false);
 
-  // Fetch logs for selected date
+  // Logs
   const { data: logsData } = useSWR(
-    session?.user?.email ? `/api/nutrition/logs?date=${formattedDate}` : null,
-    fetcher
+    session?.user?.email ? `/api/nutrition/logs?date=${formattedDate}` : null, fetcher
   );
 
-  // Fetch user goals
+  // Profile goals
   const { data: profile } = useSWR(
-    session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email)}` : null,
-    fetcher
+    session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email)}` : null, fetcher
   );
   const goals = {
     calories: profile?.caloric_target || 2000,
@@ -115,7 +130,6 @@ export default function NutritionPage() {
       timer = setTimeout(() => fn(...args), delay);
     };
   }
-
   const doSearch = useMemo(
     () =>
       debounce(async (q: string) => {
@@ -137,13 +151,51 @@ export default function NutritionPage() {
       }, 300),
     []
   );
+  useEffect(() => { doSearch(query); }, [query, doSearch]);
 
-  useEffect(() => {
-    doSearch(query);
-  }, [query, doSearch]);
+  // Utility to extract grams from strings like "30 g", "1 bar (45 g)"
+  function extractGramAmount(text?: string | null): number | null {
+    if (!text) return null;
+    const match = text.match(/(\d+(?:\.\d+)?)\s*g/i) || text.match(/\((\d+(?:\.\d+)?)\s*g\)/i);
+    if (match && match[1]) return Number(match[1]);
+    return null;
+    // Note: if OFF gives serving macros directly, we won't rely on this for macros — only to prefill grams.
+  }
 
+  // Compute scaled nutrition for the current selection
   const scaledSelected = useMemo(() => {
     if (!selectedFood) return null;
+
+    if (usingServing === "serving" && selectedFood.servingSize) {
+      const hasPerServing =
+        selectedFood.caloriesPerServing != null ||
+        selectedFood.proteinPerServing != null ||
+        selectedFood.carbsPerServing != null ||
+        selectedFood.fatPerServing != null;
+
+      if (hasPerServing) {
+        return {
+          ...selectedFood,
+          calories: +(Number(selectedFood.caloriesPerServing ?? 0)).toFixed(2),
+          protein: +(Number(selectedFood.proteinPerServing ?? 0)).toFixed(2),
+          carbs: +(Number(selectedFood.carbsPerServing ?? 0)).toFixed(2),
+          fat: +(Number(selectedFood.fatPerServing ?? 0)).toFixed(2),
+        };
+      }
+
+      // Fallback: if OFF didn’t provide per-serving macros, estimate via grams extracted
+      const servingGrams = extractGramAmount(selectedFood.servingSize) ?? grams;
+      const factor = servingGrams / 100;
+      return {
+        ...selectedFood,
+        calories: +(selectedFood.calories * factor).toFixed(2),
+        protein: +(selectedFood.protein * factor).toFixed(2),
+        carbs: +(selectedFood.carbs * factor).toFixed(2),
+        fat: +(selectedFood.fat * factor).toFixed(2),
+      };
+    }
+
+    // Per 100g scaled by grams
     const factor = grams / 100;
     return {
       ...selectedFood,
@@ -152,24 +204,28 @@ export default function NutritionPage() {
       carbs: +(selectedFood.carbs * factor).toFixed(2),
       fat: +(selectedFood.fat * factor).toFixed(2),
     };
-  }, [selectedFood, grams]);
+  }, [selectedFood, grams, usingServing]);
 
   const addEntry = async (meal: string, food: any) => {
     if (!session?.user?.email || !food) return signIn("google");
+    const chosenGrams =
+      usingServing === "serving"
+        ? extractGramAmount(food.servingSize) ?? grams
+        : grams;
+
+    const payload = {
+      date: formattedDate,
+      meal,
+      food,
+      grams: chosenGrams,
+      calories: scaledSelected!.calories,
+      protein: scaledSelected!.protein,
+      carbs: scaledSelected!.carbs,
+      fat: scaledSelected!.fat,
+    };
+
     setAdding(true);
     try {
-      const payload = {
-        date: formattedDate,
-        meal,
-        food,
-        grams,
-        calories: scaledSelected!.calories,
-        protein: scaledSelected!.protein,
-        carbs: scaledSelected!.carbs,
-        fat: scaledSelected!.fat,
-      };
-
-      // Optimistic UI update
       const optimistic = { id: `temp-${Date.now()}`, created_at: new Date().toISOString(), ...payload };
       mutate(
         `/api/nutrition/logs?date=${formattedDate}`,
@@ -184,12 +240,12 @@ export default function NutritionPage() {
       });
       if (!res.ok) throw new Error("Failed to save");
 
-      // Revalidate and reset
       mutate(`/api/nutrition/logs?date=${formattedDate}`);
       setSelectedFood(null);
       setQuery("");
       setResults([]);
       setGrams(100);
+      setUsingServing("per100");
     } finally {
       setAdding(false);
     }
@@ -201,7 +257,7 @@ export default function NutritionPage() {
     mutate(`/api/nutrition/logs?date=${formattedDate}`);
   };
 
-  // ===== Barcode scanning =====
+  // ===== Scanner (same as your fixed version, with small helpers) =====
   const openScanner = async () => {
     setScannerOpen(true);
     setScanError(null);
@@ -210,15 +266,13 @@ export default function NutritionPage() {
     setLookupLoading(false);
     scannedOnce.current = false;
   };
-
   const stopTracks = () => {
     try {
       const v = videoRef.current;
       v?.srcObject && (v.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
       if (v) v.srcObject = null;
-    } catch (_) {}
+    } catch {}
   };
-
   const closeScanner = () => {
     setScannerOpen(false);
     setScanning(false);
@@ -226,16 +280,13 @@ export default function NutritionPage() {
     setLookupLoading(false);
     scannedOnce.current = false;
     try {
-      if (codeReaderRef.current) {
-        codeReaderRef.current.reset();
-      }
-    } catch (_) {}
+      if (codeReaderRef.current) codeReaderRef.current.reset();
+    } catch {}
     stopTracks();
   };
 
   useEffect(() => {
     let mounted = true;
-
     async function startScanner() {
       if (!scannerOpen) return;
       if (typeof navigator === "undefined" || !navigator.mediaDevices) {
@@ -249,56 +300,40 @@ export default function NutritionPage() {
           setHasCamera(false);
           return;
         }
-
         setScanning(true);
         const { BrowserMultiFormatReader } = await import("@zxing/browser");
         const reader = new BrowserMultiFormatReader();
         codeReaderRef.current = reader;
 
-        // Prefer back camera on mobile
         const constraints: MediaStreamConstraints = {
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false,
         };
-
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         if (!mounted) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
-        // Attach the stream to the video element manually (helps on iOS Safari)
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => {});
         }
 
-        // Use ZXing decoder on the existing video element
         const controls = await reader.decodeFromVideoDevice(
-          undefined, // TS expects string|undefined, not null
+          undefined,
           videoRef.current!,
           (result, err) => {
             if (!mounted) return;
             if (result && !scannedOnce.current) {
               scannedOnce.current = true;
               const code = result.getText();
-
-              // Populate the textbox with the scanned code
               setBarcodeInput(code);
-
-              // Auto lookup and show result under the input (keep modal open)
               void handleBarcode(code, { keepOpen: true });
             }
           }
         );
 
-        // When modal closes, stop and reset
-        return () => {
-          controls?.stop();
-        };
+        return () => { controls?.stop(); };
       } catch (err: any) {
         console.error("[scanner] error:", err?.message || err);
         setScanError("Unable to access camera. You can enter the barcode manually.");
@@ -307,15 +342,12 @@ export default function NutritionPage() {
         stopTracks();
       }
     }
-
     const teardown = startScanner();
     return () => {
       (async () => {
-        try {
-          if (codeReaderRef.current) codeReaderRef.current.reset();
-        } catch {}
+        try { if (codeReaderRef.current) codeReaderRef.current.reset(); } catch {}
         stopTracks();
-        (await teardown)?.toString(); // no-op
+        (await teardown)?.toString();
       })();
       mounted = false;
     };
@@ -327,27 +359,22 @@ export default function NutritionPage() {
       setLookupResult(null);
       const res = await fetch(`/api/foods/search?barcode=${encodeURIComponent(code)}`);
       const json = await res.json();
-      const found = (json.foods || [])[0];
+      const found: Food | undefined = (json.foods || [])[0];
       if (!found) {
         setScanError("No product found for this barcode. You can add a manual food.");
         setLookupLoading(false);
         return;
       }
-
-      // ✅ Ensure the editor appears by populating results with the found item
       setResults([found]);
       setSelectedFood(found);
       setQuery(found.name || found.code || "");
-      setGrams(100);
-      // Open a default meal if none is open
-      setOpenMeal((prev) => prev || "Breakfast");
-
+      setUsingServing("per100"); // default to per 100 g
+      const g = extractGramAmount(found.servingSize);
+      setGrams(g ?? 100);        // prefill grams if we can parse serving
       setLookupResult(found);
       setLookupLoading(false);
-
-      if (!opts.keepOpen) {
-        closeScanner();
-      }
+      setOpenMeal((prev) => prev || "Breakfast");
+      if (!opts.keepOpen) closeScanner();
     } catch (e) {
       console.error(e);
       setScanError("Barcode lookup failed. Please try again or enter manually.");
@@ -363,29 +390,19 @@ export default function NutritionPage() {
     await handleBarcode(barcodeInput.trim(), { keepOpen: true });
   };
 
+  // ===== UI =====
   return (
     <>
       <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff", borderRadius: "12px" }}>
         {/* Date Navigation */}
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <button className="btn btn-bxkr-outline" onClick={goPrevDay}>
-            ← Previous
-          </button>
-          <h2 className="text-center mb-0" style={{ fontWeight: 700 }}>
-            Nutrition ({formattedDate})
-          </h2>
-          <button
-            className="btn btn-bxkr-outline"
-            onClick={goNextDay}
-            disabled={formattedDate === new Date().toISOString().slice(0, 10)}
-          >
-            Next →
-          </button>
+          <button className="btn btn-bxkr-outline" onClick={goPrevDay}>← Previous</button>
+          <h2 className="text-center mb-0" style={{ fontWeight: 700 }}>Nutrition ({formattedDate})</h2>
+          <button className="btn btn-bxkr-outline" onClick={goNextDay} disabled={formattedDate === new Date().toISOString().slice(0, 10)}>Next →</button>
         </div>
 
         {/* Top Section */}
         <div className="row mb-4">
-          {/* Left Column */}
           <div className="col-6">
             <div className="bxkr-card p-3">
               <h5 className="mb-3">Macros</h5>
@@ -395,61 +412,19 @@ export default function NutritionPage() {
               <p style={{ color: COLORS.fat }}>Fat: {round2(totals.fat)} / {goals.fat} g</p>
             </div>
           </div>
-
-          {/* Right Column - Concentric Rings */}
           <div className="col-6 d-flex justify-content-center">
             <div style={{ position: "relative", width: 180, height: 180 }}>
-              {/* Calories */}
               <div style={{ position: "absolute", top: 0, left: 0, width: 180, height: 180 }}>
-                <CircularProgressbar
-                  value={progress.calories}
-                  strokeWidth={7}
-                  styles={buildStyles({
-                    pathColor: COLORS.calories,
-                    trailColor: "rgba(255,127,50,0.15)",
-                    strokeLinecap: "butt",
-                    pathTransitionDuration: 0.8,
-                  })}
-                />
+                <CircularProgressbar value={progress.calories} strokeWidth={7} styles={buildStyles({ pathColor: COLORS.calories, trailColor: "rgba(255,127,50,0.15)", strokeLinecap: "butt", pathTransitionDuration: 0.8 })} />
               </div>
-              {/* Protein */}
               <div style={{ position: "absolute", top: 14, left: 14, width: 152, height: 152 }}>
-                <CircularProgressbar
-                  value={progress.protein}
-                  strokeWidth={8}
-                  styles={buildStyles({
-                    pathColor: COLORS.protein,
-                    trailColor: "rgba(50,255,127,0.15)",
-                    strokeLinecap: "butt",
-                    pathTransitionDuration: 0.8,
-                  })}
-                />
+                <CircularProgressbar value={progress.protein} strokeWidth={8} styles={buildStyles({ pathColor: COLORS.protein, trailColor: "rgba(50,255,127,0.15)", strokeLinecap: "butt", pathTransitionDuration: 0.8 })} />
               </div>
-              {/* Carbs */}
               <div style={{ position: "absolute", top: 28, left: 28, width: 124, height: 124 }}>
-                <CircularProgressbar
-                  value={progress.carbs}
-                  strokeWidth={10}
-                  styles={buildStyles({
-                    pathColor: COLORS.carbs,
-                    trailColor: "rgba(255,193,7,0.15)",
-                    strokeLinecap: "butt",
-                    pathTransitionDuration: 0.8,
-                  })}
-                />
+                <CircularProgressbar value={progress.carbs} strokeWidth={10} styles={buildStyles({ pathColor: COLORS.carbs, trailColor: "rgba(255,193,7,0.15)", strokeLinecap: "butt", pathTransitionDuration: 0.8 })} />
               </div>
-              {/* Fat */}
               <div style={{ position: "absolute", top: 42, left: 42, width: 96, height: 96 }}>
-                <CircularProgressbar
-                  value={progress.fat}
-                  strokeWidth={12}
-                  styles={buildStyles({
-                    pathColor: COLORS.fat,
-                    trailColor: "rgba(255,79,163,0.15)",
-                    strokeLinecap: "butt",
-                    pathTransitionDuration: 0.8,
-                  })}
-                />
+                <CircularProgressbar value={progress.fat} strokeWidth={12} styles={buildStyles({ pathColor: COLORS.fat, trailColor: "rgba(255,79,163,0.15)", strokeLinecap: "butt", pathTransitionDuration: 0.8 })} />
               </div>
             </div>
           </div>
@@ -487,111 +462,50 @@ export default function NutritionPage() {
               {isOpen && (
                 <div className="px-2">
                   <div className="d-flex gap-2 mb-2">
-                    <input
-                      className="form-control"
-                      placeholder={`Search foods for ${meal}…`}
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
-                    <button className="btn btn-bxkr" onClick={openScanner}>
-                      Scan barcode
-                    </button>
+                    <input className="form-control" placeholder={`Search foods for ${meal}…`} value={query} onChange={(e) => setQuery(e.target.value)} />
+                    <button className="btn btn-bxkr" onClick={openScanner}>Scan barcode</button>
                   </div>
 
                   {loadingSearch && <div>Searching…</div>}
 
-                  {/* ✅ Robust fallback: show editor even if results are empty */}
+                  {/* Fallback editor if results empty but selectedFood present */}
                   {selectedFood && results.length === 0 && (
-                    <div className="bxkr-card p-3 mb-2">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <div className="d-flex align-items-center gap-2">
-                          <input
-                            type="number"
-                            className="form-control"
-                            style={{ maxWidth: 100 }}
-                            value={grams}
-                            onChange={(e) => setGrams(Number(e.target.value))}
-                          />
-                          {/* Quick presets */}
-                          <div className="d-flex gap-2">
-                            {[50, 100, 150, 200].map((g) => (
-                              <button key={g} className="bxkr-chip" onClick={() => setGrams(g)}>
-                                {g}g
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="text-end">
-                          <span style={{ color: COLORS.calories }}>{round2(scaledSelected?.calories)} kcal</span>{" "}
-                          | <span style={{ color: COLORS.protein }}>{round2(scaledSelected?.protein)}p</span>{" "}
-                          | <span style={{ color: COLORS.carbs }}>{round2(scaledSelected?.carbs)}c</span>{" "}
-                          | <span style={{ color: COLORS.fat }}>{round2(scaledSelected?.fat)}f</span>
-                        </div>
-                      </div>
-                      <button
-                        className="btn btn-bxkr w-100 mb-2"
-                        onClick={() => addEntry(meal, selectedFood)}
-                        disabled={adding}
-                      >
-                        Add to {meal} {adding && <span className="inline-spinner" />}
-                      </button>
-                      <div className="fw-bold">
-                        {selectedFood.name} ({selectedFood.brand}) — {round2(selectedFood.calories)} kcal/100g
-                      </div>
-                    </div>
+                    <FoodEditor
+                      meal={meal}
+                      food={selectedFood}
+                      grams={grams}
+                      setGrams={setGrams}
+                      usingServing={usingServing}
+                      setUsingServing={setUsingServing}
+                      scaledSelected={scaledSelected}
+                      addEntry={addEntry}
+                    />
                   )}
 
-                  {/* Standard results list */}
                   {results.length > 0 &&
                     results.slice(0, 5).map((f) => (
                       <div key={f.id ?? f.code ?? f.name} className="mb-1">
                         {selectedFood?.id === f.id ? (
-                          <div className="bxkr-card p-3">
-                            <div className="d-flex justify-content-between align-items-center mb-2">
-                              <div className="d-flex align-items-center gap-2">
-                                <input
-                                  type="number"
-                                  className="form-control"
-                                  style={{ maxWidth: 100 }}
-                                  value={grams}
-                                  onChange={(e) => setGrams(Number(e.target.value))}
-                                />
-                                {/* Quick presets */}
-                                <div className="d-flex gap-2">
-                                  {[50, 100, 150, 200].map((g) => (
-                                    <button
-                                      key={g}
-                                      className="bxkr-chip"
-                                      onClick={() => setGrams(g)}
-                                    >
-                                      {g}g
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="text-end">
-                                <span style={{ color: COLORS.calories }}>{round2(scaledSelected?.calories)} kcal</span>{" "}
-                                | <span style={{ color: COLORS.protein }}>{round2(scaledSelected?.protein)}p</span>{" "}
-                                | <span style={{ color: COLORS.carbs }}>{round2(scaledSelected?.carbs)}c</span>{" "}
-                                | <span style={{ color: COLORS.fat }}>{round2(scaledSelected?.fat)}f</span>
-                              </div>
-                            </div>
-                            <button
-                              className="btn btn-bxkr w-100 mb-2"
-                              onClick={() => addEntry(meal, selectedFood)}
-                              disabled={adding}
-                            >
-                              Add to {meal} {adding && <span className="inline-spinner" />}
-                            </button>
-                            <div className="fw-bold">
-                              {f.name} ({f.brand}) — {round2(f.calories)} kcal/100g
-                            </div>
-                          </div>
+                          <FoodEditor
+                            meal={meal}
+                            food={selectedFood}
+                            grams={grams}
+                            setGrams={setGrams}
+                            usingServing={usingServing}
+                            setUsingServing={setUsingServing}
+                            scaledSelected={scaledSelected}
+                            addEntry={addEntry}
+                          />
                         ) : (
                           <button
                             className="list-group-item list-group-item-action"
                             style={{ background: "rgba(255,255,255,0.05)", color: "#fff" }}
-                            onClick={() => setSelectedFood(f)}
+                            onClick={() => {
+                              setSelectedFood(f);
+                              setUsingServing("per100");
+                              const g = extractGramAmount(f.servingSize);
+                              setGrams(g ?? 100);
+                            }}
                           >
                             {f.name} ({f.brand}) — {round2(f.calories)} kcal/100g
                           </button>
@@ -602,26 +516,27 @@ export default function NutritionPage() {
                   <button
                     className="btn btn-bxkr-outline w-100 mb-2"
                     style={{ borderRadius: "12px" }}
-                    onClick={() =>
+                    onClick={() => {
                       setSelectedFood({
                         id: `manual-${Date.now()}`,
+                        code: "",
                         name: "",
+                        brand: "",
+                        image: null,
                         calories: 0,
                         protein: 0,
                         carbs: 0,
                         fat: 0,
-                        brand: "",
-                      })
-                    }
+                      });
+                      setUsingServing("per100");
+                      setGrams(100);
+                    }}
                   >
                     Add manual food
                   </button>
 
                   {mealEntries.map((e: any) => (
-                    <div
-                      key={e.id}
-                      className="bxkr-card p-3 mb-2 d-flex justify-content-between align-items-center"
-                    >
+                    <div key={e.id} className="bxkr-card p-3 mb-2 d-flex justify-content-between align-items-center">
                       <div>
                         <div className="fw-bold">{e.food.name} ({e.food.brand})</div>
                         <div className="small text-dim">{e.grams} g</div>
@@ -632,9 +547,7 @@ export default function NutritionPage() {
                           | <span style={{ color: COLORS.fat }}>{round2(e.fat)}f</span>
                         </div>
                       </div>
-                      <button className="btn btn-link text-danger" onClick={() => removeEntry(e.id)}>
-                        Remove
-                      </button>
+                      <button className="btn btn-link text-danger" onClick={() => removeEntry(e.id)}>Remove</button>
                     </div>
                   ))}
                 </div>
@@ -657,26 +570,12 @@ export default function NutritionPage() {
             {hasCamera ? (
               <>
                 <div className="scanner-box mb-2">
-                  <video
-                    ref={videoRef}
-                    className="scanner-video"
-                    autoPlay
-                    playsInline
-                    muted
-                  />
-                  <div className="scanner-hint text-dim">
-                    Align the barcode within the frame. {scanning ? "Scanning…" : "Initialising…"}
-                  </div>
+                  <video ref={videoRef} className="scanner-video" autoPlay playsInline muted />
+                  <div className="scanner-hint text-dim">Align the barcode within the frame. {scanning ? "Scanning…" : "Initialising…"}</div>
                 </div>
 
                 <div className="d-flex gap-2">
-                  <input
-                    className="form-control"
-                    placeholder="e.g. 5051234567890"
-                    value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
-                    inputMode="numeric"
-                  />
+                  <input className="form-control" placeholder="e.g. 5051234567890" value={barcodeInput} onChange={(e) => setBarcodeInput(e.target.value)} inputMode="numeric" />
                   <button className="btn btn-bxkr" onClick={lookupManualBarcode} disabled={lookupLoading}>
                     {lookupLoading ? "Looking up…" : "Lookup"}
                   </button>
@@ -689,17 +588,11 @@ export default function NutritionPage() {
                     <div className="d-flex align-items-center justify-content-between">
                       <div className="me-2">
                         <div className="fw-bold">{lookupResult.name} ({lookupResult.brand})</div>
-                        <div className="small text-dim">{round2(lookupResult.calories)} kcal / 100g</div>
+                        <div className="small text-dim">
+                          {lookupResult.servingSize ? `Serving: ${lookupResult.servingSize}` : "Per 100 g"}
+                        </div>
                       </div>
-                      <button
-                        className="btn btn-bxkr-outline"
-                        onClick={() => {
-                          // Result already set in state; close the scanner
-                          closeScanner();
-                        }}
-                      >
-                        Use this
-                      </button>
+                      <button className="btn btn-bxkr-outline" onClick={() => { closeScanner(); }}>Use this</button>
                     </div>
                   </div>
                 )}
@@ -708,13 +601,7 @@ export default function NutritionPage() {
               <div className="mb-2">
                 <div className="mb-2 text-dim">Camera not available. Enter the barcode manually:</div>
                 <div className="d-flex gap-2">
-                  <input
-                    className="form-control"
-                    placeholder="e.g. 5051234567890"
-                    value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
-                    inputMode="numeric"
-                  />
+                  <input className="form-control" placeholder="e.g. 5051234567890" value={barcodeInput} onChange={(e) => setBarcodeInput(e.target.value)} inputMode="numeric" />
                   <button className="btn btn-bxkr" onClick={lookupManualBarcode} disabled={lookupLoading}>
                     {lookupLoading ? "Looking up…" : "Lookup"}
                   </button>
@@ -728,6 +615,96 @@ export default function NutritionPage() {
 
       <BottomNav />
     </>
+  );
+}
+
+/** Compact editor card, mobile-friendly */
+function FoodEditor({
+  meal,
+  food,
+  grams,
+  setGrams,
+  usingServing,
+  setUsingServing,
+  scaledSelected,
+  addEntry,
+}: {
+  meal: string;
+  food: Food;
+  grams: number;
+  setGrams: (v: number) => void;
+  usingServing: "per100" | "serving";
+  setUsingServing: (v: "per100" | "serving") => void;
+  scaledSelected: any;
+  addEntry: (meal: string, food: Food) => void;
+}) {
+  const hasServing = !!food.servingSize;
+  const servingLabel = hasServing ? `1 serving (${food.servingSize})` : undefined;
+
+  return (
+    <div className="bxkr-card p-3">
+      {/* Amount row: serving dropdown (if available) + grams input */}
+      <div className="row g-2 align-items-center mb-2">
+        <div className={hasServing ? "col-6" : "col-12"}>
+          <label className="form-label small text-dim mb-1">Grams</label>
+          <input
+            type="number"
+            className="form-control"
+            value={grams}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              // Switch to per100 scaling if user edits grams manually
+              setUsingServing("per100");
+              setGrams(Number.isFinite(v) ? Math.max(0, v) : 0);
+            }}
+          />
+        </div>
+        {hasServing && (
+          <div className="col-6">
+            <label className="form-label small text-dim mb-1">Amount</label>
+            <select
+              className="form-select"
+              value={usingServing}
+              onChange={(e) => {
+                const mode = e.target.value === "serving" ? "serving" : "per100";
+                setUsingServing(mode as "per100" | "serving");
+                if (mode === "serving") {
+                  // Prefill grams from serving string if possible
+                  const gramsFromServing = (() => {
+                    const match = (food.servingSize || "").match(/(\d+(?:\.\d+)?)\s*g/i) || (food.servingSize || "").match(/\((\d+(?:\.\d+)?)\s*g\)/i);
+                    return match && match[1] ? Number(match[1]) : null;
+                  })();
+                  if (gramsFromServing != null) setGrams(gramsFromServing);
+                }
+              }}
+            >
+              <option value="per100">Per 100 g</option>
+              <option value="serving">{servingLabel}</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Macro preview */}
+      <div className="d-flex justify-content-between small mb-2">
+        <span style={{ color: COLORS.calories }}>{round2(scaledSelected?.calories)} kcal</span>
+        <span style={{ color: COLORS.protein }}>{round2(scaledSelected?.protein)}p</span>
+        <span style={{ color: COLORS.carbs }}>{round2(scaledSelected?.carbs)}c</span>
+        <span style={{ color: COLORS.fat }}>{round2(scaledSelected?.fat)}f</span>
+      </div>
+
+      <button className="btn btn-bxkr w-100 mb-2" onClick={() => addEntry(meal, food)}>
+        Add to {meal}
+      </button>
+
+      <div className="fw-bold">{food.name} ({food.brand}) — {round2(food.calories)} kcal/100g</div>
+      {hasServing && (
+        <div className="small text-dim">
+          Serving: {food.servingSize}
+          {food.caloriesPerServing != null && ` — ${round2(food.caloriesPerServing)} kcal/serving`}
+        </div>
+      )}
+    </div>
   );
 }
 
