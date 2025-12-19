@@ -212,8 +212,7 @@ export default function Home() {
   const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
   const workoutHref = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
   const nutritionHref = `/nutrition?date=${selectedDateKey}`;
-  // 🔧 Fix 404: habits page is /habits.tsx
-  const habitHref = `/habits?date=${selectedDateKey}`;
+  const habitHref = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
 
   const accentMicro = "#ff8a2a";
