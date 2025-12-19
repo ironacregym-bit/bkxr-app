@@ -481,8 +481,8 @@ body::before {
   --bs-body-font-size: 1rem;
   --bs-body-font-weight: 400;
   --bs-body-line-height: 1.5;
-  --bs-body-color: #aaa;
-  --bs-body-color-rgb: 170, 170, 170;
+  --bs-body-color: #fff;
+  --bs-body-color-rgb: 255, 255, 255;
   --bs-body-bg: #0E0D10;
   --bs-body-bg-rgb: 39, 43, 48;
   --bs-emphasis-color: #000;
