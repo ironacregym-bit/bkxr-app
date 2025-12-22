@@ -8,49 +8,52 @@ import BottomNav from "../components/BottomNav";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-// Types align with your mixed sources (Sheets + Firestore API)
+// Matches your API response
 type Exercise = {
-  id?: string;
-  exercise_id?: string;
-  ExerciseID?: string;
-  name?: string;
-  Name?: string;
-  type?: string;
-  Type?: string;
-  equipment?: string;
-  Equipment?: string;
-  video_url?: string;
-  VideoURL?: string;
-  met_value?: number;
-  MET?: number;
-  description?: string;
+  id: string;
+  exercise_name: string;
+  type: string;
+  equipment: string;
+  video_url: string;
+  met_value: number | null;
 };
 
 const ACCENT = "#FF8A2A";
 
 export default function ExercisesPage() {
+  // Filters you requested
   const TYPES = ["All", "Boxing", "Kettlebell", "Warm up", "Mobility", "Weights", "Bodyweight"] as const;
   const [activeType, setActiveType] = useState<(typeof TYPES)[number]>("All");
   const [query, setQuery] = useState("");
 
-  const apiUrl = useMemo(() => {
-    const params = new URLSearchParams();
-    if (activeType !== "All") params.set("type", activeType);
-    if (query.trim().length > 1) params.set("query", query.trim());
-    const qs = params.toString();
-    return qs ? `/api/exercises?${qs}` : "/api/exercises";
-  }, [activeType, query]);
-
-  const { data, error, isLoading } = useSWR(apiUrl, fetcher, {
+  // Fetch once (large limit, then filter client-side)
+  const { data, error, isLoading } = useSWR("/api/exercises?limit=1000", fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
   });
 
-  const items: Exercise[] = useMemo(() => {
-    const src = data?.results || data?.items || data?.exercises || data;
-    const arr = Array.isArray(src) ? src : [];
-    return arr;
+  const allItems: Exercise[] = useMemo(() => {
+    const src = data?.exercises;
+    return Array.isArray(src) ? src : [];
   }, [data]);
+
+  // Client-side filtering by type + query
+  const items: Exercise[] = useMemo(() => {
+    const byType =
+      activeType === "All"
+        ? allItems
+        : allItems.filter((e) => (e.type || "").toLowerCase() === activeType.toLowerCase());
+
+    const q = query.trim().toLowerCase();
+    if (!q || q.length < 2) return byType;
+
+    return byType.filter((e) => {
+      const name = (e.exercise_name || "").toLowerCase();
+      const t = (e.type || "").toLowerCase();
+      const eq = (e.equipment || "").toLowerCase();
+      return name.includes(q) || t.includes(q) || eq.includes(q);
+    });
+  }, [allItems, activeType, query]);
 
   return (
     <>
@@ -64,13 +67,8 @@ export default function ExercisesPage() {
           <div className="d-flex gap-2">
             <Link
               href="/train"
-              className="btn btn-sm"
-              style={{
-                borderRadius: 24,
-                color: "#0b0f14",
-                background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
-                boxShadow: `0 0 12px ${ACCENT}66`,
-              }}
+              className="btn btn-bxkr-outline btn-sm"
+              aria-label="Back to Train"
             >
               Back to Train
             </Link>
@@ -79,6 +77,7 @@ export default function ExercisesPage() {
 
         {/* Filters + Search */}
         <div className="bxkr-card p-3 mb-3">
+          {/* Type chips */}
           <div className="d-flex flex-wrap gap-2 mb-2">
             {TYPES.map((t) => (
               <button
@@ -95,18 +94,19 @@ export default function ExercisesPage() {
               </button>
             ))}
           </div>
+
+          {/* Search */}
           <div className="d-flex gap-2">
             <input
               className="form-control"
               placeholder="Search exercises…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search exercises by name, type or equipment"
             />
             <button
               className="btn btn-bxkr-outline"
-              onClick={() => {
-                setQuery("");
-              }}
+              onClick={() => setQuery("")}
             >
               Clear
             </button>
@@ -122,13 +122,12 @@ export default function ExercisesPage() {
 
         <div className="row g-3">
           {items.map((ex) => {
-            const id =
-              ex.id ?? ex.exercise_id ?? ex.ExerciseID ?? ex.Name ?? ex.name ?? "";
-            const name = ex.name ?? ex.Name ?? "Unnamed";
-            const type = ex.type ?? ex.Type ?? "Uncategorised";
-            const equipment = ex.equipment ?? ex.Equipment ?? "";
-            const met = ex.met_value ?? ex.MET ?? null;
-            const video = ex.video_url ?? ex.VideoURL ?? "";
+            const id = ex.id;
+            const name = ex.exercise_name || "Unnamed";
+            const type = ex.type || "Uncategorised";
+            const equipment = ex.equipment || "";
+            const met = ex.met_value;
+            const video = ex.video_url || "";
 
             return (
               <div className="col-12" key={id}>
@@ -152,6 +151,9 @@ export default function ExercisesPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* If you have a detail page /exercises/[id], keep this.
+                      Otherwise you can remove it or point to the video. */}
                   <Link
                     href={`/exercises/${encodeURIComponent(String(id))}`}
                     className="btn btn-sm"
