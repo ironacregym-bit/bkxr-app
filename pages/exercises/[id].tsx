@@ -23,6 +23,19 @@ type Exercise = {
 
 export default function ExerciseDetailPage() {
   const router = useRouter();
+
+  // ✅ Guard: during prerender router is not ready; avoid reading query/id
+  if (!router.isReady) {
+    return (
+      <>
+        <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff" }}>
+          <div className="bxkr-card p-3 mb-3">Loading…</div>
+        </main>
+        <BottomNav />
+      </>
+    );
+  }
+
   const { id } = router.query as { id?: string };
 
   // Fetch all then find by id (no schema change, no new API)
@@ -37,14 +50,22 @@ export default function ExerciseDetailPage() {
   }, [data]);
 
   const exercise: Exercise | null = useMemo(() => {
-    if (!id) return null;
-    // Try match by id first
-    const byId = allItems.find((e) => String(e.id) === String(id));
+    // ✅ Guard id strictly
+    if (!id || typeof id !== "string") return null;
+    const safeId = String(id);
+
+    // Try match by Firestore doc id first
+    const byId = allItems.find((e) => String(e.id) === safeId);
     if (byId) return byId;
-    // Fallback: match by exercise_name slug
-    const byName = allItems.find(
-      (e) => encodeURIComponent(String(e.exercise_name || "")).toLowerCase() === String(id).toLowerCase()
-    );
+
+    // Fallback: match by exercise_name (slug-like, but we compare exact encodeURIComponent)
+    // ✅ Guard strings to avoid null/undefined methods
+    const byName = allItems.find((e) => {
+      const name = e?.exercise_name ?? "";
+      const enc = encodeURIComponent(name);
+      return enc.toLowerCase() === safeId.toLowerCase();
+    });
+
     return byName || null;
   }, [allItems, id]);
 
@@ -60,8 +81,8 @@ export default function ExerciseDetailPage() {
           <div className="d-flex gap-2">
             <Link
               href="/exercises"
-              className="btn btn-bxkr-outline"
-              aria-label="Back to Exercise Library"
+              className="btn btn-bxkr-outline btn-sm"
+              style={{ borderRadius: 24 }}
             >
               Back
             </Link>
@@ -80,7 +101,7 @@ export default function ExerciseDetailPage() {
           <div className="bxkr-card p-3">
             <div className="d-flex align-items-start justify-content-between">
               <div className="me-3">
-                <div className="fw-semibold h5 mb-1">{exercise.exercise_name}</div>
+                <div className="fw-semibold h5 mb-1">{exercise.exercise_name || "Unnamed"}</div>
                 <div className="small text-dim">
                   {(exercise.type || "Uncategorised")}{" "}
                   {exercise.equipment ? `• ${exercise.equipment}` : ""}{" "}
@@ -116,9 +137,9 @@ export default function ExerciseDetailPage() {
             </div>
           </div>
         )}
-      </main>
+           </main>
 
-       <BottomNav />
+      <BottomNav />
     </>
   );
 }
