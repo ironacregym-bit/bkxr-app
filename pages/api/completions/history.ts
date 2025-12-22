@@ -76,7 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const history = ranged.slice(0, n);
 
     // Cache a bit for snappy UI while revalidating
-    res.setHeader("Cache-Control", "private, max-age=15, stale-while-re    res.setHeader("Cache-Control", "private, max-age=15, stale-while-revalidate=30");
+    res.setHeader("Cache-Control", "private, max-age=15, stale-while-revalidate=30");
 
     // Return both keys:
     // - results: what Train page expects
