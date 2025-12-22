@@ -77,10 +77,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? styleStr.toUpperCase()
           : styleStr; // allow custom strings, but normalise common values
 
+
       const rounds =
         v.rounds_completed != null && Number.isFinite(Number(v.rounds_completed))
-          ? Math.max(0, Math.floor(Number(v.round          ? Math.max(0, Math.floor(Number(v.rounds_completed)))
+          ? Math.max(0, Math.floor(Number(v.rounds_completed)))
           : undefined;
+
 
       const weight =
         v.weight_kg != null && Number.isFinite(Number(v.weight_kg))
