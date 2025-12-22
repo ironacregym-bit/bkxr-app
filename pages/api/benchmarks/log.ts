@@ -139,7 +139,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await ref.set({
       user_email: userEmail,
       workout_id: String(workout_id),
-      ...updateData      ...updateData,
+      ...updateData
       created_at: now,
     });
 
