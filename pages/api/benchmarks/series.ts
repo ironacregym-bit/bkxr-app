@@ -117,7 +117,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({ results });
   } catch (err: any) {
-    console.error("[benchmarks/series] error:",    console.error("[benchmarks/series] error:", err?.message || err);
+    console.error("[benchmarks/series] error:", err?.message || err);
     return res.status(500).json({ error: "Failed to build benchmark series" });
   }
 }
