@@ -13,18 +13,27 @@ const ACCENT = "#FF8A2A";
 
 type Exercise = {
   id: string;
-  exercise_name: string;
-  type: string;
-  equipment: string;
-  video_url: string;
+  exercise_name: string | null;
+  type: string | null;
+  equipment: string | null;
+  video_url: string | null;
   met_value: number | null;
   description?: string | null;
 };
 
+function isHttpUrl(s: unknown): s is string {
+  if (typeof s !== "string") return false;
+  const trimmed = s.trim();
+  if (!trimmed) return false;
+  // Avoid calling startsWith on null/undefined; we’re already ensuring string here.
+  const lower = trimmed.toLowerCase();
+  return lower.startsWith("http://") || lower.startsWith("https://");
+}
+
 export default function ExerciseDetailPage() {
   const router = useRouter();
 
-  // ✅ Guard: during prerender router is not ready; avoid reading query/id
+  // During prerender/initial load, router.query isn't ready yet
   if (!router.isReady) {
     return (
       <>
@@ -37,37 +46,63 @@ export default function ExerciseDetailPage() {
   }
 
   const { id } = router.query as { id?: string };
+  const safeRouteId = typeof id === "string" ? id : "";
 
-  // Fetch all then find by id (no schema change, no new API)
+  // Fetch all exercises once (no schema change, no new API)
   const { data, error, isLoading } = useSWR("/api/exercises?limit=1000", fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
   });
 
+  // Normalise and filter bad entries defensively
   const allItems: Exercise[] = useMemo(() => {
     const src = data?.exercises;
-    return Array.isArray(src) ? src : [];
+    if (!Array.isArray(src)) return [];
+    // Filter out nullish entries and coerce fields safely
+    return src
+      .filter((x: any) => x && typeof x === "object")
+      .map((x: any) => ({
+        id: String(x.id ?? ""),
+        exercise_name: (x.exercise_name ?? null) as string | null,
+        type: (x.type ?? null) as string | null,
+        equipment: (x.equipment ?? null) as string | null,
+        video_url: (x.video_url ?? null) as string | null,
+        met_value:
+          typeof x.met_value === "number" ? x.met_value :
+          x.met_value == null ? null :
+          Number.isFinite(Number(x.met_value)) ? Number(x.met_value) : null,
+        description: (x.description ?? null) as string | null,
+      }));
   }, [data]);
 
+  // Find exercise by id (doc id) then fallback to slug of name
   const exercise: Exercise | null = useMemo(() => {
-    // ✅ Guard id strictly
-    if (!id || typeof id !== "string") return null;
-    const safeId = String(id);
+    if (!safeRouteId) return null;
 
-    // Try match by Firestore doc id first
-    const byId = allItems.find((e) => String(e.id) === safeId);
+    // 1) Exact match by doc id
+    const byId = allItems.find((e) => String(e.id) === safeRouteId);
     if (byId) return byId;
 
-    // Fallback: match by exercise_name (slug-like, but we compare exact encodeURIComponent)
-    // ✅ Guard strings to avoid null/undefined methods
-    const byName = allItems.find((e) => {
-      const name = e?.exercise_name ?? "";
+    // 2) Fallback match by encoded exercise_name
+    const matchByName = allItems.find((e) => {
+      const name = String(e?.exercise_name || "");
+      if (!name) return false;
       const enc = encodeURIComponent(name);
-      return enc.toLowerCase() === safeId.toLowerCase();
+      return enc.toLowerCase() === safeRouteId.toLowerCase();
     });
 
-    return byName || null;
-  }, [allItems, id]);
+    return matchByName || null;
+  }, [allItems, safeRouteId]);
+
+  const name = String(exercise?.exercise_name || "Unnamed");
+  const type = String(exercise?.type || "Uncategorised");
+  const equipment = String(exercise?.equipment || "");
+  const met = exercise?.met_value;
+  const video = exercise?.video_url && typeof exercise.video_url === "string"
+    ? exercise.video_url.trim()
+    : "";
+
+  const showVideo = isHttpUrl(video);
 
   return (
     <>
@@ -81,8 +116,8 @@ export default function ExerciseDetailPage() {
           <div className="d-flex gap-2">
             <Link
               href="/exercises"
-              className="btn btn-bxkr-outline btn-sm"
-              style={{ borderRadius: 24 }}
+              className="btn btn-bxkr-outline"
+              aria-label="Back to exercise library"
             >
               Back
             </Link>
@@ -101,11 +136,9 @@ export default function ExerciseDetailPage() {
           <div className="bxkr-card p-3">
             <div className="d-flex align-items-start justify-content-between">
               <div className="me-3">
-                <div className="fw-semibold h5 mb-1">{exercise.exercise_name || "Unnamed"}</div>
+                <div className="fw-semibold h5 mb-1">{name}</div>
                 <div className="small text-dim">
-                  {(exercise.type || "Uncategorised")}{" "}
-                  {exercise.equipment ? `• ${exercise.equipment}` : ""}{" "}
-                  {exercise.met_value != null ? `• MET ${exercise.met_value}` : ""}
+                  {type}{equipment ? ` • ${equipment}` : ""}{met != null ? ` • MET ${met}` : ""}
                 </div>
                 {exercise.description && (
                   <div className="mt-2">{exercise.description}</div>
@@ -113,9 +146,9 @@ export default function ExerciseDetailPage() {
               </div>
 
               <div className="text-end">
-                {exercise.video_url ? (
+                {showVideo ? (
                   <a
-                    href={exercise.video_url}
+                    href={video}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn btn-sm"
@@ -137,7 +170,7 @@ export default function ExerciseDetailPage() {
             </div>
           </div>
         )}
-           </main>
+      </main>
 
       <BottomNav />
     </>
