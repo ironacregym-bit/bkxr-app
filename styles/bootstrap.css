@@ -363,7 +363,8 @@ body::before {
 /* CTAs group */
 .session-actions{ display:flex; gap:.5rem; align-items:center; }
 .session-actions .btn-bxkr{ min-width:88px; }
-.session-actions .btn-bxkr-outline{ min-width:88px.session-actions .btn-bxkr-outline{ min-width:88px; }
+.session-actions .btn-bxkr-outline{ min-width:88px; }
+.session-actions .btn-bxkr-outline{ min-width:88px; }
 
 /* BottomNav safe area */
 @supports(padding:max(0px)){
