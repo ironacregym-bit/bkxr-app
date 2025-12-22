@@ -71,6 +71,41 @@ export default function NutritionPage() {
   const [usingServing, setUsingServing] = useState<"per100" | "serving">("per100");
   const [adding, setAdding] = useState(false);
 
+  // Favourites (localStorage, per-user)
+  const [favourites, setFavourites] = useState<Food[]>([]);
+  const favKey = useMemo(
+    () => (session?.user?.email ? `bxkr:favs:${session.user.email}` : `bxkr:favs:anon`),
+    [session?.user?.email]
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(favKey);
+      setFavourites(raw ? JSON.parse(raw) : []);
+    } catch {
+      setFavourites([]);
+    }
+  }, [favKey]);
+
+  const isFavourite = (food: Food | null) => {
+    if (!food) return false;
+    return favourites.some((f) => f.id === food.id || (food.code && f.code === food.code));
+  };
+  const saveFavourites = (arr: Food[]) => {
+    setFavourites(arr);
+    try {
+      localStorage.setItem(favKey, JSON.stringify(arr));
+    } catch {}
+  };
+  const toggleFavourite = (food: Food) => {
+    const exists = isFavourite(food);
+    const next = exists
+      ? favourites.filter((f) => f.id !== food.id && f.code !== food.code)
+      : [{ ...food }, ...favourites].slice(0, 30); // cap to 30
+    saveFavourites(next);
+  };
+
   // Scanner state
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -86,12 +121,14 @@ export default function NutritionPage() {
 
   // Logs
   const { data: logsData } = useSWR(
-    session?.user?.email ? `/api/nutrition/logs?date=${formattedDate}` : null, fetcher
+    session?.user?.email ? `/api/nutrition/logs?date=${formattedDate}` : null,
+    fetcher
   );
 
   // Profile goals
   const { data: profile } = useSWR(
-    session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email)}` : null, fetcher
+    session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email)}` : null,
+    fetcher
   );
   const goals = {
     calories: profile?.caloric_target || 2000,
@@ -153,13 +190,11 @@ export default function NutritionPage() {
   );
   useEffect(() => { doSearch(query); }, [query, doSearch]);
 
-  // Utility to extract grams from strings like "30 g", "1 bar (45 g)"
+  // Utility: extract grams from serving string
   function extractGramAmount(text?: string | null): number | null {
     if (!text) return null;
     const match = text.match(/(\d+(?:\.\d+)?)\s*g/i) || text.match(/\((\d+(?:\.\d+)?)\s*g\)/i);
-    if (match && match[1]) return Number(match[1]);
-    return null;
-    // Note: if OFF gives serving macros directly, we won't rely on this for macros — only to prefill grams.
+    return match && match[1] ? Number(match[1]) : null;
   }
 
   // Compute scaled nutrition for the current selection
@@ -182,8 +217,6 @@ export default function NutritionPage() {
           fat: +(Number(selectedFood.fatPerServing ?? 0)).toFixed(2),
         };
       }
-
-      // Fallback: if OFF didn’t provide per-serving macros, estimate via grams extracted
       const servingGrams = extractGramAmount(selectedFood.servingSize) ?? grams;
       const factor = servingGrams / 100;
       return {
@@ -195,7 +228,6 @@ export default function NutritionPage() {
       };
     }
 
-    // Per 100g scaled by grams
     const factor = grams / 100;
     return {
       ...selectedFood,
@@ -253,11 +285,11 @@ export default function NutritionPage() {
 
   const removeEntry = async (id: string) => {
     if (!confirm("Remove this entry?")) return;
-    await fetch(`/api/nutrition/logs?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    await fetch(`/api/nutrition/logs?id=${encodeURIComponent(id)}&date=${formattedDate}`, { method: "DELETE" });
     mutate(`/api/nutrition/logs?date=${formattedDate}`);
   };
 
-  // ===== Scanner (same as your fixed version, with small helpers) =====
+  // ===== Scanner =====
   const openScanner = async () => {
     setScannerOpen(true);
     setScanError(null);
@@ -279,9 +311,7 @@ export default function NutritionPage() {
     setScanError(null);
     setLookupLoading(false);
     scannedOnce.current = false;
-    try {
-      if (codeReaderRef.current) codeReaderRef.current.reset();
-    } catch {}
+    try { if (codeReaderRef.current) codeReaderRef.current.reset(); } catch {}
     stopTracks();
   };
 
@@ -368,9 +398,9 @@ export default function NutritionPage() {
       setResults([found]);
       setSelectedFood(found);
       setQuery(found.name || found.code || "");
-      setUsingServing("per100"); // default to per 100 g
+      setUsingServing("per100");
       const g = extractGramAmount(found.servingSize);
-      setGrams(g ?? 100);        // prefill grams if we can parse serving
+      setGrams(g ?? 100);
       setLookupResult(found);
       setLookupLoading(false);
       setOpenMeal((prev) => prev || "Breakfast");
@@ -445,6 +475,26 @@ export default function NutritionPage() {
             { calories: 0, protein: 0, carbs: 0, fat: 0 }
           );
 
+          const favouriteStrip =
+            favourites.length > 0 && (
+              <div className="mb-2" style={{ overflowX: "auto", whiteSpace: "nowrap" }}>
+                {favourites.map((fav) => (
+                  <button
+                    key={fav.id ?? fav.code ?? fav.name}
+                    className="bxkr-chip me-1"
+                    onClick={() => {
+                      setSelectedFood(fav);
+                      setUsingServing("per100");
+                      const g = extractGramAmount(fav.servingSize);
+                      setGrams(g ?? 100);
+                    }}
+                  >
+                    ⭐ {fav.name}
+                  </button>
+                ))}
+              </div>
+            );
+
           return (
             <div key={meal} className="mb-3">
               <button
@@ -461,8 +511,16 @@ export default function NutritionPage() {
 
               {isOpen && (
                 <div className="px-2">
+                  {/* Favourites strip */}
+                  {favouriteStrip}
+
                   <div className="d-flex gap-2 mb-2">
-                    <input className="form-control" placeholder={`Search foods for ${meal}…`} value={query} onChange={(e) => setQuery(e.target.value)} />
+                    <input
+                      className="form-control"
+                      placeholder={`Search foods for ${meal}…`}
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
                     <button className="btn btn-bxkr" onClick={openScanner}>Scan barcode</button>
                   </div>
 
@@ -479,6 +537,8 @@ export default function NutritionPage() {
                       setUsingServing={setUsingServing}
                       scaledSelected={scaledSelected}
                       addEntry={addEntry}
+                      isFavourite={isFavourite(selectedFood)}
+                      onToggleFavourite={() => toggleFavourite(selectedFood)}
                     />
                   )}
 
@@ -495,10 +555,12 @@ export default function NutritionPage() {
                             setUsingServing={setUsingServing}
                             scaledSelected={scaledSelected}
                             addEntry={addEntry}
+                            isFavourite={isFavourite(selectedFood)}
+                            onToggleFavourite={() => toggleFavourite(selectedFood!)}
                           />
                         ) : (
-                          <button
-                            className="list-group-item list-group-item-action"
+                          <div
+                            className="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
                             style={{ background: "rgba(255,255,255,0.05)", color: "#fff" }}
                             onClick={() => {
                               setSelectedFood(f);
@@ -507,8 +569,16 @@ export default function NutritionPage() {
                               setGrams(g ?? 100);
                             }}
                           >
-                            {f.name} ({f.brand}) — {round2(f.calories)} kcal/100g
-                          </button>
+                            <span>{f.name} ({f.brand}) — {round2(f.calories)} kcal/100g</span>
+                            <button
+                              type="button"
+                              className="btn btn-link p-0 ms-2"
+                              onClick={(ev) => { ev.stopPropagation(); toggleFavourite(f); }}
+                              title={isFavourite(f) ? "Unfavourite" : "Favourite"}
+                            >
+                              <i className={isFavourite(f) ? "fas fa-star text-warning" : "far fa-star text-dim"} />
+                            </button>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -538,7 +608,17 @@ export default function NutritionPage() {
                   {mealEntries.map((e: any) => (
                     <div key={e.id} className="bxkr-card p-3 mb-2 d-flex justify-content-between align-items-center">
                       <div>
-                        <div className="fw-bold">{e.food.name} ({e.food.brand})</div>
+                        <div className="fw-bold d-flex align-items-center">
+                          {e.food.name} ({e.food.brand})
+                          <button
+                            type="button"
+                            className="btn btn-link p-0 ms-2"
+                            onClick={() => toggleFavourite(e.food)}
+                            title={isFavourite(e.food) ? "Unfavourite" : "Favourite"}
+                          >
+                            <i className={isFavourite(e.food) ? "fas fa-star text-warning" : "far fa-star text-dim"} />
+                          </button>
+                        </div>
                         <div className="small text-dim">{e.grams} g</div>
                         <div className="small">
                           <span style={{ color: COLORS.calories }}>{round2(e.calories)} kcal</span>{" "}
@@ -547,7 +627,9 @@ export default function NutritionPage() {
                           | <span style={{ color: COLORS.fat }}>{round2(e.fat)}f</span>
                         </div>
                       </div>
-                      <button className="btn btn-link text-danger" onClick={() => removeEntry(e.id)}>Remove</button>
+                      <button className="btn btn-link text-danger" onClick={() => removeEntry(e.id)}>
+                        Remove
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -592,7 +674,9 @@ export default function NutritionPage() {
                           {lookupResult.servingSize ? `Serving: ${lookupResult.servingSize}` : "Per 100 g"}
                         </div>
                       </div>
-                      <button className="btn btn-bxkr-outline" onClick={() => { closeScanner(); }}>Use this</button>
+                      <button className="btn btn-bxkr-outline" onClick={() => { closeScanner(); }}>
+                        Use this
+                      </button>
                     </div>
                   </div>
                 )}
@@ -618,7 +702,7 @@ export default function NutritionPage() {
   );
 }
 
-/** Compact editor card, mobile-friendly */
+/** Compact editor card, mobile-friendly, with favourite toggle */
 function FoodEditor({
   meal,
   food,
@@ -628,6 +712,8 @@ function FoodEditor({
   setUsingServing,
   scaledSelected,
   addEntry,
+  isFavourite,
+  onToggleFavourite,
 }: {
   meal: string;
   food: Food;
@@ -637,6 +723,8 @@ function FoodEditor({
   setUsingServing: (v: "per100" | "serving") => void;
   scaledSelected: any;
   addEntry: (meal: string, food: Food) => void;
+  isFavourite: boolean;
+  onToggleFavourite: () => void;
 }) {
   const hasServing = !!food.servingSize;
   const servingLabel = hasServing ? `1 serving (${food.servingSize})` : undefined;
@@ -653,7 +741,6 @@ function FoodEditor({
             value={grams}
             onChange={(e) => {
               const v = Number(e.target.value);
-              // Switch to per100 scaling if user edits grams manually
               setUsingServing("per100");
               setGrams(Number.isFinite(v) ? Math.max(0, v) : 0);
             }}
@@ -669,11 +756,8 @@ function FoodEditor({
                 const mode = e.target.value === "serving" ? "serving" : "per100";
                 setUsingServing(mode as "per100" | "serving");
                 if (mode === "serving") {
-                  // Prefill grams from serving string if possible
-                  const gramsFromServing = (() => {
-                    const match = (food.servingSize || "").match(/(\d+(?:\.\d+)?)\s*g/i) || (food.servingSize || "").match(/\((\d+(?:\.\d+)?)\s*g\)/i);
-                    return match && match[1] ? Number(match[1]) : null;
-                  })();
+                  const match = (food.servingSize || "").match(/(\d+(?:\.\d+)?)\s*g/i) || (food.servingSize || "").match(/\((\d+(?:\.\d+)?)\s*g\)/i);
+                  const gramsFromServing = match && match[1] ? Number(match[1]) : null;
                   if (gramsFromServing != null) setGrams(gramsFromServing);
                 }
               }}
@@ -693,9 +777,19 @@ function FoodEditor({
         <span style={{ color: COLORS.fat }}>{round2(scaledSelected?.fat)}f</span>
       </div>
 
-      <button className="btn btn-bxkr w-100 mb-2" onClick={() => addEntry(meal, food)}>
-        Add to {meal}
-      </button>
+      <div className="d-flex gap-2 mb-2">
+        <button className="btn btn-bxkr w-100" onClick={() => addEntry(meal, food)}>
+          Add to {meal}
+        </button>
+        <button
+          type="button"
+          className="btn btn-bxkr-outline"
+          onClick={onToggleFavourite}
+          title={isFavourite ? "Unfavourite" : "Favourite"}
+        >
+          <i className={isFavourite ? "fas fa-star text-warning" : "far fa-star"} />
+        </button>
+      </div>
 
       <div className="fw-bold">{food.name} ({food.brand}) — {round2(food.calories)} kcal/100g</div>
       {hasServing && (
@@ -707,4 +801,3 @@ function FoodEditor({
     </div>
   );
 }
-
