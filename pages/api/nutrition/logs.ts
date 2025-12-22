@@ -1,3 +1,4 @@
+
 import { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]";
@@ -31,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const payload = {
       food: body.food,
       grams: Number(body.grams || 100),
-      portionLabel: body.portionLabel || null, // e.g., "1 medium"
+      portionLabel: body.portionLabel || null,
       meal: body.meal || "Other",
       calories: Number(body.calories || 0),
       protein: Number(body.protein || 0),
@@ -52,14 +53,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === "DELETE") {
     const id = req.query.id as string;
+    const date = (req.query.date as string) || todayKey;
     if (!id) return res.status(400).json({ error: "Missing id" });
 
-    // check today's collection
-    const docRef = firestore.collection("nutrition_logs").doc(userEmail).collection(todayKey).doc(id);
+    const docRef = firestore
+      .collection("nutrition_logs")
+      .doc(userEmail)
+      .collection(date)
+      .doc(id);
+
     await docRef.delete();
     return res.json({ ok: true });
   }
 
-  res.setHeader("Allow", ["GET", "POST", "DELETE"]);
-  res.status(405).end(`Method ${req.method} Not Allowed`);
+  res.setHeader("Allow", "GET, POST, DELETE");
+  return res.status(405).end(`Method ${req.method  return res.status(405).end(`Method ${req.method} Not Allowed`);
 }
