@@ -7,7 +7,6 @@ import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 import { toMillis } from "../lib/time";
 
-// generic fetcher
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 type Gym = {
@@ -20,8 +19,8 @@ type SessionItem = {
   id: string;
   class_id: string;
   coach_name?: string;
-  start_time: string | number | null; // ISO string from API or millis
-  end_time: string | number | null;   // ISO string from API or millis
+  start_time: string | number | null;
+  end_time: string | number | null;
   price: number;
   max_attendance: number;
   current_attendance: number;
@@ -30,28 +29,23 @@ type SessionItem = {
 };
 
 export default function SchedulePage() {
-  const { data: session } = useSession();
+  const { data: authSession } = useSession();
 
-  // Gym selection
+  // Gyms
   const { data: gymsResp, error: gymsError } = useSWR("/api/gyms/list", fetcher);
   const gyms: Gym[] = gymsResp?.gyms ?? [];
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
-
-  // Month selection
-  const today = new Date();
-  const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth()); // 0..11
-
-  // Derive selected gym details
   const selectedGym = useMemo(
     () => gyms.find((g) => g.id === selectedGymId) || null,
     [gyms, selectedGymId]
   );
 
-  // Month boundaries
+  // Month navigation
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth()); // 0..11
   const monthStart = useMemo(() => new Date(year, month, 1, 0, 0, 0, 0), [year, month]);
   const monthEnd = useMemo(() => new Date(year, month + 1, 0, 23, 59, 59, 999), [year, month]);
-
   const monthLabel = useMemo(
     () =>
       monthStart.toLocaleString(undefined, {
@@ -60,7 +54,6 @@ export default function SchedulePage() {
       }),
     [monthStart]
   );
-
   function prevMonth() {
     const d = new Date(year, month, 1);
     d.setMonth(d.getMonth() - 1);
@@ -74,20 +67,22 @@ export default function SchedulePage() {
     setMonth(d.getMonth());
   }
 
-  // Sessions for the selected month and gym location
+  // Sessions for selected gym/location in month range
   const fromISO = monthStart.toISOString();
   const toISO = monthEnd.toISOString();
-
   const shouldLoadSessions = Boolean(selectedGym?.location);
-  const { data: sessionsResp, error: sessionsError, isLoading: sessionsLoading } = useSWR(
+  const {
+    data: sessionsResp,
+    error: sessionsError,
+    isLoading: sessionsLoading,
+  } = useSWR(
     shouldLoadSessions
-      ? `/api/schedule/upcoming?location=${encodeURIComponent(selectedGym!.location)}&from=${encodeURIComponent(
-          fromISO
-        )}&to=${encodeURIComponent(toISO)}`
+      ? `/api/schedule/upcoming?location=${encodeURIComponent(
+          selectedGym!.location
+        )}&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`
       : null,
     fetcher
   );
-
   const sessions: SessionItem[] = sessionsResp?.sessions ?? [];
 
   // Group sessions by YYYY-MM-DD
@@ -98,29 +93,35 @@ export default function SchedulePage() {
       if (!ms) continue;
       const d = new Date(ms);
       const key = d.toISOString().slice(0, 10);
-      if (!map[key]) map[key] = [];
-      map[key].push(s);
+      (map[key] ??= []).push(s);
     }
     return map;
   }, [sessions]);
 
-  // Calendar cells (with leading blanks)
-  const firstWeekday = monthStart.getDay(); // 0 Sunday .. 6 Saturday
+  // Calendar cells (include leading blanks)
+  const firstWeekday = monthStart.getDay(); // 0 Sun .. 6 Sat
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cellKeys = useMemo(() => {
-    const blanks = Array.from({ length: firstWeekday }, (_, i) => `blank-${i}`);
-    const days = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
+  type Cell = { key: string; blank: boolean; day?: number; ymd?: string; isToday?: boolean; count?: number };
+  const cells: Cell[] = useMemo(() => {
+    const blanks: Cell[] = Array.from({ length: firstWeekday }, (_, i) => ({ key: `blank-${i}`, blank: true }));
+    const days: Cell[] = Array.from({ length: daysInMonth }, (_, i) => {
+      const dayNum = i + 1;
+      const date = new Date(year, month, dayNum);
+      const ymd = date.toISOString().slice(0, 10);
+      const count = (sessionsByDay[ymd] || []).length;
+      const isToday = date.toDateString() === new Date().toDateString();
+      return { key: `d-${ymd}`, blank: false, day: dayNum, ymd, isToday, count };
+    });
     return [...blanks, ...days];
-  }, [firstWeekday, daysInMonth]);
+  }, [firstWeekday, daysInMonth, year, month, sessionsByDay]);
 
-  // Day selection (opens the session list)
-  const [activeDay, setActiveDay] = useState<string | null>(null); // "YYYY-MM-DD"
+  // Day panel
+  const [activeDay, setActiveDay] = useState<string | null>(null);
   useEffect(() => {
-    // reset active day when month/gym changes
     setActiveDay(null);
   }, [year, month, selectedGymId]);
 
-  // Booking state
+  // Actions
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [sharing, setSharing] = useState<{ message: string; link: string } | null>(null);
@@ -131,8 +132,7 @@ export default function SchedulePage() {
       setPending(session_id);
       setActionErr(null);
       setActionMsg(null);
-      // Require sign-in
-      if (!session?.user?.email) {
+      if (!authSession?.user?.email) {
         await signIn("google");
         setPending(null);
         return;
@@ -173,7 +173,7 @@ export default function SchedulePage() {
     }
   }
 
-  // initial gym selection (first in list)
+  // Select first gym automatically
   useEffect(() => {
     if (!selectedGymId && gyms.length > 0) {
       setSelectedGymId(gyms[0].id);
@@ -182,11 +182,12 @@ export default function SchedulePage() {
 
   return (
     <>
-      <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff" }}>
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <button className="btn btn-bxkr-outline" onClick={prevMonth}>← Previous</button>
-          <h2 className="mb-0" style={{ fontWeight: 700 }}>Schedule — {monthLabel}</h2>
-          <button className="btn btn-bxkr-outline" onClick={nextMonth}>Next →</button>
+      <main className="container py-3 schedule-page" style={{ paddingBottom: "90px", color: "#fff" }}>
+        {/* Toolbar */}
+        <div className="schedule-toolbar">
+          <button className="btn btn-bxkr-outline" onClick={prevMonth} aria-label="Previous month">← Previous</button>
+          <h2 className="mb-0 month-title">Schedule — {monthLabel}</h2>
+          <button className="btn btn-bxkr-outline" onClick={nextMonth} aria-label="Next month">Next →</button>
         </div>
 
         {/* Gym selector */}
@@ -194,57 +195,47 @@ export default function SchedulePage() {
           <label className="form-label">Select gym</label>
           {gymsError && <div className="text-danger">Failed to load gyms.</div>}
           <select
-            className="form-select"
+            className="form-select gym-select"
             value={selectedGymId ?? ""}
             onChange={(e) => setSelectedGymId(e.target.value || null)}
+            aria-label="Select a gym that runs BXKR classes"
           >
             {gyms.length === 0 && <option value="">No gyms found</option>}
             {gyms.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name} — {g.location}
-              </option>
+              <option key={g.id} value={g.id}>{g.name} — {g.location}</option>
             ))}
           </select>
         </div>
 
         {/* Calendar */}
-        <div className="bxkr-card p-3 mb-3">
-          <div className="row row-cols-7 g-2 text-center mb-2">
+        <div className="schedule-calendar mb-3" role="grid" aria-label={`Calendar for ${monthLabel}`}>
+          <div className="calendar-weekdays">
             {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d) => (
-              <div key={d} className="col text-dim">{d}</div>
+              <div key={d} className="weekday">{d}</div>
             ))}
           </div>
-          <div className="row row-cols-7 g-2">
-            {cellKeys.map((key, idx) => {
-              if (key.startsWith("blank-")) {
-                return <div key={key} className="col" />;
-              }
-              const dayNum = Number(key);
-              const date = new Date(year, month, dayNum);
-              const ymd = date.toISOString().slice(0, 10);
-              const daySessions = sessionsByDay[ymd] || [];
-              const isToday =
-                date.toDateString() === new Date().toDateString();
-
+          <div className="calendar-grid">
+            {cells.map((cell) => {
+              if (cell.blank) return <div key={cell.key} />;
+              const isActive = cell.ymd === activeDay;
+              const classes = [
+                "calendar-day",
+                cell.isToday ? "today" : "",
+                isActive ? "active" : "",
+                (cell.count ?? 0) > 0 ? "has-sessions" : "",
+              ].join(" ").trim();
               return (
-                <div key={key} className="col">
-                  <button
-                    className="btn w-100"
-                    style={{
-                      borderRadius: "12px",
-                      background: "rgba(255,255,255,0.05)",
-                      color: "#fff",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      boxShadow: isToday ? "0 0 10px rgba(255,127,50,0.6)" : "none",
-                    }}
-                    onClick={() => setActiveDay(ymd)}
-                  >
-                    <div className="fw-bold">{dayNum}</div>
-                    <div className="small text-dim">
-                      {daySessions.length > 0 ? `${daySessions.length} session${daySessions.length > 1 ? "s" : ""}` : "—"}
-                    </div>
-                  </button>
-                </div>
+                <button
+                  key={cell.key}
+                  className={classes}
+                  onClick={() => setActiveDay(cell.ymd!)}
+                  aria-label={`${cell.ymd}: ${(cell.count ?? 0)} session${(cell.count ?? 0) > 1 ? "s" : ""}`}
+                >
+                  <div className="num">{cell.day}</div>
+                  <div className="meta">
+                    {(cell.count ?? 0) > 0 ? `${cell.count} session${(cell.count ?? 0) > 1 ? "s" : ""}` : "—"}
+                  </div>
+                </button>
               );
             })}
           </div>
@@ -252,9 +243,9 @@ export default function SchedulePage() {
 
         {/* Day detail panel */}
         {activeDay && (
-          <div className="bxkr-card p-3 mb-3">
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <h5 className="mb-0">Sessions on {activeDay}</h5>
+          <div className="bxkr-card p-3 day-panel">
+            <div className="panel-header">
+              <h5 className="mb-0 title">Sessions on {activeDay}</h5>
               <button className="btn btn-bxkr-outline" onClick={() => setActiveDay(null)}>Close</button>
             </div>
 
@@ -272,43 +263,45 @@ export default function SchedulePage() {
               const endStr = endMs ? new Date(endMs).toLocaleTimeString() : "";
 
               const full = s.max_attendance > 0 && s.current_attendance >= s.max_attendance;
+              const pct = s.max_attendance > 0
+                ? Math.min(100, Math.round((s.current_attendance / s.max_attendance) * 100))
+                : 0;
 
               return (
-                <div key={s.id} className="bxkr-card p-3 mb-2">
-                  <div className="d-flex justify-content-between align-items-center">
-                    <div className="me-2">
-                      <div className="fw-bold">{s.class_id} — {s.gym_name}</div>
-                      <div className="small text-dim">
-                        Coach: {s.coach_name || "TBC"} • {startStr}{endStr ? ` — ${endStr}` : ""}
-                      </div>
-                      <div className="small">
-                        Price: £{(s.price ?? 0).toFixed(2)} • Capacity: {s.current_attendance}/{s.max_attendance || "∞"}
-                      </div>
+                <div key={s.id} className="session-card">
+                  <div className="session-info">
+                    <div className="name">{s.class_id} — {s.gym_name}</div>
+                    <div className="sub">Coach: {s.coach_name || "TBC"} • {startStr}{endStr ? ` — ${endStr}` : ""}</div>
+                    <div className="session-meta">
+                      <span className="chip">£{(s.price ?? 0).toFixed(2)}</span>
+                      <span className="chip capacity">
+                        <span>{s.current_attendance}/{s.max_attendance || "∞"}</span>
+                        <span className="bar"><span style={{ width: `${pct}%` }} /></span>
+                      </span>
                     </div>
-                    <div className="d-flex gap-2">
-                      <button
-                        className="btn btn-bxkr"
-                        onClick={() => bookSession(s.id)}
-                        disabled={full || pending === s.id}
-                        title={full ? "Session is full" : "Book"}
-                      >
-                        {pending === s.id ? "Booking…" : full ? "Full" : "Book"}
-                      </button>
-                      <button
-                        className="btn btn-bxkr-outline"
-                        onClick={() => shareWhatsApp(s.id)}
-                        disabled={pending === s.id}
-                        title="Generate WhatsApp link"
-                      >
-                        Share
-                      </button>
-                    </div>
+                  </div>
+                  <div className="session-actions">
+                    <button
+                      className="btn btn-bxkr"
+                      onClick={() => bookSession(s.id)}
+                      disabled={full || pending === s.id}
+                      title={full ? "Session is full" : "Book"}
+                    >
+                      {pending === s.id ? "Booking…" : full ? "Full" : "Book"}
+                    </button>
+                    <button
+                      className="btn btn-bxkr-outline"
+                      onClick={() => shareWhatsApp(s.id)}
+                      disabled={pending === s.id}
+                      title="Generate WhatsApp link"
+                    >
+                      Share
+                    </button>
                   </div>
                 </div>
               );
             })}
 
-            {/* Action feedback */}
             {(actionMsg || actionErr || sharing) && (
               <div className="mt-2">
                 {actionMsg && <div className="pill-success mb-2">{actionMsg}</div>}
@@ -321,7 +314,6 @@ export default function SchedulePage() {
                       <button
                         className="btn btn-bxkr"
                         onClick={() => {
-                          // open WhatsApp with message prefilled
                           const url = `https://wa.me/?text=${encodeURIComponent(sharing.message)}`;
                           window.open(url, "_blank");
                         }}
@@ -345,5 +337,5 @@ export default function SchedulePage() {
 
       <BottomNav />
     </>
-   );
+  );
 }
