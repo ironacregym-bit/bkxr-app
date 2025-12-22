@@ -232,9 +232,6 @@ export default function SchedulePage() {
                   aria-label={`${cell.ymd}: ${(cell.count ?? 0)} session${(cell.count ?? 0) > 1 ? "s" : ""}`}
                 >
                   <div className="num">{cell.day}</div>
-                  <div className="meta">
-                    {(cell.count ?? 0) > 0 ? `${cell.count} session${(cell.count ?? 0) > 1 ? "s" : ""}` : "—"}
-                  </div>
                 </button>
               );
             })}
