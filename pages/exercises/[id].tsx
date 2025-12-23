@@ -1,6 +1,4 @@
-
 // pages/exercises/[id].tsx
-"use client";
 
 import { useMemo } from "react";
 import { useRouter } from "next/router";
@@ -25,7 +23,6 @@ function isHttpUrl(s: unknown): s is string {
   if (typeof s !== "string") return false;
   const trimmed = s.trim();
   if (!trimmed) return false;
-  // Avoid calling startsWith on null/undefined; we’re already ensuring string here.
   const lower = trimmed.toLowerCase();
   return lower.startsWith("http://") || lower.startsWith("https://");
 }
@@ -33,11 +30,14 @@ function isHttpUrl(s: unknown): s is string {
 export default function ExerciseDetailPage() {
   const router = useRouter();
 
-  // During prerender/initial load, router.query isn't ready yet
+  // Router not ready yet (client only)
   if (!router.isReady) {
     return (
       <>
-        <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff" }}>
+        <main
+          className="container py-3"
+          style={{ paddingBottom: "90px", color: "#fff" }}
+        >
           <div className="bxkr-card p-3 mb-3">Loading…</div>
         </main>
         <BottomNav />
@@ -48,97 +48,112 @@ export default function ExerciseDetailPage() {
   const { id } = router.query as { id?: string };
   const safeRouteId = typeof id === "string" ? id : "";
 
-  // Fetch all exercises once (no schema change, no new API)
-  const { data, error, isLoading } = useSWR("/api/exercises?limit=1000", fetcher, {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-  });
+  const { data, error, isLoading } = useSWR(
+    "/api/exercises?limit=1000",
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    }
+  );
 
-  // Normalise and filter bad entries defensively
   const allItems: Exercise[] = useMemo(() => {
     const src = data?.exercises;
     if (!Array.isArray(src)) return [];
-    // Filter out nullish entries and coerce fields safely
+
     return src
       .filter((x: any) => x && typeof x === "object")
       .map((x: any) => ({
         id: String(x.id ?? ""),
-        exercise_name: (x.exercise_name ?? null) as string | null,
-        type: (x.type ?? null) as string | null,
-        equipment: (x.equipment ?? null) as string | null,
-        video_url: (x.video_url ?? null) as string | null,
+        exercise_name: x.exercise_name ?? null,
+        type: x.type ?? null,
+        equipment: x.equipment ?? null,
+        video_url: x.video_url ?? null,
         met_value:
-          typeof x.met_value === "number" ? x.met_value :
-          x.met_value == null ? null :
-          Number.isFinite(Number(x.met_value)) ? Number(x.met_value) : null,
-        description: (x.description ?? null) as string | null,
+          typeof x.met_value === "number"
+            ? x.met_value
+            : Number.isFinite(Number(x.met_value))
+            ? Number(x.met_value)
+            : null,
+        description: x.description ?? null,
       }));
   }, [data]);
 
-  // Find exercise by id (doc id) then fallback to slug of name
   const exercise: Exercise | null = useMemo(() => {
     if (!safeRouteId) return null;
 
-    // 1) Exact match by doc id
-    const byId = allItems.find((e) => String(e.id) === safeRouteId);
+    // Match by ID
+    const byId = allItems.find((e) => e.id === safeRouteId);
     if (byId) return byId;
 
-    // 2) Fallback match by encoded exercise_name
-    const matchByName = allItems.find((e) => {
-      const name = String(e?.exercise_name || "");
-      if (!name) return false;
-      const enc = encodeURIComponent(name);
-      return enc.toLowerCase() === safeRouteId.toLowerCase();
-    });
-
-    return matchByName || null;
+    // Fallback: encoded name
+    return (
+      allItems.find((e) => {
+        const name = e.exercise_name;
+        if (!name) return false;
+        return (
+          encodeURIComponent(name).toLowerCase() ===
+          safeRouteId.toLowerCase()
+        );
+      }) || null
+    );
   }, [allItems, safeRouteId]);
 
-  const name = String(exercise?.exercise_name || "Unnamed");
-  const type = String(exercise?.type || "Uncategorised");
-  const equipment = String(exercise?.equipment || "");
+  const name = exercise?.exercise_name || "Unnamed";
+  const type = exercise?.type || "Uncategorised";
+  const equipment = exercise?.equipment || "";
   const met = exercise?.met_value;
-  const video = exercise?.video_url && typeof exercise.video_url === "string"
-    ? exercise.video_url.trim()
-    : "";
-
+  const video = exercise?.video_url?.trim() || "";
   const showVideo = isHttpUrl(video);
 
   return (
     <>
-      <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff" }}>
+      <main
+        className="container py-3"
+        style={{ paddingBottom: "90px", color: "#fff" }}
+      >
         {/* Header */}
         <div className="d-flex align-items-center justify-content-between mb-3">
           <div>
-            <h1 className="h4 mb-0" style={{ fontWeight: 700 }}>Exercise</h1>
-            <small className="text-dim">Details • Video • Equipment • MET</small>
+            <h1 className="h4 mb-0" style={{ fontWeight: 700 }}>
+              Exercise
+            </h1>
+            <small className="text-dim">
+              Details • Video • Equipment • MET
+            </small>
           </div>
-          <div className="d-flex gap-2">
-            <Link
-              href="/exercises"
-              className="btn btn-bxkr-outline"
-              aria-label="Back to exercise library"
-            >
-              Back
-            </Link>
-          </div>
+          <Link
+            href="/exercises"
+            className="btn btn-bxkr-outline"
+            aria-label="Back to exercise library"
+          >
+            Back
+          </Link>
         </div>
 
-        {/* Loading / Error / Not found */}
-        {isLoading && <div className="bxkr-card p-3 mb-3">Loading…</div>}
-        {error && <div className="bxkr-card p-3 mb-3 text-danger">Failed to load exercise.</div>}
+        {isLoading && (
+          <div className="bxkr-card p-3 mb-3">Loading…</div>
+        )}
+        {error && (
+          <div className="bxkr-card p-3 mb-3 text-danger">
+            Failed to load exercise.
+          </div>
+        )}
         {!isLoading && !error && !exercise && (
-          <div className="bxkr-card p-3 mb-3 text-dim">Exercise not found.</div>
+          <div className="bxkr-card p-3 mb-3 text-dim">
+            Exercise not found.
+          </div>
         )}
 
-        {/* Exercise Detail */}
         {exercise && (
           <div className="bxkr-card p-3">
             <div className="d-flex align-items-start justify-content-between">
               <div className="me-3">
                 <div className="fw-semibold h5 mb-1">{name}</div>
                 <div className="small text-dim">
-                  {type}{equipment ? ` • ${equipment}` : ""}{met != null ? ` • MET ${met}` : ""}
+                  {type}
+                  {equipment && ` • ${equipment}`}
+                  {met != null && ` • MET ${met}`}
                 </div>
                 {exercise.description && (
                   <div className="mt-2">{exercise.description}</div>
@@ -158,9 +173,8 @@ export default function ExerciseDetailPage() {
                       background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
                       boxShadow: `0 0 12px ${ACCENT}66`,
                     }}
-                    aria-label="Watch exercise video"
                   >
-                    <i className="fas fa-play-circle me-2" aria-hidden="true" />
+                    <i className="fas fa-play-circle me-2" />
                     Watch video
                   </a>
                 ) : (
@@ -175,4 +189,12 @@ export default function ExerciseDetailPage() {
       <BottomNav />
     </>
   );
+}
+
+/**
+ * 🔒 Force server-side rendering
+ * Prevents Next from prerendering this dynamic route at build time
+ */
+export async function getServerSideProps() {
+  return { props: {} };
 }
