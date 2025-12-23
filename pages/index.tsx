@@ -2,13 +2,15 @@ import Head from "next/head";
 import useSWR from "swr";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
+import type { GetServerSideProps, GetServerSidePropsContext } from "next";
+import { getSession } from "next-auth/react";
+
 import BottomNav from "../components/BottomNav";
 import AddToHomeScreen from "../components/AddToHomeScreen";
-import { getSession } from "next-auth/react";
-import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 import ChallengeBanner from "../components/ChallengeBanner";
 import DailyTasksCard from "../components/DailyTasksCard";
 
+/* -------------------- SSR AUTH -------------------- */
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
 ) => {
@@ -19,9 +21,8 @@ export const getServerSideProps: GetServerSideProps = async (
   return { props: {} };
 };
 
+/* -------------------- HELPERS -------------------- */
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
-
-/* ---------------- Date helpers ---------------- */
 
 function getWeek(): Date[] {
   const today = new Date();
@@ -36,27 +37,24 @@ function getWeek(): Date[] {
     return d;
   });
 }
-function formatYMD(d: Date) {
-  return d.toLocaleDateString("en-CA");
-}
-function isSameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-function startOfAlignedWeek(d: Date) {
+
+const formatYMD = (d: Date) => d.toLocaleDateString("en-CA");
+
+const isSameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+const startOfAlignedWeek = (d: Date) => {
   const day = d.getDay();
   const diffToMon = (day + 6) % 7;
   const s = new Date(d);
   s.setDate(d.getDate() - diffToMon);
   s.setHours(0, 0, 0, 0);
   return s;
-}
+};
 
-/* ---------------- Types ---------------- */
-
+/* -------------------- TYPES -------------------- */
 type ApiDay = {
   dateKey: string;
   hasWorkout?: boolean;
@@ -89,19 +87,19 @@ type DayStatus = {
   workoutIds: string[];
 };
 
-/* ---------------- Home ---------------- */
-
+/* ==================== PAGE ==================== */
 export default function Home() {
   const { data: session, status } = useSession();
-  const accent = "#ff8a2a";
 
   const weekDays = useMemo(() => getWeek(), []);
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
 
-  const greeting = (() => {
-    const h = new Date().getHours();
-    return h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening";
-  })();
+  const greeting =
+    new Date().getHours() < 12
+      ? "Good Morning"
+      : new Date().getHours() < 18
+      ? "Good Afternoon"
+      : "Good Evening";
 
   const selectedDateKey = formatYMD(selectedDay);
   const weekStartKey = useMemo(
@@ -115,121 +113,100 @@ export default function Home() {
     { revalidateOnFocus: false }
   );
 
+  /* ---------- DERIVED DAY DATA (THIS WAS MISSING) ---------- */
+  const selectedDayData: ApiDay | undefined = useMemo(() => {
+    if (!weeklyOverview?.days) return undefined;
+    return (weeklyOverview.days as ApiDay[]).find(
+      (d) => d.dateKey === selectedDateKey
+    );
+  }, [weeklyOverview, selectedDateKey]);
+
+  /* ---------- STATUS MAP ---------- */
   const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
-
-  const deriveDayBooleans = (o: any) => {
-    const isFriday =
-      Boolean(o.isFriday) ||
-      new Date(o.dateKey + "T00:00:00").getDay() === 5;
-
-    const hasWorkout =
-      Boolean(o.hasWorkout) ||
-      Boolean(o.workoutIds?.length) ||
-      Boolean(o.workoutSummary);
-
-    const workoutDone =
-      Boolean(o.workoutDone) ||
-      Boolean(o.workoutSummary);
-
-    const nutritionLogged = Boolean(o.nutritionLogged);
-
-    const habitAllDone =
-      Boolean(o.habitAllDone) ||
-      (o.habitSummary
-        ? o.habitSummary.completed >= o.habitSummary.total &&
-          o.habitSummary.total > 0
-        : false);
-
-    const checkinComplete =
-      Boolean(o.checkinComplete) || Boolean(o.checkinSummary);
-
-    const allDone =
-      (!hasWorkout || workoutDone) &&
-      nutritionLogged &&
-      habitAllDone &&
-      (!isFriday || checkinComplete);
-
-    return {
-      isFriday,
-      hasWorkout,
-      workoutDone,
-      nutritionLogged,
-      habitAllDone,
-      checkinComplete,
-      allDone,
-    };
-  };
 
   useEffect(() => {
     if (!weeklyOverview?.days) return;
-    const next: Record<string, DayStatus> = {};
-    for (const d of weeklyOverview.days as ApiDay[]) {
-      const b = deriveDayBooleans(d);
-      next[d.dateKey] = {
-        dateKey: d.dateKey,
-        ...b,
-        workoutIds: Array.isArray(d.workoutIds) ? d.workoutIds : [],
+
+    const statuses: Record<string, DayStatus> = {};
+
+    for (const o of weeklyOverview.days as ApiDay[]) {
+      const isFriday =
+        o.isFriday ??
+        new Date(o.dateKey + "T00:00:00").getDay() === 5;
+
+      const hasWorkout =
+        Boolean(o.hasWorkout) ||
+        Boolean(o.workoutSummary) ||
+        Boolean(o.workoutIds?.length);
+
+      const workoutDone =
+        Boolean(o.workoutDone) ||
+        Boolean(o.workoutSummary);
+
+      const nutritionLogged = Boolean(o.nutritionLogged);
+
+      const habitAllDone =
+        Boolean(o.habitAllDone) ||
+        (o.habitSummary
+          ? o.habitSummary.completed >= o.habitSummary.total
+          : false);
+
+      const checkinComplete =
+        Boolean(o.checkinComplete) || Boolean(o.checkinSummary);
+
+      const allDone =
+        (!hasWorkout || workoutDone) &&
+        nutritionLogged &&
+        habitAllDone &&
+        (!isFriday || checkinComplete);
+
+      statuses[o.dateKey] = {
+        dateKey: o.dateKey,
+        hasWorkout,
+        workoutDone,
+        nutritionLogged,
+        habitAllDone,
+        isFriday,
+        checkinComplete,
+        allDone,
+        workoutIds: o.workoutIds ?? [],
       };
     }
-    setWeekStatus(next);
+
+    setWeekStatus(statuses);
   }, [weeklyOverview]);
-
-  /* ---------------- Motivation logic ---------------- */
-
-  const dayStreak = useMemo(() => {
-    let streak = 0;
-    for (const d of weekDays) {
-      const st = weekStatus[formatYMD(d)];
-      if (!st) break;
-      if (d < selectedDay && st.allDone) streak++;
-      else if (d < selectedDay && !st.allDone) streak = 0;
-      if (isSameDay(d, selectedDay)) break;
-    }
-    return streak;
-  }, [weekDays, weekStatus, selectedDay]);
-
-  const derivedWeeklyTotals = useMemo(() => {
-    const days = weeklyOverview?.days || [];
-    let total = 0;
-    let done = 0;
-    for (const d of days) {
-      const b = deriveDayBooleans(d);
-      total += 1 + 1 + (b.hasWorkout ? 1 : 0) + (b.isFriday ? 1 : 0);
-      done +=
-        (b.nutritionLogged ? 1 : 0) +
-        (b.habitAllDone ? 1 : 0) +
-        (b.hasWorkout && b.workoutDone ? 1 : 0) +
-        (b.isFriday && b.checkinComplete ? 1 : 0);
-    }
-    return { total, done };
-  }, [weeklyOverview]);
-
-  const compliance =
-    derivedWeeklyTotals.total > 0
-      ? Math.round((derivedWeeklyTotals.done / derivedWeeklyTotals.total) * 100)
-      : 0;
 
   const selectedStatus = weekStatus[selectedDateKey] || ({} as DayStatus);
 
-  const todayWin = selectedStatus.allDone
-    ? "Day locked in. Momentum protected."
-    : selectedStatus.hasWorkout && !selectedStatus.workoutDone
-    ? "Complete your workout"
-    : !selectedStatus.nutritionLogged
-    ? "Log your nutrition"
-    : !selectedStatus.habitAllDone
-    ? "Complete daily habits"
-    : "Finish today strong";
+  const nutritionHref = `/nutrition?date=${selectedDateKey}`;
+  const habitHref = `/habit?date=${selectedDateKey}`;
+  const checkinHref = `/checkin`;
 
-  /* ---------------- Render ---------------- */
+  const workoutHref =
+    selectedStatus.workoutIds?.length > 0
+      ? `/workout/${selectedStatus.workoutIds[0]}`
+      : "#";
 
+  const checkinSummaryNormalized = useMemo(() => {
+    const s = selectedDayData?.checkinSummary;
+    if (!s) return undefined;
+    return {
+      ...s,
+      bodyFat: s.body_fat_pct,
+    };
+  }, [selectedDayData]);
+
+  const accent = "#ff8a2a";
+
+  /* -------------------- RENDER -------------------- */
   return (
     <>
       <Head>
         <title>BXKR</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      <main className="container py-2" style={{ paddingBottom: 70, color: "#fff" }}>
+      <main className="container py-2" style={{ paddingBottom: 80 }}>
         {/* Header */}
         <div className="d-flex justify-content-between align-items-center mb-2">
           <div className="d-flex align-items-center gap-2">
@@ -237,12 +214,17 @@ export default function Home() {
               <img
                 src={session.user.image}
                 alt=""
-                className="rounded-circle"
-                style={{ width: 36, height: 36 }}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                }}
               />
             )}
             {isLoading && <div className="inline-spinner" />}
           </div>
+
           {status === "authenticated" ? (
             <button
               className="btn btn-link text-light p-0"
@@ -260,100 +242,78 @@ export default function Home() {
           )}
         </div>
 
-        {/* Greeting */}
-        <h2 style={{ fontWeight: 700 }}>{greeting}</h2>
+        <h2 className="mb-3 fw-bold">{greeting}</h2>
 
-        {/* 🔥 Motivation Card */}
-        <div
-          style={{
-            background: "linear-gradient(135deg, rgba(255,138,42,.2), rgba(255,138,42,.08))",
-            borderRadius: 12,
-            padding: 14,
-            marginBottom: 14,
-            boxShadow: `0 0 16px rgba(255,138,42,.25)`,
-          }}
-        >
-          <div style={{ fontWeight: 700 }}>
-            🔥 {dayStreak} Day Consistency Run
-          </div>
-          <div style={{ fontSize: "0.9rem", marginTop: 4 }}>
-            {todayWin}
-          </div>
-        </div>
-
-        {/* Weekly Compliance */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontWeight: 600 }}>Weekly Compliance</div>
-          <div
-            style={{
-              background: "#333",
-              borderRadius: 8,
-              overflow: "hidden",
-              height: 10,
-              marginTop: 6,
-            }}
-          >
-            <div
-              style={{
-                width: `${compliance}%`,
-                background: accent,
-                height: "100%",
-              }}
-            />
-          </div>
-          <div style={{ fontSize: "0.85rem", marginTop: 4 }}>
-            {compliance}% adherence this week
-          </div>
-        </div>
-
-        {/* Snapshot */}
         <ChallengeBanner
           title="Weekly Snapshot"
-          message={
-            <div className="stats-row">
-              <div className="stats-col">
-                <strong>Workouts</strong>
-                {weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0}
-              </div>
-              <div className="stats-col">
-                <strong>Time</strong>
-                {weeklyOverview?.weeklyTotals?.totalWorkoutTime ?? 0}m
-              </div>
-              <div className="stats-col">
-                <strong>Calories</strong>
-                {weeklyOverview?.weeklyTotals?.totalCaloriesBurned ?? 0}
-              </div>
-            </div>
-          }
+          message="Train. Log. Recover. Repeat."
+          href="#"
+          accentColor={accent}
           showButton={false}
         />
 
-        {/* Calendar + Tasks remain unchanged */}
-      {selectedDayData && (
-  <DailyTasksCard
-    dayLabel={`${selectedDay.toLocaleDateString(undefined, {
-      weekday: "long",
-    })}, ${selectedDay.toLocaleDateString(undefined, {
-      day: "numeric",
-      month: "short",
-    })}`}
-    nutritionSummary={selectedDayData.nutritionSummary}
-    nutritionLogged={Boolean(selectedStatus.nutritionLogged)}
-    workoutSummary={selectedDayData.workoutSummary}
-    hasWorkout={Boolean(selectedStatus.hasWorkout)}
-    workoutDone={Boolean(selectedStatus.workoutDone)}
-    habitSummary={selectedDayData.habitSummary}
-    habitAllDone={Boolean(selectedStatus.habitAllDone)}
-    checkinSummary={checkinSummaryNormalized as any}
-    checkinComplete={Boolean(selectedStatus.checkinComplete)}
-    hrefs={{
-      nutrition: nutritionHref,
-      workout: workoutHref,
-      habit: habitHref,
-      checkin: checkinHref,
-    }}
-  />
-)}
+        {/* Calendar */}
+        <div className="d-flex justify-content-between text-center my-3">
+          {weekDays.map((d, i) => {
+            const dk = formatYMD(d);
+            const st = weekStatus[dk];
+            const isSelected = isSameDay(d, selectedDay);
+
+            return (
+              <div
+                key={i}
+                style={{ width: 44, cursor: "pointer" }}
+                onClick={() => setSelectedDay(d)}
+              >
+                <div style={{ fontSize: 12, opacity: 0.7 }}>
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
+                </div>
+                <div
+                  className="bxkr-day-pill"
+                  style={{
+                    borderColor: st?.allDone ? "#64c37a" : accent,
+                    boxShadow: isSelected
+                      ? `0 0 8px ${accent}`
+                      : undefined,
+                  }}
+                >
+                  {st?.allDone && !isSelected ? (
+                    <i className="fas fa-fire text-success" />
+                  ) : (
+                    d.getDate()
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ✅ DAILY TASKS CARD (FIXED) */}
+        {selectedDayData && (
+          <DailyTasksCard
+            dayLabel={`${selectedDay.toLocaleDateString(undefined, {
+              weekday: "long",
+            })}, ${selectedDay.toLocaleDateString(undefined, {
+              day: "numeric",
+              month: "short",
+            })}`}
+            nutritionSummary={selectedDayData.nutritionSummary}
+            nutritionLogged={Boolean(selectedStatus.nutritionLogged)}
+            workoutSummary={selectedDayData.workoutSummary}
+            hasWorkout={Boolean(selectedStatus.hasWorkout)}
+            workoutDone={Boolean(selectedStatus.workoutDone)}
+            habitSummary={selectedDayData.habitSummary}
+            habitAllDone={Boolean(selectedStatus.habitAllDone)}
+            checkinSummary={checkinSummaryNormalized as any}
+            checkinComplete={Boolean(selectedStatus.checkinComplete)}
+            hrefs={{
+              nutrition: nutritionHref,
+              workout: workoutHref,
+              habit: habitHref,
+              checkin: checkinHref,
+            }}
+          />
+        )}
       </main>
 
       <BottomNav />
