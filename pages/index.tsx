@@ -329,7 +329,31 @@ export default function Home() {
         />
 
         {/* Calendar + Tasks remain unchanged */}
-        <DailyTasksCard /* unchanged props */ />
+      {selectedDayData && (
+  <DailyTasksCard
+    dayLabel={`${selectedDay.toLocaleDateString(undefined, {
+      weekday: "long",
+    })}, ${selectedDay.toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "short",
+    })}`}
+    nutritionSummary={selectedDayData.nutritionSummary}
+    nutritionLogged={Boolean(selectedStatus.nutritionLogged)}
+    workoutSummary={selectedDayData.workoutSummary}
+    hasWorkout={Boolean(selectedStatus.hasWorkout)}
+    workoutDone={Boolean(selectedStatus.workoutDone)}
+    habitSummary={selectedDayData.habitSummary}
+    habitAllDone={Boolean(selectedStatus.habitAllDone)}
+    checkinSummary={checkinSummaryNormalized as any}
+    checkinComplete={Boolean(selectedStatus.checkinComplete)}
+    hrefs={{
+      nutrition: nutritionHref,
+      workout: workoutHref,
+      habit: habitHref,
+      checkin: checkinHref,
+    }}
+  />
+)}
       </main>
 
       <BottomNav />
