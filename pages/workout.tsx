@@ -131,7 +131,6 @@ export default function WorkoutHubPage() {
         className="container py-3"
         style={{
           paddingBottom: 80,
-          background: "linear-gradient(135deg,#0E0F12,#151923)",
           color: "#fff",
           borderRadius: 12,
           minHeight: "100vh",
