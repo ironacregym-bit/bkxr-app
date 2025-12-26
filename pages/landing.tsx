@@ -28,130 +28,82 @@ export default function Landing() {
   return (
     <>
       <Head>
-        <title>BXKR — Boxing x Kettlebell Conditioning System</title>
+        <title>BXKR — Boxing x Kettlebell Transformation System</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      <main
-        className="container py-4"
-        style={{
-          minHeight: "100vh",
-          background: "linear-gradient(135deg, #121212 0%, #2a160c 100%)",
-          color: "#fff",
-          paddingBottom: 80,
-        }}
-      >
-        {/* Top bar */}
-        <div
-          className="d-flex justify-content-between align-items-center mb-4"
-          style={{ ...glass, padding: "12px 16px" }}
-        >
+      <main className="container py-4" style={{ paddingBottom: 80 }}>
+        {/* TOP BAR */}
+        <div className="d-flex justify-content-between align-items-center mb-4 bxkr-card p-3">
           <div className="fw-bold">BXKR</div>
-          <div className="d-flex gap-2">
-            <button
-              className="btn btn-sm btn-primary"
-              style={{ backgroundColor: accent, border: "none", borderRadius: 24 }}
-              onClick={() => signIn("google")}
-              disabled={status === "loading"}
-            >
-              Sign in
-            </button>
-          </div>
+          <button
+            className="btn-bxkr"
+            onClick={() => signIn("google")}
+            disabled={status === "loading"}
+          >
+            Sign in
+          </button>
         </div>
 
         {/* HERO */}
         <section className="row align-items-center mb-5">
           <div className="col-12 col-md-6 mb-4">
-            <h1 className="fw-bold" style={{ fontSize: "2.3rem" }}>
-              Boxing x Kettlebell.
+            <h1 className="fw-bold" style={{ fontSize: "2.4rem" }}>
+              10 Rounds.
               <br />
-              <span style={{ color: accent }}>A conditioning system</span> — not random workouts.
+              <span style={{ color: accent }}>One system.</span>
             </h1>
 
-            <p className="mt-3" style={{ opacity: 0.9 }}>
-              BXKR is a repeatable 10-round structure that blends boxing skill,
-              kettlebell strength and metabolic conditioning.
+            <p className="mt-3 text-dim">
+              BXKR is a structured boxing & kettlebell transformation system.
+              Same format. Every session. Progress over time.
             </p>
 
-            <p className="small" style={{ opacity: 0.75 }}>
-              Built for busy people who want structure, accountability and real progress —
-              without thinking.
+            <p className="small text-dim">
+              Built for people who want structure, accountability and real
+              conditioning — not random workouts.
             </p>
 
-            <div className="d-flex gap-2 mt-3">
-              <button
-                className="btn btn-primary"
-                style={{ backgroundColor: accent, borderRadius: 24, border: "none" }}
-                onClick={() => signIn("google")}
-              >
-                Start training
+            <div className="d-flex gap-2 mt-3 flex-wrap">
+              <button className="btn-bxkr" onClick={() => signIn("google")}>
+                Start Training
               </button>
-
-              <Link
-                href="#how"
-                className="btn btn-outline-light"
-                style={{ borderRadius: 24 }}
-              >
-                How it works
+              <Link href="#how" className="btn-bxkr-outline">
+                How It Works
               </Link>
             </div>
           </div>
 
-          {/* HERO VIDEO PLACEHOLDER */}
           <div className="col-12 col-md-6">
             <div
-              style={{
-                ...glass,
-                height: 280,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#bbb",
-              }}
+              className="bxkr-card d-flex align-items-center justify-content-center"
+              style={{ height: 280, opacity: 0.7 }}
             >
-              ▶ Promo / Hero Video Placeholder
+              ▶ BXKR Training Video
             </div>
           </div>
         </section>
 
-        {/* WHO THIS IS FOR */}
+        {/* WHO IT'S FOR */}
         <section className="mb-5">
           <div className="text-center mb-3">
             <h2 className="fw-bold">Who BXKR Is For</h2>
-            <p style={{ opacity: 0.85 }}>
-              This isn’t for everyone — it’s for people who want consistency.
+            <p className="text-dim">
+              This isn’t casual fitness. It’s coached, repeatable training.
             </p>
           </div>
 
           <div className="row">
             {[
               "You want structure, not guessing workouts",
-              "You like boxing but still want strength",
+              "You like boxing but want strength too",
               "You train 3–5x per week",
-              "You want accountability without pressure",
+              "You want accountability without babysitting",
             ].map((t, i) => (
               <div className="col-12 col-md-6 mb-3" key={i}>
-                <div style={{ ...glass, padding: 16 }}>
-                  ✔ {t}
-                </div>
+                <div className="bxkr-card p-3">✔ {t}</div>
               </div>
             ))}
-          </div>
-        </section>
-
-        {/* IMAGE STRIP PLACEHOLDER */}
-        <section className="mb-5">
-          <div
-            style={{
-              ...glass,
-              height: 160,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: 0.7,
-            }}
-          >
-            Gym photos / app screenshots / training images
           </div>
         </section>
 
@@ -159,92 +111,115 @@ export default function Landing() {
         <section id="how" className="mb-5">
           <div className="text-center mb-3">
             <h2 className="fw-bold">The BXKR Format</h2>
-            <p style={{ opacity: 0.85 }}>
-              Same structure. Different intent. Progress over time.
+            <p className="text-dim">
+              Same structure. Different intent. Measurable progress.
             </p>
           </div>
 
           <div className="row">
             <div className="col-12 col-md-6 mb-3">
-              <div style={{ ...glass, padding: 16 }}>
-                <h5 className="fw-semibold">Rounds 1–5 — Boxing</h5>
-                <p className="small">
-                  Skill, speed, power, defence and conditioning.
-                  Structured combos — no random smashing.
+              <div className="bxkr-card p-4">
+                <h5 className="fw-semibold">Rounds 1–5 · Boxing</h5>
+                <p className="small text-dim">
+                  Pad & bag combinations focused on conditioning, coordination,
+                  speed and power. No random smashing.
                 </p>
               </div>
             </div>
 
             <div className="col-12 col-md-6 mb-3">
-              <div style={{ ...glass, padding: 16 }}>
-                <h5 className="fw-semibold">Rounds 6–10 — Kettlebells</h5>
-                <p className="small">
-                  Strength, engine and load using proven formats
-                  (EMOM, AMRAP, ladders).
+              <div className="bxkr-card p-4">
+                <h5 className="fw-semibold">Rounds 6–10 · Kettlebells</h5>
+                <p className="small text-dim">
+                  Strength & conditioning using simple, proven formats:
+                  EMOMs, ladders, circuits.
                 </p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* APP VALUE */}
+        {/* TRAINING OPTIONS */}
         <section className="mb-5">
           <div className="text-center mb-3">
-            <h2 className="fw-bold">More Than Training</h2>
-            <p style={{ opacity: 0.85 }}>
-              The app keeps you consistent — even when motivation dips.
-            </p>
+            <h2 className="fw-bold">Choose How You Train</h2>
+            <p className="text-dim">Same BXKR system. Different delivery.</p>
           </div>
 
           <div className="row">
-            {[
-              "Book sessions in seconds",
-              "Log nutrition & see trends",
-              "Daily habits & weekly check-ins",
-              "Progress snapshots — no spreadsheets",
-            ].map((f, i) => (
-              <div className="col-12 col-md-6 mb-3" key={i}>
-                <div style={{ ...glass, padding: 16 }}>
-                  {f}
+            <div className="col-12 col-md-6 mb-3">
+              <div className="bxkr-card p-4 h-100">
+                <h5 className="fw-semibold">In-Person BXKR</h5>
+                <ul className="small text-dim mt-2">
+                  <li>Unlimited BXKR sessions</li>
+                  <li>Open gym access</li>
+                  <li>Coach-led training</li>
+                  <li>Full BXKR app access</li>
+                </ul>
+                <div className="fw-bold mt-3">£60 / month</div>
+                <div className="small text-dim">
+                  Founders · £80 later in 2025
                 </div>
               </div>
-            ))}
+            </div>
+
+            <div className="col-12 col-md-6 mb-3">
+              <div className="bxkr-card p-4 h-100">
+                <h5 className="fw-semibold">Online BXKR</h5>
+                <ul className="small text-dim mt-2">
+                  <li>BXKR boxing & kettlebell programming</li>
+                  <li>Weekly structure & progression</li>
+                  <li>Habits & nutrition tracking</li>
+                  <li>Train anywhere</li>
+                </ul>
+                <div className="fw-bold mt-3">£30 / month</div>
+                <div className="small text-dim">Online only</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* FOUNDERS STRIP */}
+        <section className="mb-5">
+          <div className="bxkr-card p-4 text-center">
+            <h4 className="fw-bold">Founders Pricing — Limited</h4>
+            <p className="small text-dim">
+              Early members lock in lower pricing before BXKR fully opens.
+            </p>
+            <div className="d-flex justify-content-center gap-2 flex-wrap mt-2">
+              <span className="bxkr-chip">£8 per session</span>
+              <span className="bxkr-chip">£60 unlimited</span>
+              <span className="bxkr-chip">£80 later</span>
+            </div>
           </div>
         </section>
 
         {/* FINAL CTA */}
-        <section className="text-center mb-4" style={{ ...glass, padding: 24 }}>
-          <h3 className="fw-bold">Train with intent. Track with purpose.</h3>
-          <p style={{ opacity: 0.85 }}>
-            Sign in and start your first BXKR session.
+        <section className="bxkr-card p-4 text-center mb-4">
+          <h3 className="fw-bold">Start BXKR the Right Way</h3>
+          <p className="text-dim">
+            Create an account, choose your training option,
+            and lock in founders pricing.
           </p>
 
-          <div className="d-flex justify-content-center gap-2">
-            <button
-              className="btn btn-primary"
-              style={{ backgroundColor: accent, borderRadius: 24, border: "none" }}
-              onClick={() => signIn("google")}
-            >
-              Start with Google
+          <div className="d-flex justify-content-center gap-2 flex-wrap">
+            <button className="btn-bxkr" onClick={() => signIn("google")}>
+              Get Started
             </button>
-
             <button
-              className="btn btn-outline-light"
-              style={{ borderRadius: 24 }}
+              className="btn-bxkr-outline"
               onClick={() => signIn("email")}
             >
-              Continue with Email
+              Use Email
             </button>
           </div>
         </section>
 
         {/* FOOTER */}
-        <footer className="text-center" style={{ opacity: 0.6 }}>
-          <small>
-            © {new Date().getFullYear()} BXKR ·{" "}
-            <Link href="/privacy">Privacy</Link> ·{" "}
-            <Link href="/terms">Terms</Link>
-          </small>
+        <footer className="text-center text-dim small">
+          © {new Date().getFullYear()} BXKR ·{" "}
+          <Link href="/privacy">Privacy</Link> ·{" "}
+          <Link href="/terms">Terms</Link>
         </footer>
       </main>
     </>
