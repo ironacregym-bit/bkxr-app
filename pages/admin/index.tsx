@@ -82,7 +82,7 @@ export default function AdminDashboard() {
       }
 
       // Remember the key to avoid re-subscribing if unchanged
-      localStorage.setItem("bxkr_vapid_pub",      localStorage.setItem("bxkr_vapid_pub", vapidPub);
+      localStorage.setItem("bxkr_vapid_pub", vapidPub);
       setMsg("Notifications re‑enabled ✅");
     } catch (e: any) {
       setMsg(e?.message || "Failed to re‑enable notifications.");
