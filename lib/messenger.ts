@@ -1,7 +1,7 @@
 
 // lib/messenger.ts
 import firestore from "./firestoreClient";
-import { renderObjectStrings, renderString } from "./template";
+import { renderString } from "./template"; // keep renderString; drop renderObjectStrings import
 import { sendToUser } from "./sendWebPush";
 import { Timestamp } from "@google-cloud/firestore";
 
@@ -10,11 +10,29 @@ type TemplateDoc = {
   enabled: boolean;
   title_template: string;
   body_template: string;
-  url_template?: string;
-  data_template?: Record<string, string>;
-  channels?: string[];
-  throttle_seconds?: number;
+  url_template?: string | null;
+  data_template?: Record<string, any> | null;
+  channels?: string[];            // for future (e.g., ["push","email"])
+  throttle_seconds?: number;      // per-template throttle
 };
+
+/**
+ * Render all string leaves in an object using renderString(template, context).
+ * Keeps arrays/objects structure intact.
+ */
+function renderObjectStringsLocal<T = any>(obj: T, context: Record<string, any>): T {
+  if (obj == null) return obj;
+  if (typeof obj === "string") return renderString(obj, context) as unknown as T;
+  if (Array.isArray(obj)) return obj.map((v) => renderObjectStringsLocal(v, context)) as unknown as T;
+  if (typeof obj === "object") {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(obj as any)) {
+      out[k] = renderObjectStringsLocal(v, context);
+    }
+    return out as T;
+  }
+  return obj;
+}
 
 async function loadTemplate(key: string): Promise<TemplateDoc | null> {
   const doc = await firestore.collection("notification_templates").doc(key).get();
@@ -29,6 +47,7 @@ async function lastSentAt(email: string, key: string): Promise<Date | null> {
     .orderBy("created_at", "desc")
     .limit(1)
     .get();
+
   if (snap.empty) return null;
   const d = snap.docs[0].data().created_at;
   if (!d) return null;
@@ -38,7 +57,7 @@ async function lastSentAt(email: string, key: string): Promise<Date | null> {
 async function isOptedIn(email: string): Promise<boolean> {
   const doc = await firestore.collection("users").doc(email).get();
   const u = (doc.exists ? doc.data() : {}) || {};
-  // default to true if not set
+  // default to true if flag not present
   return u.notifications_opt_in !== false;
 }
 
@@ -62,8 +81,9 @@ export async function sendScenario(params: {
     return { ok: true, sent: 0, failed: 0, skipped: 1 };
   }
 
+  // Throttle check
   const now = Date.now();
-   const last = await lastSentAt(email, key);
+  const last = await lastSentAt(email, key);
   const throttleSec = Number(tmpl.throttle_seconds ?? 0);
   if (!force && throttleSec > 0 && last && now - last.getTime() < throttleSec * 1000) {
     await log(email, key, { status: "skipped", error: "throttled" });
@@ -74,10 +94,17 @@ export async function sendScenario(params: {
   const title = renderString(tmpl.title_template || "", context);
   const body = renderString(tmpl.body_template || "", context);
   const url = tmpl.url_template ? renderString(tmpl.url_template, context) : "/";
-  const data = tmpl.data_template ? renderObjectStrings(tmpl.data_template, context) : undefined;
 
-  // Only push channel for now
-  let sent = 0, failed = 0, errMsg = "";
+  // Render data_template safely (object/array/strings)
+  const data =
+    tmpl.data_template && typeof tmpl.data_template === "object"
+      ? renderObjectStringsLocal<Record<string, string>>(tmpl.data_template, context)
+      : undefined;
+
+  // Send push (only channel for now)
+  let sent = 0,
+    failed = 0,
+    errMsg = "";
 
   try {
     const resp = await sendToUser(email, { title, body, url, data });
@@ -89,7 +116,7 @@ export async function sendScenario(params: {
     errMsg = e?.message || "push_exception";
   }
 
-  // Log
+  // Log outcome
   await log(email, key, {
     status: failed > 0 ? "failed" : "sent",
     title,
