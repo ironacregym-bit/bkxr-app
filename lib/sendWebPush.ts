@@ -1,7 +1,7 @@
 
 // lib/sendWebPush.ts
 import firestore from "./firestoreClient";
-import webpush from "./webPush";
+import { webpush } from "./webPush";
 
 export type PushPayload = {
   title: string;
@@ -13,9 +13,10 @@ export type PushPayload = {
 export async function sendToUser(email: string, payload: PushPayload) {
   const doc = await firestore.collection("web_push_subscriptions").doc(email).get();
   const subs: any[] = (doc.exists && Array.isArray(doc.data()?.subs)) ? doc.data()!.subs : [];
-  if (subs.length === 0) return { ok: true, sent: 0 };
+  if (subs.length === 0) return { ok: true, sent: 0, failed: 0 };
 
-  let success = 0, failure = 0;
+  let success = 0;
+  let failure = 0;
   const stillValid: any[] = [];
 
   for (const sub of subs) {
@@ -25,11 +26,10 @@ export async function sendToUser(email: string, payload: PushPayload) {
       stillValid.push(sub);
     } catch (err: any) {
       failure++;
-      // Prune permanently gone endpoints (410/404)
-      const status = err?.statusCode;
-      if (!(String(status) === "410" || String(status) === "404")) {
-        stillValid.push(sub); // keep transient errors
-      }
+      // Permanently-gone endpoints are 404/410 — prune them
+      const status = String(err?.statusCode || "");
+      const gone = status === "404" || status === "410";
+      if (!gone) stillValid.push(sub); // keep transient failures
     }
   }
 
