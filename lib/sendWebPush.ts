@@ -6,7 +6,7 @@ import webpush from "./webPush";
 export type PushPayload = {
   title: string;
   body: string;
-  url?: string  url?: string;
+  url?: string;
   data?: Record<string, string>;
 };
 
