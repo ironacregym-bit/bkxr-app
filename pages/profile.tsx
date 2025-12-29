@@ -1,4 +1,5 @@
 
+// pages/profile.tsx
 import Head from "next/head";
 import { useSession } from "next-auth/react";
 import useSWR from "swr";
@@ -9,7 +10,7 @@ type Profile = {
   DOB: string;
   activity_factor: number | null;
   bodyfat_pct: number | null;
-  caloric_target: number | null;
+  caloric_target: number | null; // UI field (API aliases to calorie_target)
   created_at: string;
   email: string;
   height_cm: number | null;
@@ -30,7 +31,7 @@ function toNumberOrNull(val: string): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
-export default function Profile() {
+export default function ProfilePage() {
   const { data: session, status } = useSession();
   const email = session?.user?.email ?? "";
 
@@ -48,7 +49,7 @@ export default function Profile() {
         DOB: data.DOB ?? "",
         activity_factor: data.activity_factor ?? null,
         bodyfat_pct: data.bodyfat_pct ?? null,
-        caloric_target: data.caloric_target ?? null,
+        caloric_target: data.caloric_target ?? null, // keep UI field
         created_at: data.created_at ?? "",
         email: data.email ?? email,
         height_cm: data.height_cm ?? null,
@@ -77,9 +78,13 @@ export default function Profile() {
     const { weight_kg, height_cm, DOB, sex, activity_factor } = formData;
     if (weight_kg && height_cm && DOB && sex && activity_factor) {
       const birthDate = new Date(DOB);
-      const age = !isNaN(birthDate.getTime())
-        ? new Date().getFullYear() - birthDate.getFullYear()
-        : 30; // fallback
+      const today = new Date();
+      let age = 30;
+      if (!isNaN(birthDate.getTime())) {
+        age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+      }
       const base =
         sex.toLowerCase() === "male"
           ? 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
@@ -87,7 +92,13 @@ export default function Profile() {
       const target = Math.round(base * activity_factor);
       setFormData((prev) => ({ ...prev, caloric_target: target }));
     }
-  }, [formData.weight_kg, formData.height_cm, formData.DOB, formData.sex, formData.activity_factor]);
+  }, [
+    formData.weight_kg,
+    formData.height_cm,
+    formData.DOB,
+    formData.sex,
+    formData.activity_factor,
+  ]);
 
   const handleUpdate = async () => {
     if (!email) {
@@ -103,7 +114,7 @@ export default function Profile() {
           DOB: formData.DOB ?? "",
           activity_factor: formData.activity_factor ?? null,
           bodyfat_pct: formData.bodyfat_pct ?? null,
-          caloric_target: formData.caloric_target ?? null,
+          caloric_target: formData.caloric_target ?? null, // API accepts alias and maps to calorie_target
           created_at: formData.created_at ?? "",
           email,
           height_cm: formData.height_cm ?? null,
@@ -123,7 +134,7 @@ export default function Profile() {
 
       const updated: Profile = await res.json();
       setFormData(updated);
-      mutate();
+      mutate(); // refresh SWR cache/UI
       alert("✅ Profile updated successfully!");
     } catch (err: any) {
       console.error("Profile update error:", err?.message || err);
@@ -268,6 +279,7 @@ export default function Profile() {
           )}
         </div>
       </main>
+
       <BottomNav />
     </>
   );
