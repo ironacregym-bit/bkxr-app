@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const email = session?.user?.email;
   if (!email) return res.status(401).json({ error: "Unauthorized" });
 
-  try  try {
+  try{
     const { subscription } = req.body || {};
     if (!subscription || typeof subscription !== "object" || !subscription.endpoint) {
       return res.status(400).json({ error: "Valid subscription object required" });
