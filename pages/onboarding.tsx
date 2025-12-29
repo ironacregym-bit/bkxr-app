@@ -2,44 +2,47 @@
 // pages/onboarding.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import useSWR from "swr";
+import { useEffect, useState } from "react";
+import useSWR, { mutate } from "swr";
 import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
-
 const ACCENT = "#FF8A2A";
 
 type UsersDoc = {
   email?: string;
-  name?: string;
-  image?: string;
-  created_at?: string;
-  last_login_at?: string;
-  calorie_target?: number | null;
+  // metrics
+  height_cm?: number | null;
   weight_kg?: number | null;
   bodyfat_pct?: number | null;
-  DOB?: string | null; // ISO YYYY-MM-DD
+  DOB?: string | null;
+  sex?: "male" | "female" | "other" | null;
+  // activity + targets
   activity_factor?: number | null;
+  calorie_target?: number | null;
+  protein_target?: number | null;
   carb_target?: number | null;
   fat_target?: number | null;
+  // goals
+  goal_primary?: "lose" | "tone" | "gain" | null;
+  goal_intensity?: "small" | "large" | "maint" | "lean" | null;
+  // extras
+  equipment?: { bodyweight?: boolean; kettlebell?: boolean; dumbbell?: boolean } | null;
+  preferences?: { boxing_focus?: boolean; kettlebell_focus?: boolean; schedule_days?: number } | null;
+  // context
   gym_id?: string | null;
-  height_cm?: number | null;
   location?: string | null;
-  protein_target?: number | null;
   role?: string | null;
-  sex?: "male" | "female" | "other" | null;
 };
 
-type GoalPrimary = "lose" | "tone" | "gain"; // lose weight | tone up | gain weight
+type GoalPrimary = "lose" | "tone" | "gain";
 
 export default function OnboardingPage() {
   const { data: session } = useSession();
   const email = session?.user?.email || null;
 
-  // ---- Local state (mirrors Users doc + goal info) ----
-  const [step, setStep] = useState(0); // 0: metrics, 1: activity+goal, 2: equipment, 3: preferences, 4: finish
+  const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
@@ -50,50 +53,43 @@ export default function OnboardingPage() {
     bodyfat_pct: null,
     DOB: null,
     sex: null,
-    activity_factor: 1.2, // default sedentary
+    activity_factor: 1.2,
     calorie_target: null,
     protein_target: null,
     carb_target: null,
     fat_target: null,
+    goal_primary: null,
+    goal_intensity: null,
+    equipment: { bodyweight: true, kettlebell: false, dumbbell: false },
+    preferences: { boxing_focus: true, kettlebell_focus: true, schedule_days: 3 },
   });
 
-  // lightweight client-only goal intensities
-  const [goalPrimary, setGoalPrimary] = useState<GoalPrimary | null>(null);
-  const [goalIntensity, setGoalIntensity] = useState<"small" | "large" | "maint" | "lean">("maint");
-
-  // Equipment and preferences (used to tailor workouts later)
-  const [equipment, setEquipment] = useState<{ bodyweight: boolean; kettlebell: boolean; dumbbell: boolean }>({
-    bodyweight: true,
-    kettlebell: false,
-    dumbbell: false,
-  });
-  const [preferences, setPreferences] = useState<{ boxing_focus: boolean; kettlebell_focus: boolean; schedule_days: number }>({
-    boxing_focus: true,
-    kettlebell_focus: true,
-    schedule_days: 3,
-  });
-
-  // ---- Load Users doc ----
-  const { data, error, isLoading } = useSWR(
-    email ? `/api/profile?email=${encodeURIComponent(email)}` : null,
-    fetcher
-  );
+  const swrKey = email ? `/api/profile?email=${encodeURIComponent(email)}` : null;
+  const { data, error } = useSWR(swrKey, fetcher);
 
   useEffect(() => {
     if (data && typeof data === "object") {
       setProfile((prev) => ({
         ...prev,
         ...data,
-        email,
+        email: (email ?? prev.email) ?? undefined,
+        equipment: {
+          bodyweight: !!data?.equipment?.bodyweight,
+          kettlebell: !!data?.equipment?.kettlebell,
+          dumbbell: !!data?.equipment?.dumbbell,
+        },
+        preferences: {
+          boxing_focus: !!data?.preferences?.boxing_focus,
+          kettlebell_focus: !!data?.preferences?.kettlebell_focus,
+          schedule_days: Number(data?.preferences?.schedule_days ?? 3),
+        },
       }));
-      // If doc already has targets, keep them as initial values
       if (data.calorie_target || data.protein_target || data.carb_target || data.fat_target) {
         setSavedMsg("Targets loaded");
       }
     }
   }, [data, email]);
 
-  // ---- Utilities ------------------------------------------------------------
   function computeAge(dobIso?: string | null): number | null {
     if (!dobIso) return null;
     const dob = new Date(dobIso);
@@ -105,18 +101,19 @@ export default function OnboardingPage() {
     return age;
   }
 
-  function computeTargets(p: UsersDoc, goal: GoalPrimary | null, intensity: typeof goalIntensity) {
+  function computeTargets(p: UsersDoc) {
+    const goal = p.goal_primary;
+    const intensity = p.goal_intensity;
     const weight = Number(p.weight_kg ?? 0);
     const height = Number(p.height_cm ?? 0);
     const sex = p.sex ?? "other";
     const age = computeAge(p.DOB) ?? 30;
     const af = Number(p.activity_factor ?? 1.2);
 
-    if (!(weight > 0 && height > 0 && af > 0)) {
+    if (!(weight > 0 && height > 0 && af > 0) || !goal) {
       return { calorie_target: null, protein_target: null, carb_target: null, fat_target: null };
     }
 
-    // Mifflin-St Jeor
     const bmr =
       sex === "male"
         ? 10 * weight + 6.25 * height - 5 * age + 5
@@ -126,24 +123,16 @@ export default function OnboardingPage() {
 
     let tdee = bmr * af;
 
-    // Goal adjustment
-    // lose: small -10%, large -20%
-    // tone (maintenance / recomp): 0%
-    // gain: lean +10%
     if (goal === "lose") {
-      tdee *= intensity === "large" ? 0.8 : 0.9;
+      tdee *= intensity === "large" ? 0.8 : intensity === "small" ? 0.9 : 0.9;
     } else if (goal === "tone") {
       tdee *= 1.0;
     } else if (goal === "gain") {
-      tdee *= intensity === "lean" ? 1.10 : 1.10; // keep lean bulk +10%
+      tdee *= intensity === "lean" ? 1.10 : 1.10;
     }
 
-    // Macros
-    // Protein: 2.0 g/kg for lose, 1.8 g/kg for tone/gain
     const proteinG = Math.round((goal === "lose" ? 2.0 : 1.8) * weight);
-    // Fat: 0.8 g/kg (clamped 40–120g)
     const fatG = Math.round(Math.min(120, Math.max(40, 0.8 * weight)));
-    // Carbs from remainder calories: kcal = P*4 + C*4 + F*9
     const kcalAfterPF = tdee - (proteinG * 4 + fatG * 9);
     const carbsG = Math.max(0, Math.round(kcalAfterPF / 4));
 
@@ -160,43 +149,41 @@ export default function OnboardingPage() {
     setSaving(true);
     setSavedMsg(null);
 
-    // compute new targets (only when we have enough info)
-    const targets = computeTargets(profile, goalPrimary, goalIntensity);
+    const targets = computeTargets(profile);
 
     try {
       const res = await fetch("/api/onboarding/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // Users doc fields only
           email,
+          // metrics
           sex: profile.sex ?? null,
           height_cm: profile.height_cm ?? null,
           weight_kg: profile.weight_kg ?? null,
           bodyfat_pct: profile.bodyfat_pct ?? null,
           DOB: profile.DOB ?? null,
           activity_factor: profile.activity_factor ?? 1.2,
-
-          // computed targets
+          // targets
           calorie_target: targets.calorie_target,
           protein_target: targets.protein_target,
           carb_target: targets.carb_target,
           fat_target: targets.fat_target,
-
-          // optional location/gym/role passthrough (keep unchanged if absent)
+          // goals
+          goal_primary: profile.goal_primary ?? null,
+          goal_intensity: profile.goal_intensity ?? null,
+          // extras
+          equipment: profile.equipment ?? null,
+          preferences: profile.preferences ?? null,
+          // passthrough
           gym_id: profile.gym_id ?? null,
           location: profile.location ?? null,
           role: profile.role ?? null,
-
-          // add equipment/preferences as nested extras (harmless to Users):
-          equipment,
-          preferences,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed to save");
 
-      // reflect computed targets in local profile and show preview
       setProfile((prev) => ({
         ...prev,
         calorie_target: targets.calorie_target,
@@ -206,6 +193,7 @@ export default function OnboardingPage() {
       }));
       setSavedMsg("Saved ✅");
 
+      if (swrKey) await mutate(swrKey, undefined, { revalidate: true });
       if (typeof nextStep === "number") setStep(Math.max(0, Math.min(4, nextStep)));
     } catch (e: any) {
       setSavedMsg(e?.message || "Failed to save");
@@ -240,12 +228,12 @@ export default function OnboardingPage() {
     );
   }
 
-  // convenience values for showing targets
   const canShowTargets =
     (profile.height_cm ?? 0) > 0 &&
     (profile.weight_kg ?? 0) > 0 &&
     !!profile.activity_factor &&
-    !!goalPrimary;
+    !!profile.goal_primary &&
+    !!profile.calorie_target;
 
   return (
     <>
@@ -257,7 +245,6 @@ export default function OnboardingPage() {
 
         {savedMsg && <div className="pill-success mb-3">{savedMsg}</div>}
 
-        {/* Step 1: Metrics */}
         {step === 0 && (
           <div className="bxkr-card p-3 mb-3">
             <h5 className="mb-2">Your metrics</h5>
@@ -315,7 +302,6 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Step 2: Activity + Goal */}
         {step === 1 && (
           <div className="bxkr-card p-3 mb-3">
             <h5 className="mb-2">Daily activity & goal</h5>
@@ -339,8 +325,8 @@ export default function OnboardingPage() {
                 <label className="form-label small text-dim">Main goal</label>
                 <select
                   className="form-select"
-                  value={goalPrimary ?? ""}
-                  onChange={(e) => setGoalPrimary((e.target.value || null) as GoalPrimary)}
+                  value={profile.goal_primary ?? ""}
+                  onChange={(e) => setProfile({ ...profile, goal_primary: (e.target.value || null) as GoalPrimary })}
                 >
                   <option value="">Select…</option>
                   <option value="lose">Lose weight</option>
@@ -353,26 +339,21 @@ export default function OnboardingPage() {
                 <label className="form-label small text-dim">Intensity</label>
                 <select
                   className="form-select"
-                  value={goalIntensity}
-                  onChange={(e) =>
-                    setGoalIntensity(
-                      (e.target.value as typeof goalIntensity) || "maint"
-                    )
-                  }
+                  value={profile.goal_intensity ?? "maint"}
+                  onChange={(e) => setProfile({ ...profile, goal_intensity: (e.target.value || null) as UsersDoc["goal_intensity"] })}
                 >
-                  {/* map to small/large cut, maintenance, lean bulk */}
-                  {goalPrimary === "lose" && (
+                  {profile.goal_primary === "lose" && (
                     <>
                       <option value="small">Small cut</option>
                       <option value="large">Larger cut</option>
                     </>
                   )}
-                  {goalPrimary === "tone" && (
+                  {profile.goal_primary === "tone" && (
                     <>
                       <option value="maint">Maintenance / recomp</option>
                     </>
                   )}
-                  {goalPrimary === "gain" && (
+                  {profile.goal_primary === "gain" && (
                     <>
                       <option value="lean">Lean gain</option>
                     </>
@@ -381,22 +362,20 @@ export default function OnboardingPage() {
               </div>
             </div>
 
-            {/* Targets preview (after save) */}
-            {canShowTargets && profile.calorie_target && (
+            {canShowTargets && (
               <div className="bxkr-card p-3 mt-3" style={{ background: "rgba(255,255,255,0.05)" }}>
                 <div className="fw-semibold mb-1">Targets (per day)</div>
                 <div className="small">
-                  <div>Calories: <strong>{profile.calorie_target}</strong> kcal</div>
-                  <div>Protein: <strong>{profile.protein_target}</strong> g</div>
-                  <div>Carbs: <strong>{profile.carb_target}</strong> g</div>
-                  <div>Fat: <strong>{profile.fat_target}</strong> g</div>
+                  <div>Calories: <strong>{profile.calorie_target ?? "—"}</strong> kcal</div>
+                  <div>Protein: <strong>{profile.protein_target ?? "—"}</strong> g</div>
+                  <div>Carbs: <strong>{profile.carb_target ?? "—"}</strong> g</div>
+                  <div>Fat: <strong>{profile.fat_target ?? "—"}</strong> g</div>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* Step 3: Equipment */}
         {step === 2 && (
           <div className="bxkr-card p-3 mb-3">
             <h5 className="mb-2">Equipment at home</h5>
@@ -406,8 +385,10 @@ export default function OnboardingPage() {
                 <input
                   type="checkbox"
                   className="form-check-input"
-                  checked={!!equipment.bodyweight}
-                  onChange={(e) => setEquipment({ ...equipment, bodyweight: e.target.checked })}
+                  checked={!!profile.equipment?.bodyweight}
+                  onChange={(e) =>
+                    setProfile({ ...profile, equipment: { ...profile.equipment, bodyweight: e.target.checked } })
+                  }
                 />
               </div>
               <div className="col-4">
@@ -415,8 +396,10 @@ export default function OnboardingPage() {
                 <input
                   type="checkbox"
                   className="form-check-input"
-                  checked={!!equipment.kettlebell}
-                  onChange={(e) => setEquipment({ ...equipment, kettlebell: e.target.checked })}
+                  checked={!!profile.equipment?.kettlebell}
+                  onChange={(e) =>
+                    setProfile({ ...profile, equipment: { ...profile.equipment, kettlebell: e.target.checked } })
+                  }
                 />
               </div>
               <div className="col-4">
@@ -424,18 +407,16 @@ export default function OnboardingPage() {
                 <input
                   type="checkbox"
                   className="form-check-input"
-                  checked={!!equipment.dumbbell}
-                  onChange={(e) => setEquipment({ ...equipment, dumbbell: e.target.checked })}
+                  checked={!!profile.equipment?.dumbbell}
+                  onChange={(e) =>
+                    setProfile({ ...profile, equipment: { ...profile.equipment, dumbbell: e.target.checked } })
+                  }
                 />
               </div>
-            </div>
-            <div className="small text-dim mt-2">
-              BXKR workouts include Bodyweight, Kettlebell, and Dumbbell variants.
             </div>
           </div>
         )}
 
-        {/* Step 4: Preferences */}
         {step === 3 && (
           <div className="bxkr-card p-3 mb-3">
             <h5 className="mb-2">Preferences</h5>
@@ -445,8 +426,10 @@ export default function OnboardingPage() {
                 <input
                   type="checkbox"
                   className="form-check-input"
-                  checked={!!preferences.boxing_focus}
-                  onChange={(e) => setPreferences({ ...preferences, boxing_focus: e.target.checked })}
+                  checked={!!profile.preferences?.boxing_focus}
+                  onChange={(e) =>
+                    setProfile({ ...profile, preferences: { ...profile.preferences, boxing_focus: e.target.checked } })
+                  }
                 />
               </div>
               <div className="col-6">
@@ -454,16 +437,20 @@ export default function OnboardingPage() {
                 <input
                   type="checkbox"
                   className="form-check-input"
-                  checked={!!preferences.kettlebell_focus}
-                  onChange={(e) => setPreferences({ ...preferences, kettlebell_focus: e.target.checked })}
+                  checked={!!profile.preferences?.kettlebell_focus}
+                  onChange={(e) =>
+                    setProfile({ ...profile, preferences: { ...profile.preferences, kettlebell_focus: e.target.checked } })
+                  }
                 />
               </div>
               <div className="col-12 mt-2">
                 <label className="form-label small text-dim">Target sessions per week</label>
                 <select
                   className="form-select"
-                  value={preferences.schedule_days}
-                  onChange={(e) => setPreferences({ ...preferences, schedule_days: Number(e.target.value) })}
+                  value={profile.preferences?.schedule_days ?? 3}
+                  onChange={(e) =>
+                    setProfile({ ...profile, preferences: { ...profile.preferences, schedule_days: Number(e.target.value) } })
+                  }
                 >
                   {[2,3,4,5,6].map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>
@@ -472,7 +459,6 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Step 5: Finish */}
         {step === 4 && (
           <div className="bxkr-card p-3 mb-3">
             <h5 className="mb-2">All set!</h5>
@@ -482,7 +468,6 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Controls: Back / Next only (Next auto-saves) */}
         <div className="d-flex justify-content-between">
           <button
             className="btn btn-bxkr-outline"
@@ -491,22 +476,18 @@ export default function OnboardingPage() {
           >
             ← Back
           </button>
-
           <button
             className="btn btn-bxkr"
             onClick={() => {
               const next = step + 1;
               if (next <= 4) {
-                // Auto-save then advance
                 autoSave(next);
               } else {
-                // Final: save then go home
                 autoSave();
                 window.location.href = "/";
               }
             }}
             disabled={saving}
-            aria-label={step < 4 ? "Next" : "Finish"}
             style={{ background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, borderRadius: 24 }}
           >
             {step < 4 ? "Next →" : "Finish → Home"}
