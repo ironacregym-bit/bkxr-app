@@ -8,10 +8,10 @@ import { useSession } from "next-auth/react";
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
-  return outputArray;
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
 }
 
 export default function NotificationsInit() {
@@ -19,28 +19,29 @@ export default function NotificationsInit() {
 
   useEffect(() => {
     if (status !== "authenticated") return;
+
     (async () => {
+      // Require SW + Push support
       if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
 
-      // Register the SW
-      const reg = await navigator.serviceWorker.register("/notification-sw.js", { scope: "/" });
+      // Wait for your single SW (/sw.js) to be ready
+      const reg = await navigator.serviceWorker.ready;
 
-      // Request permission
+      // Request permission if not already granted
       let perm = Notification.permission;
       if (perm === "default") perm = await Notification.requestPermission();
       if (perm !== "granted") return;
 
-      // Subscribe
-      const vapidPub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
-      const sub = await reg.pushManager.subscribe({
+      // Avoid duplicate subscriptions if the browser already has one
+      const existing = await reg.pushManager.getSubscription();
+
+      const subscription = existing ?? await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPub),
+        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!),
       });
 
-      // Serialise subscription (toJSON covers endpoint + keys)
-      const subObj = JSON.parse(JSON.stringify(sub));
-
-           // Send subscription to server
+      // Serialise and POST to server
+      const subObj = JSON.parse(JSON.stringify(subscription));
       await fetch("/api/notifications/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -49,5 +50,5 @@ export default function NotificationsInit() {
     })().catch(() => {});
   }, [status]);
 
-  return null; // headless initialiser
+  return null;
 }
