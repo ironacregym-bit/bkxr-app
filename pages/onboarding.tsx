@@ -44,7 +44,7 @@ export default function OnboardingPage() {
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   const [profile, setProfile] = useState<UsersDoc>({
-    email,
+    email: email ?? undefined,
     height_cm: null,
     weight_kg: null,
     bodyfat_pct: null,
