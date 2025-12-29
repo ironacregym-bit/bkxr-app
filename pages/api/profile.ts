@@ -1,54 +1,81 @@
 
+// pages/api/profile.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import firestore from "../../lib/firestoreClient"; // Firestore client
-
-// The only fields we allow in the profile
-const ALLOWED_KEYS = new Set([
-  "DOB",
-  "activity_factor",
-  "bodyfat_pct",
-  "caloric_target",
-  "protein_target",  // ✅ new
-  "carb_target",     // ✅ new
-  "fat_target",      // ✅ new
-  "created_at",
-  "email",
-  "height_cm",
-  "image",
-  "last_login_at",
-  "name",
-  "sex",
-  "weight_kg",
-  "location",
-]);
-
-// Response shape (all fields you specified + new macro targets)
-interface ProfileResponse {
-  DOB: string;                 // "" when unknown
-  activity_factor: number | null;
-  bodyfat_pct: number | null;
-  caloric_target: number | null;
-  protein_target: number | null; // ✅ new
-  carb_target: number | null;    // ✅ new
-  fat_target: number | null;     // ✅ new
-  created_at: string;          // ISO string or "" if not set
-  email: string;               // provided in query or stored value
-  height_cm: number | null;
-  image: string;               // "" when unknown
-  last_login_at: string;       // ISO string or "" if not set
-  name: string;                // "" when unknown
-  sex: string;                 // "" when unknown
-  weight_kg: number | null;
-  location: string;
-}
+import firestore from "../../lib/firestoreClient";
 
 /**
- * Convert Firestore Timestamp or string to ISO string.
- * If value is absent/invalid, return "".
+ * Allowed fields to update via PATCH.
+ * NOTE:
+ * - We accept `caloric_target` as alias on input, but we store/read `calorie_target`.
+ * - We include onboarding extras so the client can persist them in Users.
  */
+const ALLOWED_KEYS = new Set([
+  "email",
+  "name",
+  "image",
+  "created_at",
+  "last_login_at",
+  "DOB",
+  "sex",
+  "height_cm",
+  "weight_kg",
+  "bodyfat_pct",
+  "activity_factor",
+  "calorie_target", // canonical
+  "caloric_target", // alias (input only, converted to calorie_target)
+  "protein_target",
+  "carb_target",
+  "fat_target",
+  "gym_id",
+  "location",
+  "role",
+  // onboarding extras
+  "equipment",       // { bodyweight, kettlebell, dumbbell }
+  "preferences",     // { boxing_focus, kettlebell_focus, schedule_days }
+  // goals
+  "goal_primary",    // "lose" | "tone" | "gain"
+  "goal_intensity",  // "small" | "large" | "maint" | "lean"
+]);
+
+/** Response shape returned to client */
+interface ProfileResponse {
+  email: string;
+  name: string;
+  image: string;
+  created_at: string;
+  last_login_at: string;
+
+  // metrics
+  DOB: string;
+  sex: string;
+  height_cm: number | null;
+  weight_kg: number | null;
+  bodyfat_pct: number | null;
+
+  // activity + targets (canonical: calorie_target)
+  activity_factor: number | null;
+  calorie_target: number | null;
+  protein_target: number | null;
+  carb_target: number | null;
+  fat_target: number | null;
+
+  // context
+  gym_id: string | null;
+  location: string;
+  role: string | null;
+
+  // goals
+  goal_primary: "lose" | "tone" | "gain" | null;
+  goal_intensity: "small" | "large" | "maint" | "lean" | null;
+
+  // onboarding extras
+  equipment: { bodyweight?: boolean; kettlebell?: boolean; dumbbell?: boolean } | null;
+  preferences: { boxing_focus?: boolean; kettlebell_focus?: boolean; schedule_days?: number } | null;
+}
+
+/** Convert Firestore Timestamp or string to ISO string; fallback to "" */
 function toIsoStringOrEmpty(value: any): string {
   if (!value) return "";
-  // Firestore Timestamp: has toDate()
   if (typeof value === "object" && typeof value.toDate === "function") {
     try {
       return value.toDate().toISOString();
@@ -56,74 +83,100 @@ function toIsoStringOrEmpty(value: any): string {
       return "";
     }
   }
-  // If already a string that looks like a date, return as-is
   if (typeof value === "string") {
     return value;
   }
   return "";
 }
 
-/**
- * Build a safe response object with defaults.
- * - Ensures only allowed fields appear.
- * - Normalises timestamp fields to strings.
- * - Applies empty-string / null defaults per your schema.
- */
+/** Build a consistent response object */
 function buildProfileResponse(email: string, data: Record<string, any> = {}): ProfileResponse {
   return {
+    // identity
     email: (typeof data.email === "string" && data.email.trim()) || email,
     name: (typeof data.name === "string" && data.name) || "",
     image: (typeof data.image === "string" && data.image) || "",
+    created_at: toIsoStringOrEmpty(data.created_at),
+    last_login_at: toIsoStringOrEmpty(data.last_login_at),
+
+    // metrics
     DOB: (typeof data.DOB === "string" && data.DOB) || "",
     sex: (typeof data.sex === "string" && data.sex) || "",
     height_cm: typeof data.height_cm === "number" ? data.height_cm : null,
     weight_kg: typeof data.weight_kg === "number" ? data.weight_kg : null,
     bodyfat_pct: typeof data.bodyfat_pct === "number" ? data.bodyfat_pct : null,
+
+    // activity + targets
     activity_factor: typeof data.activity_factor === "number" ? data.activity_factor : null,
-    caloric_target: typeof data.caloric_target === "number" ? data.caloric_target : null,
-    protein_target: typeof data.protein_target === "number" ? data.protein_target : null, // ✅
-    carb_target: typeof data.carb_target === "number" ? data.carb_target : null,         // ✅
-    fat_target: typeof data.fat_target === "number" ? data.fat_target : null,            // ✅
-    created_at: toIsoStringOrEmpty(data.created_at),
-    last_login_at: toIsoStringOrEmpty(data.last_login_at),
+    calorie_target:
+      typeof data.calorie_target === "number"
+        ? data.calorie_target
+        : typeof data.caloric_target === "number" // legacy alias, if present in stored data
+        ? data.caloric_target
+        : null,
+    protein_target: typeof data.protein_target === "number" ? data.protein_target : null,
+    carb_target: typeof data.carb_target === "number" ? data.carb_target : null,
+    fat_target: typeof data.fat_target === "number" ? data.fat_target : null,
+
+    // context
+    gym_id: typeof data.gym_id === "string" ? data.gym_id : null,
     location: (typeof data.location === "string" && data.location.trim()) || "",
+    role: typeof data.role === "string" ? data.role : null,
+
+    // goals
+    goal_primary:
+      data.goal_primary === "lose" || data.goal_primary === "tone" || data.goal_primary === "gain"
+        ? data.goal_primary
+        : null,
+    goal_intensity:
+      data.goal_intensity === "small" ||
+      data.goal_intensity === "large" ||
+      data.goal_intensity === "maint" ||
+      data.goal_intensity === "lean"
+        ? data.goal_intensity
+        : null,
+
+    // onboarding extras
+    equipment: data.equipment ?? null,
+    preferences: data.preferences ?? null,
   };
 }
 
-/**
- * Filter a payload so only ALLOWED_KEYS remain.
- * Also trims strings; leaves numbers/null as-is.
- * Timestamp fields can be provided as strings or Firestore Timestamp
- * —we store whatever is provided, and normalise only on response.
- */
+/** Filter incoming PATCH body to allowed keys; aliasing `caloric_target` -> `calorie_target` */
 function filterPatchBody(body: any): Record<string, any> {
   const out: Record<string, any> = {};
   if (!body || typeof body !== "object") return out;
 
   for (const key of Object.keys(body)) {
     if (!ALLOWED_KEYS.has(key)) continue;
-    const val = body[key];
+    let val = body[key];
+
+    // Convert alias caloric_target -> calorie_target on input
+    const targetKey = key === "caloric_target" ? "calorie_target" : key;
 
     // Normalise strings by trimming
     if (typeof val === "string") {
-      out[key] = val.trim();
+      out[targetKey] = val.trim();
       continue;
     }
 
     // Allow numbers/null directly
     if (typeof val === "number" || val === null) {
-      out[key] = val;
+      out[targetKey] = val;
       continue;
     }
 
-    // Allow Firestore Timestamp objects or Date objects unmodified;
-    // they will be normalised when building the response.
+    // Allow Firestore Timestamp objects or Date objects unmodified
     if (val && (typeof (val as any).toDate === "function" || val instanceof Date)) {
-      out[key] = val;
+      out[targetKey] = val;
       continue;
     }
 
-    // For anything else (e.g., undefined), skip
+    // Allow booleans or objects (equipment/preferences)
+    if (typeof val === "boolean" || typeof val === "object") {
+      out[targetKey] = val;
+      continue;
+    }
   }
 
   return out;
@@ -137,16 +190,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const docRef = firestore.collection("users").doc(email.trim());
+    // Use capitalised Users collection as canonical source
+    const docRef = firestore.collection("Users").doc(email.trim());
 
     if (req.method === "GET") {
       const snap = await docRef.get();
 
       if (!snap.exists) {
-        // Return a blank profile object (no reference to any current user)
+        // Return blank profile with all keys present for predictable client rendering
         return res.status(200).json(
           buildProfileResponse(email.trim(), {
-            // explicit blanks/nulls so the client can rely on keys existing
             name: "",
             image: "",
             DOB: "",
@@ -155,13 +208,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             weight_kg: null,
             bodyfat_pct: null,
             activity_factor: null,
-            caloric_target: null,
-            protein_target: null, // ✅
-            carb_target: null,    // ✅
-            fat_target: null,     // ✅
+            calorie_target: null,
+            protein_target: null,
+            carb_target: null,
+            fat_target: null,
+            goal_primary: null,
+            goal_intensity: null,
+            equipment: null,
+            preferences: null,
+            gym_id: null,
+            location: "",
+            role: null,
             created_at: "",
             last_login_at: "",
-            location: "",
           })
         );
       }
@@ -187,9 +246,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json(buildProfileResponse(email.trim(), updated.data() || {}));
     }
 
-    return res.status(405).json({ error: "Method not allowed" });
+    res.setHeader("Allow", "GET, PATCH");
+    return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   } catch (err: any) {
     console.error("Profile API error:", err?.message || err);
-    return res.status(500).json({ error: "Failed to process profile request" });
+       return res.status(500).json({ error: "Failed to process profile request" });
   }
-}
