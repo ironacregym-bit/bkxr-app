@@ -14,45 +14,56 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user?.email) return res.status(401).json({ error: "Unauthorized" });
 
+  const {
+    email,
+    sex,
+    height_cm,
+    weight_kg,
+    bodyfat_pct,
+    DOB,
+    activity_factor,
+    calorie_target,
+    protein_target,
+    carb_target,
+    fat_target,
+    gym_id,
+    location,
+    role,
+    // equipment, preferences (accepted but not stored in Users; keep for future use)
+  } = req.body || {};
+
+  const userEmail = String(email || session.user.email);
+
   try {
-    const {
-      email,
-      height_cm,
-      weight_kg,
-      DOB,
-      sex,
-      activity_factor,
-      job_type,
-      goal_primary,
-      goal_intensity,
-      equipment,
-      preferences,
-    } = req.body || {};
-
-    const userEmail = String(email || session.user.email);
-
-    // Write to Users (sheet-style) collection by email id
     const usersRef = firestore.collection("Users").doc(userEmail);
-    const now = new Date();
+    const snap = await usersRef.get();
+    const nowIso = new Date().toISOString();
 
-    await usersRef.set(
-      {
-        email: userEmail,
-        height_cm: height_cm != null ? Number(height_cm) : null,
-        weight_kg: weight_kg != null ? Number(weight_kg) : null,
-        DOB: DOB || null,
-        sex: sex || null,
-        activity_factor: activity_factor != null ? Number(activity_factor) : null,
-        job_type: job_type || null,
-        goal_primary: goal_primary || null,
-        goal_intensity: goal_intensity || null,
-        equipment: equipment || null,
-        preferences: preferences || null,
-        updated_at: now.toISOString(),
-      },
-      { merge: true }
-    );
+    const payload: any = {
+      email: userEmail,
+      sex: sex ?? null,
+      height_cm: height_cm != null ? Number(height_cm) : null,
+      weight_kg: weight_kg != null ? Number(weight_kg) : null,
+      bodyfat_pct: bodyfat_pct != null ? Number(bodyfat_pct) : null,
+      DOB: DOB || null,
+      activity_factor: activity_factor != null ? Number(activity_factor) : null,
 
+      calorie_target: calorie_target != null ? Number(calorie_target) : null,
+      protein_target: protein_target != null ? Number(protein_target) : null,
+      carb_target: carb_target != null ? Number(carb_target) : null,
+      fat_target: fat_target != null ? Number(fat_target) : null,
+
+      gym_id: gym_id || null,
+      location: location || null,
+      role: role || null,
+      last_login_at: nowIso, // harmless refresh marker
+    };
+
+    if (!snap.exists) {
+      payload.created_at = nowIso;
+    }
+
+    await usersRef.set(payload, { merge: true });
     return res.status(200).json({ ok: true });
   } catch (err: any) {
     console.error("[onboarding/save] error:", err?.message || err);
