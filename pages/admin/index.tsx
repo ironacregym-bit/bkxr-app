@@ -82,8 +82,8 @@ export default function AdminDashboard() {
       }
 
       // Remember the key to avoid re-subscribing if unchanged
-      localStorage.setItem("bxkr_vapid_pub", vapidPub);
-           setMsg("Notifications re‑enabled ✅");
+      localStorage.setItem("bxkr_vapid_pub",      localStorage.setItem("bxkr_vapid_pub", vapidPub);
+      setMsg("Notifications re‑enabled ✅");
     } catch (e: any) {
       setMsg(e?.message || "Failed to re‑enable notifications.");
     } finally {
@@ -111,6 +111,8 @@ export default function AdminDashboard() {
     { title: "Create Session", icon: "fas fa-calendar-plus", link: "/admin/sessions/create", color: "info" },
     { title: "Manage Bookings", icon: "fas fa-list", link: "/admin/bookings", color: "secondary" },
     { title: "Generate WhatsApp Link", icon: "fab fa-whatsapp", link: "/admin/share", color: "success" },
+    // New Notifications tile
+    { title: "Notifications", icon: "fas fa-bell", link: "/admin/notifications", color: "danger" },
     { title: "Manage Users", icon: "fas fa-users", link: "/admin/users", color: "dark" },
   ];
 
@@ -134,24 +136,33 @@ export default function AdminDashboard() {
                 If you’ve changed VAPID keys or moved devices, re‑enable push notifications here.
               </div>
             </div>
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={handleReenableNotifications}
-              disabled={busy}
-              style={{
-                borderRadius: 24,
-                color: "#0b0f14",
-                background: "linear-gradient(135deg, #FF8A2A, #ff7f32)",
-                boxShadow: "0 0 12px rgba(255,138,42,0.6)",
-                border: "none",
-                padding: "8px 16px",
-                fontWeight: 600,
-              }}
-            >
-              {busy ? "Working…" : "Re‑enable notifications"}
-            </button>
+
+            <div className="d-flex gap-2">
+              {/* Open Notifications Admin page */}
+              /admin/notifications
+                Open Notifications Admin
+              </Link>
+
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={handleReenableNotifications}
+                disabled={busy}
+                style={{
+                  borderRadius: 24,
+                  color: "#0b0f14",
+                  background: "linear-gradient(135deg, #FF8A2A, #ff7f32)",
+                  boxShadow: "0 0 12px rgba(255,138,42,0.6)",
+                  border: "none",
+                  padding: "8px 16px",
+                  fontWeight: 600,
+                }}
+              >
+                {busy ? "Working…" : "Re‑enable notifications"}
+              </button>
+            </div>
           </div>
+
           {msg && (
             <div className={`mt-2 alert ${msg.includes("✅") ? "alert-success" : "alert-info"}`} role="alert">
               {msg}
