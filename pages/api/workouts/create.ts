@@ -248,7 +248,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       benchmark_name: payload.benchmark_name,
       created_at: now.toDate().toISOString(),
       updated_at: now.toDate().toISOString(),
-      rounds: rounds      rounds: roundsOut,
+      rounds: roundsOut,
     };
 
     return res.status(200).json(dto);
