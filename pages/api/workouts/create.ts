@@ -1,32 +1,41 @@
 
 // pages/api/workouts/create.ts
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { adminDb as db, Timestamp } from '../../../lib/firebaseAdmin';
+import type { NextApiRequest, NextApiResponse } from "next";
+import firestore from "../../../lib/firestoreClient"; // ✅ your Firestore client
+import { Timestamp } from "@google-cloud/firestore";
 import {
-  WorkoutCreatePayload, RoundOut, ExerciseItemOut, WorkoutTemplateDTO, KBStyle
-} from '../../../types/workouts';
+  WorkoutCreatePayload,
+  RoundOut,
+  ExerciseItemOut,
+  WorkoutTemplateDTO,
+  KBStyle,
+} from "../../../types/workouts";
 
 // --- Helpers ---
 function assertPayload(p: WorkoutCreatePayload) {
-  if (!p.visibility) throw new Error('visibility is required');
-  if (p.visibility === 'private' && !p.owner_email) throw new Error('owner_email is required for private templates');
-  if (!p.workout_name) throw new Error('workout_name is required');
+  if (!p.visibility) throw new Error("visibility is required");
+  if (p.visibility === "private" && !p.owner_email)
+    throw new Error("owner_email is required for private templates");
+  if (!p.workout_name) throw new Error("workout_name is required");
 
   // Boxing: exactly 5 rounds; each round = exactly 3 combos; each combo has >=1 action
-  if (!p.boxing?.rounds || p.boxing.rounds.length !== 5) throw new Error('boxing.rounds must contain exactly 5 rounds');
+  if (!p.boxing?.rounds || p.boxing.rounds.length !== 5)
+    throw new Error("boxing.rounds must contain exactly 5 rounds");
   p.boxing.rounds.forEach((r, idx) => {
     if (!Array.isArray(r.combos) || r.combos.length !== 3) {
       throw new Error(`boxing.rounds[${idx}] must contain exactly 3 combos`);
     }
     r.combos.forEach((combo, j) => {
       if (!Array.isArray(combo.actions) || combo.actions.length < 1) {
-        throw new Error(`boxing.rounds[${idx}].combos[${j}] must contain at least 1 action`);
+        throw new Error(
+          `boxing.rounds[${idx}].combos[${j}] must contain at least 1 action`
+        );
       }
       combo.actions.forEach((a, k) => {
-        if (!a.kind || !['punch', 'defence'].includes(a.kind)) {
+        if (!a.kind || !["punch", "defence"].includes(a.kind)) {
           throw new Error(`boxing action kind invalid at [${idx}][${j}][${k}]`);
         }
-        if (!a.code || typeof a.code !== 'string') {
+        if (!a.code || typeof a.code !== "string") {
           throw new Error(`boxing action code required at [${idx}][${j}][${k}]`);
         }
       });
@@ -34,17 +43,26 @@ function assertPayload(p: WorkoutCreatePayload) {
   });
 
   // Kettlebell: exactly 5 rounds; valid style; each round has >=1 item with exercise_id + order
-  if (!p.kettlebell?.rounds || p.kettlebell.rounds.length !== 5) throw new Error('kettlebell.rounds must contain exactly 5 rounds');
+  if (!p.kettlebell?.rounds || p.kettlebell.rounds.length !== 5)
+    throw new Error("kettlebell.rounds must contain exactly 5 rounds");
   p.kettlebell.rounds.forEach((r, idx) => {
-    if (!r.style || !['EMOM', 'AMRAP', 'LADDER'].includes(r.style)) {
-      throw new Error(`kettlebell.rounds[${idx}].style must be EMOM | AMRAP | LADDER`);
+    if (!r.style || !["EMOM", "AMRAP", "LADDER"].includes(r.style)) {
+      throw new Error(
+        `kettlebell.rounds[${idx}].style must be EMOM | AMRAP | LADDER`
+      );
     }
     if (!Array.isArray(r.items) || r.items.length < 1) {
       throw new Error(`kettlebell.rounds[${idx}].items must contain at least 1 exercise`);
     }
     r.items.forEach((it, j) => {
-      if (!it.exercise_id) throw new Error(`kettlebell.rounds[${idx}].items[${j}].exercise_id is required`);
-      if (typeof it.order !== 'number') throw new Error(`kettlebell.rounds[${idx}].items[${j}].order must be a number`);
+      if (!it.exercise_id)
+        throw new Error(
+          `kettlebell.rounds[${idx}].items[${j}].exercise_id is required`
+        );
+      if (typeof it.order !== "number")
+        throw new Error(
+          `kettlebell.rounds[${idx}].items[${j}].order must be a number`
+        );
     });
   });
 }
@@ -58,7 +76,8 @@ function kettlebellRoundName(n: number, provided?: string) {
 
 // --- Handler ---
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== "POST")
+    return res.status(405).json({ error: "Method not allowed" });
 
   const payload = req.body as WorkoutCreatePayload;
   try {
@@ -68,13 +87,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (payload.dry_run) {
-    return res.status(200).json({ ok: true, message: 'Validation passed (dry-run). No writes performed.' });
+    return res
+      .status(200)
+      .json({ ok: true, message: "Validation passed (dry-run). No writes performed." });
   }
 
   try {
+    // Use your Firestore client (service account via env)
+    const db = firestore;
+
     const workoutRef = payload.workout_id
-      ? db.collection('workouts').doc(payload.workout_id)
-      : db.collection('workouts').doc();
+      ? db.collection("workouts").doc(payload.workout_id)
+      : db.collection("workouts").doc();
 
     const now = Timestamp.now();
     const batch = db.batch();
@@ -90,7 +114,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         is_benchmark: payload.is_benchmark ?? false,
         benchmark_name: payload.benchmark_name ?? null,
         visibility: payload.visibility,
-        owner_email: payload.visibility === 'private' ? payload.owner_email : null,
+        owner_email: payload.visibility === "private" ? payload.owner_email : null,
         created_at: now,
         updated_at: now,
       },
@@ -103,12 +127,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for (let i = 0; i < payload.boxing.rounds.length; i++) {
       const order = i + 1;
       const b = payload.boxing.rounds[i];
-      const roundRef = workoutRef.collection('rounds').doc();
+      const roundRef = workoutRef.collection("rounds").doc();
 
       batch.set(roundRef, {
         name: boxingRoundName(order, b.name),
         order,
-        category: 'Boxing',
+        category: "Boxing",
         duration_s: 180,
         is_benchmark_component: false,
       });
@@ -116,11 +140,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const itemsOut: ExerciseItemOut[] = [];
       for (let j = 0; j < b.combos.length; j++) {
         const combo = b.combos[j];
-        const itemRef = roundRef.collection('items').doc();
+        const itemRef = roundRef.collection("items").doc();
 
         batch.set(itemRef, {
-          type: 'Boxing',
-          style: 'Combo',
+          type: "Boxing",
+          style: "Combo",
           order: j + 1,
           duration_s: 180,
           combo: {
@@ -132,8 +156,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         itemsOut.push({
           item_id: itemRef.id,
-          type: 'Boxing',
-          style: 'Combo',
+          type: "Boxing",
+          style: "Combo",
           order: j + 1,
           duration_s: 180,
           combo: { name: combo.name, actions: combo.actions, notes: combo.notes },
@@ -144,7 +168,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         round_id: roundRef.id,
         name: boxingRoundName(order, b.name),
         order,
-        category: 'Boxing',
+        category: "Boxing",
         duration_s: 180,
         is_benchmark_component: false,
         items: itemsOut,
@@ -155,12 +179,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for (let k = 0; k < payload.kettlebell.rounds.length; k++) {
       const order = 6 + k;
       const r = payload.kettlebell.rounds[k];
-      const roundRef = workoutRef.collection('rounds').doc();
+      const roundRef = workoutRef.collection("rounds").doc();
 
       batch.set(roundRef, {
         name: kettlebellRoundName(k + 1, r.name),
         order,
-        category: 'Kettlebell',
+        category: "Kettlebell",
         style: r.style,
         is_benchmark_component: r.is_benchmark_component ?? false,
       });
@@ -169,10 +193,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const itemsOut: ExerciseItemOut[] = [];
 
       for (const item of sortedItems) {
-        const itemRef = roundRef.collection('items').doc();
+        const itemRef = roundRef.collection("items").doc();
 
         batch.set(itemRef, {
-          type: 'Kettlebell',
+          type: "Kettlebell",
           style: item.style ?? r.style,
           order: item.order,
           exercise_id: item.exercise_id,
@@ -186,7 +210,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         itemsOut.push({
           item_id: itemRef.id,
-          type: 'Kettlebell',
+          type: "Kettlebell",
           style: (item.style ?? r.style) as KBStyle,
           order: item.order,
           exercise_id: item.exercise_id,
@@ -202,7 +226,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         round_id: roundRef.id,
         name: kettlebellRoundName(k + 1, r.name),
         order,
-        category: 'Kettlebell',
+        category: "Kettlebell",
         style: r.style,
         is_benchmark_component: r.is_benchmark_component ?? false,
         items: itemsOut,
@@ -215,7 +239,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const dto: WorkoutTemplateDTO = {
       workout_id: workoutRef.id,
       visibility: payload.visibility,
-      owner_email: payload.visibility === 'private' ? payload.owner_email : undefined,
+      owner_email: payload.visibility === "private" ? payload.owner_email : undefined,
       workout_name: payload.workout_name,
       focus: payload.focus,
       notes: payload.notes,
@@ -224,13 +248,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       benchmark_name: payload.benchmark_name,
       created_at: now.toDate().toISOString(),
       updated_at: now.toDate().toISOString(),
-      rounds: roundsOut,
+      rounds: rounds      rounds: roundsOut,
     };
 
     return res.status(200).json(dto);
   } catch (err: any) {
-    console.error('workouts/create error', err);
-    return res.status(500).json({ error: 'Failed to create BXKR workout template' });
+    console.error("workouts/create error", err);
+    return res
+      .status(500)
+      .json({ error: "Failed to create BXKR workout template" });
   }
 }
-
