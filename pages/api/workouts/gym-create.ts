@@ -143,7 +143,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await batch.commit();
 
-    return res.status(201    return res.status(201).json({ ok: true, workout_id: workoutRef.id });
+    return res.status(201).json({ ok: true, workout_id: workoutRef.id });
   } catch (err: any) {
     console.error("[workouts/gym-create] error:", err?.message || err);
     return res.status(500).json({ error: "Failed to create gym workout" });
