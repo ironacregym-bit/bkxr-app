@@ -444,7 +444,7 @@ export default function GymCreateWorkoutPage() {
           disabled={saving}
           style={{ borderRadius: 24, background: ACCENT, border: "none" }}
         >
-          {saving ? "Saving…" : "Create Gym Workout          {saving ? "Saving…" : "Create Gym Workout"}
+          {saving ? "Saving…" : "Create Gym Workout"}
         </button>
       </main>
       <BottomNav />
