@@ -22,8 +22,8 @@
     "react-circular-progressbar": "^2.1.0",
     "@zxing/browser": "^0.1.4",
     "chart.js": "^4.4.1",
-    "react-chartjs-2": "^5.2.0"
-
+    "react-chartjs-2": "^5.2.0",
+    "web-push": "^3.6.0"
 
   },
   "devDependencies": {
