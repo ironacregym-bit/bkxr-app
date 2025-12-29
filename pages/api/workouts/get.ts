@@ -6,7 +6,7 @@ import { adminDb as db } from "../../../lib/firebaseAdmin";
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const workout_id = (req.query.workout_id as string) || (req.query.id as string) || "";
   if (!workout_id.trim()) {
-    return res.status(400).json    return res.status(400).json({ error: "workout_id is required" });
+    return res.status(400).json({ error: "workout_id is required" });
   }
 
   try {
