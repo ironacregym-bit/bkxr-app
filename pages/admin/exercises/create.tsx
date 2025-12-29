@@ -6,7 +6,7 @@ import Head from "next/head";
 import { useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import BottomNav from "../../components/BottomNav";
+import BottomNav from "../../../components/BottomNav";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
