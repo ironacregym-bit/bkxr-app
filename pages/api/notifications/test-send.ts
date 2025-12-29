@@ -31,7 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const data = typeof source.data === "object" ? (source.data as Record<string, string>) : undefined;
 
   if (req.method !== "GET" && req.method !== "POST") {
-    res.setHeader("Allow", "GET,    res.setHeader("Allow", "GET, POST");
+    res.setHeader("Allow", "GET, POST");
     return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
 
