@@ -139,7 +139,7 @@ export default function AdminDashboard() {
 
             <div className="d-flex gap-2">
               {/* Open Notifications Admin page */}
-              /admin/notifications
+              <Link href="/admin/notifications">
                 Open Notifications Admin
               </Link>
 
