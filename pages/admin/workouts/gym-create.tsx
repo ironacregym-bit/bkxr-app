@@ -8,7 +8,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import useSWR from "swr";
 import { useState } from "react";
-import BottomNav from "../../components/BottomNav";
+import BottomNav from "../../../components/BottomNav";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
