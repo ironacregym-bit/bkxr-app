@@ -9,6 +9,7 @@ import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 import ChallengeBanner from "../components/ChallengeBanner";
 import DailyTasksCard from "../components/DailyTasksCard";
+import TasksBanner from "../components/TasksBanner";
 
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
@@ -54,7 +55,7 @@ function startOfAlignedWeek(d: Date) {
   return s;
 }
 
-/** 
+/**
  * 🔄 API day payload from /api/weekly/overview.
  * NOTE: we now use `body_fat_pct` (numeric) in checkinSummary.
  */
@@ -217,6 +218,7 @@ export default function Home() {
 
   const accentMicro = "#ff8a2a";
 
+  // ===== Carousel state for Tasks + Weekly Snapshot =====
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const [slideIndex, setSlideIndex] = useState(0);
   const goToSlide = (idx: number) => {
@@ -243,9 +245,12 @@ export default function Home() {
       | { weight?: number; body_fat_pct?: number; bodyFat?: number; weightChange?: number; bfChange?: number }
       | undefined;
     if (!s) return undefined;
-    const body_fat_pct = typeof s.body_fat_pct === "number" ? s.body_fat_pct
-                        : typeof s.bodyFat === "number" ? s.bodyFat
-                        : 0;
+    const body_fat_pct =
+      typeof s.body_fat_pct === "number"
+        ? s.body_fat_pct
+        : typeof s.bodyFat === "number"
+        ? s.bodyFat
+        : 0;
     return {
       ...s,
       body_fat_pct,
@@ -266,14 +271,25 @@ export default function Home() {
         <div className="d-flex justify-content-between mb-2 align-items-center">
           <div className="d-flex align-items-center gap-2">
             {session?.user?.image && (
-              <img src={session.user.image} alt="" className="rounded-circle" style={{ width: 36, height: 36, objectFit: "cover" }} />
+              <img
+                src={session.user.image}
+                alt=""
+                className="rounded-circle"
+                style={{ width: 36, height: 36, objectFit: "cover" }}
+              />
             )}
             {(weekLoading || overviewLoading) && <div className="inline-spinner" />}
           </div>
           {status === "authenticated" ? (
-            <button className="btn btn-link text-light p-0" onClick={() => signOut()}>Sign out</button>
+            <button className="btn btn-link text-light p-0" onClick={() => signOut()}>
+              Sign out
+            </button>
           ) : (
-            <button className="btn btn-link text-light p-0" onClick={() => signIn("google")} style={{ background: "transparent", border: "none", textDecoration: "underline" }}>
+            <button
+              className="btn btn-link text-light p-0"
+              onClick={() => signIn("google")}
+              style={{ background: "transparent", border: "none", textDecoration: "underline" }}
+            >
               Sign in
             </button>
           )}
@@ -283,6 +299,66 @@ export default function Home() {
         <h2 className="mb-3" style={{ fontWeight: 700, fontSize: "1.4rem" }}>
           {greeting}
         </h2>
+
+        {/* ===== Carousel: Tasks Banner (slide 1) + Weekly Snapshot (slide 2) ===== */}
+        <section
+          ref={carouselRef}
+          className="bxkr-carousel"
+          style={{ gap: 0, marginBottom: 10 }}
+          aria-label="Quick tasks and weekly snapshot carousel"
+        >
+          {/* Slide 1 — Outstanding Tasks (onboarding tasks banner) */}
+          <div className="bxkr-slide" style={{ padding: "0 2px" }}>
+            <TasksBanner />
+          </div>
+
+          {/* Slide 2 — Weekly Snapshot banner */}
+          <div className="bxkr-slide" style={{ padding: "0 2px" }}>
+            <ChallengeBanner
+              title="Weekly Snapshot"
+              message={
+                <div className="challenge-banner-message">
+                  <div className="stats-row">
+                    <div className="stats-col">
+                      <strong>Workouts</strong>
+                      {weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0}
+                    </div>
+                    <div className="stats-col">
+                      <strong>Time</strong>
+                      {(weeklyOverview?.weeklyTotals?.totalWorkoutTime ?? 0)}m
+                    </div>
+                    <div className="stats-col">
+                      <strong>Calories</strong>
+                      {(weeklyOverview?.weeklyTotals?.totalCaloriesBurned ?? 0)} kcal
+                    </div>
+                  </div>
+                </div>
+              }
+              href="#"
+              iconLeft="fas fa-chart-line"
+              accentColor="#5b7c99"
+              background="linear-gradient(90deg, rgba(91,124,153,.30), rgba(91,124,153,.18))"
+              showButton={false}
+              style={{ margin: 0 }}
+            />
+          </div>
+        </section>
+
+        {/* Carousel dots */}
+        <div className="bxkr-carousel-dots">
+          <button
+            type="button"
+            className={`bxkr-carousel-dot ${slideIndex === 0 ? "active" : ""}`}
+            aria-label="Show tasks"
+            onClick={() => goToSlide(0)}
+          />
+          <button
+            type="button"
+            className={`bxkr-carousel-dot ${slideIndex === 1 ? "active" : ""}`}
+            aria-label="Show weekly snapshot"
+            onClick={() => goToSlide(1)}
+          />
+        </div>
 
         {/* Weekly Progress */}
         {weeklyOverview?.days && (
@@ -297,7 +373,7 @@ export default function Home() {
                       : "0%",
                   background: accentMicro,
                   height: "100%",
-                  transition: "width .4s ease"
+                  transition: "width .4s ease",
                 }}
               />
             </div>
@@ -306,28 +382,6 @@ export default function Home() {
             </div>
           </div>
         )}
-
-        {/* Snapshot banner (unchanged) */}
-        <section className="bxkr-slide">
-          <ChallengeBanner
-            title="Weekly Snapshot"
-            message={
-              <div className="challenge-banner-message">
-                <div className="stats-row">
-                  <div className="stats-col"><strong>Workouts</strong>{weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0}</div>
-                  <div className="stats-col"><strong>Time</strong>{(weeklyOverview?.weeklyTotals?.totalWorkoutTime ?? 0)}m</div>
-                  <div className="stats-col"><strong>Calories</strong>{(weeklyOverview?.weeklyTotals?.totalCaloriesBurned ?? 0)} kcal</div>
-                </div>
-              </div>
-            }
-            href="#"
-            iconLeft="fas fa-chart-line"
-            accentColor="#5b7c99"
-            background="linear-gradient(90deg, rgba(91,124,153,.30), rgba(91,124,153,.18))"
-            showButton={false}
-            style={{ margin: 0 }}
-          />
-        </section>
 
         {/* Calendar */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
@@ -340,7 +394,7 @@ export default function Home() {
               return (
                 <div key={i} style={{ width: 44 }}>
                   <div style={{ fontSize: "0.8rem", opacity: 0.6 }}>
-                    {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i]}
+                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
                   </div>
                   <div className="bxkr-day-pill" style={{ opacity: 0.5 }}>
                     {d.getDate()}
@@ -349,19 +403,23 @@ export default function Home() {
               );
             }
 
-            const ringColor = st.allDone ? "#64c37a" : (isSelected ? accentMicro : "rgba(255,255,255,0.3)");
-            const boxShadow = isSelected ? `0 0 8px ${ringColor}` : (st.allDone ? `0 0 3px ${ringColor}` : "none");
+            const ringColor = st.allDone ? "#64c37a" : isSelected ? accentMicro : "rgba(255,255,255,0.3)";
+            const boxShadow = isSelected ? `0 0 8px ${ringColor}` : st.allDone ? `0 0 3px ${ringColor}` : "none";
 
             return (
               <div key={i} style={{ width: 44, cursor: "pointer" }} onClick={() => setSelectedDay(d)}>
                 <div style={{ fontSize: "0.8rem", color: "#fff", opacity: 0.85, marginBottom: 4 }}>
-                  {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i]}
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
                 </div>
                 <div
                   className={`bxkr-day-pill ${st.allDone ? "completed" : ""}`}
                   style={{ boxShadow, fontWeight: isSelected ? 600 : 400, borderColor: st.allDone ? undefined : ringColor }}
                 >
-                  <span className={`bxkr-day-content ${st.allDone ? (isSelected ? "state-num" : "state-flame") : "state-num"}`}>
+                  <span
+                    className={`bxkr-day-content ${
+                      st.allDone ? (isSelected ? "state-num" : "state-flame") : "state-num"
+                    }`}
+                  >
                     {st.allDone && !isSelected ? (
                       <i
                         className="fas fa-fire"
@@ -369,7 +427,7 @@ export default function Home() {
                           color: "#64c37a",
                           textShadow: `0 0 8px #64c37a`,
                           fontSize: "1rem",
-                          lineHeight: 1
+                          lineHeight: 1,
                         }}
                       />
                     ) : (
