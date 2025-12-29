@@ -1,7 +1,7 @@
 
 // pages/api/profile.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import firestore from "../../lib/firestoreClient";
+import firestore from "../../../lib/firestoreClient";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const email = (req.query.email as string) || "";
