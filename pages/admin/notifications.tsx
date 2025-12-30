@@ -205,7 +205,7 @@ export default function AdminNotifications() {
               <input className="form-control" value={testKey} onChange={(e) => setTestKey(e.target.value)} placeholder="e.g., workout_completed" />
             </div>
             <div className="col-12 col-md-8">
-              <              <label className="form-label">Context (JSON)</label>
+              <label className="form-label">Context (JSON)</label>
               <textarea className="form-control" rows={4} value={testCtx} onChange={(e) => setTestCtx(e.target.value)} placeholder='{"user":{"name":"Rob"},"workout":{"id":"w1","name":"Benchmark Engine"}}' />
             </div>
           </div>
