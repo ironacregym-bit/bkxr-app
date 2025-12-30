@@ -2,31 +2,18 @@
 import Head from "next/head";
 import Link from "next/link";
 import { signIn, useSession } from "next-auth/react";
-import type { GetServerSideProps, GetServerSidePropsContext } from "next";
-import { getSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect } from "react";
-
-export const getServerSideProps: GetServerSideProps = async (
-  context: GetServerSidePropsContext
-) => {
-  const session = await getSession(context);
-  // If already signed in, send to your main app page (adjust if your route differs)
-  if (session) {
-    return { redirect: { destination: "/home", permanent: false } };
-  }
-  return { props: {} };
-};
 
 export default function Landing() {
   const { status } = useSession();
   const router = useRouter();
   const accent = "#FF8A2A";
 
-  // Client-side guard as well (covers CSR + SW caching edge-cases)
+  // If you want a client-side guard, it can remain; it will just ensure we stay on "/"
   useEffect(() => {
     if (status === "authenticated") {
-      router.replace("/home");
+      router.replace("/"); // main app lives at "/"
     }
   }, [status, router]);
 
@@ -43,7 +30,7 @@ export default function Landing() {
           <div className="fw-bold" style={{ fontSize: "1.4rem" }}>BXKR</div>
           <button
             className="bxkr-btn"
-            onClick={() => signIn("google", { callbackUrl: "/home" })}
+            onClick={() => signIn("google", { callbackUrl: "/" })}
             disabled={status === "loading"}
           >
             Sign in
@@ -73,7 +60,7 @@ export default function Landing() {
             <div className="d-flex gap-2 mt-3 flex-wrap">
               <button
                 className="bxkr-btn"
-                onClick={() => signIn("google", { callbackUrl: "/home" })}
+                onClick={() => signIn("google", { callbackUrl: "/" })}
               >
                 Start Your Transformation
               </button>
@@ -109,8 +96,8 @@ export default function Landing() {
                 {/* Replace with your real photo in /public */}
                 <img
                   src="/barn-gym.jpg"
-                  alt="Iron Acre Gym — Open barn training space"
-                  style={{ width: "100%", height: 300, objectFit: "cover" }}
+                  alt="Iron Acre Gym — open barn on a working farm"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 />
               </div>
             </div>
@@ -139,11 +126,13 @@ export default function Landing() {
                 <div className="d-flex gap-2 mt-3 flex-wrap">
                   <button
                     className="bxkr-btn"
-                    onClick={() => signIn("google", { callbackUrl: "/home" })}
+                    onClick={() => signIn("google", { callbackUrl: "/" })}
                   >
                     Join In‑Person BXKR
                   </button>
-                  <Link href="#online" className="btn-bxkr-outline">See Online Programme</Link>
+                  <Link href="#online" className="btn-bxkr-outline">
+                    See Online Programme
+                  </Link>
                 </div>
               </div>
             </div>
@@ -166,8 +155,8 @@ export default function Landing() {
                 {/* Replace with your real app mockup in /public */}
                 <img
                   src="/bxkr-app.jpg"
-                  alt="BXKR App — Hybrid boxing & kettlebell training"
-                  style={{ width: "100%", height: 300, objectFit: "cover" }}
+                  alt="BXKR app — workouts, habits, nutrition tracking"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 />
               </div>
             </div>
@@ -198,11 +187,13 @@ export default function Landing() {
                 <div className="d-flex gap-2 mt-3 flex-wrap">
                   <button
                     className="bxkr-btn"
-                    onClick={() => signIn("google", { callbackUrl: "/home" })}
+                    onClick={() => signIn("google", { callbackUrl: "/" })}
                   >
                     Join BXKR Online
                   </button>
-                  <Link href="#inperson" className="btn-bxkr-outline">See In‑Person Option</Link>
+                  <Link href="#inperson" className="btn-bxkr-outline">
+                    See In‑Person Option
+                  </Link>
                 </div>
               </div>
             </div>
@@ -233,11 +224,13 @@ export default function Landing() {
                 <div className="d-flex gap-2 mt-3">
                   <button
                     className="bxkr-btn"
-                    onClick={() => signIn("google", { callbackUrl: "/home" })}
+                    onClick={() => signIn("google", { callbackUrl: "/" })}
                   >
                     Join In‑Person
                   </button>
-                  <Link href="#online" className="btn-bxkr-outline">Learn More</Link>
+                  <Link href="#online" className="btn-bxkr-outline">
+                    Learn More
+                  </Link>
                 </div>
               </div>
             </div>
@@ -258,11 +251,13 @@ export default function Landing() {
                 <div className="d-flex gap-2 mt-3">
                   <button
                     className="bxkr-btn"
-                    onClick={() => signIn("google", { callbackUrl: "/home" })}
+                    onClick={() => signIn("google", { callbackUrl: "/" })}
                   >
                     Join Online
                   </button>
-                  <Link href="#inperson" className="btn-bxkr-outline">Learn More</Link>
+                  <Link href="#inperson" className="btn-bxkr-outline">
+                    Learn More
+                  </Link>
                 </div>
               </div>
             </div>
@@ -279,14 +274,14 @@ export default function Landing() {
           <div className="d-flex justify-content-center gap-2 flex-wrap mt-3">
             <button
               className="bxkr-btn"
-              onClick={() => signIn("google", { callbackUrl: "/home" })}
+              onClick={() => signIn("google", { callbackUrl: "/" })}
               disabled={status === "loading"}
             >
               Get Started
             </button>
             <button
               className="btn-bxkr-outline"
-              onClick={() => signIn("email", { callbackUrl: "/home" })}
+              onClick={() => signIn("email", { callbackUrl: "/" })}
             >
               Use Email
             </button>
