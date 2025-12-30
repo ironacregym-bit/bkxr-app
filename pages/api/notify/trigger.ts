@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!key) return res.status(400).json({ error: "key required" });
     const recipient = String(email || session.user.email);
     const resp = await sendScenario({ email: recipient, key: String(key), context: context || {}, force: !!force });
-    return res    return res.status(200).json(resp);
+    return res.status(200).json(resp);
   } catch (e: any) {
     console.error("[notify/trigger]", e?.message || e);
     return res.status(500).json({ error: "Failed to trigger notification" });
