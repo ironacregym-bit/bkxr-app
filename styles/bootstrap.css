@@ -44,6 +44,25 @@ body::before {
   z-index: -1;
 }
 
+.btn-bxkr-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 2px solid #FF8A2A;
+  color: #FF8A2A;
+  background: transparent;
+  font-weight: 600;
+  transition: box-shadow .2s ease, transform .2s ease, background .2s ease, color .2s ease;
+  line-height: 1; /* avoids tall text causing odd border rendering */
+}
+.btn-bxkr-outline:hover {
+  box-shadow: 0 0 16px rgba(255,138,42,0.65);
+  transform: scale(1.04);
+  background: rgba(255,138,42,0.12);
+}
+
 /* ===== Carousel ===== */
 .bxkr-carousel {
   display: flex;
