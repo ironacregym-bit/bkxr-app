@@ -2,6 +2,7 @@
 // pages/api/billing/webhook.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { stripe } from "../../../lib/stripe";
+import type Stripe from "stripe";
 import firestore from "../../../lib/firestoreClient";
 
 // Disable Next.js body parser to access the raw body for Stripe signature verification
