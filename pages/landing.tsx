@@ -3,19 +3,40 @@ import Head from "next/head";
 import Link from "next/link";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/router";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 export default function Landing() {
   const { status } = useSession();
   const router = useRouter();
   const accent = "#FF8A2A";
 
-  // If you want a client-side guard, it can remain; it will just ensure we stay on "/"
+  /**
+   * TODO: Replace this with your real WhatsApp number (E.164 without '+')
+   * e.g. UK mobile: '447912345678'
+   */
+  const whatsappNumber = "447000000000";
+
+  // Pre-filled WhatsApp message for In-Person interest
+  const waHref = useMemo(() => {
+    const msg = encodeURIComponent(
+      "Hi – I'm interested in trying a BXKR class at Iron Acre Gym in Westerfield. Could you share the next available sessions and how to book?"
+    );
+    // wa.me requires the number without '+' or spaces
+    return `https://wa.me/${whatsappNumber}?text=${msg}`;
+  }, [whatsappNumber]);
+
+  // Keep authenticated users on "/" (main app home)
   useEffect(() => {
     if (status === "authenticated") {
-      router.replace("/"); // main app lives at "/"
+      router.replace("/");
     }
   }, [status, router]);
+
+  // Helper: route to NextAuth provider screen (registration/sign-in)
+  const goToRegistration = () => {
+    // This shows the provider list (Google for now; email can be added later)
+    window.location.href = "/api/auth/signin";
+  };
 
   return (
     <>
@@ -27,7 +48,14 @@ export default function Landing() {
       <main className="container py-4" style={{ paddingBottom: 80 }}>
         {/* TOP BAR */}
         <div className="d-flex justify-content-between align-items-center mb-4 futuristic-card">
-          <div className="fw-bold" style={{ fontSize: "1.4rem" }}>BXKR</div>
+          <div className="d-flex align-items-center gap-2">
+            <img
+              src="/BXKRLogoNoBG.jpg"
+              alt="BXKR"
+              style={{ height: 36, width: "auto", display: "block" }}
+            />
+          </div>
+
           <button
             className="bxkr-btn"
             onClick={() => signIn("google", { callbackUrl: "/" })}
@@ -41,8 +69,7 @@ export default function Landing() {
         <section className="row align-items-center mb-5">
           <div className="col-12 col-md-6 mb-4">
             <h1 className="fw-bold" style={{ fontSize: "2.6rem", lineHeight: 1.2 }}>
-              A Hybrid{" "}
-              <span style={{ color: accent }}>Boxing &amp; Kettlebell</span>
+              A Hybrid <span style={{ color: accent }}>Boxing &amp; Kettlebell</span>
               <br />
               Transformation Programme
             </h1>
@@ -53,15 +80,12 @@ export default function Landing() {
             </p>
 
             <p className="small text-dim">
-              Structured sessions, measurable progress, and accountability. Train in person at
-              Iron Acre Gym, or go fully online with the BXKR app.
+              Train in person at Iron Acre Gym — an open barn on a working farm in Westerfield —
+              or go fully online inside the BXKR app.
             </p>
 
             <div className="d-flex gap-2 mt-3 flex-wrap">
-              <button
-                className="bxkr-btn"
-                onClick={() => signIn("google", { callbackUrl: "/" })}
-              >
+              <button className="bxkr-btn" onClick={goToRegistration}>
                 Start Your Transformation
               </button>
               <Link href="#compare" className="btn-bxkr-outline">
@@ -85,15 +109,14 @@ export default function Landing() {
           <div className="text-center mb-4">
             <h2 className="fw-bold">In‑Person BXKR at Iron Acre Gym (Westerfield)</h2>
             <p className="text-dim">
-              Train in an open barn on a working farm. Raw atmosphere, serious training,
-              coach-led sessions. It’s a proper environment for people who want to get better.
+              Train in an open barn on a working farm. Raw atmosphere. Serious training. Coach‑led
+              sessions. A proper environment for people who want to get better.
             </p>
           </div>
 
           <div className="row g-3 align-items-stretch">
             <div className="col-12 col-md-6">
               <div className="futuristic-card p-0" style={{ overflow: "hidden" }}>
-                {/* Replace with your real photo in /public */}
                 <img
                   src="/barn-gym.jpg"
                   alt="Iron Acre Gym — open barn on a working farm"
@@ -106,8 +129,8 @@ export default function Landing() {
               <div className="futuristic-card p-4 h-100">
                 <h4 className="fw-bold">A Training Environment Like No Other</h4>
                 <p className="text-dim small mt-2">
-                  Fresh air through the barn. Bags and pads. Chalk and bells. No mirrors.
-                  No fluff. Just quality work and progression with coaching.
+                  Fresh air through the barn. Bags and pads. Chalk and bells. No mirrors. No fluff.
+                  Just quality work and progression with coaching.
                 </p>
 
                 <ul className="small text-dim mt-3">
@@ -121,15 +144,12 @@ export default function Landing() {
                 <div className="fw-bold mt-3" style={{ fontSize: "1.2rem" }}>
                   £60 / month
                 </div>
-                <div className="small text-dim">Founders pricing. Limited availability.</div>
+                <div className="small text-dim">Or pay‑as‑you‑go: £8 per class</div>
 
                 <div className="d-flex gap-2 mt-3 flex-wrap">
-                  <button
-                    className="bxkr-btn"
-                    onClick={() => signIn("google", { callbackUrl: "/" })}
-                  >
-                    Join In‑Person BXKR
-                  </button>
+                  <a href={waHref} target="_blank" rel="noopener noreferrer" className="bxkr-btn">
+                    Join In‑Person via WhatsApp
+                  </a>
                   <Link href="#online" className="btn-bxkr-outline">
                     See Online Programme
                   </Link>
@@ -144,15 +164,14 @@ export default function Landing() {
           <div className="text-center mb-4">
             <h2 className="fw-bold">BXKR Online Programme</h2>
             <p className="text-dim">
-              The full BXKR system delivered through the app — train anywhere,
-              stay accountable and progress every week.
+              The full BXKR system delivered through the app — train anywhere, track everything,
+              and progress every week.
             </p>
           </div>
 
           <div className="row g-3 align-items-stretch">
             <div className="col-12 col-md-6 order-md-2">
               <div className="futuristic-card p-0" style={{ overflow: "hidden" }}>
-                {/* Replace with your real app mockup in /public */}
                 <img
                   src="/bxkr-app.jpg"
                   alt="BXKR app — workouts, habits, nutrition tracking"
@@ -180,15 +199,12 @@ export default function Landing() {
                 </ul>
 
                 <div className="fw-bold mt-3" style={{ fontSize: "1.2rem" }}>
-                  £30 / month
+                  £20 / month
                 </div>
                 <div className="small text-dim">Start anywhere. Train consistently.</div>
 
                 <div className="d-flex gap-2 mt-3 flex-wrap">
-                  <button
-                    className="bxkr-btn"
-                    onClick={() => signIn("google", { callbackUrl: "/" })}
-                  >
+                  <button className="bxkr-btn" onClick={goToRegistration}>
                     Join BXKR Online
                   </button>
                   <Link href="#inperson" className="btn-bxkr-outline">
@@ -221,13 +237,12 @@ export default function Landing() {
                   <li>Includes full BXKR app access</li>
                 </ul>
                 <div className="fw-bold mt-3">£60 / month</div>
+                <div className="small text-dim">Or £8 per class (PAYG)</div>
+
                 <div className="d-flex gap-2 mt-3">
-                  <button
-                    className="bxkr-btn"
-                    onClick={() => signIn("google", { callbackUrl: "/" })}
-                  >
-                    Join In‑Person
-                  </button>
+                  <a href={waHref} target="_blank" rel="noopener noreferrer" className="bxkr-btn">
+                    Join In‑Person via WhatsApp
+                  </a>
                   <Link href="#online" className="btn-bxkr-outline">
                     Learn More
                   </Link>
@@ -247,12 +262,10 @@ export default function Landing() {
                   <li>Daily accountability via push notifications</li>
                   <li>Lower cost than in‑person coaching</li>
                 </ul>
-                <div className="fw-bold mt-3">£30 / month</div>
+                <div className="fw-bold mt-3">£20 / month</div>
+
                 <div className="d-flex gap-2 mt-3">
-                  <button
-                    className="bxkr-btn"
-                    onClick={() => signIn("google", { callbackUrl: "/" })}
-                  >
+                  <button className="bxkr-btn" onClick={goToRegistration}>
                     Join Online
                   </button>
                   <Link href="#inperson" className="btn-bxkr-outline">
@@ -264,34 +277,9 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* FINAL CTA */}
-        <section className="futuristic-card p-4 text-center mb-4">
-          <h3 className="fw-bold">Start Your BXKR Journey</h3>
-          <p className="text-dim">
-            Choose the version that fits your life — in person, or online from anywhere.
-          </p>
-
-          <div className="d-flex justify-content-center gap-2 flex-wrap mt-3">
-            <button
-              className="bxkr-btn"
-              onClick={() => signIn("google", { callbackUrl: "/" })}
-              disabled={status === "loading"}
-            >
-              Get Started
-            </button>
-            <button
-              className="btn-bxkr-outline"
-              onClick={() => signIn("email", { callbackUrl: "/" })}
-            >
-              Use Email
-            </button>
-          </div>
-        </section>
-
         {/* FOOTER */}
         <footer className="text-center text-dim small">
-          © {new Date().getFullYear()} BXKR ·{" "}
-          <Link href="/privacy">Privacy</Link> ·{" "}
+          © {new Date().getFullYear()} BXKR · <Link href="/privacy">Privacy</Link> ·{" "}
           <Link href="/terms">Terms</Link>
         </footer>
       </main>
