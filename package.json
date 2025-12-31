@@ -1,3 +1,4 @@
+
 {
   "name": "bxkr-app",
   "private": true,
@@ -10,23 +11,23 @@
     "date-fns": "^3.6.0",
     "googleapis": "^132.0.0",
     "next": "14.2.4",
-    "next-auth": "^4.24.7",
+    "next-auth": "5.0.0-beta.25",
+    "@auth/firebase-adapter": "^1.6.0",
+    "firebase-admin": "^12.0.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "zod": "^3.23.8",
     "swr": "^2.2.5",
     "nodemailer": "^7.0.1",
     "firebase": "^11.0.0",
-    "firebase-admin": "^12.0.0",
     "@google-cloud/firestore": "^7.7.0",
     "react-circular-progressbar": "^2.1.0",
     "@zxing/browser": "^0.1.4",
     "chart.js": "^4.4.1",
     "react-chartjs-2": "^5.2.0",
     "web-push": "^3.6.0"
-
   },
-  "devDependencies": {
+   "devDependencies": {
     "typescript": "^5.6.3",
     "@types/node": "^20.11.30",
     "@types/react": "^18.3.3",
