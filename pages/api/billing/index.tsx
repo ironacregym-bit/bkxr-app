@@ -60,7 +60,7 @@ export default function Billing() {
               Start 14‑day Trial
             </button>
           </div>
-          {error && <div className="alert alert-danger mt-3">{error}</          {error && <div className="alert alert-danger mt-3">{error}</div>}
+          {error && <div className="alert alert-danger mt-3">{error}</div>}
         </div>
       </main>
     </>
