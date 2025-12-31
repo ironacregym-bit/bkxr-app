@@ -1,4 +1,3 @@
-
 // pages/api/auth/[...nextauth].ts
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
@@ -19,7 +18,11 @@ const EMAIL_KEYS = [
 ];
 const HAVE_EMAIL = hasAll(EMAIL_KEYS);
 
-const HAVE_SA = hasAll(["GOOGLE_PROJECT_ID", "GOOGLE_CLIENT_EMAIL", "GOOGLE_PRIVATE_KEY"]);
+const HAVE_SA = hasAll([
+  "GOOGLE_PROJECT_ID",
+  "GOOGLE_CLIENT_EMAIL",
+  "GOOGLE_PRIVATE_KEY",
+]);
 
 let adapter: ReturnType<typeof FirestoreAdapter> | undefined;
 try {
@@ -32,14 +35,16 @@ try {
       }),
     });
   } else {
-    console.error("[NextAuth] Missing GOOGLE_* service account envs; Email magic links need adapter.");
+    console.error(
+      "[NextAuth] Missing GOOGLE_* service account envs; Email magic links need adapter."
+    );
   }
 } catch (e) {
   console.error("[NextAuth] Failed to init FirestoreAdapter:", e);
 }
 
 export const authOptions: NextAuthOptions = {
-  adapter, // Email will work only if adapter is defined
+  adapter,
 
   providers: [
     GoogleProvider({
@@ -67,7 +72,16 @@ export const authOptions: NextAuthOptions = {
 
   session: { strategy: "jwt" },
 
+  pages: {
+    error: "/auth/error",
+  },
+
   callbacks: {
+    // 🔥 Fix: allow switching between Google + Email without NextAuth blocking it
+    async signIn() {
+      return true;
+    },
+
     async jwt({ token, account }) {
       if (account) {
         (token as any).accessToken = (account as any).access_token;
@@ -84,7 +98,8 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         (session.user as any).role = ((token as any).role as string) || "user";
-        (session.user as any).gym_id = ((token as any).gym_id as string) || null;
+        (session.user as any).gym_id =
+          ((token as any).gym_id as string) || null;
       }
       (session as any).accessToken = (token as any).accessToken as string;
       return session;
@@ -135,14 +150,16 @@ export const authOptions: NextAuthOptions = {
           await firestore
             .collection("users")
             .doc(user.email)
-            .set({ last_login_at: new Date().toISOString() }, { merge: true });
+            .set(
+              { last_login_at: new Date().toISOString() },
+              { merge: true }
+            );
         }
       } catch (e) {
         console.error("[NextAuth events.signIn] update last_login_at failed:", e);
       }
-       },
+    },
   },
 };
 
-// ✅ Required: default export of the NextAuth handler
 export default NextAuth(authOptions);
