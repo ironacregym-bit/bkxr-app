@@ -2,19 +2,19 @@
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import EmailProvider from "next-auth/providers/email";
-import { FirestoreAdapter } from "@next-auth/firebase-adapter"; // <- v4 adapter
+import { FirestoreAdapter } from "@next-auth/firebase-adapter"; // v4 adapter
 import { cert } from "firebase-admin/app";
 import firestore from "../../../lib/firestoreClient";
 
 export const authOptions: NextAuthOptions = {
-  // NextAuth v4 + Firestore adapter (stores users/accounts/sessions/verificationTokens for Email magic links)
+  // Firestore adapter to store verification tokens (required for Email magic links)
   adapter: FirestoreAdapter({
     credential: cert({
       projectId: process.env.GOOGLE_PROJECT_ID,
       clientEmail: process.env.GOOGLE_CLIENT_EMAIL,
       privateKey: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
     }),
-    // You can leave default collection names or customise via `collections: {...}`
+    // Optionally: collections: { users: "auth_users", accounts: "auth_accounts", sessions: "auth_sessions", verificationTokens: "auth_verificationTokens" }
   }),
 
   providers: [
@@ -23,7 +23,7 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
 
-    // Email magic links via Gmail SMTP (requires Gmail App Password)
+    // Email magic links via Gmail SMTP (use an App Password)
     EmailProvider({
       server: {
         host: process.env.EMAIL_SERVER_HOST,
@@ -43,15 +43,19 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async jwt({ token, account }) {
+      // Keep Google access token for your client use (if needed)
       if (account) {
         (token as any).accessToken = (account as any).access_token;
       }
+
+      // Enrich token with role/gym_id from your canonical `users` collection
       if (token.email) {
-        const userSnap = await firestore.collection("users").doc(token.email).get();
-        const userData = userSnap.exists ? userSnap.data() ?? {} : {};
-        (token as any).role = (userData.role as string) || "user";
-        (token as any).gym_id = (userData.gym_id as string) || null;
+        const snap = await firestore.collection("users").doc(token.email).get();
+        const data = snap.exists ? snap.data() ?? {} : {};
+        (token as any).role = (data.role as string) || "user";
+        (token as any).gym_id = (data.gym_id as string) || null;
       }
+
       return token;
     },
 
@@ -76,12 +80,14 @@ export const authOptions: NextAuthOptions = {
   },
 
   events: {
-    async createUser(user) {
+    // 🔧 Correct signature: payload object containing { user }
+    async createUser({ user }) {
       try {
         if (!user?.email) return;
         const ref = firestore.collection("users").doc(user.email);
         const snap = await ref.get();
         const nowIso = new Date().toISOString();
+
         if (!snap.exists) {
           await ref.set(
             {
@@ -101,13 +107,15 @@ export const authOptions: NextAuthOptions = {
         console.error("[NextAuth events.createUser] sync failed:", e);
       }
     },
+
+    // 🔧 Correct signature: payload object containing { user, account, isNewUser }
     async signIn({ user }) {
       try {
         if (user?.email) {
           await firestore
             .collection("users")
             .doc(user.email)
-            .set({ last_login_at: new Date().toISOString()            .set({ last_login_at: new Date().toISOString() }, { merge: true });
+            .set({ last_login_at: new Date().toISOString() }, { merge: true });
         }
       } catch (e) {
         console.error("[NextAuth events.signIn] update last_login_at failed:", e);
