@@ -2,7 +2,7 @@
 // pages/onboarding.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import useSWR, { mutate } from "swr";
 import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
@@ -34,6 +34,9 @@ type UsersDoc = {
   gym_id?: string | null;
   location?: string | null;
   role?: string | null;
+  // billing (written by Stripe webhook)
+  subscription_status?: "trialing" | "active" | "past_due" | "canceled" | "paused" | "incomplete" | null;
+  trial_end?: string | null; // ISO
 };
 
 type GoalPrimary = "lose" | "tone" | "gain";
@@ -62,6 +65,8 @@ export default function OnboardingPage() {
     goal_intensity: null,
     equipment: { bodyweight: true, kettlebell: false, dumbbell: false },
     preferences: { boxing_focus: true, kettlebell_focus: true, schedule_days: 3 },
+    subscription_status: null,
+    trial_end: null,
   });
 
   const swrKey = email ? `/api/profile?email=${encodeURIComponent(email)}` : null;
@@ -83,6 +88,8 @@ export default function OnboardingPage() {
           kettlebell_focus: !!data?.preferences?.kettlebell_focus,
           schedule_days: Number(data?.preferences?.schedule_days ?? 3),
         },
+        subscription_status: (data as UsersDoc)?.subscription_status ?? prev.subscription_status ?? null,
+        trial_end: (data as UsersDoc)?.trial_end ?? prev.trial_end ?? null,
       }));
       if (data.calorie_target || data.protein_target || data.carb_target || data.fat_target) {
         setSavedMsg("Targets loaded");
@@ -202,6 +209,33 @@ export default function OnboardingPage() {
     }
   }
 
+  // Stripe actions
+  async function startTrial() {
+    try {
+      setSaving(true);
+      const res = await fetch("/api/billing/create-checkout-session", { method: "POST" });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "Failed to create session");
+      window.location.href = j.url;
+    } catch (e: any) {
+      setSavedMsg(e?.message || "Failed to start trial");
+      setSaving(false);
+    }
+  }
+
+  async function openPortal() {
+    try {
+      setSaving(true);
+      const res = await fetch("/api/billing/create-portal-session", { method: "POST" });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "Failed to open portal");
+      window.location.href = j.url;
+    } catch (e: any) {
+      setSavedMsg(e?.message || "Failed to open portal");
+      setSaving(false);
+    }
+  }
+
   if (!email) {
     return (
       <>
@@ -235,6 +269,14 @@ export default function OnboardingPage() {
     !!profile.goal_primary &&
     !!profile.calorie_target;
 
+  // Derived billing info
+  const trialDaysLeft = useMemo(() => {
+    if (!profile.trial_end) return null;
+    const ms = new Date(profile.trial_end).getTime() - Date.now();
+    const d = Math.ceil(ms / (1000 * 60 * 60 * 24));
+    return d > 0 ? d : 0;
+  }, [profile.trial_end]);
+
   return (
     <>
       <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff" }}>
@@ -244,6 +286,23 @@ export default function OnboardingPage() {
         </div>
 
         {savedMsg && <div className="pill-success mb-3">{savedMsg}</div>}
+
+        {/* Trial banner if we already know trial_end from webhook */}
+        {profile.trial_end && (
+          <div className="bxkr-card p-3 mb-3" style={{ borderLeft: `4px solid ${ACCENT}` }}>
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <strong>Trial</strong>: {trialDaysLeft} days left
+                <span className="text-dim ms-2">
+                  Ends {new Date(profile.trial_end).toLocaleDateString()}
+                </span>
+              </div>
+              <button className="btn btn-bxkr-outline" onClick={openPortal} disabled={saving}>
+                Manage billing
+              </button>
+            </div>
+          </div>
+        )}
 
         {step === 0 && (
           <div className="bxkr-card p-3 mb-3">
@@ -304,7 +363,7 @@ export default function OnboardingPage() {
 
         {step === 1 && (
           <div className="bxkr-card p-3 mb-3">
-            <h5 className="mb-2">Daily activity & goal</h5>
+            <h5 className="mb-2">Daily activity &amp; goal</h5>
             <div className="row g-2">
               <div className="col-12">
                 <label className="form-label small text-dim">Activity multiplier</label>
@@ -417,6 +476,7 @@ export default function OnboardingPage() {
           </div>
         )}
 
+        {/* STEP 3 — Preferences */}
         {step === 3 && (
           <div className="bxkr-card p-3 mb-3">
             <h5 className="mb-2">Preferences</h5>
@@ -428,7 +488,10 @@ export default function OnboardingPage() {
                   className="form-check-input"
                   checked={!!profile.preferences?.boxing_focus}
                   onChange={(e) =>
-                    setProfile({ ...profile, preferences: { ...profile.preferences, boxing_focus: e.target.checked } })
+                    setProfile({
+                      ...profile,
+                      preferences: { ...(profile.preferences || {}), boxing_focus: e.target.checked },
+                    })
                   }
                 />
               </div>
@@ -439,7 +502,10 @@ export default function OnboardingPage() {
                   className="form-check-input"
                   checked={!!profile.preferences?.kettlebell_focus}
                   onChange={(e) =>
-                    setProfile({ ...profile, preferences: { ...profile.preferences, kettlebell_focus: e.target.checked } })
+                    setProfile({
+                      ...profile,
+                      preferences: { ...(profile.preferences || {}), kettlebell_focus: e.target.checked },
+                    })
                   }
                 />
               </div>
@@ -449,23 +515,57 @@ export default function OnboardingPage() {
                   className="form-select"
                   value={profile.preferences?.schedule_days ?? 3}
                   onChange={(e) =>
-                    setProfile({ ...profile, preferences: { ...profile.preferences, schedule_days: Number(e.target.value) } })
+                    setProfile({
+                      ...profile,
+                      preferences: { ...(profile.preferences || {}), schedule_days: Number(e.target.value) },
+                    })
                   }
                 >
-                  {[2,3,4,5,6].map((n) => <option key={n} value={n}>{n}</option>)}
+                  {[2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
             </div>
           </div>
         )}
 
+        {/* STEP 4 — All set! + Trial CTA if not active */}
         {step === 4 && (
-          <div className="bxkr-card p-3 mb-3">
-            <h5 className="mb-2">All set!</h5>
-            <p className="text-dim">
-              BXKR will tailor your workouts and tasks based on your metrics, goals, and equipment.
-            </p>
-          </div>
+          <>
+            {profile.subscription_status !== "active" && (
+              <div className="bxkr-card p-3 mb-3">
+                <h5 className="mb-2">Start your 14‑day free trial</h5>
+                <p className="text-dim">
+                  Unlock all BXKR features: structured boxing & kettlebell sessions, habit tracking,
+                  nutrition logging, weekly breakdowns and accountability.
+                </p>
+                <ul className="small text-dim mb-2">
+                  <li>No card required today</li>
+                  <li>Cancel anytime</li>
+                  <li>Full access for 14 days</li>
+                </ul>
+                <div className="d-flex gap-2">
+                  <button
+                    className="btn btn-bxkr"
+                    onClick={startTrial}
+                    disabled={saving}
+                    style={{ background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, borderRadius: 24 }}
+                  >
+                    {saving ? "Starting…" : "Start free trial"}
+                  </button>
+                  <button className="btn btn-bxkr-outline" type="button" disabled={saving}>
+                    Maybe later
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="bxkr-card p-3 mb-3">
+              <h5 className="mb-2">All set!</h5>
+              <p className="text-dim">
+                BXKR will tailor your workouts and tasks based on your metrics, goals, and equipment.
+              </p>
+            </div>
+          </>
         )}
 
         <div className="d-flex justify-content-between">
