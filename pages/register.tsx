@@ -10,14 +10,14 @@ export default function Register() {
   const router = useRouter();
   const ACCENT = "#FF8A2A";
 
-  // If already authenticated, go to your main index page.
+  // If already authenticated, go to onboarding
   useEffect(() => {
     if (status === "authenticated") {
-      router.replace("/");
+      router.replace("/onboarding");
     }
   }, [status, router]);
 
-  // --- In‑person CTA via WhatsApp (replace with your real number if desired) ---
+  // In‑person CTA via WhatsApp (replace with your real number if desired)
   // Provide digits only, no "+" or spaces (E.164 without '+')
   const whatsappNumber = "447000000000";
   const waHref = useMemo(() => {
@@ -27,7 +27,7 @@ export default function Register() {
     return `https://wa.me/${whatsappNumber}?text=${msg}`;
   }, [whatsappNumber]);
 
-  // --- Email magic link form state ---
+  // Email magic link form state
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -53,7 +53,7 @@ export default function Register() {
       // We set redirect:false so the page doesn’t navigate; user will click the email link.
       const res = await signIn("email", {
         email,
-        callbackUrl: "/",
+        callbackUrl: "/onboarding",
         redirect: false,
       });
       if (res && !res.error) {
@@ -88,7 +88,7 @@ export default function Register() {
           </div>
           <button
             className="bxkr-btn"
-            onClick={() => signIn("google", { callbackUrl: "/" })}
+            onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
             disabled={status === "loading"}
           >
             Sign in with Google
@@ -154,7 +154,7 @@ export default function Register() {
                 <button
                   type="button"
                   className="btn-bxkr-outline"
-                  onClick={() => signIn("google", { callbackUrl: "/" })}
+                  onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
                 >
                   Google
                 </button>
