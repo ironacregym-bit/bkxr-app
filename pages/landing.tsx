@@ -1,7 +1,7 @@
 
 import Head from "next/head";
 import Link from "next/link";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect, useMemo } from "react";
 
@@ -14,7 +14,7 @@ export default function Landing() {
    * TODO: Replace this with your real WhatsApp number (E.164 without '+')
    * e.g. UK mobile: '447912345678'
    */
-  const whatsappNumber = "447000000000";
+  const whatsappNumber = "447860861120";
 
   // Pre-filled WhatsApp message for In-Person interest
   const waHref = useMemo(() => {
@@ -31,12 +31,6 @@ export default function Landing() {
       router.replace("/");
     }
   }, [status, router]);
-
-  // Helper: route to NextAuth provider screen (registration/sign-in)
-  const goToRegistration = () => {
-    // This shows the provider list (Google for now; email can be added later)
-    window.location.href = "/api/auth/signin";
-  };
 
   return (
     <>
@@ -56,13 +50,10 @@ export default function Landing() {
             />
           </div>
 
-          <button
-            className="bxkr-btn"
-            onClick={() => signIn("google", { callbackUrl: "/" })}
-            disabled={status === "loading"}
-          >
+          {/* Route to the register page instead of direct NextAuth */}
+          <Link href="/register" className="bxkr-btn" aria-label="Sign in">
             Sign in
-          </button>
+          </Link>
         </div>
 
         {/* HERO */}
@@ -85,9 +76,10 @@ export default function Landing() {
             </p>
 
             <div className="d-flex gap-2 mt-3 flex-wrap">
-              <button className="bxkr-btn" onClick={goToRegistration}>
+              {/* Route to register page */}
+              <Link href="/register" className="bxkr-btn">
                 Start Your Transformation
-              </button>
+              </Link>
               <Link href="#compare" className="btn-bxkr-outline">
                 Compare Options
               </Link>
@@ -204,9 +196,10 @@ export default function Landing() {
                 <div className="small text-dim">Start anywhere. Train consistently.</div>
 
                 <div className="d-flex gap-2 mt-3 flex-wrap">
-                  <button className="bxkr-btn" onClick={goToRegistration}>
+                  {/* Route to register page */}
+                  <Link href="/register" className="bxkr-btn">
                     Join BXKR Online
-                  </button>
+                  </Link>
                   <Link href="#inperson" className="btn-bxkr-outline">
                     See In‑Person Option
                   </Link>
@@ -220,7 +213,6 @@ export default function Landing() {
         <section className="mb-5" id="compare">
           <div className="text-center mb-4">
             <h2 className="fw-bold">Which BXKR Is Right for You?</h2>
-            <p className="text-dim">Choose the training style that fits your life.</p>
           </div>
 
           <div className="row">
@@ -265,9 +257,10 @@ export default function Landing() {
                 <div className="fw-bold mt-3">£20 / month</div>
 
                 <div className="d-flex gap-2 mt-3">
-                  <button className="bxkr-btn" onClick={goToRegistration}>
+                  {/* Route to register page */}
+                  <Link href="/register" className="bxkr-btn">
                     Join Online
-                  </button>
+                  </Link>
                   <Link href="#inperson" className="btn-bxkr-outline">
                     Learn More
                   </Link>
@@ -283,6 +276,5 @@ export default function Landing() {
           <Link href="/terms">Terms</Link>
         </footer>
       </main>
-    </>
+       </>
   );
-}
