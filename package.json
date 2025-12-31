@@ -13,7 +13,7 @@
     "next": "14.2.4",
     "next-auth": "5.0.0-beta.25",
     "@auth/firebase-adapter": "^1.6.0",
-    "firebase-admin": "^12.0.0",
+    "firebase-admin": "^11.10.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "zod": "^3.23.8",
@@ -27,14 +27,15 @@
     "react-chartjs-2": "^5.2.0",
     "web-push": "^3.6.0"
   },
-   "devDependencies": {
+  "overrides": {
+    "firebase-admin": "11.10.1"
+  },
+  "devDependencies": {
     "typescript": "^5.6.3",
     "@types/node": "^20.11.30",
     "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
+       "@types/react-dom": "^18.3.0",
     "@types/web-push": "^3.6.3"
   },
-  "engines": {
-    "node": ">=18.18"
-  }
+  "engines": { "node": ">=18.18" }
 }
