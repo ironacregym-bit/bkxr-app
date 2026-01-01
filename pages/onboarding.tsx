@@ -59,6 +59,12 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [unsaved, setUnsaved] = useState<boolean>(false);
+
+  const markDirty = () => {
+    setUnsaved(true);
+    setSavedMsg(null);
+  };
 
   const [profile, setProfile] = useState<UsersDoc>({
     email: email ?? undefined,
@@ -204,7 +210,6 @@ export default function OnboardingPage() {
   async function autoSave(nextStep?: number) {
     if (!email) return signIn("google");
     setSaving(true);
-    setSavedMsg(null);
 
     const targets = computeTargets(profile);
     const equipmentPayload = workoutTypeToEquipment(profile.workout_type ?? null);
@@ -254,6 +259,7 @@ export default function OnboardingPage() {
         fat_target: targets.fat_target,
         equipment: equipmentPayload,
       }));
+      setUnsaved(false);
       setSavedMsg("Saved ✅");
 
       if (swrKey) await mutate(swrKey, undefined, { revalidate: true });
@@ -325,11 +331,28 @@ export default function OnboardingPage() {
     <>
       <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff" }}>
         {/* Header + trial banner */}
-        <div className="d-flex align-items-center justify-content-between mb-3">
+        <div className="d-flex align-items-center justify-content-between mb-2">
           <h2 className="mb-0" style={{ fontWeight: 700 }}>Let’s Tailor BXKR To You</h2>
           <div className="text-dim">Step {step + 1} / 5</div>
         </div>
-        {savedMsg && <div className="pill-success mb-3">{savedMsg}</div>}
+
+        {/* Saved / Unsaved indicator */}
+        <div className="mb-3">
+          {unsaved ? (
+            <span
+              className="bxkr-chip"
+              style={{
+                borderColor: ACCENT,
+                color: "#fff",
+                boxShadow: "0 0 10px rgba(255,122,26,0.5)",
+              }}
+            >
+              Unsaved changes
+            </span>
+          ) : (
+            savedMsg && <div className="pill-success">{savedMsg}</div>
+          )}
+        </div>
 
         {profile.trial_end && (
           <div className="futuristic-card p-3 mb-3" style={{ borderLeft: `4px solid ${ACCENT}` }}>
@@ -361,7 +384,10 @@ export default function OnboardingPage() {
                   type="number"
                   className="form-control"
                   value={profile.height_cm ?? ""}
-                  onChange={(e) => setProfile({ ...profile, height_cm: Number(e.target.value) || null })}
+                  onChange={(e) => {
+                    markDirty();
+                    setProfile({ ...profile, height_cm: Number(e.target.value) || null });
+                  }}
                 />
               </div>
               <div className="col-12 col-md-6">
@@ -370,7 +396,10 @@ export default function OnboardingPage() {
                   type="number"
                   className="form-control"
                   value={profile.weight_kg ?? ""}
-                  onChange={(e) => setProfile({ ...profile, weight_kg: Number(e.target.value) || null })}
+                  onChange={(e) => {
+                    markDirty();
+                    setProfile({ ...profile, weight_kg: Number(e.target.value) || null });
+                  }}
                 />
               </div>
               <div className="col-12 col-md-6">
@@ -379,7 +408,10 @@ export default function OnboardingPage() {
                   type="date"
                   className="form-control"
                   value={profile.DOB ?? ""}
-                  onChange={(e) => setProfile({ ...profile, DOB: e.target.value || null })}
+                  onChange={(e) => {
+                    markDirty();
+                    setProfile({ ...profile, DOB: e.target.value || null });
+                  }}
                 />
               </div>
               <div className="col-12 col-md-6">
@@ -387,7 +419,10 @@ export default function OnboardingPage() {
                 <select
                   className="form-select"
                   value={profile.sex ?? ""}
-                  onChange={(e) => setProfile({ ...profile, sex: (e.target.value || null) as UsersDoc["sex"] })}
+                  onChange={(e) => {
+                    markDirty();
+                    setProfile({ ...profile, sex: (e.target.value || null) as UsersDoc["sex"] });
+                  }}
                 >
                   <option value="">Select…</option>
                   <option value="male">Male</option>
@@ -403,7 +438,10 @@ export default function OnboardingPage() {
                   type="number"
                   className="form-control"
                   value={profile.bodyfat_pct ?? ""}
-                  onChange={(e) => setProfile({ ...profile, bodyfat_pct: Number(e.target.value) || null })}
+                  onChange={(e) => {
+                    markDirty();
+                    setProfile({ ...profile, bodyfat_pct: Number(e.target.value) || null });
+                  }}
                 />
               </div>
             </div>
@@ -431,13 +469,14 @@ export default function OnboardingPage() {
                     type="button"
                     aria-pressed={active}
                     className="btn-bxkr-outline"
-                    onClick={() =>
+                    onClick={() => {
+                      markDirty();
                       setProfile({
                         ...profile,
                         job_type: opt.key as JobType,
                         activity_factor: opt.af,
-                      })
-                    }
+                      });
+                    }}
                     style={{
                       background: active ? "rgba(255,138,42,0.12)" : undefined,
                       borderColor: active ? ACCENT : undefined,
@@ -464,7 +503,10 @@ export default function OnboardingPage() {
                     type="button"
                     aria-pressed={active}
                     className="btn-bxkr-outline"
-                    onClick={() => setProfile({ ...profile, goal_primary: opt.key as UsersDoc["goal_primary"] })}
+                    onClick={() => {
+                      markDirty();
+                      setProfile({ ...profile, goal_primary: opt.key as UsersDoc["goal_primary"] });
+                    }}
                     style={{
                       background: active ? "rgba(255,138,42,0.12)" : undefined,
                       borderColor: active ? ACCENT : undefined,
@@ -491,71 +533,171 @@ export default function OnboardingPage() {
           </section>
         )}
 
-        {/* ===== STEP 2 — Workout Type (full-bleed, title + thirds) ===== */}
+        {/* ===== STEP 2 — Workout Type (full‑bleed to viewport edge, fits remaining height) ===== */}
         {step === 2 && (
-          <section className="panel-fullbleed">
-            <header className="panel-header"><h5 className="mb-2">Workout Type</h5></header>
-            <div className="panel-images">
-              {/* Bodyweight */}
+          <section
+            style={{
+              display: "grid",
+              gridTemplateRows: "auto 1fr auto",
+              // iOS safe height
+              minHeight: "100svh",
+              minHeightFallback: "100vh",
+            } as React.CSSProperties}
+          >
+            {/* Title inside container */}
+            <div className="panel-header px-3">
+              <h5 className="mb-2">Workout Type</h5>
+            </div>
+
+            {/* Full‑bleed image column (edge to edge) */}
+            <div
+              style={{
+                width: "100vw",
+                marginLeft: "calc(50% - 50vw)",
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
+                gap: 0,
+              }}
+            >
+              {/* Bodyweight (1/3 of column via flex) */}
               <button
                 type="button"
-                className={`image-slice ${profile.workout_type === "bodyweight" ? "active" : ""}`}
                 style={{
-                  height: "33.3333vh",
+                  flex: "1 1 0",
+                  minHeight: 0,
+                  border: "none",
+                  padding: 0,
                   backgroundImage: "url(/bodyweight.jpg)",
                   backgroundSize: "cover",
-                  backgroundPosition: "center"
+                  backgroundPosition: "center",
+                  position: "relative",
+                  cursor: "pointer",
                 }}
-                onClick={() => setProfile({ ...profile, workout_type: "bodyweight" })}
+                onClick={() => {
+                  markDirty();
+                  setProfile({ ...profile, workout_type: "bodyweight" });
+                }}
               >
-                <div className="image-overlay">
+                {/* Motivator overlay on selection */}
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "flex-end",
+                    padding: "14px 16px",
+                    background:
+                      "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%)",
+                    color: "#fff",
+                    opacity: profile.workout_type === "bodyweight" ? 1 : 0,
+                    transition: "opacity .18s ease",
+                  }}
+                >
                   <div>
-                    <div className="image-title">Bodyweight</div>
-                    <div className="image-sub">Train anywhere. Own your movement patterns and stability.</div>
+                    <div style={{ fontWeight: 700 }}>Bodyweight</div>
+                    <div className="text-dim">Train anywhere. Own your movement patterns and stability.</div>
                   </div>
                 </div>
               </button>
+
               {/* Kettlebells */}
               <button
                 type="button"
-                className={`image-slice ${profile.workout_type === "kettlebells" ? "active" : ""}`}
                 style={{
-                  height: "33.3333vh",
+                  flex: "1 1 0",
+                  minHeight: 0,
+                  border: "none",
+                  padding: 0,
                   backgroundImage: "url(/kettlebells.jpg)",
                   backgroundSize: "cover",
-                  backgroundPosition: "center"
+                  backgroundPosition: "center",
+                  position: "relative",
+                  cursor: "pointer",
                 }}
-                onClick={() => setProfile({ ...profile, workout_type: "kettlebells" })}
+                onClick={() => {
+                  markDirty();
+                  setProfile({ ...profile, workout_type: "kettlebells" });
+                }}
               >
-                <div className="image-overlay">
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "flex-end",
+                    padding: "14px 16px",
+                    background:
+                      "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%)",
+                    color: "#fff",
+                    opacity: profile.workout_type === "kettlebells" ? 1 : 0,
+                    transition: "opacity .18s ease",
+                  }}
+                >
                   <div>
-                    <div className="image-title">Kettlebells</div>
-                    <div className="image-sub">Explosive strength & conditioning. Flow, hinge and press.</div>
+                    <div style={{ fontWeight: 700 }}>Kettlebells</div>
+                    <div className="text-dim">Explosive strength & conditioning. Flow, hinge and press.</div>
                   </div>
                 </div>
               </button>
+
               {/* Dumbbells */}
               <button
                 type="button"
-                className={`image-slice ${profile.workout_type === "dumbbells" ? "active" : ""}`}
                 style={{
-                  height: "33.3333vh",
+                  flex: "1 1 0",
+                  minHeight: 0,
+                  border: "none",
+                  padding: 0,
                   backgroundImage: "url(/dumbbells.jpg)",
                   backgroundSize: "cover",
-                  backgroundPosition: "center"
+                  backgroundPosition: "center",
+                  position: "relative",
+                  cursor: "pointer",
                 }}
-                onClick={() => setProfile({ ...profile, workout_type: "dumbbells" })}
+                onClick={() => {
+                  markDirty();
+                  setProfile({ ...profile, workout_type: "dumbbells" });
+                }}
               >
-                <div className="image-overlay">
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "flex-end",
+                    padding: "14px 16px",
+                    background:
+                      "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%)",
+                    color: "#fff",
+                    opacity: profile.workout_type === "dumbbells" ? 1 : 0,
+                    transition: "opacity .18s ease",
+                  }}
+                >
                   <div>
-                    <div className="image-title">Dumbbells</div>
-                    <div className="image-sub">Classic resistance, balanced loading, scalable progressions.</div>
+                    <div style={{ fontWeight: 700 }}>Dumbbells</div>
+                    <div className="text-dim">Classic resistance, balanced loading, scalable progressions.</div>
                   </div>
                 </div>
               </button>
             </div>
-            <div className="panel-nav">
-              <button className="btn btn-bxkr-outline" onClick={() => autoSave(step - 1)} disabled={isFirstStep || saving}>← Back</button>
+
+            {/* Back / Next in view */}
+            <div
+              style={{
+                padding: "12px 16px",
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "8px",
+              }}
+            >
+              <button
+                className="btn btn-bxkr-outline"
+                onClick={() => autoSave(step - 1)}
+                disabled={isFirstStep || saving}
+              >
+                ← Back
+              </button>
               <button className="btn btn-bxkr" onClick={() => autoSave(step + 1)} disabled={saving}>
                 Next →
                 {saving && <span className="inline-spinner ms-2" />}
@@ -564,52 +706,129 @@ export default function OnboardingPage() {
           </section>
         )}
 
-        {/* ===== STEP 3 — Fighting Style (full-bleed, title + halves) ===== */}
+        {/* ===== STEP 3 — Fighting Style (full‑bleed to viewport edge, fits remaining height) ===== */}
         {step === 3 && (
-          <section className="panel-fullbleed">
-            <header className="panel-header"><h5 className="mb-2">Fighting Style</h5></header>
-            <div className="panel-images">
-              {/* Boxing */}
+          <section
+            style={{
+              display: "grid",
+              gridTemplateRows: "auto 1fr auto",
+              minHeight: "100svh",
+            }}
+          >
+            <div className="panel-header px-3">
+              <h5 className="mb-2">Fighting Style</h5>
+            </div>
+
+            <div
+              style={{
+                width: "100vw",
+                marginLeft: "calc(50% - 50vw)",
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
+                gap: 0,
+              }}
+            >
+              {/* Boxing (upper half) */}
               <button
                 type="button"
-                className={`image-slice ${profile.fighting_style === "boxing" ? "active" : ""}`}
                 style={{
-                  height: "50vh",
+                  flex: "1 1 0",
+                  minHeight: 0,
+                  border: "none",
+                  padding: 0,
                   backgroundImage: "url(/boxing.jpg)",
                   backgroundSize: "cover",
-                  backgroundPosition: "center"
+                  backgroundPosition: "center",
+                  position: "relative",
+                  cursor: "pointer",
                 }}
-                onClick={() => setProfile({ ...profile, fighting_style: "boxing" })}
+                onClick={() => {
+                  markDirty();
+                  setProfile({ ...profile, fighting_style: "boxing" });
+                }}
               >
-                <div className="image-overlay">
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "flex-end",
+                    padding: "14px 16px",
+                    background:
+                      "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%)",
+                    color: "#fff",
+                    opacity: profile.fighting_style === "boxing" ? 1 : 0,
+                    transition: "opacity .18s ease",
+                  }}
+                >
                   <div>
-                    <div className="image-title">Boxing</div>
-                    <div className="image-sub">Purely punch‑based. Master the sweet science of speed & precision.</div>
+                    <div style={{ fontWeight: 700 }}>Boxing</div>
+                    <div className="text-dim">
+                      Purely punch‑based. Master the sweet science of speed & precision.
+                    </div>
                   </div>
                 </div>
               </button>
-              {/* Kickboxing */}
+
+              {/* Kickboxing (lower half) */}
               <button
                 type="button"
-                className={`image-slice ${profile.fighting_style === "kickboxing" ? "active" : ""}`}
                 style={{
-                  height: "50vh",
+                  flex: "1 1 0",
+                  minHeight: 0,
+                  border: "none",
+                  padding: 0,
                   backgroundImage: "url(/kickboxing.jpg)",
                   backgroundSize: "cover",
-                  backgroundPosition: "center"
+                  backgroundPosition: "center",
+                  position: "relative",
+                  cursor: "pointer",
                 }}
-                onClick={() => setProfile({ ...profile, fighting_style: "kickboxing" })}
+                onClick={() => {
+                  markDirty();
+                  setProfile({ ...profile, fighting_style: "kickboxing" });
+                }}
               >
-                <div className="image-overlay">
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "flex-end",
+                    padding: "14px 16px",
+                    background:
+                      "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%)",
+                    color: "#fff",
+                    opacity: profile.fighting_style === "kickboxing" ? 1 : 0,
+                    transition: "opacity .18s ease",
+                  }}
+                >
                   <div>
-                    <div className="image-title">Kickboxing</div>
-                    <div className="image-sub">Punches, kicks & knees. Total‑body power and athletic footwork.</div>
+                    <div style={{ fontWeight: 700 }}>Kickboxing</div>
+                    <div className="text-dim">
+                      Punches, kicks & knees. Total‑body power and athletic footwork.
+                    </div>
                   </div>
                 </div>
               </button>
             </div>
-            <div className="panel-nav">
-              <button className="btn btn-bxkr-outline" onClick={() => autoSave(step - 1)} disabled={isFirstStep || saving}>← Back</button>
+
+            <div
+              style={{
+                padding: "12px 16px",
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "8px",
+              }}
+            >
+              <button
+                className="btn btn-bxkr-outline"
+                onClick={() => autoSave(step - 1)}
+                disabled={isFirstStep || saving}
+              >
+                ← Back
+              </button>
               <button className="btn btn-bxkr" onClick={() => autoSave(step + 1)} disabled={saving}>
                 Next →
                 {saving && <span className="inline-spinner ms-2" />}
