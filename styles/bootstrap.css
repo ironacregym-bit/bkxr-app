@@ -16,11 +16,7 @@
 
 /* ===== Body & Typography ===== */
 body {
-  background: radial-gradient(
-    circle at top left,
-    rgba(255, 107, 0, 0.15),  /* Neon orange glow */
-    #1C1C1C 60%               /* Charcoal base */
-  );
+  background: linear-gradient(180deg,#1a1a1a 0%, #222 100%);
   color: #fff;
   font-family: 'Inter', sans-serif;
   min-height: 100vh;
