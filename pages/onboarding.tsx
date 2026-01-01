@@ -734,7 +734,7 @@ export default function OnboardingPage() {
             style={{ background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, borderRadius: 24 }}
           >
             {step < 4 ? "Next →" : "Finish → Home"}
-            {saving && <            {saving && <span className="inline-spinner ms-2" />}
+            {saving && <span className="inline-spinner ms-2" />}
           </button>
         </div>
       </main>
