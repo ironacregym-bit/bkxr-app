@@ -50,11 +50,11 @@ export default function OnboardingPage() {
   const email = session?.user?.email || null;
 
   // Steps:
-  // 0 Metrics
-  // 1 Job type + Goal primary
-  // 2 Workout type (full-bleed thirds)
-  // 3 Fighting style (full-bleed halves)
-  // 4 Finish + Free trial CTA (hidden if subscribed/trialing)
+  // 0 Your Metrics
+  // 1 Job Type + Main Goal
+  // 2 Workout Type (1/3 each)
+  // 3 Fighting Style (1/2 each)
+  // 4 Finish + Free Trial (hidden if already subscribed/trialing)
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
@@ -168,9 +168,9 @@ export default function OnboardingPage() {
         ? 10 * weight + 6.25 * height - 5 * age - 161
         : 10 * weight + 6.25 * height - 5 * age;
     let tdee = bmr * af;
-    if (goal === "lose") tdee *= 0.85;      // drop fat
-    else if (goal === "tone") tdee *= 1.0;  // tone up
-    else if (goal === "gain") tdee *= 1.10; // put on muscle
+    if (goal === "lose") tdee *= 0.85;      // Drop Fat
+    else if (goal === "tone") tdee *= 1.0;  // Tone Up
+    else if (goal === "gain") tdee *= 1.10; // Put On Muscle
     const proteinG = Math.round((goal === "lose" ? 2.0 : 1.8) * weight);
     const fatG = Math.round(Math.min(120, Math.max(40, 0.8 * weight)));
     const kcalAfterPF = tdee - (proteinG * 4 + fatG * 9);
@@ -289,10 +289,10 @@ export default function OnboardingPage() {
       <>
         <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff" }}>
           <div className="futuristic-card p-3 mb-3">
-            <h5 className="mb-2">Welcome to BXKR</h5>
+            <h5 className="mb-2">Welcome To BXKR</h5>
             <p className="text-dim mb-3">Please sign in to personalise your training.</p>
             <button className="btn btn-bxkr" onClick={() => signIn("google")}>
-              Sign in with Google
+              Sign In With Google
             </button>
           </div>
         </main>
@@ -305,7 +305,7 @@ export default function OnboardingPage() {
     return (
       <>
         <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff" }}>
-          <div className="futuristic-card p-3 mb-3 text-danger">Failed to load your profile.</div>
+          <div className="futuristic-card p-3 mb-3 text-danger">Failed To Load Your Profile.</div>
         </main>
         <BottomNav />
       </>
@@ -318,7 +318,7 @@ export default function OnboardingPage() {
       <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff" }}>
         {/* Header + trial banner */}
         <div className="d-flex align-items-center justify-content-between mb-3">
-          <h2 className="mb-0" style={{ fontWeight: 700 }}>Let’s tailor BXKR to you</h2>
+          <h2 className="mb-0" style={{ fontWeight: 700 }}>Let’s Tailor BXKR To You</h2>
           <div className="text-dim">Step {step + 1} / 5</div>
         </div>
         {savedMsg && <div className="pill-success mb-3">{savedMsg}</div>}
@@ -333,19 +333,19 @@ export default function OnboardingPage() {
                 </span>
               </div>
               <button className="btn btn-bxkr-outline" onClick={openPortal} disabled={saving}>
-                Manage billing
+                Manage Billing
               </button>
             </div>
           </div>
         )}
 
-        {/* ===== STEP 0 — Metrics (glass, full-page feel) ===== */}
+        {/* ===== STEP 0 — Your Metrics ===== */}
         {step === 0 && (
           <section
             className="futuristic-card p-4 mb-3 d-flex flex-column justify-content-center"
             style={{ minHeight: "65vh" }}
           >
-            <h5 className="mb-2">Your metrics</h5>
+            <h5 className="mb-2">Your Metrics</h5>
             <div className="row g-3">
               <div className="col-12 col-md-6">
                 <label className="form-label small text-dim">Height (cm)</label>
@@ -366,7 +366,7 @@ export default function OnboardingPage() {
                 />
               </div>
               <div className="col-12 col-md-6">
-                <label className="form-label small text-dim">Date of Birth</label>
+                <label className="form-label small text-dim">Date Of Birth</label>
                 <input
                   type="date"
                   className="form-control"
@@ -384,12 +384,12 @@ export default function OnboardingPage() {
                   <option value="">Select…</option>
                   <option value="male">Male</option>
                   <option value="female">Female</option>
-                  <option value="other">Other / Prefer not to say</option>
+                  <option value="other">Other / Prefer Not To Say</option>
                 </select>
               </div>
               <div className="col-12 col-md-6">
                 <label className="form-label small text-dim">
-                  Body fat (%) <span className="text-dim">(if known)</span>
+                  Body Fat (%) <span className="text-dim">(If Known)</span>
                 </label>
                 <input
                   type="number"
@@ -402,72 +402,76 @@ export default function OnboardingPage() {
           </section>
         )}
 
-        {/* ===== STEP 1 — Job type + Goal (chips) ===== */}
+        {/* ===== STEP 1 — Job Type + Main Goal ===== */}
         {step === 1 && (
           <section
             className="futuristic-card p-4 mb-3 d-flex flex-column justify-content-center"
             style={{ minHeight: "65vh" }}
           >
-            <h5 className="mb-2">Job type</h5>
+            <h5 className="mb-2">Job Type</h5>
             <div className="d-flex flex-wrap gap-2 mb-3">
-              <button
-                type="button"
-                className={`btn-bxkr-outline ${profile.job_type === "desk" ? "active" : ""}`}
-                onClick={() => setProfile({ ...profile, job_type: "desk", activity_factor: 1.2 })}
-              >
-                Desk / Office
-              </button>
-              <button
-                type="button"
-                className={`btn-bxkr-outline ${profile.job_type === "mixed" ? "active" : ""}`}
-                onClick={() => setProfile({ ...profile, job_type: "mixed", activity_factor: 1.375 })}
-              >
-                Mixed
-              </button>
-              <button
-                type="button"
-                className={`btn-bxkr-outline ${profile.job_type === "manual" ? "active" : ""}`}
-                onClick={() => setProfile({ ...profile, job_type: "manual", activity_factor: 1.55 })}
-              >
-                Manual / Labour
-              </button>
-              <button
-                type="button"
-                className={`btn-bxkr-outline ${profile.job_type === "athlete" ? "active" : ""}`}
-                onClick={() => setProfile({ ...profile, job_type: "athlete", activity_factor: 1.9 })}
-              >
-                Athlete
-              </button>
+              {[
+                { key: "desk", label: "Desk / Office", af: 1.2 },
+                { key: "mixed", label: "Mixed", af: 1.375 },
+                { key: "manual", label: "Manual / Labour", af: 1.55 },
+                { key: "athlete", label: "Athlete", af: 1.9 },
+              ].map((opt) => {
+                const active = profile.job_type === (opt.key as JobType);
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    aria-pressed={active}
+                    className="btn-bxkr-outline"
+                    onClick={() =>
+                      setProfile({
+                        ...profile,
+                        job_type: opt.key as JobType,
+                        activity_factor: opt.af,
+                      })
+                    }
+                    style={{
+                      background: active ? "rgba(255,138,42,0.12)" : undefined,
+                      borderColor: active ? ACCENT : undefined,
+                      color: active ? "#fff" : undefined,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
 
-            <h5 className="mb-2">Main goal</h5>
+            <h5 className="mb-2">Main Goal</h5>
             <div className="d-flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={`btn-bxkr-outline ${profile.goal_primary === "tone" ? "active" : ""}`}
-                onClick={() => setProfile({ ...profile, goal_primary: "tone" })}
-              >
-                Tone up
-              </button>
-              <button
-                type="button"
-                className={`btn-bxkr-outline ${profile.goal_primary === "lose" ? "active" : ""}`}
-                onClick={() => setProfile({ ...profile, goal_primary: "lose" })}
-              >
-                Drop fat
-              </button>
-              <button
-                type="button"
-                className={`btn-bxkr-outline ${profile.goal_primary === "gain" ? "active" : ""}`}
-                onClick={() => setProfile({ ...profile, goal_primary: "gain" })}
-              >
-                Put on muscle
-              </button>
+              {[
+                { key: "tone", label: "Tone Up" },
+                { key: "lose", label: "Drop Fat" },
+                { key: "gain", label: "Put On Muscle" },
+              ].map((opt) => {
+                const active = profile.goal_primary === (opt.key as UsersDoc["goal_primary"]);
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    aria-pressed={active}
+                    className="btn-bxkr-outline"
+                    onClick={() => setProfile({ ...profile, goal_primary: opt.key as UsersDoc["goal_primary"] })}
+                    style={{
+                      background: active ? "rgba(255,138,42,0.12)" : undefined,
+                      borderColor: active ? ACCENT : undefined,
+                      color: active ? "#fff" : undefined,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
 
             {canShowTargets && (
               <div className="futuristic-card p-3 mt-3" style={{ background: "rgba(255,255,255,0.05)" }}>
-                <div className="fw-semibold mb-1">Targets (per day)</div>
+                <div className="fw-semibold mb-1">Targets (Per Day)</div>
                 <div className="small">
                   <div>Calories: <strong>{profile.calorie_target ?? "—"}</strong> kcal</div>
                   <div>Protein: <strong>{profile.protein_target ?? "—"}</strong> g</div>
@@ -479,9 +483,10 @@ export default function OnboardingPage() {
           </section>
         )}
 
-        {/* ===== STEP 2 — Workout Type (full-width vertical thirds) ===== */}
+        {/* ===== STEP 2 — Workout Type (title + thirds) ===== */}
         {step === 2 && (
           <section className="futuristic-card p-0 mb-3" style={{ minHeight: "75vh", overflow: "hidden" }}>
+            <div className="p-3"><h5 className="mb-2">Workout Type</h5></div>
             {/* Bodyweight 1/3 */}
             <button
               type="button"
@@ -489,7 +494,7 @@ export default function OnboardingPage() {
               style={{
                 display: "block",
                 height: "33vh",
-                backgroundImage: "url(/images/bodyweight.jpg)",
+                backgroundImage: "url(/bodyweight.jpg)",
                 backgroundSize: "cover",
                 backgroundPosition: "center",
                 border: "none",
@@ -503,7 +508,7 @@ export default function OnboardingPage() {
               style={{
                 display: "block",
                 height: "33vh",
-                backgroundImage: "url(/images/kettlebells.jpg)",
+                backgroundImage: "url(/kettlebells.jpg)",
                 backgroundSize: "cover",
                 backgroundPosition: "center",
                 border: "none",
@@ -517,7 +522,7 @@ export default function OnboardingPage() {
               style={{
                 display: "block",
                 height: "33vh",
-                backgroundImage: "url(/images/dumbbells.jpg)",
+                backgroundImage: "url(/dumbbells.jpg)",
                 backgroundSize: "cover",
                 backgroundPosition: "center",
                 border: "none",
@@ -527,9 +532,10 @@ export default function OnboardingPage() {
           </section>
         )}
 
-        {/* ===== STEP 3 — Fighting Style (full-width vertical halves) ===== */}
+        {/* ===== STEP 3 — Fighting Style (title + halves) ===== */}
         {step === 3 && (
           <section className="futuristic-card p-0 mb-3" style={{ minHeight: "75vh", overflow: "hidden" }}>
+            <div className="p-3"><h5 className="mb-2">Fighting Style</h5></div>
             {/* Boxing 1/2 */}
             <button
               type="button"
@@ -537,7 +543,7 @@ export default function OnboardingPage() {
               style={{
                 display: "block",
                 height: "50vh",
-                backgroundImage: "url(/images/boxing.jpg)",
+                backgroundImage: "url(/boxing.jpg)",
                 backgroundSize: "cover",
                 backgroundPosition: "center",
                 border: "none",
@@ -551,7 +557,7 @@ export default function OnboardingPage() {
               style={{
                 display: "block",
                 height: "50vh",
-                backgroundImage: "url(/images/kickboxing.jpg)",
+                backgroundImage: "url(/kickboxing.jpg)",
                 backgroundSize: "cover",
                 backgroundPosition: "center",
                 border: "none",
@@ -561,7 +567,7 @@ export default function OnboardingPage() {
           </section>
         )}
 
-        {/* ===== STEP 4 — Finish + Trial CTA (hidden if already subscribed/trialing) ===== */}
+        {/* ===== STEP 4 — Finish + Free Trial (no 'Maybe Later') ===== */}
         {step === 4 && (
           <section
             className="futuristic-card p-4 mb-3 d-flex flex-column justify-content-center"
@@ -570,7 +576,7 @@ export default function OnboardingPage() {
             {profile.subscription_status !== "active" &&
              profile.subscription_status !== "trialing" && (
               <div className="futuristic-card p-3 mb-3">
-                <h5 className="mb-2">Start your 14‑day free trial</h5>
+                <h5 className="mb-2">Start Your 14‑Day Free Trial</h5>
                 <p className="text-dim">
                   Unlock all BXKR features: structured boxing & kettlebell sessions, habit tracking,
                   nutrition logging, weekly breakdowns and accountability.
@@ -587,17 +593,14 @@ export default function OnboardingPage() {
                     disabled={saving}
                     style={{ background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, borderRadius: 24 }}
                   >
-                    {saving ? "Starting…" : "Start free trial"}
-                  </button>
-                  <button className="btn btn-bxkr-outline" type="button" disabled={saving}>
-                    Maybe later
+                    {saving ? "Starting…" : "Start Free Trial"}
                   </button>
                 </div>
               </div>
             )}
 
             <div className="futuristic-card p-3 mb-3">
-              <h5 className="mb-2">All set!</h5>
+              <h5 className="mb-2">All Set!</h5>
               <p className="text-dim">
                 BXKR will tailor your training based on your metrics, job type, workout type and fighting style.
               </p>
