@@ -10,6 +10,9 @@ import BottomNav from "../components/BottomNav";
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const ACCENT = "#FF8A2A";
 
+/* -------------------- Types -------------------- */
+type WorkoutType = "bodyweight" | "kettlebells" | "dumbbells";
+type FightingStyle = "boxing" | "kickboxing";
 type UsersDoc = {
   email?: string;
   // metrics
@@ -24,12 +27,15 @@ type UsersDoc = {
   protein_target?: number | null;
   carb_target?: number | null;
   fat_target?: number | null;
-  // goals
+  // goals (simplified)
   goal_primary?: "lose" | "tone" | "gain" | null;
-  goal_intensity?: "small" | "large" | "maint" | "lean" | null;
-  // extras
-  equipment?: { bodyweight?: boolean; kettlebell?: boolean; dumbbell?: boolean } | null;
+  // new workout choices
+  workout_type?: WorkoutType | null;
+  fighting_style?: FightingStyle | null;
+  // emphasis
   preferences?: { boxing_focus?: boolean; kettlebell_focus?: boolean; schedule_days?: number } | null;
+  // legacy compatibility
+  equipment?: { bodyweight?: boolean; kettlebell?: boolean; dumbbell?: boolean } | null;
   // context
   gym_id?: string | null;
   location?: string | null;
@@ -41,6 +47,63 @@ type UsersDoc = {
 
 type GoalPrimary = "lose" | "tone" | "gain";
 
+/* -------------------- Image Tile Components -------------------- */
+function SelectTile({
+  title,
+  img,
+  active,
+  onClick,
+}: {
+  title: string;
+  img: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`tile ${active ? "active" : ""}`}
+      style={{
+        borderRadius: 16,
+        padding: 0,
+        border: `1px solid rgba(255,255,255,0.12)`,
+        background: "rgba(255,255,255,0.05)",
+        boxShadow: active ? "0 0 18px rgba(255,138,42,0.6)" : "none",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        className="tile-image"
+        style={{
+          width: "100%",
+          aspectRatio: "16/9",
+          backgroundImage: `url(${img})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          filter: active ? "none" : "grayscale(10%)",
+        }}
+      />
+      <div
+        className="tile-label d-flex align-items-center justify-content-between"
+        style={{ padding: "10px 12px" }}
+      >
+        <span className="fw-semibold">{title}</span>
+        <span
+          className="bxkr-chip"
+          style={{
+            borderColor: active ? ACCENT : "rgba(255,255,255,0.12)",
+            color: active ? ACCENT : "inherit",
+          }}
+        >
+          {active ? "Selected" : "Choose"}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+/* -------------------- Page -------------------- */
 export default function OnboardingPage() {
   const { data: session, status } = useSession();
   const email = session?.user?.email || null;
@@ -62,19 +125,18 @@ export default function OnboardingPage() {
     carb_target: null,
     fat_target: null,
     goal_primary: null,
-    goal_intensity: null,
-    equipment: { bodyweight: true, kettlebell: false, dumbbell: false },
+    workout_type: null,
+    fighting_style: "boxing",
     preferences: { boxing_focus: true, kettlebell_focus: true, schedule_days: 3 },
+    equipment: { bodyweight: true, kettlebell: false, dumbbell: false }, // legacy compat
     subscription_status: null,
     trial_end: null,
   });
 
-  // SWR key can be null; SWR still calls the hook safely in a consistent order.
   const swrKey = email ? `/api/profile?email=${encodeURIComponent(email)}` : null;
   const { data, error } = useSWR(swrKey, fetcher);
 
-  // --- Hooks must be placed before any conditional returns ---
-  // Derived targets visibility (cheap, no hook needed)
+  /* ---- Derived values (hooks must be above any return) ---- */
   const canShowTargets =
     (profile.height_cm ?? 0) > 0 &&
     (profile.weight_kg ?? 0) > 0 &&
@@ -82,7 +144,6 @@ export default function OnboardingPage() {
     !!profile.goal_primary &&
     !!profile.calorie_target;
 
-  // Derived trial days left (useMemo is fine here because it’s always called)
   const trialDaysLeft = useMemo(() => {
     if (!profile.trial_end) return null;
     const ms = new Date(profile.trial_end).getTime() - Date.now();
@@ -90,7 +151,7 @@ export default function OnboardingPage() {
     return d > 0 ? d : 0;
   }, [profile.trial_end]);
 
-  // Load initial user doc: prefill + billing info, mark onboarding_started_at
+  /* ---- Prefill from API, mark onboarding_started_at ---- */
   useEffect(() => {
     (async () => {
       if (status === "loading") return;
@@ -115,27 +176,28 @@ export default function OnboardingPage() {
             kettlebell_focus: !!j?.preferences?.kettlebell_focus,
             schedule_days: Number(j?.preferences?.schedule_days ?? 3),
           },
-          subscription_status: (j as UsersDoc)?.subscription_status ?? prev.subscription_status ?? null,
-          trial_end: (j as UsersDoc)?.trial_end ?? prev.trial_end ?? null,
+          workout_type: j?.workout_type ?? prev.workout_type ?? null,
+          fighting_style: (j?.fighting_style as FightingStyle) ?? prev.fighting_style ?? "boxing",
+          subscription_status: j?.subscription_status ?? prev.subscription_status ?? null,
+          trial_end: j?.trial_end ?? prev.trial_end ?? null,
         }));
 
         if (j.calorie_target || j.protein_target || j.carb_target || j.fat_target) {
           setSavedMsg("Targets loaded");
         }
 
-        // Mark onboarding started (idempotent)
         await fetch("/api/onboarding/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, onboarding_started_at: new Date().toISOString() }),
         });
       } catch (e: any) {
-        // We’ll show the error below in the conditional render
         console.error("[onboarding] load error:", e?.message || e);
       }
     })();
   }, [status, email]);
 
+  /* -------------------- Helpers -------------------- */
   function computeAge(dobIso?: string | null): number | null {
     if (!dobIso) return null;
     const dob = new Date(dobIso);
@@ -147,9 +209,9 @@ export default function OnboardingPage() {
     return age;
   }
 
+  // Simplified targets (no intensity)
   function computeTargets(p: UsersDoc) {
     const goal = p.goal_primary;
-    const intensity = p.goal_intensity;
     const weight = Number(p.weight_kg ?? 0);
     const height = Number(p.height_cm ?? 0);
     const sex = p.sex ?? "other";
@@ -168,14 +230,9 @@ export default function OnboardingPage() {
         : 10 * weight + 6.25 * height - 5 * age;
 
     let tdee = bmr * af;
-
-    if (goal === "lose") {
-      tdee *= intensity === "large" ? 0.8 : intensity === "small" ? 0.9 : 0.9;
-    } else if (goal === "tone") {
-      tdee *= 1.0;
-    } else if (goal === "gain") {
-      tdee *= intensity === "lean" ? 1.10 : 1.10;
-    }
+    if (goal === "lose") tdee *= 0.85;      // drop fat
+    else if (goal === "tone") tdee *= 1.0;  // tone up
+    else if (goal === "gain") tdee *= 1.10; // put on muscle
 
     const proteinG = Math.round((goal === "lose" ? 2.0 : 1.8) * weight);
     const fatG = Math.round(Math.min(120, Math.max(40, 0.8 * weight)));
@@ -190,12 +247,23 @@ export default function OnboardingPage() {
     };
   }
 
+  function workoutTypeToEquipment(wt: WorkoutType | null) {
+    return wt === "kettlebells"
+      ? { bodyweight: false, kettlebell: true, dumbbell: false }
+      : wt === "dumbbells"
+      ? { bodyweight: false, kettlebell: false, dumbbell: true }
+      : wt === "bodyweight"
+      ? { bodyweight: true, kettlebell: false, dumbbell: false }
+      : { bodyweight: true, kettlebell: false, dumbbell: false };
+  }
+
   async function autoSave(nextStep?: number) {
     if (!email) return signIn("google");
     setSaving(true);
     setSavedMsg(null);
 
     const targets = computeTargets(profile);
+    const equipmentPayload = workoutTypeToEquipment(profile.workout_type ?? null);
 
     try {
       const res = await fetch("/api/onboarding/save", {
@@ -217,10 +285,13 @@ export default function OnboardingPage() {
           fat_target: targets.fat_target,
           // goals
           goal_primary: profile.goal_primary ?? null,
-          goal_intensity: profile.goal_intensity ?? null,
-          // extras
-          equipment: profile.equipment ?? null,
+          // new choices
+          workout_type: profile.workout_type ?? null,
+          fighting_style: profile.fighting_style ?? null,
+          // emphasis
           preferences: profile.preferences ?? null,
+          // legacy equipment for compat
+          equipment: equipmentPayload,
           // passthrough
           gym_id: profile.gym_id ?? null,
           location: profile.location ?? null,
@@ -236,6 +307,7 @@ export default function OnboardingPage() {
         protein_target: targets.protein_target,
         carb_target: targets.carb_target,
         fat_target: targets.fat_target,
+        equipment: equipmentPayload,
       }));
       setSavedMsg("Saved ✅");
 
@@ -248,7 +320,6 @@ export default function OnboardingPage() {
     }
   }
 
-  // Stripe actions
   async function startTrial() {
     try {
       setSaving(true);
@@ -275,7 +346,7 @@ export default function OnboardingPage() {
     }
   }
 
-  // --- Conditional returns AFTER all hooks (to keep hook order consistent) ---
+  /* --------------- Conditional returns AFTER hooks --------------- */
   if (!email) {
     return (
       <>
@@ -304,17 +375,17 @@ export default function OnboardingPage() {
     );
   }
 
+  /* -------------------- Render -------------------- */
   return (
     <>
       <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff" }}>
+        {/* Header + trial banner */}
         <div className="d-flex align-items-center justify-content-between mb-3">
           <h2 className="mb-0" style={{ fontWeight: 700 }}>Let’s tailor BXKR to you</h2>
           <div className="text-dim">Step {step + 1} / 5</div>
         </div>
-
         {savedMsg && <div className="pill-success mb-3">{savedMsg}</div>}
 
-        {/* Trial banner (from webhook data) */}
         {profile.trial_end && (
           <div className="bxkr-card p-3 mb-3" style={{ borderLeft: `4px solid ${ACCENT}` }}>
             <div className="d-flex justify-content-between align-items-center">
@@ -331,12 +402,15 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* STEP 0 — Metrics */}
+        {/* ===== STEP 0 — Metrics (full-page feel) ===== */}
         {step === 0 && (
-          <div className="bxkr-card p-3 mb-3">
+          <section
+            className="bxkr-card p-4 mb-3 d-flex flex-column justify-content-center"
+            style={{ minHeight: "65vh" }}
+          >
             <h5 className="mb-2">Your metrics</h5>
-            <div className="row g-2">
-              <div className="col-6">
+            <div className="row g-3">
+              <div className="col-12 col-md-6">
                 <label className="form-label small text-dim">Height (cm)</label>
                 <input
                   type="number"
@@ -345,7 +419,7 @@ export default function OnboardingPage() {
                   onChange={(e) => setProfile({ ...profile, height_cm: Number(e.target.value) || null })}
                 />
               </div>
-              <div className="col-6">
+              <div className="col-12 col-md-6">
                 <label className="form-label small text-dim">Weight (kg)</label>
                 <input
                   type="number"
@@ -354,7 +428,7 @@ export default function OnboardingPage() {
                   onChange={(e) => setProfile({ ...profile, weight_kg: Number(e.target.value) || null })}
                 />
               </div>
-              <div className="col-6">
+              <div className="col-12 col-md-6">
                 <label className="form-label small text-dim">Date of Birth</label>
                 <input
                   type="date"
@@ -363,7 +437,7 @@ export default function OnboardingPage() {
                   onChange={(e) => setProfile({ ...profile, DOB: e.target.value || null })}
                 />
               </div>
-              <div className="col-6">
+              <div className="col-12 col-md-6">
                 <label className="form-label small text-dim">Gender</label>
                 <select
                   className="form-select"
@@ -376,8 +450,8 @@ export default function OnboardingPage() {
                   <option value="other">Other / Prefer not to say</option>
                 </select>
               </div>
-              <div className="col-6">
-                <label className="form-label small text-dim">Body fat (%)</label>
+              <div className="col-12 col-md-6">
+                <label className="form-label small text-dim">Body fat (%) <span className="text-dim">(if known)</span></label>
                 <input
                   type="number"
                   className="form-control"
@@ -386,14 +460,17 @@ export default function OnboardingPage() {
                 />
               </div>
             </div>
-          </div>
+          </section>
         )}
 
-        {/* STEP 1 — Activity & Goal */}
+        {/* ===== STEP 1 — Activity & Goal (no intensity) ===== */}
         {step === 1 && (
-          <div className="bxkr-card p-3 mb-3">
+          <section
+            className="bxkr-card p-4 mb-3 d-flex flex-column justify-content-center"
+            style={{ minHeight: "65vh" }}
+          >
             <h5 className="mb-2">Daily activity &amp; goal</h5>
-            <div className="row g-2">
+            <div className="row g-3">
               <div className="col-12">
                 <label className="form-label small text-dim">Activity multiplier</label>
                 <select
@@ -409,46 +486,31 @@ export default function OnboardingPage() {
                 </select>
               </div>
 
-              <div className="col-6">
+              <div className="col-12">
                 <label className="form-label small text-dim">Main goal</label>
-                <select
-                  className="form-select"
-                  value={profile.goal_primary ?? ""}
-                  onChange={(e) => setProfile({ ...profile, goal_primary: (e.target.value || null) as GoalPrimary })}
-                >
-                  <option value="">Select…</option>
-                  <option value="lose">Lose weight</option>
-                  <option value="tone">Tone up</option>
-                  <option value="gain">Gain weight</option>
-                </select>
-              </div>
-
-              <div className="col-6">
-                <label className="form-label small text-dim">Intensity</label>
-                <select
-                  className="form-select"
-                  value={profile.goal_intensity ?? "maint"}
-                  onChange={(e) =>
-                    setProfile({ ...profile, goal_intensity: (e.target.value || null) as UsersDoc["goal_intensity"] })
-                  }
-                >
-                  {profile.goal_primary === "lose" && (
-                    <>
-                      <option value="small">Small cut</option>
-                      <option value="large">Larger cut</option>
-                    </>
-                  )}
-                  {profile.goal_primary === "tone" && (
-                    <>
-                      <option value="maint">Maintenance / recomp</option>
-                    </>
-                  )}
-                  {profile.goal_primary === "gain" && (
-                    <>
-                      <option value="lean">Lean gain</option>
-                    </>
-                  )}
-                </select>
+                <div className="d-flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={`btn-bxkr-outline ${profile.goal_primary === "tone" ? "active" : ""}`}
+                    onClick={() => setProfile({ ...profile, goal_primary: "tone" })}
+                  >
+                    Tone up
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-bxkr-outline ${profile.goal_primary === "lose" ? "active" : ""}`}
+                    onClick={() => setProfile({ ...profile, goal_primary: "lose" })}
+                  >
+                    Drop fat
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-bxkr-outline ${profile.goal_primary === "gain" ? "active" : ""}`}
+                    onClick={() => setProfile({ ...profile, goal_primary: "gain" })}
+                  >
+                    Put on muscle
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -463,80 +525,120 @@ export default function OnboardingPage() {
                 </div>
               </div>
             )}
-          </div>
+          </section>
         )}
 
-        {/* STEP 2 — Equipment */}
+        {/* ===== STEP 2 — Workout Type (image tiles) ===== */}
         {step === 2 && (
-          <div className="bxkr-card p-3 mb-3">
-            <h5 className="mb-2">Equipment at home</h5>
-            <div className="row g-2">
-              <div className="col-4">
-                <label className="form-label small text-dim">Bodyweight</label><br />
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  checked={!!profile.equipment?.bodyweight}
-                  onChange={(e) =>
-                    setProfile({ ...profile, equipment: { ...profile.equipment, bodyweight: e.target.checked } })
-                  }
-                />
-              </div>
-              <div className="col-4">
-                <label className="form-label small text-dim">Kettlebell</label><br />
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  checked={!!profile.equipment?.kettlebell}
-                  onChange={(e) =>
-                    setProfile({ ...profile, equipment: { ...profile.equipment, kettlebell: e.target.checked } })
-                  }
-                />
-              </div>
-              <div className="col-4">
-                <label className="form-label small text-dim">Dumbbell</label><br />
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  checked={!!profile.equipment?.dumbbell}
-                  onChange={(e) =>
-                    setProfile({ ...profile, equipment: { ...profile.equipment, dumbbell: e.target.checked } })
-                  }
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 3 — Preferences */}
-        {step === 3 && (
-          <div className="bxkr-card p-3 mb-3">
-            <h5 className="mb-2">Preferences</h5>
-            <div className="row g-2">
-              <div className="col-6">
-                <label className="form-label small text-dim">Boxing emphasis</label><br />
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  checked={!!profile.preferences?.boxing_focus}
-                  onChange={(e) =>
+          <section
+            className="bxkr-card p-4 mb-3 d-flex flex-column justify-content-center"
+            style={{ minHeight: "65vh" }}
+          >
+            <h5 className="mb-1">Workout type</h5>
+            <p className="text-dim small mb-2">
+              Choose how you’ll train most of the time. You can switch later.
+            </p>
+            <div className="row g-3">
+              <div className="col-12 col-md-4">
+                <SelectTile
+                  title="Bodyweight"
+                  img="/images/bodyweight.jpg"
+                  active={profile.workout_type === "bodyweight"}
+                  onClick={() =>
                     setProfile({
                       ...profile,
-                      preferences: { ...(profile.preferences || {}), boxing_focus: e.target.checked },
+                      workout_type: "bodyweight",
                     })
                   }
                 />
               </div>
-              <div className="col-6">
-                <label className="form-label small text-dim">Kettlebell emphasis</label><br />
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  checked={!!profile.preferences?.kettlebell_focus}
-                  onChange={(e) =>
+              <div className="col-12 col-md-4">
+                <SelectTile
+                  title="Kettlebells"
+                  img="/images/kettlebells.jpg"
+                  active={profile.workout_type === "kettlebells"}
+                  onClick={() =>
                     setProfile({
                       ...profile,
-                      preferences: { ...(profile.preferences || {}), kettlebell_focus: e.target.checked },
+                      workout_type: "kettlebells",
+                    })
+                  }
+                />
+              </div>
+              <div className="col-12 col-md-4">
+                <SelectTile
+                  title="Dumbbells"
+                  img="/images/dumbbells.jpg"
+                  active={profile.workout_type === "dumbbells"}
+                  onClick={() =>
+                    setProfile({
+                      ...profile,
+                      workout_type: "dumbbells",
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <h5 className="mt-4 mb-1">Fighting style</h5>
+            <p className="text-dim small mb-2">Pick your primary discipline.</p>
+            <div className="row g-3">
+              <div className="col-12 col-md-6">
+                <SelectTile
+                  title="Boxing"
+                  img="/images/boxing.jpg"
+                  active={profile.fighting_style === "boxing"}
+                  onClick={() => setProfile({ ...profile, fighting_style: "boxing" })}
+                />
+              </div>
+              <div className="col-12 col-md-6">
+                <SelectTile
+                  title="Kickboxing"
+                  img="/images/kickboxing.jpg"
+                  active={profile.fighting_style === "kickboxing"}
+                  onClick={() => setProfile({ ...profile, fighting_style: "kickboxing" })}
+                />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ===== STEP 3 — Emphasis (image toggle tiles) ===== */}
+        {step === 3 && (
+          <section
+            className="bxkr-card p-4 mb-3 d-flex flex-column justify-content-center"
+            style={{ minHeight: "65vh" }}
+          >
+            <h5 className="mb-2">Preferences</h5>
+            <div className="row g-3">
+              <div className="col-12 col-md-6">
+                <SelectTile
+                  title="Boxing emphasis"
+                  img="/images/boxing-focus.jpg"
+                  active={!!profile.preferences?.boxing_focus}
+                  onClick={() =>
+                    setProfile({
+                      ...profile,
+                      preferences: {
+                        ...(profile.preferences || {}),
+                        boxing_focus: !profile.preferences?.boxing_focus,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="col-12 col-md-6">
+                <SelectTile
+                  title="Kettlebell emphasis"
+                  img="/images/kettlebell-focus.jpg"
+                  active={!!profile.preferences?.kettlebell_focus}
+                  onClick={() =>
+                    setProfile({
+                      ...profile,
+                      preferences: {
+                        ...(profile.preferences || {}),
+                        kettlebell_focus: !profile.preferences?.kettlebell_focus,
+                      },
                     })
                   }
                 />
@@ -549,20 +651,28 @@ export default function OnboardingPage() {
                   onChange={(e) =>
                     setProfile({
                       ...profile,
-                      preferences: { ...(profile.preferences || {}), schedule_days: Number(e.target.value) },
+                      preferences: {
+                        ...(profile.preferences || {}),
+                        schedule_days: Number(e.target.value),
+                      },
                     })
                   }
                 >
-                  {[2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}
+                  {[2, 3, 4, 5, 6].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
                 </select>
               </div>
             </div>
-          </div>
+          </section>
         )}
 
-        {/* STEP 4 — All set! + Trial CTA if not active */}
+        {/* ===== STEP 4 — All set! + Trial CTA ===== */}
         {step === 4 && (
-          <>
+          <section
+            className="bxkr-card p-4 mb-3 d-flex flex-column justify-content-center"
+            style={{ minHeight: "65vh" }}
+          >
             {profile.subscription_status !== "active" && (
               <div className="bxkr-card p-3 mb-3">
                 <h5 className="mb-2">Start your 14‑day free trial</h5>
@@ -594,10 +704,10 @@ export default function OnboardingPage() {
             <div className="bxkr-card p-3 mb-3">
               <h5 className="mb-2">All set!</h5>
               <p className="text-dim">
-                BXKR will tailor your workouts and tasks based on your metrics, goals, and equipment.
+                BXKR will tailor your workouts and tasks based on your metrics, goals, and selections.
               </p>
             </div>
-          </>
+          </section>
         )}
 
         {/* Navigation */}
@@ -624,7 +734,7 @@ export default function OnboardingPage() {
             style={{ background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, borderRadius: 24 }}
           >
             {step < 4 ? "Next →" : "Finish → Home"}
-            {saving && <span className="inline-spinner ms-2" />}
+            {saving && <            {saving && <span className="inline-spinner ms-2" />}
           </button>
         </div>
       </main>
