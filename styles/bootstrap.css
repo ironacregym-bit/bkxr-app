@@ -16,7 +16,12 @@
 
 /* ===== Body & Typography ===== */
 body {
-  background: linear-gradient(180deg,#1a1a1a 0%, #222 100%);
+  background: linear-gradient(
+  180deg,
+  #0B0C0F 0%,
+  #0E1014 60%,
+  #0A0B0D 100%
+);
   color: #fff;
   font-family: 'Inter', sans-serif;
   min-height: 100vh;
