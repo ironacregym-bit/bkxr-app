@@ -1,13 +1,26 @@
 
-// pages/api/onboarding/status.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import firestore from "../../../lib/firestoreClient";
 
 function getDeep(obj: any, path: string): any {
-  // Supports "equipment.kettlebell"
   return path.split(".").reduce((acc, key) => (acc && acc[key] != null ? acc[key] : undefined), obj);
+}
+
+function metricsComplete(user: any): boolean {
+  const h = Number(user?.height_cm);
+  const w = Number(user?.weight_kg);
+  return h > 0 && w > 0 && !!user?.DOB && !!user?.sex;
+}
+function jobGoalComplete(user: any): boolean {
+  return !!user?.goal_primary;
+}
+function workoutTypeComplete(user: any): boolean {
+  return !!user?.workout_type;
+}
+function fightingStyleComplete(user: any): boolean {
+  return !!user?.fighting_style;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -17,30 +30,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const userEmail = session.user.email;
 
   try {
-    // Load tasks
-    const tasksSnap = await firestore.collection("tasks").orderBy("priority", "asc").get();
-    const tasks = tasksSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+    // Load task definitions (optional), otherwise fallback list
+    const tasksSnap = await firestore.collection("tasks").orderBy("priority", "asc").get().catch(() => null);
+    const tasks = tasksSnap ? tasksSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) : [];
+
     const fallback = [
-      { id: "t_add_metrics", key: "add_metrics", title: "Add your metrics", targetPath: "/onboarding", requiredFields: ["height_cm","weight_kg","DOB","sex"], priority: 1, active: true },
-      { id: "t_set_goal", key: "set_goal", title: "Set your goal", targetPath: "/onboarding", requiredFields: ["goal_primary","goal_intensity"], priority: 2, active: true },
-      { id: "t_select_equipment", key: "select_equipment", title: "Select your equipment", targetPath: "/onboarding", requiredFields: ["equipment.bodyweight","equipment.kettlebell","equipment.dumbbell"], priority: 3, active: true },
+      { id: "t_metrics", key: "metrics", title: "Add your metrics", targetPath: "/onboarding", priority: 1, active: true },
+      { id: "t_job_goal", key: "job_goal", title: "Set your goal", targetPath: "/onboarding", priority: 2, active: true },
+      { id: "t_workout_type", key: "workout_type", title: "Choose workout type", targetPath: "/onboarding", priority: 3, active: true },
+      { id: "t_fighting_style", key: "fighting_style", title: "Choose fighting style", targetPath: "/onboarding", priority: 4, active: true },
     ];
     const defs = (tasks.length > 0 ? tasks : fallback).filter((t) => t.active !== false);
 
-    // Load profile
-    const userDoc = await firestore.collection("Users").doc(userEmail).get();
+    // Load profile from canonical lowercase collection
+    const userDoc = await firestore.collection("users").doc(userEmail).get();
     const userData = userDoc.exists ? userDoc.data() : {};
 
     const outstanding = defs.filter((t) => {
+      const key = t.key;
+      if (key === "metrics") return !metricsComplete(userData);
+      if (key === "job_goal") return !jobGoalComplete(userData);
+      if (key === "workout_type") return !workoutTypeComplete(userData);
+      if (key === "fighting_style") return !fightingStyleComplete(userData);
+
+      // If a task points to onboarding and all onboarding sections are complete, hide
+      if ((t.targetPath || "").toLowerCase().includes("/onboarding")) {
+        return !(metricsComplete(userData) && jobGoalComplete(userData) && workoutTypeComplete(userData) && fightingStyleComplete(userData));
+      }
+
+      // Generic field presence support if a custom task uses requiredFields
       const fields: string[] = Array.isArray(t.requiredFields) ? t.requiredFields : [];
-      if (fields.length === 0) return false; // no requirements means no need to show
+      if (fields.length === 0) return false;
       return fields.some((f) => {
         const val = getDeep(userData, f);
-        // treat empty string, null, undefined as missing; booleans false count as missing unless explicitly required true
-        if (typeof val === "boolean") {
-          return val !== true;
-        }
-        return val == null || val === "";
+        return val == null || val === ""; // booleans are not assumed required-true by default
       });
     });
 
@@ -53,7 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           title: t.title,
           description: t.description || "",
           targetPath: t.targetPath || "/onboarding",
-        })),
+               })),
     });
   } catch (err: any) {
     console.error("[onboarding/status] error:", err?.message || err);
