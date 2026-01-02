@@ -12,7 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const snap = await firestore.collection("notification_rules").get();
     const rules = snap.docs.map((d) => ({ key: d.id, ...(d.data() as any) }));
-    return    return res.status(200).json({ rules });
+    return res.status(200).json({ rules });
   } catch (e: any) {
     console.error("[rules/list]", e?.message || e);
     return res.status(500).json({ error: "Failed to list rules" });
