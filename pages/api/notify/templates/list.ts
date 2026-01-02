@@ -1,7 +1,6 @@
 
-// pages/api/notify/templates/list.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
 import firestore from "../../../../lib/firestoreClient";
 
@@ -17,7 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
     const templates = snap.docs.map((d) => ({ key: d.id, ...(d.data() as any) }));
     return res.status(200).json({ templates });
-  } catch (e: any) {
+  } catch (e  } catch (e: any) {
     console.error("[templates/list]", e?.message || e);
     return res.status(500).json({ error: "Failed to list templates" });
   }
