@@ -371,14 +371,14 @@ export default function Home() {
 
         {/* ===== Weekly Circles in a glass card (replaces the old progress bar) ===== */}
         {weeklyOverview?.days && (
-          <div className="bxkr-card p-3" style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 12 }}>
             <WeeklyCircles
-              weeklyProgressPercent={weeklyProgressPercent}
+              weeklyProgress      weeklyProgressPercent={weeklyProgressPercent}
               weeklyWorkoutsCompleted={weeklyWorkoutsCompleted}
               dayStreak={dayStreak}
             />
           </div>
-        )}
+
 
         {/* Calendar */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
