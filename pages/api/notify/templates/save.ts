@@ -1,7 +1,6 @@
 
-// pages/api/notify/templates/save.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
 import firestore from "../../../../lib/firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
@@ -19,7 +18,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Rename 'channels' during destructuring to avoid shadowing/redeclaration
     const {
       key,
       enabled,
@@ -27,30 +25,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       body_template,
       url_template,
       data_template,
-      channels: channelsIn,             // ✅ rename
+      channels: channelsIn,
       throttle_seconds,
       test_defaults,
     } = req.body || {};
 
     if (!key || !title_template || !body_template) {
-      return res
-        .status(400)
-        .json({ error: "key, title_template, body_template are required" });
+      return res.status(400).json({ error: "key, title_template, body_template are required" });
     }
 
     const docRef = firestore.collection("notification_templates").doc(String(key));
     const now = Timestamp.now();
 
-    // Normalise inputs
     const parsedDataTemplate =
-      data_template && typeof data_template === "object"
-        ? data_template
-        : null;
+      data_template && typeof data_template === "object" ? data_template : null;
 
     const parsedTestDefaults =
-      test_defaults && typeof test_defaults === "object"
-        ? test_defaults
-        : null;
+      test_defaults && typeof test_defaults === "object" ? test_defaults : null;
 
     const finalChannels =
       Array.isArray(channelsIn) && channelsIn.length ? channelsIn : ["push"];
@@ -63,10 +54,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       url_template: url_template ? String(url_template) : null,
       data_template: parsedDataTemplate,
       channels: finalChannels,
-      throttle_seconds:
-        throttle_seconds != null ? Number(throttle_seconds) : 0,
+      throttle_seconds: throttle_seconds != null ? Number(throttle_seconds) : 0,
       test_defaults: parsedTestDefaults,
       updated_at: now,
+      updated_by: session.user.email,
     };
 
     const snap = await docRef.get();
