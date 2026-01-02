@@ -23,18 +23,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const snap = await coll.orderBy("created_at", "desc").limit(limit).get();
 
     const items = snap.docs.map((d) => {
-      const x = d      const x = d.data() as any;
+      const x = d.data() as any; // <-- fixed: single declaration
       return {
         id: d.id,
         title: String(x.title || ""),
         message: String(x.message || ""),
         href: x.href || null,
-        created_at: typeof x.created_at === "string"
-          ? x.created_at
-          : (x.created_at?.toDate?.() ? x.created_at.toDate().toISOString() : null),
-        read_at: typeof x.read_at === "string"
-          ? x.read_at
-          : (x.read_at?.toDate?.() ? x.read_at.toDate().toISOString() : null),
+        created_at:
+          typeof x.created_at === "string"
+            ? x.created_at
+            : x.created_at?.toDate?.()
+            ? x.created_at.toDate().toISOString()
+            : null,
+        read_at:
+          typeof x.read_at === "string"
+            ? x.read_at
+            : x.read_at?.toDate?.()
+            ? x.read_at.toDate().toISOString()
+            : null,
         delivered_channels: Array.isArray(x.delivered_channels) ? x.delivered_channels : ["in_app"],
         source_key: String(x.source_key || ""),
         source_event: x.source_event || null,
@@ -43,7 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     return res.status(200).json({ items });
-  } catch (e: any) {
+  } catch (e: any)  } catch (e: any) {
     console.error("[notifications/feed]", e?.message || e);
     return res.status(500).json({ error: "Failed to load notifications" });
   }
