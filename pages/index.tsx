@@ -9,7 +9,10 @@ import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 import ChallengeBanner from "../components/ChallengeBanner";
 import DailyTasksCard from "../components/DailyTasksCard";
-import TasksBanner from "../components/TasksBanner";
+// OLD: import TasksBanner from "../components/TasksBanner";
+// NEW:
+import NotificationsBanner from "../components/NotificationsBanner";
+import WeeklyCircles from "../components/Dashboard/WeeklyCircles";
 
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
@@ -218,7 +221,7 @@ export default function Home() {
 
   const accentMicro = "#ff8a2a";
 
-  // ===== Carousel state for Tasks + Weekly Snapshot =====
+  // ===== Carousel state for Notifications + Weekly Overview =====
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const [slideIndex, setSlideIndex] = useState(0);
   const goToSlide = (idx: number) => {
@@ -258,6 +261,55 @@ export default function Home() {
       bodyFat: (s as any).bodyFat ?? body_fat_pct,
     };
   }, [selectedDayData]);
+
+  // ===== Weekly circles derived values =====
+  const weeklyProgressPercent = useMemo(() => {
+    const { totalTasks, completedTasks } = derivedWeeklyTotals;
+    if (!totalTasks) return 0;
+    return Math.round((completedTasks / totalTasks) * 100);
+  }, [derivedWeeklyTotals]);
+
+  const weeklyWorkoutsCompleted = useMemo(() => {
+    // Prefer weeklyTotals if provided
+    const completedFromTotals = Number(weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0);
+    if (Number.isFinite(completedFromTotals)) {
+      return Math.max(0, Math.min(3, completedFromTotals));
+    }
+    // Fallback: count days with workoutDone
+    const days = (weeklyOverview?.days as ApiDay[]) || [];
+    const count = days.reduce((acc, d) => acc + (d?.workoutDone ? 1 : 0), 0);
+    return Math.max(0, Math.min(3, count));
+  }, [weeklyOverview]);
+
+  // ===== One-time emit of onboarding_incomplete if server reports outstanding onboarding tasks =====
+  const { data: onboardingStatus } = useSWR("/api/onboarding/status", fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30_000,
+  });
+  const emittedOnboardingNudgeRef = useRef(false);
+  useEffect(() => {
+    if (emittedOnboardingNudgeRef.current) return;
+    const items = Array.isArray(onboardingStatus?.outstanding) ? onboardingStatus.outstanding : [];
+    const hasOnboardingOutstanding = items.some(
+      (i: any) =>
+        ["metrics", "job_goal", "workout_type", "fighting_style"].includes(String(i.key)) ||
+        String(i.targetPath || "").toLowerCase().includes("/onboarding")
+    );
+    if (!hasOnboardingOutstanding) return;
+    emittedOnboardingNudgeRef.current = true;
+
+    (async () => {
+      try {
+        await fetch("/api/notify/emit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event: "onboarding_incomplete", context: {}, force: false }),
+        });
+      } catch (e) {
+        console.error("[emit onboarding_incomplete]", e);
+      }
+    })();
+  }, [onboardingStatus]);
 
   return (
     <>
@@ -300,46 +352,24 @@ export default function Home() {
           {greeting}
         </h2>
 
-        {/* ===== Carousel: Tasks Banner (slide 1) + Weekly Snapshot (slide 2) ===== */}
+        {/* ===== Carousel: Notifications (slide 1) + Weekly Circles (slide 2) ===== */}
         <section
           ref={carouselRef}
           className="bxkr-carousel"
           style={{ gap: 0, marginBottom: 10 }}
-          aria-label="Quick tasks and weekly snapshot carousel"
+          aria-label="Notifications and weekly overview carousel"
         >
-          {/* Slide 1 — Outstanding Tasks (onboarding tasks banner) */}
+          {/* Slide 1 — Notifications feed (coach-style pill banners) */}
           <div className="bxkr-slide" style={{ padding: "0 2px" }}>
-            <TasksBanner />
+            <NotificationsBanner />
           </div>
 
-          {/* Slide 2 — Weekly Snapshot banner */}
+          {/* Slide 2 — Weekly overview: three circular charts */}
           <div className="bxkr-slide" style={{ padding: "0 2px" }}>
-            <ChallengeBanner
-              title="Weekly Snapshot"
-              message={
-                <div className="challenge-banner-message">
-                  <div className="stats-row">
-                    <div className="stats-col">
-                      <strong>Workouts</strong>
-                      {weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0}
-                    </div>
-                    <div className="stats-col">
-                      <strong>Time</strong>
-                      {(weeklyOverview?.weeklyTotals?.totalWorkoutTime ?? 0)}m
-                    </div>
-                    <div className="stats-col">
-                      <strong>Calories</strong>
-                      {(weeklyOverview?.weeklyTotals?.totalCaloriesBurned ?? 0)} kcal
-                    </div>
-                  </div>
-                </div>
-              }
-              href="#"
-              iconLeft="fas fa-chart-line"
-              accentColor="#5b7c99"
-              background="linear-gradient(90deg, rgba(91,124,153,.30), rgba(91,124,153,.18))"
-              showButton={false}
-              style={{ margin: 0 }}
+            <WeeklyCircles
+              weeklyProgressPercent={weeklyProgressPercent}
+              weeklyWorkoutsCompleted={weeklyWorkoutsCompleted}
+              dayStreak={dayStreak}
             />
           </div>
         </section>
@@ -349,18 +379,18 @@ export default function Home() {
           <button
             type="button"
             className={`bxkr-carousel-dot ${slideIndex === 0 ? "active" : ""}`}
-            aria-label="Show tasks"
+            aria-label="Show notifications"
             onClick={() => goToSlide(0)}
           />
           <button
             type="button"
             className={`bxkr-carousel-dot ${slideIndex === 1 ? "active" : ""}`}
-            aria-label="Show weekly snapshot"
+            aria-label="Show weekly overview"
             onClick={() => goToSlide(1)}
           />
         </div>
 
-        {/* Weekly Progress */}
+        {/* Weekly Progress (legacy bar retained; optional to remove if circles fully replace it) */}
         {weeklyOverview?.days && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>Weekly Progress</div>
