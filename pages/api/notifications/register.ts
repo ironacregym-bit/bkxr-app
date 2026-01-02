@@ -1,7 +1,6 @@
 
-// pages/api/notifications/register.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import firestore from "../../../lib/firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
@@ -19,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const { subscription } = req.body || {};
     if (!subscription || typeof subscription !== "object" || !subscription.endpoint) {
-           return res.status(400).json({ error: "Valid subscription object required" });
+      return res.status(400).json({ error: "Valid subscription object required" });
     }
 
     const docRef = firestore.collection("web_push_subscriptions").doc(email);
@@ -27,9 +26,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const now = Timestamp.now();
     const current = snap.exists && Array.isArray(snap.data()?.subs) ? snap.data()!.subs : [];
 
-    // Deduplicate by endpoint
     const filtered = current.filter((s: any) => s?.endpoint !== subscription.endpoint);
-    filtered.push({ ...subscription, last_seen: now });
+    filtered.push({ ...subscription, last    filtered.push({ ...subscription, last_seen: now });
 
     await docRef.set({ email, subs: filtered, updated_at: now }, { merge: true });
     return res.status(200).json({ ok: true });
@@ -37,4 +35,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error("[notifications/register] error:", e?.message || e);
     return res.status(500).json({ error: "Failed to register subscription" });
   }
-}
