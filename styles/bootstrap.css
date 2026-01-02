@@ -635,6 +635,41 @@ body::before {
   color: #fff;
 }
 
+/* ==== Onboarding sticky footer (full-bleed steps) ==== */
+.onb-footer {
+  position: sticky;
+  bottom: 0;
+  padding: 10px 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(10,11,13,0.35) 40%, rgba(10,11,13,0.65) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  z-index: 5;
+}
+.onb-footer-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Make the two CTA buttons balanced and comfortably tappable */
+.onb-cta {
+  min-height: 48px;
+  padding-left: 18px;
+  padding-right: 18px;
+}
+.onb-cta-wide {
+  flex: 1 1 0;
+}
+
+/* Optional: keep the same bottom nav safe-area pattern here as well */
+@supports (padding: max(0px)) {
+  .onb-footer-inner { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+}
+
 
 :root,
 [data-bs-theme=light] {
