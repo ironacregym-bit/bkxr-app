@@ -8,12 +8,25 @@ import { useSession } from "next-auth/react";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
+// Exact gradient requested
+const GRADIENT = "linear-gradient(135deg, #ff7f32, #ff9a3a)";
+// Default coach avatar (replace with your image in /public)
+const COACH_AVATAR_SRC = "/coach.jpg";
+
 type TaskItem = {
   id: string;
-  key: string;             // e.g., "metrics", "job_goal", "workout_type", "fighting_style"
+  key: string;             // "metrics" | "job_goal" | "workout_type" | "fighting_style" | ...
   title: string;
   description?: string;
   targetPath: string;      // e.g., "/onboarding"
+};
+
+type CoachNotification = {
+  id: string;
+  title: string;           // e.g., "Coach update"
+  message: string;         // body
+  href?: string;           // optional deep link
+  created_at?: string;
 };
 
 export default function TasksBanner() {
@@ -21,10 +34,11 @@ export default function TasksBanner() {
   const email = session?.user?.email || null;
 
   // Outstanding tasks from server
-  const { data, error, isLoading } = useSWR("/api/onboarding/status", fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 30_000,
-  });
+  const { data: statusResp, error: statusErr, isLoading: statusLoading } = useSWR(
+    "/api/onboarding/status",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
 
   // Profile used to determine if tasks are already done
   const swrProfileKey = email ? `/api/profile?email=${encodeURIComponent(email)}` : null;
@@ -33,15 +47,24 @@ export default function TasksBanner() {
     dedupingInterval: 30_000,
   });
 
-  const items: TaskItem[] = Array.isArray(data?.outstanding)
-    ? (data!.outstanding as TaskItem[])
+  // Optional coach notifications
+  const { data: coachResp } = useSWR("/api/coach/notifications", fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30_000,
+  });
+
+  const items: TaskItem[] = Array.isArray(statusResp?.outstanding)
+    ? (statusResp!.outstanding as TaskItem[])
     : [];
 
-  if (error) return null;
-  if (isLoading) return <div className="bxkr-card p-3 mb-2">Loading tasks…</div>;
-  if (!items.length) return null;
+  const notifications: CoachNotification[] = Array.isArray(coachResp?.notifications)
+    ? (coachResp!.notifications as CoachNotification[])
+    : [];
 
-  // ----- Completion guards (client-side) -----
+  if (statusErr) return null;
+  if (statusLoading) return <div className="bxkr-card p-3 mb-2">Loading…</div>;
+
+  // ----- Completion guards (client-side only; we'll also add server-side when you paste the API) -----
   const metricsComplete = (() => {
     if (!profile) return false;
     const h = Number(profile.height_cm);
@@ -58,8 +81,7 @@ export default function TasksBanner() {
   const onboardingAllComplete =
     metricsComplete && jobGoalComplete && workoutTypeComplete && fightingStyleComplete;
 
-  const filtered = items.filter((t) => {
-    // Specific task keys
+  const filteredTasks = items.filter((t) => {
     if (t.key === "metrics") return !metricsComplete;
     if (t.key === "job_goal") return !jobGoalComplete;
     if (t.key === "workout_type") return !workoutTypeComplete;
@@ -72,44 +94,121 @@ export default function TasksBanner() {
     return true;
   });
 
-  if (!filtered.length) return null;
+  // If nothing to show, return null
+  const nothing =
+    (!notifications || notifications.length === 0) &&
+    (!filteredTasks || filteredTasks.length === 0);
+  if (nothing) return null;
 
   return (
-    <div className="mb-3" role="region" aria-label="Quick start tasks">
-      {filtered.map((t) => (
+    <div className="mb-3" role="region" aria-label="Coach notifications and quick tasks">
+      {/* Coach notifications first */}
+      {notifications?.map((n) => (
+        <CoachPill
+          key={n.id}
+          title={n.title || "From your coach"}
+          message={n.message}
+          href={n.href}
+          avatarSrc={COACH_AVATAR_SRC}
+        />
+      ))}
+
+      {/* Outstanding tasks rendered as pill banners (Weekly Snapshot style) */}
+      {filteredTasks.map((t) => (
         <TaskPill
           key={t.id}
           title={t.title}
           message={t.description || "Tap to continue"}
           href={t.targetPath}
-          // Same feel as .btn-bxkr (orange gradient + pill)
-          background="linear-gradient(135deg, var(--bxkr-accent), #ff7f32)"
-          accentColor="#0b0f14" // dark text works on orange gradient; we’ll compute accessible text colour
         />
       ))}
     </div>
   );
 }
 
-/** Weekly Snapshot / Coach-style pill banner for a single task */
+/** Pill banner with coach avatar (matches weekly snapshot feel in orange gradient) */
+function CoachPill({
+  title,
+  message,
+  href,
+  avatarSrc = COACH_AVATAR_SRC,
+}: {
+  title: string;
+  message: string;
+  href?: string;
+  avatarSrc?: string;
+}) {
+  const Content = (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        background: GRADIENT,
+        borderRadius: 50,
+        padding: "12px 16px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
+        color: "#fff",
+        marginBottom: 12,
+      }}
+    >
+      {/* Avatar */}
+      <div
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: "50%",
+          overflow: "hidden",
+          border: "2px solid rgba(255,255,255,0.4)",
+          marginRight: 12,
+          flexShrink: 0,
+        }}
+        aria-hidden="true"
+      >
+        {/* Use next/image if you prefer; keeping simple for drop-in */}
+        <img src={avatarSrc} alt="Coach" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      </div>
+
+      {/* Text */}
+      <div style={{ flexGrow: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontWeight: 700,
+            fontSize: 16,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {title}
+        </div>
+        <div style={{ fontSize: 13, opacity: 0.95 }}>{message}</div>
+      </div>
+
+      {/* Chevron */}
+      <i className="fas fa-chevron-right" aria-hidden="true" style={{ marginLeft: 12, color: "#fff" }} />
+    </div>
+  );
+
+  return href ? (
+    <Link href={href} className="text-decoration-none" aria-label={`${title}: ${message}`}>
+      {Content}
+    </Link>
+  ) : (
+    Content
+  );
+}
+
+/** Pill banner for a task (matches weekly snapshot style and gradient) */
 function TaskPill({
   title,
   message,
   href,
-  background = "linear-gradient(135deg, var(--bxkr-accent), #ff7f32)",
-  accentColor,
 }: {
   title: string;
   message: string;
   href: string;
-  background?: string;
-  /** Optional override; otherwise we derive contrasting text colour from gradient end colour. */
-  accentColor?: string;
 }) {
-  // Derive a readable text colour against the orange gradient (use the end colour here for heuristic)
-  const gradientEnd = "#ff7f32";
-  const textColour = accentColor || getReadableTextColor(gradientEnd);
-
   return (
     <Link
       href={href}
@@ -119,15 +218,15 @@ function TaskPill({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        background,
+        background: GRADIENT,
         borderRadius: 50,
         padding: "12px 16px",
         boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
-        color: textColour,
+        color: "#fff",
         marginBottom: 12,
       }}
     >
-      {/* Left icon circle (consistent with weekly snapshot / coach style) */}
+      {/* Left icon circle */}
       <div
         style={{
           width: 40,
@@ -154,31 +253,15 @@ function TaskPill({
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
-            color: "#ffffff",
           }}
         >
           {title}
         </div>
-        <div style={{ fontSize: 13, opacity: 0.95, color: "#ffffff" }}>{message}</div>
+        <div style={{ fontSize: 13, opacity: 0.95 }}>{message}</div>
       </div>
 
-      {/* Right chevron */}
-      <i
-        className="fas fa-chevron-right"
-        aria-hidden="true"
-        style={{ marginLeft: 12, color: "#ffffff" }}
-      />
+      {/* Chevron */}
+      <i className="fas fa-chevron-right" aria-hidden="true" style={{ marginLeft: 12, color: "#fff" }} />
     </Link>
-  );
-}
-
-// Simple luminance-based contrast heuristic for text colour choice
-function getReadableTextColor(hex: string): string {
-  const c = hex.replace("#", "");
-  if (c.length !== 6) return "#0e0e0e";
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return luminance > 160 ? "#0e0e0e" : "#ffffff";
+   );
 }
