@@ -373,7 +373,7 @@ export default function Home() {
         {weeklyOverview?.days && (
           <div style={{ marginBottom: 12 }}>
             <WeeklyCircles
-              weeklyProgress      weeklyProgressPercent={weeklyProgressPercent}
+              weeklyProgressPercent={weeklyProgressPercent}
               weeklyWorkoutsCompleted={weeklyWorkoutsCompleted}
               dayStreak={dayStreak}
             />
