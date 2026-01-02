@@ -10,7 +10,7 @@ import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 import DailyTasksCard from "../components/DailyTasksCard";
 // NEW
 import NotificationsBanner from "../components/NotificationsBanner";
-import WeeklyCircles from "../components/Dashboard/WeeklyCircles";
+import WeeklyCircles from "../components/dashboard/WeeklyCircles";
 
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
