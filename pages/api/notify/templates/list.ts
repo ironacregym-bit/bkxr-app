@@ -16,7 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
     const templates = snap.docs.map((d) => ({ key: d.id, ...(d.data() as any) }));
     return res.status(200).json({ templates });
-  } catch (e  } catch (e: any) {
+  } catch (e: any) {
     console.error("[templates/list]", e?.message || e);
     return res.status(500).json({ error: "Failed to list templates" });
   }
