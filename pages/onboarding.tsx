@@ -381,6 +381,38 @@ export default function OnboardingPage() {
             </button>
           </div>
         )}
+
+        {/* Page-level Back/Next for steps 2 & 3 (full-bleed). Sticky, safe-area aware. */}
+        {(step === 2 || step === 3) && (
+          <div
+            className="d-flex justify-content-between"
+            id="onb-page-nav"
+            style={{
+              position: "sticky",
+              bottom: 0,
+              paddingTop: 10,
+              paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+              background:
+                "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.35) 40%, rgba(0,0,0,0.65) 100%)",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
+              borderTop: "1px solid rgba(255,255,255,0.08)",
+              zIndex: 5,
+            }}
+          >
+            <button
+              className="btn btn-bxkr-outline"
+              onClick={() => setStep((s) => Math.max(0, s - 1))}
+              disabled={isFirstStep || saving}
+            >
+              ← Back
+            </button>
+            <button className="btn btn-bxkr" onClick={() => autoSave(step + 1)} disabled={saving}>
+              Next →
+              {saving && <span className="inline-spinner ms-2" />}
+            </button>
+          </div>
+        )}
       </main>
 
       <BottomNav />
