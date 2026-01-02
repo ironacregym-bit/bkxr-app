@@ -7,12 +7,10 @@ import BottomNav from "../components/BottomNav";
 import AddToHomeScreen from "../components/AddToHomeScreen";
 import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
-import ChallengeBanner from "../components/ChallengeBanner";
 import DailyTasksCard from "../components/DailyTasksCard";
-// OLD: import TasksBanner from "../components/TasksBanner";
-// NEW:
+// NEW
 import NotificationsBanner from "../components/NotificationsBanner";
-import WeeklyCircles from "../components/dashboard/WeeklyCircles";
+import WeeklyCircles from "../components/Dashboard/WeeklyCircles";
 
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
@@ -73,7 +71,6 @@ type ApiDay = {
   nutritionSummary?: { calories: number; protein: number };
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
   habitSummary?: { completed: number; total: number };
-  // CHANGED: body_fat_pct instead of bodyFat
   checkinSummary?: { weight: number; body_fat_pct: number; weightChange?: number; bfChange?: number };
   workoutIds?: string[];
 };
@@ -221,7 +218,7 @@ export default function Home() {
 
   const accentMicro = "#ff8a2a";
 
-  // ===== Carousel state for Notifications + Weekly Overview =====
+  // ===== Carousel state for Notifications only =====
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const [slideIndex, setSlideIndex] = useState(0);
   const goToSlide = (idx: number) => {
@@ -241,8 +238,7 @@ export default function Home() {
     return () => el.removeEventListener("scroll", onScroll);
   }, [slideIndex]);
 
-  // ✅ Normalise check-in summary for downstream components:
-  //    Provide both body_fat_pct (new) and bodyFat (legacy) so DailyTasksCard keeps working.
+  // ✅ Normalise check-in summary for downstream components
   const checkinSummaryNormalized = useMemo(() => {
     const s = selectedDayData?.checkinSummary as
       | { weight?: number; body_fat_pct?: number; bodyFat?: number; weightChange?: number; bfChange?: number }
@@ -257,7 +253,6 @@ export default function Home() {
     return {
       ...s,
       body_fat_pct,
-      // legacy alias for components still reading `bodyFat`
       bodyFat: (s as any).bodyFat ?? body_fat_pct,
     };
   }, [selectedDayData]);
@@ -270,12 +265,10 @@ export default function Home() {
   }, [derivedWeeklyTotals]);
 
   const weeklyWorkoutsCompleted = useMemo(() => {
-    // Prefer weeklyTotals if provided
     const completedFromTotals = Number(weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0);
     if (Number.isFinite(completedFromTotals)) {
       return Math.max(0, Math.min(3, completedFromTotals));
     }
-    // Fallback: count days with workoutDone
     const days = (weeklyOverview?.days as ApiDay[]) || [];
     const count = days.reduce((acc, d) => acc + (d?.workoutDone ? 1 : 0), 0);
     return Math.max(0, Math.min(3, count));
@@ -316,6 +309,8 @@ export default function Home() {
       <Head>
         <title>BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        {/* Modern PWA capability meta */}
+        <meta name="mobile-web-app-capable" content="yes" />
       </Head>
 
       <main className="container py-2" style={{ paddingBottom: "70px", color: "#fff" }}>
@@ -352,64 +347,36 @@ export default function Home() {
           {greeting}
         </h2>
 
-        {/* ===== Carousel: Notifications (slide 1) + Weekly Circles (slide 2) ===== */}
+        {/* ===== Notifications carousel (single slide) ===== */}
         <section
           ref={carouselRef}
           className="bxkr-carousel"
           style={{ gap: 0, marginBottom: 10 }}
-          aria-label="Notifications and weekly overview carousel"
+          aria-label="Notifications carousel"
         >
-          {/* Slide 1 — Notifications feed (coach-style pill banners) */}
           <div className="bxkr-slide" style={{ padding: "0 2px" }}>
             <NotificationsBanner />
           </div>
+        </section>
 
-          {/* Slide 2 — Weekly overview: three circular charts */}
-          <div className="bxkr-slide" style={{ padding: "0 2px" }}>
+        {/* Single dot (active) */}
+        <div className="bxkr-carousel-dots">
+          <button
+            type="button"
+            className="bxkr-carousel-dot active"
+            aria-label="Show notifications"
+            onClick={() => goToSlide(0)}
+          />
+        </div>
+
+        {/* ===== Weekly Circles in a glass card (replaces the old progress bar) ===== */}
+        {weeklyOverview?.days && (
+          <div className="bxkr-card p-3" style={{ marginBottom: 12 }}>
             <WeeklyCircles
               weeklyProgressPercent={weeklyProgressPercent}
               weeklyWorkoutsCompleted={weeklyWorkoutsCompleted}
               dayStreak={dayStreak}
             />
-          </div>
-        </section>
-
-        {/* Carousel dots */}
-        <div className="bxkr-carousel-dots">
-          <button
-            type="button"
-            className={`bxkr-carousel-dot ${slideIndex === 0 ? "active" : ""}`}
-            aria-label="Show notifications"
-            onClick={() => goToSlide(0)}
-          />
-          <button
-            type="button"
-            className={`bxkr-carousel-dot ${slideIndex === 1 ? "active" : ""}`}
-            aria-label="Show weekly overview"
-            onClick={() => goToSlide(1)}
-          />
-        </div>
-
-        {/* Weekly Progress (legacy bar retained; optional to remove if circles fully replace it) */}
-        {weeklyOverview?.days && (
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Weekly Progress</div>
-            <div style={{ background: "#333", borderRadius: 8, overflow: "hidden", height: 12 }}>
-              <div
-                style={{
-                  width:
-                    derivedWeeklyTotals.totalTasks > 0
-                      ? `${(derivedWeeklyTotals.completedTasks / derivedWeeklyTotals.totalTasks) * 100}%`
-                      : "0%",
-                  background: accentMicro,
-                  height: "100%",
-                  transition: "width .4s ease",
-                }}
-              />
-            </div>
-            <div style={{ fontSize: "0.85rem", marginTop: 4 }}>
-              {derivedWeeklyTotals.completedTasks} / {derivedWeeklyTotals.totalTasks} tasks completed
-            </div>
           </div>
         )}
 
@@ -486,7 +453,6 @@ export default function Home() {
             workoutDone={Boolean(selectedStatus.workoutDone)}
             habitSummary={selectedDayData.habitSummary}
             habitAllDone={Boolean(selectedStatus.habitAllDone)}
-            // 👇 pass the normalised summary so components can read body_fat_pct or bodyFat
             checkinSummary={checkinSummaryNormalized as any}
             checkinComplete={Boolean(selectedStatus.checkinComplete)}
             hrefs={{
