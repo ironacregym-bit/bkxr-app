@@ -1,4 +1,5 @@
 
+// pages/api/notify/emit.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
@@ -7,6 +8,7 @@ import { renderTemplateStrings } from "../../../lib/notifications/render";
 import { writeUserNotification } from "../../../lib/notifications/store";
 import { sendPushIfOptedIn } from "../../../lib/notifications/push";
 
+// Completion check used by rules
 function onboardingComplete(user: any): boolean {
   const h = Number(user?.height_cm);
   const w = Number(user?.weight_kg);
@@ -25,10 +27,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const force = !!b.force;
 
   try {
-    const userSnap = await firestore.collection("users").doc(userEmail).get();
+    const userSnap = await firestore.collection("users").doc(userEmail).get(); // ✅ lowercase 'users'
     const user = userSnap.exists ? userSnap.data() : {};
 
-    const q = await firestore.collection("notification_rules").where("event", "==", event).where("enabled", "==", true).get();
+    // Load enabled rules for this event
+    const q = await firestore.collection("notification_rules")
+      .where("event", "==", event)
+      .where("enabled", "==", true)
+      .get();
     const rules = q.docs.map((d) => d.data()).sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0));
 
     let emitted = 0;
@@ -39,12 +45,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (Boolean(cond.onboarding_complete) !== onboardingComplete(user)) continue;
       }
 
+      // Render inline templates embedded in the rule doc
       const { title, body, url, data } = renderTemplateStrings({
         title_template: r.title_template,
         body_template: r.body_template,
         url_template: r.url_template,
         data_template: r.data_template,
-      }, { ...context, user });
+           }, { ...context, user });
+
+      if (!title || !body) continue; // guard against bad rule docs
 
       const created = await writeUserNotification(userEmail, {
         title, message: body, href: url,
@@ -66,7 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({ emitted });
   } catch (e: any) {
-     console.error("[notify/emit]", e?.message || e);
+    console.error("[notify/emit]", e?.message || e, e?.stack);
     return res.status(500).json({ error: "Failed to emit" });
   }
 }
