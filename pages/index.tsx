@@ -378,6 +378,8 @@ export default function Home() {
               dayStreak={dayStreak}
             />
           </div>
+          );
+        }
 
 
         {/* Calendar */}
