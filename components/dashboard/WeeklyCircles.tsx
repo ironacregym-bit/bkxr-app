@@ -5,7 +5,7 @@
 type Props = {
   /** Weekly progress percentage (0–100). */
   weeklyProgressPercent: number;
-  /** Weekly workouts completed (0–3). Count only in label/sub; ring shows % of 3 internally. */
+  /** Weekly workouts completed (0–3). Count-only in subtext; ring shows % of 3 internally. */
   weeklyWorkoutsCompleted: number;
   /** Day streak (consecutive days fully filled). */
   dayStreak: number;
@@ -16,53 +16,63 @@ export default function WeeklyCircles({
   weeklyWorkoutsCompleted,
   dayStreak,
 }: Props) {
-  // Keep workouts ring as % of 3, but display "Workouts" + count only.
+  // Workouts ring is % of 3, while we display the count-only in the subtext
   const workoutsPct = Math.max(0, Math.min(100, Math.round((weeklyWorkoutsCompleted / 3) * 100)));
   const progressPct = Math.max(0, Math.min(100, Math.round(weeklyProgressPercent)));
 
-  // ✨ Smaller overall footprint (about half the previous vertical size)
-  const size = 64;            // was 100
-  const stroke = 8;           // was 10
+  // Compact footprint (half of original)
+  const size = 64;
+  const stroke = 8;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
 
   return (
     <div
-      // No background here; let the parent wrap in a glass card if desired
+      // Grid of three cards with slight separators
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(3, 1fr)",
-        gap: 8,
-        alignItems: "center",
+        gap: 10,
       }}
     >
-      <Circle
-        size={size}
-        stroke={stroke}
-        radius={r}
-        circumference={c}
-        percent={progressPct}
-        label="Weekly Progress"
-        sub={`${progressPct}%`}
-      />
-      <Circle
-        size={size}
-        stroke={stroke}
-        radius={r}
-        circumference={c}
-        percent={workoutsPct}
-        label="Workouts"
-        sub={`${weeklyWorkoutsCompleted}`} // ✂️ removed “/3”
-      />
-      <Circle
-        size={size}
-        stroke={stroke}
-        radius={r}
-        circumference={c}
-        percent={Math.min(100, dayStreak)} // visual cap only
-        label="Day Streak"
-        sub={`${dayStreak}d`}
-      />
+      {/* Card 1: Weekly Progress */}
+      <div className="futuristic-card" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+        <Circle
+          size={size}
+          stroke={stroke}
+          radius={r}
+          circumference={c}
+          percent={progressPct}
+          label="Weekly Progress"
+          sub={`${progressPct}%`}
+        />
+      </div>
+
+      {/* Card 2: Workouts (count only) */}
+      <div className="futuristic-card" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+        <Circle
+          size={size}
+          stroke={stroke}
+          radius={r}
+          circumference={c}
+          percent={workoutsPct}
+          label="Workouts"
+          sub={`${weeklyWorkoutsCompleted}`} // count only; no “/3”
+        />
+      </div>
+
+      {/* Card 3: Day Streak */}
+      <div className="futuristic-card" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+        <Circle
+          size={size}
+          stroke={stroke}
+          radius={r}
+          circumference={c}
+          percent={Math.min(100, dayStreak)} // visual cap only
+          label="Day Streak"
+          sub={`${dayStreak}d`}
+        />
+      </div>
     </div>
   );
 }
@@ -87,7 +97,7 @@ function Circle({
   const clamped = Math.max(0, Math.min(100, percent));
   const offset = circumference - (clamped / 100) * circumference;
 
-  // Use a scoped gradient ID to avoid collisions if multiple instances render
+  // Scoped gradient ID to avoid collisions
   const gradId = "bxkrWeeklyGrad";
 
   return (
@@ -121,7 +131,7 @@ function Circle({
           strokeLinecap="round"
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
-        {/* Center text (scaled down for smaller rings) */}
+        {/* Center text (scaled for compact ring) */}
         <text
           x="50%"
           y="50%"
