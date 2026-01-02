@@ -5,7 +5,7 @@
 type Props = {
   /** Weekly progress percentage (0–100). */
   weeklyProgressPercent: number;
-  /** Weekly workouts completed (0–3). Will be displayed as % of 3. */
+  /** Weekly workouts completed (0–3). Count only in label/sub; ring shows % of 3 internally. */
   weeklyWorkoutsCompleted: number;
   /** Day streak (consecutive days fully filled). */
   dayStreak: number;
@@ -16,17 +16,25 @@ export default function WeeklyCircles({
   weeklyWorkoutsCompleted,
   dayStreak,
 }: Props) {
+  // Keep workouts ring as % of 3, but display "Workouts" + count only.
   const workoutsPct = Math.max(0, Math.min(100, Math.round((weeklyWorkoutsCompleted / 3) * 100)));
   const progressPct = Math.max(0, Math.min(100, Math.round(weeklyProgressPercent)));
-  const size = 100;
-  const stroke = 10;
+
+  // ✨ Smaller overall footprint (about half the previous vertical size)
+  const size = 64;            // was 100
+  const stroke = 8;           // was 10
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
 
   return (
     <div
-      className="bxkr-card p-3"
-      style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, alignItems: "center" }}
+      // No background here; let the parent wrap in a glass card if desired
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gap: 8,
+        alignItems: "center",
+      }}
     >
       <Circle
         size={size}
@@ -43,15 +51,15 @@ export default function WeeklyCircles({
         radius={r}
         circumference={c}
         percent={workoutsPct}
-        label="Workouts (of 3)"
-        sub={`${weeklyWorkoutsCompleted}/3`}
+        label="Workouts"
+        sub={`${weeklyWorkoutsCompleted}`} // ✂️ removed “/3”
       />
       <Circle
         size={size}
         stroke={stroke}
         radius={r}
         circumference={c}
-        percent={Math.min(100, dayStreak)} // just to cap the ring visually
+        percent={Math.min(100, dayStreak)} // visual cap only
         label="Day Streak"
         sub={`${dayStreak}d`}
       />
@@ -79,11 +87,14 @@ function Circle({
   const clamped = Math.max(0, Math.min(100, percent));
   const offset = circumference - (clamped / 100) * circumference;
 
+  // Use a scoped gradient ID to avoid collisions if multiple instances render
+  const gradId = "bxkrWeeklyGrad";
+
   return (
     <div style={{ textAlign: "center" }}>
-      <svg width={size} height={size}>
+      <svg width={size} height={size} aria-hidden="true">
         <defs>
-          <linearGradient id="bxkrGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#ff7f32" />
             <stop offset="100%" stopColor="#ff9a3a" />
           </linearGradient>
@@ -102,7 +113,7 @@ function Circle({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="url(#bxkrGrad)"
+          stroke={`url(#${gradId})`}
           strokeWidth={stroke}
           fill="none"
           strokeDasharray={`${circumference} ${circumference}`}
@@ -110,19 +121,19 @@ function Circle({
           strokeLinecap="round"
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
-        {/* Center text */}
+        {/* Center text (scaled down for smaller rings) */}
         <text
           x="50%"
           y="50%"
           textAnchor="middle"
           dominantBaseline="central"
           fill="#fff"
-          style={{ fontWeight: 700, fontSize: 16 }}
+          style={{ fontWeight: 700, fontSize: 12 }}
         >
           {sub}
         </text>
       </svg>
-      <div className="text-dim" style={{ marginTop: 6, fontSize: 13 }}>{label}</div>
+      <div className="text-dim" style={{ marginTop: 4, fontSize: 12 }}>{label}</div>
     </div>
-   );
+  );
 }
