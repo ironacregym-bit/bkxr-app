@@ -27,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const current = snap.exists && Array.isArray(snap.data()?.subs) ? snap.data()!.subs : [];
 
     const filtered = current.filter((s: any) => s?.endpoint !== subscription.endpoint);
-    filtered.push({ ...subscription, last    filtered.push({ ...subscription, last_seen: now });
+    filtered.push({ ...subscription, last_seen: now });
 
     await docRef.set({ email, subs: filtered, updated_at: now }, { merge: true });
     return res.status(200).json({ ok: true });
