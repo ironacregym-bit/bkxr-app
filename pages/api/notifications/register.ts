@@ -35,3 +35,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error("[notifications/register] error:", e?.message || e);
     return res.status(500).json({ error: "Failed to register subscription" });
   }
+}
