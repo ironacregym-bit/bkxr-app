@@ -1,7 +1,6 @@
 
-// pages/api/notify/templates/delete.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
 import firestore from "../../../../lib/firestoreClient";
 
@@ -19,6 +18,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ ok: true });
   } catch (e: any) {
     console.error("[templates/delete]", e?.message || e);
-    return res.status(500).json({ error: "Failed to delete template" });
+    return res.status(500).json({ error: "Failed to delete template    return res.status(500).json({ error: "Failed to delete template" });
   }
 }
