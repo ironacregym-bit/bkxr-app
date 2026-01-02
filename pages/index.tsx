@@ -12,7 +12,7 @@ import DailyTasksCard from "../components/DailyTasksCard";
 // OLD: import TasksBanner from "../components/TasksBanner";
 // NEW:
 import NotificationsBanner from "../components/NotificationsBanner";
-import WeeklyCircles from "../components/Dashboard/WeeklyCircles";
+import WeeklyCircles from "../components/dashboard/WeeklyCircles";
 
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
