@@ -7,7 +7,7 @@ import Link from "next/link";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const GRADIENT = "linear-gradient(135deg, #ff7f32, #ff9a3a)";
-const COACH_AVATAR_SRC = "/coach.jpg"; // replace with your asset
+const COACH_AVATAR_SRC = "public/coach.jpg"; // replace with your asset
 
 export default function NotificationsBanner() {
   const { data, error, isLoading } = useSWR("/api/notifications/feed?limit=10", fetcher, {
