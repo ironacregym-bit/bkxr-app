@@ -69,7 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .filter((it) => {
         if (!it.expires_at) return true; // if no expiry, keep
         const expMs = Date.parse(it.expires_at);
-        return isNaN(expMs) ? true        return isNaN(expMs) ? true : expMs > now;
+        return isNaN(expMs) ? true : expMs > now;
       })
       .slice(0, limit);
 
