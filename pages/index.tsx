@@ -8,7 +8,7 @@ import AddToHomeScreen from "../components/AddToHomeScreen";
 import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 import DailyTasksCard from "../components/DailyTasksCard";
-// NEW
+// WeeklyCircles (your current path)
 import WeeklyCircles from "../components/dashboard/WeeklyCircles";
 
 export const getServerSideProps: GetServerSideProps = async (
@@ -57,7 +57,6 @@ function startOfAlignedWeek(d: Date) {
 
 /**
  * 🔄 API day payload from /api/weekly/overview.
- * NOTE: we now use `body_fat_pct` (numeric) in checkinSummary.
  */
 type ApiDay = {
   dateKey: string;
@@ -168,6 +167,26 @@ export default function Home() {
     if (!weeklyOverview?.days) return undefined;
     return (weeklyOverview.days as ApiDay[]).find((d) => d.dateKey === selectedDateKey);
   }, [weeklyOverview, selectedDateKey]);
+
+  // ✅ Normalise check-in summary for downstream components (restore missing block)
+  const checkinSummaryNormalized = useMemo(() => {
+    const s = selectedDayData?.checkinSummary as
+      | { weight?: number; body_fat_pct?: number; bodyFat?: number; weightChange?: number; bfChange?: number }
+      | undefined;
+    if (!s) return undefined;
+    const body_fat_pct =
+      typeof s.body_fat_pct === "number"
+        ? s.body_fat_pct
+        : typeof (s as any).bodyFat === "number"
+        ? (s as any).bodyFat
+        : 0;
+    return {
+      ...s,
+      body_fat_pct,
+      // legacy alias for components still reading `bodyFat`
+      bodyFat: (s as any).bodyFat ?? body_fat_pct,
+    };
+  }, [selectedDayData]);
 
   const selectedStatus = weekStatus[selectedDateKey] || ({} as DayStatus);
   const hasWorkoutToday = Boolean(selectedStatus.hasWorkout);
@@ -407,6 +426,7 @@ export default function Home() {
                 }}
                 aria-hidden="true"
               >
+                {/* Replace with your coach image asset in /public */}
                 <img src="/coach.jpg" alt="Coach" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               </div>
               <div style={{ flexGrow: 1, minWidth: 0 }}>
@@ -471,6 +491,7 @@ export default function Home() {
               );
             }
 
+            const accentMicro = "#ff8a2a";
             const ringColor = st.allDone ? "#64c37a" : isSelected ? accentMicro : "rgba(255,255,255,0.3)";
             const boxShadow = isSelected ? `0 0 8px ${ringColor}` : st.allDone ? `0 0 3px ${ringColor}` : "none";
 
@@ -524,6 +545,7 @@ export default function Home() {
             workoutDone={Boolean(selectedStatus.workoutDone)}
             habitSummary={selectedDayData.habitSummary}
             habitAllDone={Boolean(selectedStatus.habitAllDone)}
+            // 👇 pass the normalised summary so components can read body_fat_pct or bodyFat
             checkinSummary={checkinSummaryNormalized as any}
             checkinComplete={Boolean(selectedStatus.checkinComplete)}
             hrefs={{
