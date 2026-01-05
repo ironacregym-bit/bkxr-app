@@ -8,7 +8,6 @@ import AddToHomeScreen from "../components/AddToHomeScreen";
 import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 import DailyTasksCard from "../components/DailyTasksCard";
-// WeeklyCircles (your current path)
 import WeeklyCircles from "../components/dashboard/WeeklyCircles";
 
 export const getServerSideProps: GetServerSideProps = async (
@@ -87,6 +86,12 @@ type DayStatus = {
 
 export default function Home() {
   const { data: session, status } = useSession();
+
+  // Original greeting text (generic time-of-day)
+  const greeting = (() => {
+    const h = new Date().getHours();
+    return h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening";
+  })();
 
   const weekDays = useMemo(() => getWeek(), []);
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
@@ -168,7 +173,7 @@ export default function Home() {
     return (weeklyOverview.days as ApiDay[]).find((d) => d.dateKey === selectedDateKey);
   }, [weeklyOverview, selectedDateKey]);
 
-  // ✅ Normalise check-in summary for downstream components (restore missing block)
+  // Normalise check-in summary for downstream components
   const checkinSummaryNormalized = useMemo(() => {
     const s = selectedDayData?.checkinSummary as
       | { weight?: number; body_fat_pct?: number; bodyFat?: number; weightChange?: number; bfChange?: number }
@@ -183,7 +188,6 @@ export default function Home() {
     return {
       ...s,
       body_fat_pct,
-      // legacy alias for components still reading `bodyFat`
       bodyFat: (s as any).bodyFat ?? body_fat_pct,
     };
   }, [selectedDayData]);
@@ -197,7 +201,7 @@ export default function Home() {
   const habitHref = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
 
-  // Contextual metrics
+  // Contextual metrics for circles
   const dayStreak = useMemo(() => {
     let streak = 0;
     for (const d of weekDays) {
@@ -224,77 +228,9 @@ export default function Home() {
     return Math.max(0, Math.min(3, count));
   }, [weeklyOverview]);
 
-  // ===== ONE notification (or fallback coach cue) =====
-  const { data: feed } = useSWR("/api/notifications/feed?limit=1", fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 30_000,
-  });
-  const primaryNotification = Array.isArray(feed?.items) ? feed.items[0] : null;
-
-  // Compute a coach cue if no notification exists
-  const coachCue = useMemo(() => {
-    const w = weeklyWorkoutsCompleted;
-    const p = weeklyProgressPercent;
-    const streak = dayStreak;
-    const todayIsFriday =
-      new Date(selectedDateKey + "T00:00:00").getDay() === 5 ||
-      selectedStatus.isFriday;
-
-    if (w === 0) return "Get your first workout of the week in — a quick boxer’s conditioning will do.";
-    if (w === 1) return "Strong start. Hit workout 2/3 today to lock in momentum.";
-    if (w === 2) return "You’re close. Nail workout 3/3 and finish the week on a high.";
-    if (todayIsFriday && !selectedStatus.checkinComplete) return "It’s Friday — complete your check‑in to keep your accountability tight.";
-    if (p < 50) return "Keep the pace — small actions compound. Log nutrition and habits today.";
-    if (streak >= 2) return `Protect the streak — ${streak} days in a row. One more keeps it alive.`;
-    return "Own today — one meaningful action moves you forward.";
-  }, [weeklyWorkoutsCompleted, weeklyProgressPercent, dayStreak, selectedDateKey, selectedStatus.isFriday, selectedStatus.checkinComplete]);
-
-  // Optionally emit a coach cue into notifications when none exists (keeps collection logic unified)
-  const emittedCoachCueRef = useRef(false);
-  useEffect(() => {
-    if (emittedCoachCueRef.current) return;
-    if (primaryNotification) return; // already have something
-    emittedCoachCueRef.current = true;
-    (async () => {
-      try {
-        await fetch("/api/notify/emit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            event: "coach_cue",
-            context: { message: coachCue },
-            force: false,
-          }),
-        }).catch(() => {});
-      } catch {
-        // noop — if rules aren’t set yet, this gracefully does nothing
-      }
-    })();
-  }, [primaryNotification, coachCue]);
-
-  // Contextual pressure greeting (replaces generic greeting)
-  const contextualGreeting = useMemo(() => {
-    const w = weeklyWorkoutsCompleted;
-    const nextWorkout = Math.min(w + 1, 3);
-    const todayIsFriday =
-      new Date(selectedDateKey + "T00:00:00").getDay() === 5 ||
-      selectedStatus.isFriday;
-
-    if (todayIsFriday && !selectedStatus.checkinComplete) {
-      return `Friday pressure: complete your check‑in to lock the week.`;
-    }
-    if (w < 3) {
-      return `Secure your week: ${w}/3 workouts done. Hit ${nextWorkout}/3 today to keep your ${dayStreak}‑day streak.`;
-    }
-    if (weeklyProgressPercent < 100) {
-      return `Finish strong: ${weeklyProgressPercent}% of weekly tasks done — close the gap today.`;
-    }
-    return `Maintain excellence: keep routines tight and prepare the next week.`;
-  }, [weeklyWorkoutsCompleted, weeklyProgressPercent, dayStreak, selectedDateKey, selectedStatus.isFriday, selectedStatus.checkinComplete]);
-
-  // Visible weekly reward (UI-only; no schema changes)
+  // Visible weekly reward (UI-only; to be persisted later)
   const coinsEarned = useMemo(() => {
-    // Simple pilot formula: 5 coins per completed task
+    // Pilot formula: 5 coins per completed task (adjust later)
     const { completedTasks } = derivedWeeklyTotals;
     return completedTasks * 5;
   }, [derivedWeeklyTotals]);
@@ -311,7 +247,7 @@ export default function Home() {
       </Head>
 
       <main className="container py-2" style={{ paddingBottom: "70px", color: "#fff" }}>
-        {/* Header */}
+        {/* Header — Move BXKR coins next to Sign out */}
         <div className="d-flex justify-content-between mb-2 align-items-center">
           <div className="d-flex align-items-center gap-2">
             {session?.user?.image && (
@@ -324,141 +260,72 @@ export default function Home() {
             )}
             {(weekLoading || overviewLoading) && <div className="inline-spinner" />}
           </div>
-          {status === "authenticated" ? (
-            <button className="btn btn-link text-light p-0" onClick={() => signOut()}>
-              Sign out
-            </button>
-          ) : (
-            <button
-              className="btn btn-link text-light p-0"
-              onClick={() => signIn("google")}
-              style={{ background: "transparent", border: "none", textDecoration: "underline" }}
-            >
-              Sign in
-            </button>
-          )}
-        </div>
 
-        {/* Contextual pressure + weekly reward */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto",
-            gap: 10,
-            alignItems: "center",
-            marginBottom: 10,
-          }}
-        >
-          {/* Pressure line */}
-          <div
-            className="bxkr-glass-row"
-            style={{
-              padding: "10px 14px",
-              marginBottom: 0,
-              borderRadius: 12,
-              background: "rgba(255,255,255,0.06)",
-              backdropFilter: "blur(8px)",
-              WebkitBackdropFilter: "blur(8px)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              color: "#fff",
-              cursor: "default",
-            }}
-          >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
-              <i className="fas fa-bolt" style={{ color: "#ff8a2a" }} aria-hidden="true" />
-              <span>{contextualGreeting}</span>
-            </span>
-          </div>
-
-          {/* Coins */}
-          <div
-            className="bxkr-glass-row"
-            style={{
-              padding: "10px 14px",
-              marginBottom: 0,
-              borderRadius: 12,
-              background: "rgba(255,255,255,0.06)",
-              backdropFilter: "blur(8px)",
-              WebkitBackdropFilter: "blur(8px)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              color: "#fff",
-              cursor: "default",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-            aria-label="Weekly reward"
-            title="Pilot rewards — coins are for future partner perks"
-          >
-            <i className="fas fa-coins" style={{ color: "#ffd54f" }} aria-hidden="true" />
-            <span style={{ fontWeight: 700 }}>{coinsEarned} BXKR coins</span>
-          </div>
-        </div>
-
-        {/* ===== Single notification (or coach cue) ===== */}
-        <section style={{ marginBottom: 10 }}>
-          {primaryNotification ? (
-            // Gradient pill with coach avatar
-            <a
-              href={primaryNotification.href || "#"}
-              className="text-decoration-none"
-              aria-label={`${primaryNotification.title}: ${primaryNotification.message}`}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                background: "linear-gradient(135deg, #ff7f32, #ff9a3a)",
-                borderRadius: 20,
-                padding: "12px 16px",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
-                color: "#fff",
-              }}
-            >
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: "50%",
-                  overflow: "hidden",
-                  border: "2px solid rgba(255,255,255,0.4)",
-                  marginRight: 12,
-                  flexShrink: 0,
-                }}
-                aria-hidden="true"
-              >
-                {/* Replace with your coach image asset in /public */}
-                <img src="/coach.jpg" alt="Coach" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              </div>
-              <div style={{ flexGrow: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 16, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {primaryNotification.title}
-                </div>
-                <div style={{ fontSize: 13, opacity: 0.95 }}>{primaryNotification.message}</div>
-              </div>
-              <i className="fas fa-chevron-right" aria-hidden="true" style={{ marginLeft: 12, color: "#fff" }} />
-            </a>
-          ) : (
-            // Coach cue glass row (no gradient)
+          <div className="d-flex align-items-center gap-2">
+            {/* Coins pill */}
             <div
               className="bxkr-glass-row"
               style={{
-                padding: "12px 16px",
+                padding: "6px 10px",
+                marginBottom: 0,
                 borderRadius: 12,
                 background: "rgba(255,255,255,0.06)",
                 backdropFilter: "blur(8px)",
                 WebkitBackdropFilter: "blur(8px)",
                 border: "1px solid rgba(255,255,255,0.12)",
                 color: "#fff",
+                cursor: "default",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: "0.9rem",
               }}
-              aria-label="Coach cue"
+              aria-label="Weekly reward coins"
+              title="Coins will be persisted to your profile in a future update"
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
-                <i className="fas fa-dumbbell" style={{ color: "#ff8a2a" }} aria-hidden="true" />
-                <span>{coachCue}</span>
-              </span>
+              <i className="fas fa-coins" style={{ color: "#ffd54f" }} aria-hidden="true" />
+              <span style={{ fontWeight: 700 }}>{coinsEarned} BXKR</span>
             </div>
-          )}
-        </section>
+
+            {/* Sign in/out */}
+            {status === "authenticated" ? (
+              <button className="btn btn-link text-light p-0" onClick={() => signOut()}>
+                Sign out
+              </button>
+            ) : (
+              <button
+                className="btn btn-link text-light p-0"
+                onClick={() => signIn("google")}
+                style={{ background: "transparent", border: "none", textDecoration: "underline" }}
+              >
+                Sign in
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Greeting — simple time-of-day (not a notification) */}
+        <div
+          className="bxkr-glass-row"
+          style={{
+            padding: "10px 14px",
+            marginBottom: 10,
+            borderRadius: 12,
+            background: "rgba(255,255,255,0.06)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            border: "1px solid rgba(255,255,255,0.12)",
+            color: "#fff",
+            cursor: "default",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+          aria-label="Greeting"
+        >
+          <i className="fas fa-bolt" style={{ color: "#ff8a2a" }} aria-hidden="true" />
+          <span style={{ fontWeight: 600 }}>{greeting}</span>
+        </div>
 
         {/* ===== Weekly Circles (three separate futuristic cards with slight separators) ===== */}
         {weeklyOverview?.days && (
@@ -491,7 +358,6 @@ export default function Home() {
               );
             }
 
-            const accentMicro = "#ff8a2a";
             const ringColor = st.allDone ? "#64c37a" : isSelected ? accentMicro : "rgba(255,255,255,0.3)";
             const boxShadow = isSelected ? `0 0 8px ${ringColor}` : st.allDone ? `0 0 3px ${ringColor}` : "none";
 
@@ -579,4 +445,4 @@ export default function Home() {
       <AddToHomeScreen />
     </>
   );
-}
++
