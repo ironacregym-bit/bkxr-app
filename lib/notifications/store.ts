@@ -58,7 +58,7 @@ export async function writeUserNotification(
     delivered_channels: Array.isArray(opts.channels) && opts.channels.length ? opts.channels : ["in_app"],
     source_key: opts.source_key,
     source_event: opts.source_event || null,
-    meta: opts.meta || null    meta: opts.meta || null,
+    meta: opts.meta || null,
     // NEW: expiry field
     expires_at: expiresIso,
   };
