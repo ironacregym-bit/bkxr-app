@@ -65,3 +65,4 @@ export async function writeUserNotification(
 
   await coll.add(doc);
   return doc;
+}
