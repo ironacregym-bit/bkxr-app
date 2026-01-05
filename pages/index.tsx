@@ -9,7 +9,6 @@ import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 import DailyTasksCard from "../components/DailyTasksCard";
 // NEW
-import NotificationsBanner from "../components/NotificationsBanner";
 import WeeklyCircles from "../components/dashboard/WeeklyCircles";
 
 export const getServerSideProps: GetServerSideProps = async (
@@ -93,10 +92,6 @@ export default function Home() {
   const weekDays = useMemo(() => getWeek(), []);
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
 
-  const greeting = (() => {
-    const h = new Date().getHours();
-    return h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening";
-  })();
   const selectedDateKey = formatYMD(selectedDay);
   const weekStartKey = useMemo(() => formatYMD(startOfAlignedWeek(new Date())), []);
 
@@ -152,40 +147,7 @@ export default function Home() {
     setWeekLoading(false);
   }, [weeklyOverview]);
 
-  // ✅ FIXED STREAK LOGIC
-  const dayStreak = useMemo(() => {
-    let streak = 0;
-    for (const d of weekDays) {
-      const st = weekStatus[formatYMD(d)];
-      if (!st) break;
-
-      if (d < selectedDay && st.allDone) {
-        streak++;
-      } else if (d < selectedDay && !st.allDone) {
-        streak = 0;
-      }
-
-      if (isSameDay(d, selectedDay)) break;
-    }
-    return streak;
-  }, [weekDays, weekStatus, selectedDay]);
-
-  const workoutStreak = useMemo(() => {
-    let streak = 0;
-    for (const d of weekDays) {
-      const st = weekStatus[formatYMD(d)];
-      if (!st) break;
-
-      if (d < selectedDay && st.hasWorkout) {
-        if (st.workoutDone) streak++;
-        else streak = 0;
-      }
-
-      if (isSameDay(d, selectedDay)) break;
-    }
-    return streak;
-  }, [weekDays, weekStatus, selectedDay]);
-
+  // Derived weekly totals
   const derivedWeeklyTotals = useMemo(() => {
     const days = (weeklyOverview?.days as any[]) || [];
     let totalTasks = 0;
@@ -216,48 +178,19 @@ export default function Home() {
   const habitHref = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
 
-  const accentMicro = "#ff8a2a";
+  // Contextual metrics
+  const dayStreak = useMemo(() => {
+    let streak = 0;
+    for (const d of weekDays) {
+      const st = weekStatus[formatYMD(d)];
+      if (!st) break;
+      if (d < selectedDay && st.allDone) streak++;
+      else if (d < selectedDay && !st.allDone) streak = 0;
+      if (isSameDay(d, selectedDay)) break;
+    }
+    return streak;
+  }, [weekDays, weekStatus, selectedDay]);
 
-  // ===== Carousel state for Notifications only =====
-  const carouselRef = useRef<HTMLDivElement | null>(null);
-  const [slideIndex, setSlideIndex] = useState(0);
-  const goToSlide = (idx: number) => {
-    const el = carouselRef.current;
-    if (!el) return;
-    el.scrollTo({ left: idx * el.clientWidth, behavior: "smooth" });
-    setSlideIndex(idx);
-  };
-  useEffect(() => {
-    const el = carouselRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      const idx = Math.round(el.scrollLeft / Math.max(el.clientWidth, 1));
-      if (idx !== slideIndex) setSlideIndex(idx);
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [slideIndex]);
-
-  // ✅ Normalise check-in summary for downstream components
-  const checkinSummaryNormalized = useMemo(() => {
-    const s = selectedDayData?.checkinSummary as
-      | { weight?: number; body_fat_pct?: number; bodyFat?: number; weightChange?: number; bfChange?: number }
-      | undefined;
-    if (!s) return undefined;
-    const body_fat_pct =
-      typeof s.body_fat_pct === "number"
-        ? s.body_fat_pct
-        : typeof s.bodyFat === "number"
-        ? s.bodyFat
-        : 0;
-    return {
-      ...s,
-      body_fat_pct,
-      bodyFat: (s as any).bodyFat ?? body_fat_pct,
-    };
-  }, [selectedDayData]);
-
-  // ===== Weekly circles derived values =====
   const weeklyProgressPercent = useMemo(() => {
     const { totalTasks, completedTasks } = derivedWeeklyTotals;
     if (!totalTasks) return 0;
@@ -266,43 +199,88 @@ export default function Home() {
 
   const weeklyWorkoutsCompleted = useMemo(() => {
     const completedFromTotals = Number(weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0);
-    if (Number.isFinite(completedFromTotals)) {
-      return Math.max(0, Math.min(3, completedFromTotals));
-    }
+    if (Number.isFinite(completedFromTotals)) return Math.max(0, Math.min(3, completedFromTotals));
     const days = (weeklyOverview?.days as ApiDay[]) || [];
     const count = days.reduce((acc, d) => acc + (d?.workoutDone ? 1 : 0), 0);
     return Math.max(0, Math.min(3, count));
   }, [weeklyOverview]);
 
-  // ===== One-time emit of onboarding_incomplete if server reports outstanding onboarding tasks =====
-  const { data: onboardingStatus } = useSWR("/api/onboarding/status", fetcher, {
+  // ===== ONE notification (or fallback coach cue) =====
+  const { data: feed } = useSWR("/api/notifications/feed?limit=1", fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
-  const emittedOnboardingNudgeRef = useRef(false);
-  useEffect(() => {
-    if (emittedOnboardingNudgeRef.current) return;
-    const items = Array.isArray(onboardingStatus?.outstanding) ? onboardingStatus.outstanding : [];
-    const hasOnboardingOutstanding = items.some(
-      (i: any) =>
-        ["metrics", "job_goal", "workout_type", "fighting_style"].includes(String(i.key)) ||
-        String(i.targetPath || "").toLowerCase().includes("/onboarding")
-    );
-    if (!hasOnboardingOutstanding) return;
-    emittedOnboardingNudgeRef.current = true;
+  const primaryNotification = Array.isArray(feed?.items) ? feed.items[0] : null;
 
+  // Compute a coach cue if no notification exists
+  const coachCue = useMemo(() => {
+    const w = weeklyWorkoutsCompleted;
+    const p = weeklyProgressPercent;
+    const streak = dayStreak;
+    const todayIsFriday =
+      new Date(selectedDateKey + "T00:00:00").getDay() === 5 ||
+      selectedStatus.isFriday;
+
+    if (w === 0) return "Get your first workout of the week in — a quick boxer’s conditioning will do.";
+    if (w === 1) return "Strong start. Hit workout 2/3 today to lock in momentum.";
+    if (w === 2) return "You’re close. Nail workout 3/3 and finish the week on a high.";
+    if (todayIsFriday && !selectedStatus.checkinComplete) return "It’s Friday — complete your check‑in to keep your accountability tight.";
+    if (p < 50) return "Keep the pace — small actions compound. Log nutrition and habits today.";
+    if (streak >= 2) return `Protect the streak — ${streak} days in a row. One more keeps it alive.`;
+    return "Own today — one meaningful action moves you forward.";
+  }, [weeklyWorkoutsCompleted, weeklyProgressPercent, dayStreak, selectedDateKey, selectedStatus.isFriday, selectedStatus.checkinComplete]);
+
+  // Optionally emit a coach cue into notifications when none exists (keeps collection logic unified)
+  const emittedCoachCueRef = useRef(false);
+  useEffect(() => {
+    if (emittedCoachCueRef.current) return;
+    if (primaryNotification) return; // already have something
+    emittedCoachCueRef.current = true;
     (async () => {
       try {
         await fetch("/api/notify/emit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ event: "onboarding_incomplete", context: {}, force: false }),
-        });
-      } catch (e) {
-        console.error("[emit onboarding_incomplete]", e);
+          body: JSON.stringify({
+            event: "coach_cue",
+            context: { message: coachCue },
+            force: false,
+          }),
+        }).catch(() => {});
+      } catch {
+        // noop — if rules aren’t set yet, this gracefully does nothing
       }
     })();
-  }, [onboardingStatus]);
+  }, [primaryNotification, coachCue]);
+
+  // Contextual pressure greeting (replaces generic greeting)
+  const contextualGreeting = useMemo(() => {
+    const w = weeklyWorkoutsCompleted;
+    const nextWorkout = Math.min(w + 1, 3);
+    const todayIsFriday =
+      new Date(selectedDateKey + "T00:00:00").getDay() === 5 ||
+      selectedStatus.isFriday;
+
+    if (todayIsFriday && !selectedStatus.checkinComplete) {
+      return `Friday pressure: complete your check‑in to lock the week.`;
+    }
+    if (w < 3) {
+      return `Secure your week: ${w}/3 workouts done. Hit ${nextWorkout}/3 today to keep your ${dayStreak}‑day streak.`;
+    }
+    if (weeklyProgressPercent < 100) {
+      return `Finish strong: ${weeklyProgressPercent}% of weekly tasks done — close the gap today.`;
+    }
+    return `Maintain excellence: keep routines tight and prepare the next week.`;
+  }, [weeklyWorkoutsCompleted, weeklyProgressPercent, dayStreak, selectedDateKey, selectedStatus.isFriday, selectedStatus.checkinComplete]);
+
+  // Visible weekly reward (UI-only; no schema changes)
+  const coinsEarned = useMemo(() => {
+    // Simple pilot formula: 5 coins per completed task
+    const { completedTasks } = derivedWeeklyTotals;
+    return completedTasks * 5;
+  }, [derivedWeeklyTotals]);
+
+  const accentMicro = "#ff8a2a";
 
   return (
     <>
@@ -342,34 +320,127 @@ export default function Home() {
           )}
         </div>
 
-        {/* Greeting */}
-        <h2 className="mb-3" style={{ fontWeight: 700, fontSize: "1.4rem" }}>
-          {greeting}
-        </h2>
-
-        {/* ===== Notifications carousel (single slide) ===== */}
-        <section
-          ref={carouselRef}
-          className="bxkr-carousel"
-          style={{ gap: 0, marginBottom: 10 }}
-          aria-label="Notifications carousel"
+        {/* Contextual pressure + weekly reward */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr auto",
+            gap: 10,
+            alignItems: "center",
+            marginBottom: 10,
+          }}
         >
-          <div className="bxkr-slide" style={{ padding: "0 2px" }}>
-            <NotificationsBanner />
+          {/* Pressure line */}
+          <div
+            className="bxkr-glass-row"
+            style={{
+              padding: "10px 14px",
+              marginBottom: 0,
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.06)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              color: "#fff",
+              cursor: "default",
+            }}
+          >
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
+              <i className="fas fa-bolt" style={{ color: "#ff8a2a" }} aria-hidden="true" />
+              <span>{contextualGreeting}</span>
+            </span>
           </div>
-        </section>
 
-        {/* Single dot (active) */}
-        <div className="bxkr-carousel-dots">
-          <button
-            type="button"
-            className="bxkr-carousel-dot active"
-            aria-label="Show notifications"
-            onClick={() => goToSlide(0)}
-          />
+          {/* Coins */}
+          <div
+            className="bxkr-glass-row"
+            style={{
+              padding: "10px 14px",
+              marginBottom: 0,
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.06)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              color: "#fff",
+              cursor: "default",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+            aria-label="Weekly reward"
+            title="Pilot rewards — coins are for future partner perks"
+          >
+            <i className="fas fa-coins" style={{ color: "#ffd54f" }} aria-hidden="true" />
+            <span style={{ fontWeight: 700 }}>{coinsEarned} BXKR coins</span>
+          </div>
         </div>
 
-        {/* ===== Weekly Circles in a glass card (replaces the old progress bar) ===== */}
+        {/* ===== Single notification (or coach cue) ===== */}
+        <section style={{ marginBottom: 10 }}>
+          {primaryNotification ? (
+            // Gradient pill with coach avatar
+            <a
+              href={primaryNotification.href || "#"}
+              className="text-decoration-none"
+              aria-label={`${primaryNotification.title}: ${primaryNotification.message}`}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "linear-gradient(135deg, #ff7f32, #ff9a3a)",
+                borderRadius: 20,
+                padding: "12px 16px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
+                color: "#fff",
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: "50%",
+                  overflow: "hidden",
+                  border: "2px solid rgba(255,255,255,0.4)",
+                  marginRight: 12,
+                  flexShrink: 0,
+                }}
+                aria-hidden="true"
+              >
+                <img src="/coach.jpg" alt="Coach" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              </div>
+              <div style={{ flexGrow: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 16, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {primaryNotification.title}
+                </div>
+                <div style={{ fontSize: 13, opacity: 0.95 }}>{primaryNotification.message}</div>
+              </div>
+              <i className="fas fa-chevron-right" aria-hidden="true" style={{ marginLeft: 12, color: "#fff" }} />
+            </a>
+          ) : (
+            // Coach cue glass row (no gradient)
+            <div
+              className="bxkr-glass-row"
+              style={{
+                padding: "12px 16px",
+                borderRadius: 12,
+                background: "rgba(255,255,255,0.06)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                color: "#fff",
+              }}
+              aria-label="Coach cue"
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
+                <i className="fas fa-dumbbell" style={{ color: "#ff8a2a" }} aria-hidden="true" />
+                <span>{coachCue}</span>
+              </span>
+            </div>
+          )}
+        </section>
+
+        {/* ===== Weekly Circles (three separate futuristic cards with slight separators) ===== */}
         {weeklyOverview?.days && (
           <div style={{ marginBottom: 12 }}>
             <WeeklyCircles
@@ -378,9 +449,7 @@ export default function Home() {
               dayStreak={dayStreak}
             />
           </div>
-          )
-        }
-
+        )}
 
         {/* Calendar */}
         <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
