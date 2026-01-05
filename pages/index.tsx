@@ -1,4 +1,5 @@
 
+// pages/index.tsx
 import Head from "next/head";
 import useSWR from "swr";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -54,7 +55,7 @@ function startOfAlignedWeek(d: Date) {
   return s;
 }
 
-/** /api/weekly/overview day payload */
+/** Day payload from /api/weekly/overview */
 type ApiDay = {
   dateKey: string;
   hasWorkout?: boolean;
@@ -82,10 +83,23 @@ type DayStatus = {
   workoutIds: string[];
 };
 
+type FeedItem = {
+  id: string;
+  title: string;
+  message: string;
+  href?: string | null;
+  created_at?: string | null;
+  read_at?: string | null;
+  delivered_channels?: string[];
+  source_key?: string;
+  source_event?: string | null;
+  meta?: any;
+};
+
 export default function Home() {
   const { data: session, status } = useSession();
 
-  // Basic time-of-day text (used as part of urgency greeting)
+  // Basic time-of-day text used within urgency copy
   const timeGreeting = (() => {
     const h = new Date().getHours();
     return h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening";
@@ -149,7 +163,7 @@ export default function Home() {
     setWeekLoading(false);
   }, [weeklyOverview]);
 
-  // Derived weekly totals
+  // Weekly totals
   const derivedWeeklyTotals = useMemo(() => {
     const days = (weeklyOverview?.days as any[]) || [];
     let totalTasks = 0;
@@ -199,7 +213,7 @@ export default function Home() {
   const habitHref = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
 
-  // Contextual metrics for circles & greeting
+  // Contextual metrics
   const dayStreak = useMemo(() => {
     let streak = 0;
     for (const d of weekDays) {
@@ -226,7 +240,7 @@ export default function Home() {
     return Math.max(0, Math.min(3, count));
   }, [weeklyOverview]);
 
-  // Urgency-based copy (white text greeting next to profile)
+  // Urgency greeting (white text next to profile)
   const urgencyGreeting = useMemo(() => {
     const w = weeklyWorkoutsCompleted;
     const nextWorkout = Math.min(w + 1, 3);
@@ -245,20 +259,20 @@ export default function Home() {
     return `${timeGreeting} — maintain excellence and prep the next week.`;
   }, [timeGreeting, weeklyWorkoutsCompleted, weeklyProgressPercent, dayStreak, selectedDateKey, selectedStatus.isFriday, selectedStatus.checkinComplete]);
 
-  // Visible weekly reward (UI-only; to be persisted later)
+  // Coins (UI-only for now)
   const coinsEarned = useMemo(() => {
-    // Pilot formula: 5 coins per completed task (adjust later)
+    // Pilot: 5 coins per completed task. Adjust later and persist server-side.
     const { completedTasks } = derivedWeeklyTotals;
     return completedTasks * 5;
   }, [derivedWeeklyTotals]);
 
-  // ===== Notifications feed (carousel-like cycling if multiple) =====
+  // Notifications feed (cycle if multiple)
   const { data: feed } = useSWR("/api/notifications/feed?limit=5", fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
-  const items = Array.isArray(feed?.items) ? feed.items : [];
-  const [notifIndex, setNotifIndex] = useState(0);
+  const items: FeedItem[] = Array.isArray(feed?.items) ? (feed.items as FeedItem[]) : [];
+  const [notifIndex, setNotifIndex] = useState<number>(0);
   useEffect(() => {
     if (!items.length) setNotifIndex(0);
     else setNotifIndex((i) => Math.min(i, items.length - 1));
@@ -386,7 +400,11 @@ export default function Home() {
                   }}
                   aria-hidden="true"
                 >
-                  <img src="/coach.jpg" alt="Coach" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <img
+                    src="/coach.jpg"
+                    alt="Coach"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
                 </div>
 
                 {/* Notification body */}
@@ -410,7 +428,7 @@ export default function Home() {
                 {/* CTA chevron */}
                 {items[notifIndex]?.href && (
                   <a
-                    href={items[notifIndex].href}
+                    href={items[notifIndex].href ?? "#"}
                     aria-label="Open"
                     style={{ color: "#fff" }}
                   >
@@ -451,7 +469,7 @@ export default function Home() {
                 </div>
 
                 <div className="bxkr-carousel-dots">
-                  {items.map((_, i) => (
+                  {items.map((_: FeedItem, i: number) => (
                     <button
                       key={i}
                       type="button"
@@ -463,10 +481,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          ) : (
-            // If no notifications, show nothing (greeting already gives urgency)
-            null
-          )}
+          ) : null}
         </section>
 
         {/* ===== Weekly Circles (three separate futuristic cards with slight separators) ===== */}
@@ -589,5 +604,5 @@ export default function Home() {
       {/* Add to Home Screen Prompt */}
       <AddToHomeScreen />
     </>
-   );
+  );
 }
