@@ -54,9 +54,7 @@ function startOfAlignedWeek(d: Date) {
   return s;
 }
 
-/**
- * 🔄 API day payload from /api/weekly/overview.
- */
+/** /api/weekly/overview day payload */
 type ApiDay = {
   dateKey: string;
   hasWorkout?: boolean;
@@ -87,8 +85,8 @@ type DayStatus = {
 export default function Home() {
   const { data: session, status } = useSession();
 
-  // Original greeting text (generic time-of-day)
-  const greeting = (() => {
+  // Basic time-of-day text (used as part of urgency greeting)
+  const timeGreeting = (() => {
     const h = new Date().getHours();
     return h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening";
   })();
@@ -201,7 +199,7 @@ export default function Home() {
   const habitHref = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
 
-  // Contextual metrics for circles
+  // Contextual metrics for circles & greeting
   const dayStreak = useMemo(() => {
     let streak = 0;
     for (const d of weekDays) {
@@ -228,12 +226,46 @@ export default function Home() {
     return Math.max(0, Math.min(3, count));
   }, [weeklyOverview]);
 
+  // Urgency-based copy (white text greeting next to profile)
+  const urgencyGreeting = useMemo(() => {
+    const w = weeklyWorkoutsCompleted;
+    const nextWorkout = Math.min(w + 1, 3);
+    const today = new Date(selectedDateKey + "T00:00:00").getDay();
+    const isFriday = today === 5 || selectedStatus.isFriday;
+
+    if (isFriday && !selectedStatus.checkinComplete) {
+      return `${timeGreeting} — Friday pressure: complete your check‑in to lock the week.`;
+    }
+    if (w < 3) {
+      return `${timeGreeting} — secure your week: ${w}/3 workouts done. Hit ${nextWorkout}/3 today to keep your ${dayStreak}‑day streak.`;
+    }
+    if (weeklyProgressPercent < 100) {
+      return `${timeGreeting} — finish strong: ${weeklyProgressPercent}% done. Close the gap today.`;
+    }
+    return `${timeGreeting} — maintain excellence and prep the next week.`;
+  }, [timeGreeting, weeklyWorkoutsCompleted, weeklyProgressPercent, dayStreak, selectedDateKey, selectedStatus.isFriday, selectedStatus.checkinComplete]);
+
   // Visible weekly reward (UI-only; to be persisted later)
   const coinsEarned = useMemo(() => {
     // Pilot formula: 5 coins per completed task (adjust later)
     const { completedTasks } = derivedWeeklyTotals;
     return completedTasks * 5;
   }, [derivedWeeklyTotals]);
+
+  // ===== Notifications feed (carousel-like cycling if multiple) =====
+  const { data: feed } = useSWR("/api/notifications/feed?limit=5", fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30_000,
+  });
+  const items = Array.isArray(feed?.items) ? feed.items : [];
+  const [notifIndex, setNotifIndex] = useState(0);
+  useEffect(() => {
+    if (!items.length) setNotifIndex(0);
+    else setNotifIndex((i) => Math.min(i, items.length - 1));
+  }, [items.length]);
+
+  const goPrev = () => setNotifIndex((i) => (i <= 0 ? items.length - 1 : i - 1));
+  const goNext = () => setNotifIndex((i) => (i >= items.length - 1 ? 0 : i + 1));
 
   const accentMicro = "#ff8a2a";
 
@@ -247,9 +279,9 @@ export default function Home() {
       </Head>
 
       <main className="container py-2" style={{ paddingBottom: "70px", color: "#fff" }}>
-        {/* Header — Move BXKR coins next to Sign out */}
+        {/* Header — profile + urgency greeting (left), coins + sign out (right) */}
         <div className="d-flex justify-content-between mb-2 align-items-center">
-          <div className="d-flex align-items-center gap-2">
+          <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
             {session?.user?.image && (
               <img
                 src={session.user.image}
@@ -259,6 +291,21 @@ export default function Home() {
               />
             )}
             {(weekLoading || overviewLoading) && <div className="inline-spinner" />}
+            {/* Urgency-based white greeting next to profile */}
+            <div
+              style={{
+                color: "#fff",
+                fontWeight: 600,
+                fontSize: "0.95rem",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "70vw",
+              }}
+              aria-label="Urgent greeting"
+            >
+              {urgencyGreeting}
+            </div>
           </div>
 
           <div className="d-flex align-items-center gap-2">
@@ -304,28 +351,123 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Greeting — simple time-of-day (not a notification) */}
-        <div
-          className="bxkr-glass-row"
-          style={{
-            padding: "10px 14px",
-            marginBottom: 10,
-            borderRadius: 12,
-            background: "rgba(255,255,255,0.06)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-            border: "1px solid rgba(255,255,255,0.12)",
-            color: "#fff",
-            cursor: "default",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-          aria-label="Greeting"
-        >
-          <i className="fas fa-bolt" style={{ color: "#ff8a2a" }} aria-hidden="true" />
-          <span style={{ fontWeight: 600 }}>{greeting}</span>
-        </div>
+        {/* ===== Notifications (coach-styled, cyclic if >1) ===== */}
+        <section style={{ marginBottom: 10 }}>
+          {items.length > 0 ? (
+            <div
+              className="bxkr-card"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                padding: 8,
+                borderRadius: 14,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 10px",
+                  borderRadius: 12,
+                  background: "linear-gradient(135deg, #ff7f32, #ff9a3a)",
+                  color: "#fff",
+                }}
+              >
+                {/* Coach avatar */}
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    border: "2px solid rgba(255,255,255,0.4)",
+                    flexShrink: 0,
+                  }}
+                  aria-hidden="true"
+                >
+                  <img src="/coach.jpg" alt="Coach" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
+
+                {/* Notification body */}
+                <div style={{ flexGrow: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 16,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {items[notifIndex]?.title}
+                  </div>
+                  <div style={{ fontSize: 13, opacity: 0.95 }}>
+                    {items[notifIndex]?.message}
+                  </div>
+                </div>
+
+                {/* CTA chevron */}
+                {items[notifIndex]?.href && (
+                  <a
+                    href={items[notifIndex].href}
+                    aria-label="Open"
+                    style={{ color: "#fff" }}
+                  >
+                    <i className="fas fa-chevron-right" aria-hidden="true" />
+                  </a>
+                )}
+              </div>
+
+              {/* Controls: prev/next + dots */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginTop: 6,
+                }}
+              >
+                <div className="d-flex align-items-center gap-2">
+                  <button
+                    className="btn btn-sm btn-bxkr-outline"
+                    onClick={goPrev}
+                    aria-label="Previous notification"
+                    style={{ borderRadius: 999 }}
+                  >
+                    ←
+                  </button>
+                  <button
+                    className="btn btn-sm btn-bxkr"
+                    onClick={goNext}
+                    aria-label="Next notification"
+                    style={{
+                      borderRadius: 999,
+                      background: "linear-gradient(135deg, #ff7f32, #ff9a3a)",
+                    }}
+                  >
+                    →
+                  </button>
+                </div>
+
+                <div className="bxkr-carousel-dots">
+                  {items.map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className={`bxkr-carousel-dot ${notifIndex === i ? "active" : ""}`}
+                      aria-label={`Notification ${i + 1}`}
+                      onClick={() => setNotifIndex(i)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            // If no notifications, show nothing (greeting already gives urgency)
+            null
+          )}
+        </section>
 
         {/* ===== Weekly Circles (three separate futuristic cards with slight separators) ===== */}
         {weeklyOverview?.days && (
@@ -348,11 +490,12 @@ export default function Home() {
             if (!st) {
               return (
                 <div key={i} style={{ width: 44 }}>
-                  <div style={{ fontSize: "0.8rem", opacity: 0.6 }}>
+                  {/* Weekday label: fontWeight 500 */}
+                  <div style={{ fontSize: "0.8rem", opacity: 0.6, fontWeight: 500 }}>
                     {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
                   </div>
                   <div className="bxkr-day-pill" style={{ opacity: 0.5 }}>
-                    {d.getDate()}
+                    <span style={{ fontWeight: 500 }}>{d.getDate()}</span>
                   </div>
                 </div>
               );
@@ -363,17 +506,19 @@ export default function Home() {
 
             return (
               <div key={i} style={{ width: 44, cursor: "pointer" }} onClick={() => setSelectedDay(d)}>
-                <div style={{ fontSize: "0.8rem", color: "#fff", opacity: 0.85, marginBottom: 4 }}>
+                {/* Weekday label: fontWeight 500 */}
+                <div style={{ fontSize: "0.8rem", color: "#fff", opacity: 0.85, marginBottom: 4, fontWeight: 500 }}>
                   {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
                 </div>
                 <div
                   className={`bxkr-day-pill ${st.allDone ? "completed" : ""}`}
-                  style={{ boxShadow, fontWeight: isSelected ? 600 : 400, borderColor: st.allDone ? undefined : ringColor }}
+                  style={{ boxShadow, fontWeight: isSelected ? 600 : 500, borderColor: st.allDone ? undefined : ringColor }}
                 >
                   <span
                     className={`bxkr-day-content ${
                       st.allDone ? (isSelected ? "state-num" : "state-flame") : "state-num"
                     }`}
+                    style={{ fontWeight: 500 }}
                   >
                     {st.allDone && !isSelected ? (
                       <i
@@ -411,7 +556,7 @@ export default function Home() {
             workoutDone={Boolean(selectedStatus.workoutDone)}
             habitSummary={selectedDayData.habitSummary}
             habitAllDone={Boolean(selectedStatus.habitAllDone)}
-            // 👇 pass the normalised summary so components can read body_fat_pct or bodyFat
+            // 👇 normalised summary so components can read body_fat_pct or bodyFat
             checkinSummary={checkinSummaryNormalized as any}
             checkinComplete={Boolean(selectedStatus.checkinComplete)}
             hrefs={{
@@ -444,5 +589,5 @@ export default function Home() {
       {/* Add to Home Screen Prompt */}
       <AddToHomeScreen />
     </>
-  );
+   );
 }
