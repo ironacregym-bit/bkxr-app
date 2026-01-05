@@ -11,7 +11,7 @@ export default async function handler(_req: NextApiRequest, res: NextApiResponse
     for (const doc of usersSnap.docs) {
       const email = doc.id;
       const coll = firestore.collection("user_notifications").doc(email).collection("items");
-      const snap = await coll.orderBy("created_at      const snap = await coll.orderBy("created_at", "desc").limit(100).get();
+      const snap = await coll.orderBy("created_at", "desc").limit(100).get();
       const batch = firestore.batch();
 
       for (const d of snap.docs) {
