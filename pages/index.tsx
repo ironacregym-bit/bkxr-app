@@ -368,15 +368,7 @@ export default function Home() {
         {/* ===== Notifications (coach-styled, cyclic if >1) ===== */}
         <section style={{ marginBottom: 10 }}>
           {items.length > 0 ? (
-            <div
-              className=""
-              style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                padding: 8,
-                borderRadius: 14,
-              }}
-            >
+            <div>
               <div
                 style={{
                   display: "flex",
