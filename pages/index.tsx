@@ -369,7 +369,7 @@ export default function Home() {
         <section style={{ marginBottom: 10 }}>
           {items.length > 0 ? (
             <div
-              className="bxkr-card"
+              className=""
               style={{
                 background: "rgba(255,255,255,0.06)",
                 border: "1px solid rgba(255,255,255,0.12)",
@@ -383,7 +383,7 @@ export default function Home() {
                   alignItems: "center",
                   gap: 10,
                   padding: "8px 10px",
-                  borderRadius: 12,
+                  borderRadius: '9999px',
                   background: "linear-gradient(135deg, #ff7f32, #ff9a3a)",
                   color: "#fff",
                 }}
