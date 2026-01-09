@@ -2,7 +2,7 @@
 // pages/index.tsx
 import Head from "next/head";
 import useSWR from "swr";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 import AddToHomeScreen from "../components/AddToHomeScreen";
@@ -10,6 +10,7 @@ import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 import DailyTasksCard from "../components/DailyTasksCard";
 import WeeklyCircles from "../components/dashboard/WeeklyCircles";
+import NotificationsBanner from "../components/NotificationsBanner";
 
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext
@@ -83,27 +84,14 @@ type DayStatus = {
   workoutIds: string[];
 };
 
-type FeedItem = {
-  id: string;
-  title: string;
-  message: string;
-  href?: string | null;
-  created_at?: string | null;
-  read_at?: string | null;
-  delivered_channels?: string[];
-  source_key?: string;
-  source_event?: string | null;
-  meta?: any;
-};
-
 export default function Home() {
   const { data: session, status } = useSession();
 
-  // Basic time-of-day text used within urgency copy
-  const timeGreeting = (() => {
+  // Simple greeting only (no urgency copy)
+  const timeGreeting = useMemo(() => {
     const h = new Date().getHours();
     return h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening";
-  })();
+  }, []);
 
   const weekDays = useMemo(() => getWeek(), []);
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
@@ -213,7 +201,7 @@ export default function Home() {
   const habitHref = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
 
-  // Contextual metrics
+  // Contextual metrics used elsewhere
   const dayStreak = useMemo(() => {
     let streak = 0;
     for (const d of weekDays) {
@@ -240,47 +228,6 @@ export default function Home() {
     return Math.max(0, Math.min(3, count));
   }, [weeklyOverview]);
 
-  // Urgency greeting (white text next to profile)
-  const urgencyGreeting = useMemo(() => {
-    const w = weeklyWorkoutsCompleted;
-    const nextWorkout = Math.min(w + 1, 3);
-    const today = new Date(selectedDateKey + "T00:00:00").getDay();
-    const isFriday = today === 5 || selectedStatus.isFriday;
-
-    if (isFriday && !selectedStatus.checkinComplete) {
-      return `${timeGreeting} — Friday pressure: complete your check‑in to lock the week.`;
-    }
-    if (w < 3) {
-      return `${timeGreeting} — secure your week: ${w}/3 workouts done. Hit ${nextWorkout}/3 today to keep your ${dayStreak}‑day streak.`;
-    }
-    if (weeklyProgressPercent < 100) {
-      return `${timeGreeting} — finish strong: ${weeklyProgressPercent}% done. Close the gap today.`;
-    }
-    return `${timeGreeting} — maintain excellence and prep the next week.`;
-  }, [timeGreeting, weeklyWorkoutsCompleted, weeklyProgressPercent, dayStreak, selectedDateKey, selectedStatus.isFriday, selectedStatus.checkinComplete]);
-
-  // Coins (UI-only for now)
-  const coinsEarned = useMemo(() => {
-    // Pilot: 5 coins per completed task. Adjust later and persist server-side.
-    const { completedTasks } = derivedWeeklyTotals;
-    return completedTasks * 5;
-  }, [derivedWeeklyTotals]);
-
-  // Notifications feed (cycle if multiple)
-  const { data: feed } = useSWR("/api/notifications/feed?limit=5", fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 30_000,
-  });
-  const items: FeedItem[] = Array.isArray(feed?.items) ? (feed.items as FeedItem[]) : [];
-  const [notifIndex, setNotifIndex] = useState<number>(0);
-  useEffect(() => {
-    if (!items.length) setNotifIndex(0);
-    else setNotifIndex((i) => Math.min(i, items.length - 1));
-  }, [items.length]);
-
-  const goPrev = () => setNotifIndex((i) => (i <= 0 ? items.length - 1 : i - 1));
-  const goNext = () => setNotifIndex((i) => (i >= items.length - 1 ? 0 : i + 1));
-
   const accentMicro = "#ff8a2a";
 
   return (
@@ -293,7 +240,7 @@ export default function Home() {
       </Head>
 
       <main className="container py-2" style={{ paddingBottom: "70px", color: "#fff" }}>
-        {/* Header — profile + urgency greeting (left), coins + sign out (right) */}
+        {/* Header — profile + simple greeting (left), sign out (right) */}
         <div className="d-flex justify-content-between mb-2 align-items-center">
           <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
             {session?.user?.image && (
@@ -305,7 +252,6 @@ export default function Home() {
               />
             )}
             {(weekLoading || overviewLoading) && <div className="inline-spinner" />}
-            {/* Urgency-based white greeting next to profile */}
             <div
               style={{
                 color: "#fff",
@@ -316,39 +262,13 @@ export default function Home() {
                 textOverflow: "ellipsis",
                 maxWidth: "70vw",
               }}
-              aria-label="Urgent greeting"
+              aria-label="Greeting"
             >
-              {urgencyGreeting}
+              {timeGreeting}
             </div>
           </div>
 
           <div className="d-flex align-items-center gap-2">
-            {/* Coins pill */}
-            <div
-              className="bxkr-glass-row"
-              style={{
-                padding: "6px 10px",
-                marginBottom: 0,
-                borderRadius: 12,
-                background: "rgba(255,255,255,0.06)",
-                backdropFilter: "blur(8px)",
-                WebkitBackdropFilter: "blur(8px)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                color: "#fff",
-                cursor: "default",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: "0.9rem",
-              }}
-              aria-label="Weekly reward coins"
-              title="Coins will be persisted to your profile in a future update"
-            >
-              <i className="fas fa-coins" style={{ color: "#ffd54f" }} aria-hidden="true" />
-              <span style={{ fontWeight: 700 }}>{coinsEarned} BXKR</span>
-            </div>
-
-            {/* Sign in/out */}
             {status === "authenticated" ? (
               <button className="btn btn-link text-light p-0" onClick={() => signOut()}>
                 Sign out
@@ -365,115 +285,9 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ===== Notifications (coach-styled, cyclic if >1) ===== */}
+        {/* ===== Notifications (coach-styled) ===== */}
         <section style={{ marginBottom: 10 }}>
-          {items.length > 0 ? (
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 10px",
-                  borderRadius: '9999px',
-                  background: "linear-gradient(135deg, #ff7f32, #ff9a3a)",
-                  color: "#fff",
-                }}
-              >
-                {/* Coach avatar */}
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: "50%",
-                    overflow: "hidden",
-                    border: "2px solid rgba(255,255,255,0.4)",
-                    flexShrink: 0,
-                  }}
-                  aria-hidden="true"
-                >
-                  <img
-                    src="/coach.jpg"
-                    alt="Coach"
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                </div>
-
-                {/* Notification body */}
-                <div style={{ flexGrow: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      fontSize: 16,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {items[notifIndex]?.title}
-                  </div>
-                  <div style={{ fontSize: 13, opacity: 0.95 }}>
-                    {items[notifIndex]?.message}
-                  </div>
-                </div>
-
-                {/* CTA chevron */}
-                {items[notifIndex]?.href && (
-                  <a
-                    href={items[notifIndex].href ?? "#"}
-                    aria-label="Open"
-                    style={{ color: "#fff" }}
-                  >
-                    <i className="fas fa-chevron-right" aria-hidden="true" />
-                  </a>
-                )}
-              </div>
-
-              {/* Controls: prev/next + dots */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginTop: 6,
-                }}
-              >
-                <div className="d-flex align-items-center gap-2">
-                  <button
-                    className="btn btn-sm btn-bxkr-outline"
-                    onClick={goPrev}
-                    aria-label="Previous notification"
-                    style={{ borderRadius: 999 }}
-                  >
-                    ←
-                  </button>
-                  <button
-                    className="btn btn-sm btn-bxkr"
-                    onClick={goNext}
-                    aria-label="Next notification"
-                    style={{
-                      borderRadius: 999,
-                      background: "linear-gradient(135deg, #ff7f32, #ff9a3a)",
-                    }}
-                  >
-                    →
-                  </button>
-                </div>
-
-                <div className="bxkr-carousel-dots">
-                  {items.map((_: FeedItem, i: number) => (
-                    <button
-                      key={i}
-                      type="button"
-                      className={`bxkr-carousel-dot ${notifIndex === i ? "active" : ""}`}
-                      aria-label={`Notification ${i + 1}`}
-                      onClick={() => setNotifIndex(i)}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : null}
+          <NotificationsBanner />
         </section>
 
         {/* ===== Weekly Circles (three separate futuristic cards with slight separators) ===== */}
@@ -567,10 +381,10 @@ export default function Home() {
             checkinSummary={checkinSummaryNormalized as any}
             checkinComplete={Boolean(selectedStatus.checkinComplete)}
             hrefs={{
-              nutrition: nutritionHref,
-              workout: workoutHref,
-              habit: habitHref,
-              checkin: checkinHref,
+              nutrition: `/nutrition?date=${selectedDateKey}`,
+              workout: hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#",
+              habit: `/habit?date=${selectedDateKey}`,
+              checkin: `/checkin`,
             }}
           />
         )}
