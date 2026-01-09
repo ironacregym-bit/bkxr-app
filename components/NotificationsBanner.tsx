@@ -7,8 +7,15 @@ import Link from "next/link";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const GRADIENT = "linear-gradient(135deg, #ff7f32, #ff9a3a)";
-// In Next.js, assets in /public are served from the root (e.g., /coach.jpg)
+// In Next.js, assets inside /public are served from root path
 const COACH_AVATAR_SRC = "/coach.jpg";
+
+type FeedItem = {
+  id: string;
+  title: string;
+  message: string;
+  href?: string | null;
+};
 
 export default function NotificationsBanner() {
   const { data, error, isLoading } = useSWR("/api/notifications/feed?limit=10", fetcher, {
@@ -18,7 +25,6 @@ export default function NotificationsBanner() {
 
   if (error) return null;
 
-  // Loading: simple inline pill skeleton without bxkr-card/glass
   if (isLoading)
     return (
       <div
@@ -70,12 +76,12 @@ export default function NotificationsBanner() {
       </div>
     );
 
-  const items = Array.isArray(data?.items) ? data.items : [];
+  const items: FeedItem[] = Array.isArray(data?.items) ? data.items : [];
   if (!items.length) return null;
 
   return (
     <div className="mb-3" role="region" aria-label="Coach notifications">
-      {items.map((n: any) => (
+      {items.map((n) => (
         <Pill key={n.id} title={n.title} message={n.message} href={n.href} />
       ))}
     </div>
@@ -90,13 +96,14 @@ function Pill({ title, message, href }: { title: string; message: string; href?:
         alignItems: "center",
         justifyContent: "space-between",
         background: GRADIENT,
-        borderRadius: 9999, // full pill
+        borderRadius: 9999,
         padding: "12px 16px",
         boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
         color: "#fff",
         marginBottom: 12,
       }}
     >
+      {/* Coach avatar */}
       <div
         style={{
           width: 40,
@@ -112,6 +119,7 @@ function Pill({ title, message, href }: { title: string; message: string; href?:
         <img src={COACH_AVATAR_SRC} alt="Coach" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       </div>
 
+      {/* Notification body */}
       <div style={{ flexGrow: 1, minWidth: 0 }}>
         <div
           style={{
@@ -127,6 +135,7 @@ function Pill({ title, message, href }: { title: string; message: string; href?:
         <div style={{ fontSize: 13, opacity: 0.95 }}>{message}</div>
       </div>
 
+      {/* Chevron */}
       <i className="fas fa-chevron-right" aria-hidden="true" style={{ marginLeft: 12, color: "#fff" }} />
     </div>
   );
