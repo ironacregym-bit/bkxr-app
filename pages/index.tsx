@@ -87,7 +87,7 @@ type DayStatus = {
 export default function Home() {
   const { data: session, status } = useSession();
 
-  // ✅ Hydration guard (avoids SSR/CSR mismatch during session resolution)
+  // ✅ Hydration guard for session resolving
   if (status === "loading") {
     return (
       <main style={{ color: "#fff", textAlign: "center", padding: "2rem" }}>
@@ -96,20 +96,30 @@ export default function Home() {
     );
   }
 
-  // Simple greeting only (no urgency copy)
-  const timeGreeting = useMemo(() => {
+  // ✅ Mount flag to defer client-only values
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // ✅ Greeting computed on client to avoid SSR/CSR mismatch
+  const [timeGreeting, setTimeGreeting] = useState<string>("");
+  useEffect(() => {
     const h = new Date().getHours();
-    return h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening";
+    setTimeGreeting(h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening");
   }, []);
 
-  const weekDays = useMemo(() => getWeek(), []);
+  // ✅ Week and key derived after mount to avoid timezone-based SSR mismatch
+  const weekDays = useMemo(() => (mounted ? getWeek() : []), [mounted]);
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
 
   const selectedDateKey = formatYMD(selectedDay);
-  const weekStartKey = useMemo(() => formatYMD(startOfAlignedWeek(new Date())), []);
+  const weekStartKey = useMemo(
+    () => (mounted ? formatYMD(startOfAlignedWeek(new Date())) : ""),
+    [mounted]
+  );
 
+  // ✅ Gate SWR until we have a client-computed week key
   const { data: weeklyOverview, isLoading: overviewLoading } = useSWR(
-    `/api/weekly/overview?week=${weekStartKey}`,
+    weekStartKey ? `/api/weekly/overview?week=${weekStartKey}` : null,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 }
   );
@@ -249,7 +259,7 @@ export default function Home() {
       </Head>
 
       <main className="container py-2" style={{ paddingBottom: "70px", color: "#fff" }}>
-        {/* Header — profile + simple greeting (left), sign out (right) */}
+        {/* Header — profile + greeting (left), sign out (right) */}
         <div className="d-flex justify-content-between mb-2 align-items-center">
           <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
             {session?.user?.image && (
@@ -273,7 +283,8 @@ export default function Home() {
               }}
               aria-label="Greeting"
             >
-              {timeGreeting}
+              {/* Render greeting only after mount to avoid SSR mismatch */}
+              {mounted ? timeGreeting : ""}
             </div>
           </div>
 
@@ -300,7 +311,7 @@ export default function Home() {
         </section>
 
         {/* ===== Weekly Circles (three separate futuristic cards with slight separators) ===== */}
-        {weeklyOverview?.days && (
+        {weeklyOverview?.days && mounted && (
           <div style={{ marginBottom: 12 }}>
             <WeeklyCircles
               weeklyProgressPercent={weeklyProgressPercent}
@@ -311,67 +322,69 @@ export default function Home() {
         )}
 
         {/* ===== Calendar (inline week pills) ===== */}
-        <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
-          {weekDays.map((d, i) => {
-            const isSelected = isSameDay(d, selectedDay);
-            const dk = formatYMD(d);
-            const st = weekStatus[dk];
+        {mounted && (
+          <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
+            {weekDays.map((d, i) => {
+              const isSelected = isSameDay(d, selectedDay);
+              const dk = formatYMD(d);
+              const st = weekStatus[dk];
 
-            if (!st) {
+              if (!st) {
+                return (
+                  <div key={i} style={{ width: 44 }}>
+                    {/* Weekday label: fontWeight 500 */}
+                    <div style={{ fontSize: "0.8rem", opacity: 0.6, fontWeight: 500 }}>
+                      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
+                    </div>
+                    <div className="bxkr-day-pill" style={{ opacity: 0.5 }}>
+                      <span style={{ fontWeight: 500 }}>{d.getDate()}</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              const ringColor = st.allDone ? "#64c37a" : isSelected ? accentMicro : "rgba(255,255,255,0.3)";
+              const boxShadow = isSelected ? `0 0 8px ${ringColor}` : st.allDone ? `0 0 3px ${ringColor}` : "none";
+
               return (
-                <div key={i} style={{ width: 44 }}>
+                <div key={i} style={{ width: 44, cursor: "pointer" }} onClick={() => setSelectedDay(d)}>
                   {/* Weekday label: fontWeight 500 */}
-                  <div style={{ fontSize: "0.8rem", opacity: 0.6, fontWeight: 500 }}>
+                  <div style={{ fontSize: "0.8rem", color: "#fff", opacity: 0.85, marginBottom: 4, fontWeight: 500 }}>
                     {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
                   </div>
-                  <div className="bxkr-day-pill" style={{ opacity: 0.5 }}>
-                    <span style={{ fontWeight: 500 }}>{d.getDate()}</span>
+                  <div
+                    className={`bxkr-day-pill ${st.allDone ? "completed" : ""}`}
+                    style={{ boxShadow, fontWeight: isSelected ? 600 : 500, borderColor: st.allDone ? undefined : ringColor }}
+                  >
+                    <span
+                      className={`bxkr-day-content ${
+                        st.allDone ? (isSelected ? "state-num" : "state-flame") : "state-num"
+                      }`}
+                      style={{ fontWeight: 500 }}
+                    >
+                      {st.allDone && !isSelected ? (
+                        <i
+                          className="fas fa-fire"
+                          style={{
+                            color: "#64c37a",
+                            textShadow: `0 0 8px #64c37a`,
+                            fontSize: "1rem",
+                            lineHeight: 1,
+                          }}
+                        />
+                      ) : (
+                        d.getDate()
+                      )}
+                    </span>
                   </div>
                 </div>
               );
-            }
-
-            const ringColor = st.allDone ? "#64c37a" : isSelected ? accentMicro : "rgba(255,255,255,0.3)";
-            const boxShadow = isSelected ? `0 0 8px ${ringColor}` : st.allDone ? `0 0 3px ${ringColor}` : "none";
-
-            return (
-              <div key={i} style={{ width: 44, cursor: "pointer" }} onClick={() => setSelectedDay(d)}>
-                {/* Weekday label: fontWeight 500 */}
-                <div style={{ fontSize: "0.8rem", color: "#fff", opacity: 0.85, marginBottom: 4, fontWeight: 500 }}>
-                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
-                </div>
-                <div
-                  className={`bxkr-day-pill ${st.allDone ? "completed" : ""}`}
-                  style={{ boxShadow, fontWeight: isSelected ? 600 : 500, borderColor: st.allDone ? undefined : ringColor }}
-                >
-                  <span
-                    className={`bxkr-day-content ${
-                      st.allDone ? (isSelected ? "state-num" : "state-flame") : "state-num"
-                    }`}
-                    style={{ fontWeight: 500 }}
-                  >
-                    {st.allDone && !isSelected ? (
-                      <i
-                        className="fas fa-fire"
-                        style={{
-                          color: "#64c37a",
-                          textShadow: `0 0 8px #64c37a`,
-                          fontSize: "1rem",
-                          lineHeight: 1,
-                        }}
-                      />
-                    ) : (
-                      d.getDate()
-                    )}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+            })}
+          </div>
+        )}
 
         {/* ===== Daily Tasks Card (selected day) ===== */}
-        {selectedDayData && (
+        {mounted && selectedDayData && (
           <DailyTasksCard
             dayLabel={`${selectedDay.toLocaleDateString(undefined, {
               weekday: "long",
@@ -399,7 +412,7 @@ export default function Home() {
         )}
 
         {/* Workout loading fallback */}
-        {hasWorkoutToday && !hasWorkoutId && (
+        {mounted && hasWorkoutToday && !hasWorkoutId && (
           <div
             className="text-center"
             style={{
