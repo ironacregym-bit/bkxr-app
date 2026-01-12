@@ -16,6 +16,13 @@ import type { UsersDoc, JobType } from "../components/Onboarding/types";
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const ACCENT = "#FF8A2A";
 
+/**
+ * Orchestrator (UI-only polish):
+ * - Equipment step removed (not present in this flow)
+ * - Dynamic total step count used for header
+ * - Consistent sticky bottom CTA bar with safe-area padding
+ * - Tiny "Saved" pill auto-hides after 1.5s
+ */
 export default function OnboardingPage() {
   const { data: session, status } = useSession();
   const email = session?.user?.email || null;
@@ -56,7 +63,7 @@ export default function OnboardingPage() {
   const swrKey = email ? `/api/profile?email=${encodeURIComponent(email)}` : null;
   const { data, error } = useSWR(swrKey, fetcher);
 
-  // Compute targets on demand
+  // Compute targets on demand (UI-only; data flow unchanged)
   const targets = useMemo(() => {
     const goal = profile.goal_primary;
     const weight = Number(profile.weight_kg ?? 0);
@@ -117,12 +124,13 @@ export default function OnboardingPage() {
     return d > 0 ? d : 0;
   }, [profile.trial_end]);
 
+  const totalSteps = 4; // Metrics, Job+Goal, WorkoutType, FinishTrial
   const isFirstStep = step <= 0;
-  const isLastStep = step >= 3;
+  const isLastStep = step >= totalSteps - 1;
 
   const availableHeight = useAvailableHeight("onb-header", "onb-page-nav");
 
-  /* ---- Prefill ---- */
+  /* ---- Prefill (refresh-safe) ---- */
   useEffect(() => {
     (async () => {
       if (status === "loading") return;
@@ -153,6 +161,7 @@ export default function OnboardingPage() {
           trial_end: j?.trial_end ?? prev.trial_end ?? null,
         }));
 
+        // mark started (non-null writes handled by API)
         await fetch("/api/onboarding/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -163,6 +172,14 @@ export default function OnboardingPage() {
       }
     })();
   }, [status, email]);
+
+  /* ---- Auto-hide 'Saved' pill after 1.5s ---- */
+  useEffect(() => {
+    if (savedMsg && savedMsg.toLowerCase().includes("saved")) {
+      const t = setTimeout(() => setSavedMsg(null), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [savedMsg]);
 
   async function autoSave(nextStep?: number) {
     if (!email) return signIn("google");
@@ -206,7 +223,7 @@ export default function OnboardingPage() {
       setSavedMsg("Saved ✅");
 
       if (swrKey) await mutate(swrKey, undefined, { revalidate: true });
-      if (typeof nextStep === "number") setStep(Math.max(0, Math.min(3, nextStep)));
+      if (typeof nextStep === "number") setStep(Math.max(0, Math.min(totalSteps - 1, nextStep)));
     } catch (e: any) {
       setSavedMsg(e?.message || "Failed to save");
     } finally {
@@ -259,13 +276,14 @@ export default function OnboardingPage() {
   /* -------------------- Render -------------------- */
   return (
     <>
+      {/* Header */}
       <header id="onb-header" className="container py-2" style={{ color: "#fff" }}>
         <div className="d-flex align-items-center justify-content-between">
           <h2 className="mb-0" style={{ fontWeight: 700 }}>Let’s Tailor BXKR To You</h2>
-          <div className="text-dim">Step {step + 1} / 4</div>
+          <div className="text-dim">Step {step + 1} / {totalSteps}</div>
         </div>
 
-        <div className="mt-2">
+        <div className="mt-2" aria-live="polite">
           {unsaved ? (
             <span
               className="bxkr-chip"
@@ -283,6 +301,7 @@ export default function OnboardingPage() {
         </div>
       </header>
 
+      {/* Content */}
       <main className="container py-2" style={{ color: "#fff" }}>
         {step === 0 && (
           <StepMetrics profile={profile} setProfile={setProfile} markDirty={markDirty} />
@@ -322,65 +341,56 @@ export default function OnboardingPage() {
           />
         )}
 
-        {/* Navigation */}
-        {(step === 0 || step === 1) && (
-          <div className="d-flex justify-content-between" id="onb-page-nav">
-            <button
-              className="btn btn-bxkr-outline"
-              onClick={() => setStep((s) => Math.max(0, s - 1))}
-              disabled={isFirstStep || saving}
-              style={{ borderRadius: 24 }}
-            >
-              ← Back
-            </button>
-            <button
-              className="btn btn-bxkr"
-              onClick={() => autoSave(step + 1)}
-              disabled={saving}
-              style={{ background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, borderRadius: 24 }}
-            >
-              Next →
-              {saving && <span className="inline-spinner ms-2" />}
-            </button>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div
-            id="onb-page-nav"
-            style={{
-              position: "sticky",
-              bottom: 0,
-              paddingTop: 10,
-              paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
-              background:
-                "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.35) 40%, rgba(0,0,0,0.65) 100%)",
-              backdropFilter: "blur(10px)",
-              WebkitBackdropFilter: "blur(10px)",
-              borderTop: "1px solid rgba(255,255,255,0.08)",
-              zIndex: 5,
-            }}
-            className="d-flex justify-content-between"
+        {/* Sticky Navigation (uniform across steps) */}
+        <div
+          id="onb-page-nav"
+          style={{
+            position: "sticky",
+            bottom: 0,
+            paddingTop: 10,
+            paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+            background:
+              "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.35) 40%, rgba(0,0,0,0.65) 100%)",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            zIndex: 5,
+          }}
+          className="d-flex justify-content-between"
+        >
+          <button
+            className="btn btn-bxkr-outline"
+            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            disabled={isFirstStep || saving}
+            style={{ borderRadius: 24 }}
+            aria-label="Back"
           >
-            <button
-              className="btn btn-bxkr-outline"
-              onClick={() => setStep((s) => Math.max(0, s - 1))}
-              disabled={isFirstStep || saving}
-              style={{ borderRadius: 24 }}
-            >
-              ← Back
-            </button>
+            ← Back
+          </button>
+          {!isLastStep ? (
             <button
               className="btn btn-bxkr"
               onClick={() => autoSave(step + 1)}
               disabled={saving}
               style={{ background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, borderRadius: 24 }}
+              aria-label="Next"
             >
               Next →
               {saving && <span className="inline-spinner ms-2" />}
             </button>
-          </div>
-        )}
+          ) : (
+            <button
+              className="btn btn-bxkr"
+              onClick={() => autoSave()}
+              disabled={saving}
+              style={{ background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, borderRadius: 24 }}
+              aria-label="Save"
+            >
+              Save
+              {saving && <span className="inline-spinner ms-2" />}
+            </button>
+          )}
+        </div>
       </main>
 
       <BottomNav />
