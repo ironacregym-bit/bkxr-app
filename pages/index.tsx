@@ -87,27 +87,18 @@ type DayStatus = {
 export default function Home() {
   const { data: session, status } = useSession();
 
-  // ✅ Hydration guard for session resolving
-  if (status === "loading") {
-    return (
-      <main style={{ color: "#fff", textAlign: "center", padding: "2rem" }}>
-        Loading…
-      </main>
-    );
-  }
-
-  // ✅ Mount flag to defer client-only values
+  // Mount flag to defer client-only values
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // ✅ Greeting computed on client to avoid SSR/CSR mismatch
+  // Greeting computed on client to avoid SSR/CSR mismatch
   const [timeGreeting, setTimeGreeting] = useState<string>("");
   useEffect(() => {
     const h = new Date().getHours();
     setTimeGreeting(h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening");
   }, []);
 
-  // ✅ Week and key derived after mount to avoid timezone-based SSR mismatch
+  // Week and key derived after mount to avoid timezone-based SSR mismatch
   const weekDays = useMemo(() => (mounted ? getWeek() : []), [mounted]);
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
 
@@ -117,7 +108,7 @@ export default function Home() {
     [mounted]
   );
 
-  // ✅ Gate SWR until we have a client-computed week key
+  // Gate SWR until we have a client-computed week key
   const { data: weeklyOverview, isLoading: overviewLoading } = useSWR(
     weekStartKey ? `/api/weekly/overview?week=${weekStartKey}` : null,
     fetcher,
@@ -249,6 +240,8 @@ export default function Home() {
 
   const accentMicro = "#ff8a2a";
 
+  const showLoadingBar = status === "loading" || !mounted;
+
   return (
     <>
       <Head>
@@ -270,7 +263,7 @@ export default function Home() {
                 style={{ width: 36, height: 36, objectFit: "cover" }}
               />
             )}
-            {(weekLoading || overviewLoading) && <div className="inline-spinner" />}
+            {(showLoadingBar || weekLoading || overviewLoading) && <div className="inline-spinner" />}
             <div
               style={{
                 color: "#fff",
@@ -283,7 +276,6 @@ export default function Home() {
               }}
               aria-label="Greeting"
             >
-              {/* Render greeting only after mount to avoid SSR mismatch */}
               {mounted ? timeGreeting : ""}
             </div>
           </div>
@@ -399,7 +391,7 @@ export default function Home() {
             workoutDone={Boolean(selectedStatus.workoutDone)}
             habitSummary={selectedDayData.habitSummary}
             habitAllDone={Boolean(selectedStatus.habitAllDone)}
-            // 👇 normalised summary so components can read body_fat_pct or bodyFat
+            // normalised summary so components can read body_fat_pct or bodyFat
             checkinSummary={checkinSummaryNormalized as any}
             checkinComplete={Boolean(selectedStatus.checkinComplete)}
             hrefs={{
