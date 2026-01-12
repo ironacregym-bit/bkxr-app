@@ -6,10 +6,12 @@ import { useEffect, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
-import { useAvailableHeight } from "../components/Onboarding/useAvailableHeight";
+// Removed: useAvailableHeight (not needed after removing Workout Type step)
+// import { useAvailableHeight } from "../components/Onboarding/useAvailableHeight";
 import StepMetrics from "../components/Onboarding/StepMetrics";
 import StepJobGoal from "../components/Onboarding/StepJobGoal";
-import StepWorkoutType from "../components/Onboarding/StepWorkoutType";
+// Removed: StepWorkoutType
+// import StepWorkoutType from "../components/Onboarding/StepWorkoutType";
 import StepFinishTrial from "../components/Onboarding/StepFinishTrial";
 import type { UsersDoc, JobType } from "../components/Onboarding/types";
 
@@ -18,7 +20,7 @@ const ACCENT = "#FF8A2A";
 
 /**
  * Orchestrator (UI-only polish):
- * - Equipment step removed (not present in this flow)
+ * - Workout Type step removed
  * - Dynamic total step count used for header
  * - Consistent sticky bottom CTA bar with safe-area padding
  * - Tiny "Saved" pill auto-hides after 1.5s
@@ -51,6 +53,8 @@ export default function OnboardingPage() {
     carb_target: null,
     fat_target: null,
     goal_primary: null,
+    // workout_type remains in the profile so previously saved values still load,
+    // but there is no longer a step to edit it during onboarding.
     workout_type: null,
     subscription_status: null,
     trial_end: null,
@@ -124,11 +128,13 @@ export default function OnboardingPage() {
     return d > 0 ? d : 0;
   }, [profile.trial_end]);
 
-  const totalSteps = 4; // Metrics, Job+Goal, WorkoutType, FinishTrial
+  // Total steps: Metrics (0), Job+Goal (1), Finish Trial (2)
+  const totalSteps = 3;
   const isFirstStep = step <= 0;
   const isLastStep = step >= totalSteps - 1;
 
-  const availableHeight = useAvailableHeight("onb-header", "onb-page-nav");
+  // Removed: availableHeight since Workout Type step is gone
+  // const availableHeight = useAvailableHeight("onb-header", "onb-page-nav");
 
   /* ---- Prefill (refresh-safe) ---- */
   useEffect(() => {
@@ -156,6 +162,7 @@ export default function OnboardingPage() {
               if (Math.abs(v - 1.9) < 0.01) return "athlete";
               return null;
             })(j?.activity_factor),
+          // workout_type is still read if present, but not edited in this flow
           workout_type: j?.workout_type ?? prev.workout_type ?? null,
           subscription_status: j?.subscription_status ?? prev.subscription_status ?? null,
           trial_end: j?.trial_end ?? prev.trial_end ?? null,
@@ -203,6 +210,7 @@ export default function OnboardingPage() {
           carb_target: targets.carb_target,
           fat_target: targets.fat_target,
           goal_primary: profile.goal_primary ?? null,
+          // workout_type included if already present; not edited in this flow
           workout_type: profile.workout_type ?? null,
           gym_id: profile.gym_id ?? null,
           location: profile.location ?? null,
@@ -318,15 +326,6 @@ export default function OnboardingPage() {
         )}
 
         {step === 2 && (
-          <StepWorkoutType
-            profile={profile}
-            setProfile={setProfile}
-            markDirty={markDirty}
-            availableHeight={availableHeight}
-          />
-        )}
-
-        {step === 3 && (
           <StepFinishTrial
             subscription_status={profile.subscription_status ?? null}
             saving={saving}
