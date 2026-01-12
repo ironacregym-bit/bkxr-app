@@ -1,4 +1,5 @@
 
+// pages/index.tsx
 import Head from "next/head";
 import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
@@ -55,6 +56,7 @@ function startOfAlignedWeek(d: Date) {
   return s;
 }
 
+/** Day payload from /api/weekly/overview */
 type ApiDay = {
   dateKey: string;
   hasWorkout?: boolean;
@@ -85,7 +87,7 @@ type DayStatus = {
 export default function Home() {
   const { data: session, status } = useSession();
 
-  // ✅ Hydration guard
+  // ✅ Hydration guard (avoids SSR/CSR mismatch during session resolution)
   if (status === "loading") {
     return (
       <main style={{ color: "#fff", textAlign: "center", padding: "2rem" }}>
@@ -94,6 +96,7 @@ export default function Home() {
     );
   }
 
+  // Simple greeting only (no urgency copy)
   const timeGreeting = useMemo(() => {
     const h = new Date().getHours();
     return h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening";
@@ -157,6 +160,7 @@ export default function Home() {
     setWeekLoading(false);
   }, [weeklyOverview]);
 
+  // Weekly totals
   const derivedWeeklyTotals = useMemo(() => {
     const days = (weeklyOverview?.days as any[]) || [];
     let totalTasks = 0;
@@ -178,6 +182,7 @@ export default function Home() {
     return (weeklyOverview.days as ApiDay[]).find((d) => d.dateKey === selectedDateKey);
   }, [weeklyOverview, selectedDateKey]);
 
+  // Normalise check-in summary for downstream components
   const checkinSummaryNormalized = useMemo(() => {
     const s = selectedDayData?.checkinSummary as
       | { weight?: number; body_fat_pct?: number; bodyFat?: number; weightChange?: number; bfChange?: number }
@@ -200,6 +205,37 @@ export default function Home() {
   const hasWorkoutToday = Boolean(selectedStatus.hasWorkout);
   const workoutIds = selectedStatus.workoutIds || [];
   const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
+  const workoutHref = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
+  const nutritionHref = `/nutrition?date=${selectedDateKey}`;
+  const habitHref = `/habit?date=${selectedDateKey}`;
+  const checkinHref = `/checkin`;
+
+  // Contextual metrics used elsewhere
+  const dayStreak = useMemo(() => {
+    let streak = 0;
+    for (const d of weekDays) {
+      const st = weekStatus[formatYMD(d)];
+      if (!st) break;
+      if (d < selectedDay && st.allDone) streak++;
+      else if (d < selectedDay && !st.allDone) streak = 0;
+      if (isSameDay(d, selectedDay)) break;
+    }
+    return streak;
+  }, [weekDays, weekStatus, selectedDay]);
+
+  const weeklyProgressPercent = useMemo(() => {
+    const { totalTasks, completedTasks } = derivedWeeklyTotals;
+    if (!totalTasks) return 0;
+    return Math.round((completedTasks / totalTasks) * 100);
+  }, [derivedWeeklyTotals]);
+
+  const weeklyWorkoutsCompleted = useMemo(() => {
+    const completedFromTotals = Number(weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0);
+    if (Number.isFinite(completedFromTotals)) return Math.max(0, Math.min(3, completedFromTotals));
+    const days = (weeklyOverview?.days as ApiDay[]) || [];
+    const count = days.reduce((acc, d) => acc + (d?.workoutDone ? 1 : 0), 0);
+    return Math.max(0, Math.min(3, count));
+  }, [weeklyOverview]);
 
   const accentMicro = "#ff8a2a";
 
@@ -208,11 +244,12 @@ export default function Home() {
       <Head>
         <title>BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        {/* Modern PWA capability meta */}
         <meta name="mobile-web-app-capable" content="yes" />
       </Head>
 
       <main className="container py-2" style={{ paddingBottom: "70px", color: "#fff" }}>
-        {/* Header */}
+        {/* Header — profile + simple greeting (left), sign out (right) */}
         <div className="d-flex justify-content-between mb-2 align-items-center">
           <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
             {session?.user?.image && (
@@ -257,27 +294,129 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Notifications */}
+        {/* ===== Notifications (coach-styled) ===== */}
         <section style={{ marginBottom: 10 }}>
           <NotificationsBanner />
         </section>
 
-        {/* Weekly Circles */}
+        {/* ===== Weekly Circles (three separate futuristic cards with slight separators) ===== */}
         {weeklyOverview?.days && (
           <div style={{ marginBottom: 12 }}>
             <WeeklyCircles
-              weeklyProgressPercent={Math.round((derivedWeeklyTotals.completedTasks / derivedWeeklyTotals.totalTasks) * 100)}
-              weeklyWorkoutsCompleted={Math.max(0, Math.min(3, Number(weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0)))}
-              dayStreak={0}
+              weeklyProgressPercent={weeklyProgressPercent}
+              weeklyWorkoutsCompleted={weeklyWorkoutsCompleted}
+              dayStreak={dayStreak}
             />
           </div>
         )}
 
-        {/* Calendar */}
-        {/* ... (unchanged calendar and DailyTasksCard code) */}
+        {/* ===== Calendar (inline week pills) ===== */}
+        <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
+          {weekDays.map((d, i) => {
+            const isSelected = isSameDay(d, selectedDay);
+            const dk = formatYMD(d);
+            const st = weekStatus[dk];
+
+            if (!st) {
+              return (
+                <div key={i} style={{ width: 44 }}>
+                  {/* Weekday label: fontWeight 500 */}
+                  <div style={{ fontSize: "0.8rem", opacity: 0.6, fontWeight: 500 }}>
+                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
+                  </div>
+                  <div className="bxkr-day-pill" style={{ opacity: 0.5 }}>
+                    <span style={{ fontWeight: 500 }}>{d.getDate()}</span>
+                  </div>
+                </div>
+              );
+            }
+
+            const ringColor = st.allDone ? "#64c37a" : isSelected ? accentMicro : "rgba(255,255,255,0.3)";
+            const boxShadow = isSelected ? `0 0 8px ${ringColor}` : st.allDone ? `0 0 3px ${ringColor}` : "none";
+
+            return (
+              <div key={i} style={{ width: 44, cursor: "pointer" }} onClick={() => setSelectedDay(d)}>
+                {/* Weekday label: fontWeight 500 */}
+                <div style={{ fontSize: "0.8rem", color: "#fff", opacity: 0.85, marginBottom: 4, fontWeight: 500 }}>
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
+                </div>
+                <div
+                  className={`bxkr-day-pill ${st.allDone ? "completed" : ""}`}
+                  style={{ boxShadow, fontWeight: isSelected ? 600 : 500, borderColor: st.allDone ? undefined : ringColor }}
+                >
+                  <span
+                    className={`bxkr-day-content ${
+                      st.allDone ? (isSelected ? "state-num" : "state-flame") : "state-num"
+                    }`}
+                    style={{ fontWeight: 500 }}
+                  >
+                    {st.allDone && !isSelected ? (
+                      <i
+                        className="fas fa-fire"
+                        style={{
+                          color: "#64c37a",
+                          textShadow: `0 0 8px #64c37a`,
+                          fontSize: "1rem",
+                          lineHeight: 1,
+                        }}
+                      />
+                    ) : (
+                      d.getDate()
+                    )}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ===== Daily Tasks Card (selected day) ===== */}
+        {selectedDayData && (
+          <DailyTasksCard
+            dayLabel={`${selectedDay.toLocaleDateString(undefined, {
+              weekday: "long",
+            })}, ${selectedDay.toLocaleDateString(undefined, {
+              day: "numeric",
+              month: "short",
+            })}`}
+            nutritionSummary={selectedDayData.nutritionSummary}
+            nutritionLogged={Boolean(selectedStatus.nutritionLogged)}
+            workoutSummary={selectedDayData.workoutSummary}
+            hasWorkout={Boolean(selectedStatus.hasWorkout)}
+            workoutDone={Boolean(selectedStatus.workoutDone)}
+            habitSummary={selectedDayData.habitSummary}
+            habitAllDone={Boolean(selectedStatus.habitAllDone)}
+            // 👇 normalised summary so components can read body_fat_pct or bodyFat
+            checkinSummary={checkinSummaryNormalized as any}
+            checkinComplete={Boolean(selectedStatus.checkinComplete)}
+            hrefs={{
+              nutrition: nutritionHref,
+              workout: workoutHref,
+              habit: habitHref,
+              checkin: checkinHref,
+            }}
+          />
+        )}
+
+        {/* Workout loading fallback */}
+        {hasWorkoutToday && !hasWorkoutId && (
+          <div
+            className="text-center"
+            style={{
+              opacity: 0.8,
+              fontSize: "0.9rem",
+              marginTop: 8,
+            }}
+          >
+            Loading workout details… <span className="inline-spinner" />
+          </div>
+        )}
       </main>
 
+      {/* Bottom Navigation */}
       <BottomNav />
+
+      {/* Add to Home Screen Prompt */}
       <AddToHomeScreen />
     </>
   );
