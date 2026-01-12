@@ -10,7 +10,6 @@ import { useAvailableHeight } from "../components/Onboarding/useAvailableHeight"
 import StepMetrics from "../components/Onboarding/StepMetrics";
 import StepJobGoal from "../components/Onboarding/StepJobGoal";
 import StepWorkoutType from "../components/Onboarding/StepWorkoutType";
-import StepFightingStyle from "../components/Onboarding/StepFightingStyle";
 import StepFinishTrial from "../components/Onboarding/StepFinishTrial";
 import type { UsersDoc, JobType } from "../components/Onboarding/types";
 
@@ -46,8 +45,6 @@ export default function OnboardingPage() {
     fat_target: null,
     goal_primary: null,
     workout_type: null,
-    fighting_style: "boxing",
-    equipment: { bodyweight: true, kettlebell: false, dumbbell: false },
     subscription_status: null,
     trial_end: null,
   });
@@ -121,12 +118,11 @@ export default function OnboardingPage() {
   }, [profile.trial_end]);
 
   const isFirstStep = step <= 0;
-  const isLastStep = step >= 4;
+  const isLastStep = step >= 3;
 
-  // Measure available height for full-bleed steps (2, 3)
   const availableHeight = useAvailableHeight("onb-header", "onb-page-nav");
 
-  /* ---- Prefill, ensure activity_factor is persisted ---- */
+  /* ---- Prefill ---- */
   useEffect(() => {
     (async () => {
       if (status === "loading") return;
@@ -141,12 +137,6 @@ export default function OnboardingPage() {
           ...prev,
           ...j,
           email: email ?? prev.email ?? undefined,
-          equipment: {
-            bodyweight: !!j?.equipment?.bodyweight,
-            kettlebell: !!j?.equipment?.kettlebell,
-            dumbbell: !!j?.equipment?.dumbbell,
-          },
-          // trust activity_factor if present; derive job_type if missing
           activity_factor: j?.activity_factor ?? prev.activity_factor ?? 1.2,
           job_type:
             j?.job_type ??
@@ -159,12 +149,10 @@ export default function OnboardingPage() {
               return null;
             })(j?.activity_factor),
           workout_type: j?.workout_type ?? prev.workout_type ?? null,
-          fighting_style: j?.fighting_style ?? prev.fighting_style ?? "boxing",
           subscription_status: j?.subscription_status ?? prev.subscription_status ?? null,
           trial_end: j?.trial_end ?? prev.trial_end ?? null,
         }));
 
-        // Mark onboarding started (idempotent)
         await fetch("/api/onboarding/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -186,28 +174,19 @@ export default function OnboardingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          // metrics
           sex: profile.sex ?? null,
           height_cm: profile.height_cm ?? null,
           weight_kg: profile.weight_kg ?? null,
           bodyfat_pct: profile.bodyfat_pct ?? null,
           DOB: profile.DOB ?? null,
-          // job type → activity_factor
           job_type: profile.job_type ?? null,
           activity_factor: profile.activity_factor ?? 1.2,
-          // targets (calculated)
           calorie_target: targets.calorie_target,
           protein_target: targets.protein_target,
           carb_target: targets.carb_target,
           fat_target: targets.fat_target,
-          // goals
           goal_primary: profile.goal_primary ?? null,
-          // new choices
           workout_type: profile.workout_type ?? null,
-          fighting_style: profile.fighting_style ?? null,
-          // legacy equipment
-          equipment: deriveEquipment(profile.workout_type ?? null),
-          // passthrough
           gym_id: profile.gym_id ?? null,
           location: profile.location ?? null,
           role: profile.role ?? null,
@@ -222,28 +201,17 @@ export default function OnboardingPage() {
         protein_target: targets.protein_target,
         carb_target: targets.carb_target,
         fat_target: targets.fat_target,
-        equipment: deriveEquipment(profile.workout_type ?? null),
       }));
       setUnsaved(false);
       setSavedMsg("Saved ✅");
 
       if (swrKey) await mutate(swrKey, undefined, { revalidate: true });
-      if (typeof nextStep === "number") setStep(Math.max(0, Math.min(4, nextStep)));
+      if (typeof nextStep === "number") setStep(Math.max(0, Math.min(3, nextStep)));
     } catch (e: any) {
       setSavedMsg(e?.message || "Failed to save");
     } finally {
       setSaving(false);
     }
-  }
-
-  function deriveEquipment(wt: UsersDoc["workout_type"] | null) {
-    return wt === "kettlebells"
-      ? { bodyweight: false, kettlebell: true, dumbbell: false }
-      : wt === "dumbbells"
-      ? { bodyweight: false, kettlebell: false, dumbbell: true }
-      : wt === "bodyweight"
-      ? { bodyweight: true, kettlebell: false, dumbbell: false }
-      : { bodyweight: true, kettlebell: false, dumbbell: false };
   }
 
   async function startTrial() {
@@ -291,11 +259,10 @@ export default function OnboardingPage() {
   /* -------------------- Render -------------------- */
   return (
     <>
-      {/* Header block includes step title so availableHeight excludes it */}
       <header id="onb-header" className="container py-2" style={{ color: "#fff" }}>
         <div className="d-flex align-items-center justify-content-between">
           <h2 className="mb-0" style={{ fontWeight: 700 }}>Let’s Tailor BXKR To You</h2>
-          <div className="text-dim">Step {step + 1} / 5</div>
+          <div className="text-dim">Step {step + 1} / 4</div>
         </div>
 
         <div className="mt-2">
@@ -316,7 +283,6 @@ export default function OnboardingPage() {
         </div>
       </header>
 
-      {/* Body */}
       <main className="container py-2" style={{ color: "#fff" }}>
         {step === 0 && (
           <StepMetrics profile={profile} setProfile={setProfile} markDirty={markDirty} />
@@ -342,15 +308,6 @@ export default function OnboardingPage() {
         )}
 
         {step === 3 && (
-          <StepFightingStyle
-            profile={profile}
-            setProfile={setProfile}
-            markDirty={markDirty}
-            availableHeight={availableHeight}
-          />
-        )}
-
-        {step === 4 && (
           <StepFinishTrial
             subscription_status={profile.subscription_status ?? null}
             saving={saving}
@@ -365,7 +322,7 @@ export default function OnboardingPage() {
           />
         )}
 
-        {/* Page-level Back/Next for steps 0 & 1 (card-based) */}
+        {/* Navigation */}
         {(step === 0 || step === 1) && (
           <div className="d-flex justify-content-between" id="onb-page-nav">
             <button
@@ -388,8 +345,7 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Page-level Back/Next for steps 2 & 3 (full-bleed). Sticky, safe-area aware. */}
-        {(step === 2 || step === 3) && (
+        {step === 2 && (
           <div
             id="onb-page-nav"
             style={{
