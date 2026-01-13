@@ -140,47 +140,53 @@ function buildProfileResponse(email: string, data: Record<string, any> = {}): Pr
   };
 }
 
+// Filter PATCH body: allow only whitelisted keys, skip null/undefined, map alias -> canonical
 function filterPatchBody(body: any): Record<string, any> {
   const out: Record<string, any> = {};
   if (!body || typeof body !== "object") return out;
 
   for (const key of Object.keys(body)) {
     if (!ALLOWED_KEYS.has(key)) continue;
-    let val = body[key];
-
-    // Convert alias calorie_target -> caloric_target on input
     const targetKey = key === "calorie_target" ? "caloric_target" : key;
+    const val = (body as Record<string, any>)[key];
 
+    if (val === null || val === undefined) continue; // ⛔️ skip null/undefined to avoid wipes
+
+    // Normalise strings
     if (typeof val === "string") {
       let v = val.trim();
-      if (targetKey === "sex") v = v.toLowerCase();
-      if (targetKey === "goal_primary") v = v.toLowerCase();
-      if (targetKey === "goal_intensity") v = v.toLowerCase();
+      if (targetKey === "sex" || targetKey === "goal_primary" || targetKey === "goal_intensity") {
+        v = v.toLowerCase();
+      }
       out[targetKey] = v;
       continue;
     }
-    if (typeof val === "number" || val === null) { out[targetKey] = val; continue; }
-    if (val && (typeof (val as any).toDate === "function" || val instanceof Date)) { out[targetKey] = val; continue; }
-    if (typeof val === "boolean" || typeof val === "object") { out[targetKey] = val; continue; }
+
+    // Numbers, booleans, objects, Dates are allowed as-is
+    if (typeof val === "number" || typeof val === "boolean" || typeof val === "object") {
+      out[targetKey] = val;
+      continue;
+    }
   }
   return out;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const email = req.query.email as string;
-  if (!email || typeof email !== "string" || !email.trim()) {
+  const emailParam = req.query.email as string;
+  const email = decodeURIComponent(String(emailParam || "")).trim();
+  if (!email) {
     return res.status(400).json({ error: "Email required" });
   }
 
   try {
-    // Use lowercase users collection
-    const docRef = firestore.collection("users").doc(email.trim());
+    // Use lowercase 'users' collection; docId is the email string
+    const docRef = firestore.collection("users").doc(email);
 
     if (req.method === "GET") {
       const snap = await docRef.get();
       if (!snap.exists) {
         return res.status(200).json(
-          buildProfileResponse(email.trim(), {
+          buildProfileResponse(email, {
             name: "", image: "", DOB: "", sex: "",
             height_cm: null, weight_kg: null, bodyfat_pct: null,
             activity_factor: null, caloric_target: null,
@@ -192,19 +198,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
       }
       const data = snap.data() || {};
-      return res.status(200).json(buildProfileResponse(email.trim(), data));
+      return res.status(200).json(buildProfileResponse(email, data));
     }
 
     if (req.method === "PATCH") {
       const filtered = filterPatchBody(req.body);
       if (Object.keys(filtered).length === 0) {
         return res.status(400).json({ error: "No valid fields to update" });
-           }
-      if (typeof filtered.email === "string") filtered.email = email.trim();
+      }
+
+      // Maintain identity consistency (server is source of truth)
+      filtered.email = email;
 
       await docRef.set(filtered, { merge: true });
       const updated = await docRef.get();
-      return res.status(200).json(buildProfileResponse(email.trim(), updated.data() || {}));
+      return res.status(200).json(buildProfileResponse(email, updated.data() || {}));
     }
 
     res.setHeader("Allow", "GET, PATCH");
