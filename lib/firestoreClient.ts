@@ -1,24 +1,28 @@
 
 // lib/firestoreClient.ts
-import { Firestore, Timestamp, FieldValue } from "@google-cloud/firestore";
+import { Firestore } from "@google-cloud/firestore";
 
-// Normalize private key from Vercel env (convert escaped \n to real newlines)
+// Normalise private key from Vercel env (convert escaped \n to real newlines, strip accidental quotes)
 function normalizeKey(key?: string): string {
-  if (!key) return '';
-  return key
-    .replace(/\\n/g, '\n')    .replace(/\\n/g, '\n')          // convert escaped newlines
-    .replace(/^"+|"+$/g, '')        // remove accidental quotes
-    .trim();
+  if (!key) return "";
+  return key.replace(/\\n/g, "\n").replace(/^"+|"+$/g, "").trim();
 }
 
 const firestore = new Firestore({
-  projectId: process.env.GOOGLE_PROJECT_ID, // e.g., "my-firestore-project"
+  projectId: process.env.GOOGLE_PROJECT_ID,
   credentials: {
-    client_email: process.env.GOOGLE_CLIENT_EMAIL, // ✅ correct env var
+    client_email: process.env.GOOGLE_CLIENT_EMAIL,
     private_key: normalizeKey(process.env.GOOGLE_PRIVATE_KEY),
   },
 });
 
-export default firestore;
-// Convenience exports if you need them elsewhere
+// Prevent undefined properties from being sent (safer merges)
+firestore.settings({ ignoreUndefinedProperties: true });
 
+// Optional: one-time log to confirm runtime project (remove after validation)
+if (process.env.NODE_ENV !== "production") {
+  // Do NOT log the private key. Project ID is safe.
+  console.log("[BXKR] Firestore project:", process.env.GOOGLE_PROJECT_ID);
+}
+
+export default firestore;
