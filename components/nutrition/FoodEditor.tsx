@@ -10,13 +10,17 @@ const COLORS = {
   fat: "#ff4fa3",
 };
 
+function round2(n: number | undefined | null): string {
+  return n !== undefined && n !== null ? Number(n).toFixed(2) : "-";
+}
+
 export type Food = {
   id: string;
   code: string;
   name: string;
   brand: string;
   image: string | null;
-  calories: number; // per 100g or per-serving after scaling
+  calories: number; // per 100g or scaled
   protein: number;
   carbs: number;
   fat: number;
@@ -54,91 +58,78 @@ export default function FoodEditor({
   const servingLabel = hasServing ? `1 serving (${food.servingSize})` : undefined;
 
   return (
-    <div className="bxkr-card p-3 mb-2">
-      <div className="d-flex justify-content-between align-items-start">
-        <div>
-          <div className="fw-bold d-flex align-items-center">
-            <input
-              className="form-control form-control-sm bg-transparent text-white border-0 p-0 fw-bold"
-              style={{ maxWidth: 280 }}
-              placeholder="Food name"
-              value={food.name}
-              onChange={(e) => (food.name = e.target.value)}
-            />
-            <button
-              type="button"
-              className="btn btn-link p-0 ms-2"
-              onClick={onToggleFavourite}
-              title={isFavourite ? "Unfavourite" : "Favourite"}
-            >
-              <i className={isFavourite ? "fas fa-star text-warning" : "far fa-star text-dim"} />
-            </button>
-          </div>
-          <input
-            className="form-control form-control-sm bg-transparent text-dim border-0 p-0"
-            style={{ maxWidth: 280 }}
-            placeholder="Brand"
-            value={food.brand}
-            onChange={(e) => (food.brand = e.target.value)}
-          />
-        </div>
-        <div className="text-end">
-          {usingServing === "serving" && hasServing ? (
-            <div className="small text-dim">{servingLabel}</div>
-          ) : (
-            <div className="small text-dim">{grams} g</div>
-          )}
-        </div>
-      </div>
-
-      <div className="d-flex gap-2 align-items-center mt-2">
-        {hasServing && (
-          <div className="btn-group btn-group-sm" role="group" aria-label="Amount type">
-            <button
-              type="button"
-              className={`btn ${usingServing === "per100" ? "btn-bxkr" : "btn-bxkr-outline"}`}
-              onClick={() => setUsingServing("per100")}
-            >
-              Per 100 g
-            </button>
-            <button
-              type="button"
-              className={`btn ${usingServing === "serving" ? "btn-bxkr" : "btn-bxkr-outline"}`}
-              onClick={() => setUsingServing("serving")}
-            >
-              Per serving
-            </button>
-          </div>
-        )}
-        {usingServing === "per100" && (
+    <div className="bxkr-card p-3">
+      {/* Amount row: serving dropdown (if available) + grams input */}
+      <div className="row g-2 align-items-center mb-2">
+        <div className={hasServing ? "col-6" : "col-12"}>
+          <label className="form-label small text-dim mb-1">Grams</label>
           <input
             type="number"
-            className="form-control form-control-sm"
-            placeholder="Grams"
-            min={1}
-            step={1}
+            className="form-control"
             value={grams}
-            onChange={(e) => setGrams(Number(e.target.value || 0))}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setUsingServing("per100");
+              setGrams(Number.isFinite(v) ? Math.max(0, v) : 0);
+            }}
           />
+        </div>
+        {hasServing && (
+          <div className="col-6">
+            <label className="form-label small text-dim mb-1">Amount</label>
+            <select
+              className="form-select"
+              value={usingServing}
+              onChange={(e) => {
+                const mode = e.target.value === "serving" ? "serving" : "per100";
+                setUsingServing(mode as "per100" | "serving");
+                if (mode === "serving") {
+                  const match =
+                    (food.servingSize || "").match(/(\d+(?:\.\d+)?)\s*g/i) ||
+                    (food.servingSize || "").match(/\((\d+(?:\.\d+)?)\s*g\)/i);
+                  const gramsFromServing = match && match[1] ? Number(match[1]) : null;
+                  if (gramsFromServing != null) setGrams(gramsFromServing);
+                }
+              }}
+            >
+              <option value="per100">Per 100 g</option>
+              <option value="serving">{servingLabel}</option>
+            </select>
+          </div>
         )}
       </div>
 
-      {scaledSelected && (
-        <div className="mt-2">
-          <div className="small">
-            <span style={{ color: COLORS.calories }}>{scaledSelected.calories.toFixed(2)} kcal</span>{" "}
-            | <span style={{ color: COLORS.protein }}>{scaledSelected.protein.toFixed(2)}p</span>{" "}
-            | <span style={{ color: COLORS.carbs }}>{scaledSelected.carbs.toFixed(2)}c</span>{" "}
-            | <span style={{ color: COLORS.fat }}>{scaledSelected.fat.toFixed(2)}f</span>
-          </div>
-        </div>
-      )}
+      {/* Macro preview */}
+      <div className="d-flex justify-content-between small mb-2">
+        <span style={{ color: COLORS.calories }}>{round2(scaledSelected?.calories)} kcal</span>
+        <span style={{ color: COLORS.protein }}>{round2(scaledSelected?.protein)}p</span>
+        <span style={{ color: COLORS.carbs }}>{round2(scaledSelected?.carbs)}c</span>
+        <span style={{ color: COLORS.fat }}>{round2(scaledSelected?.fat)}f</span>
+      </div>
 
-      <div className="d-flex justify-content-end mt-3">
-        <button className="btn btn-bxkr" onClick={() => addEntry(meal, scaledSelected || food)}>
+      <div className="d-flex gap-2 mb-2">
+        <button className="btn btn-bxkr w-100" onClick={() => addEntry(meal, (scaledSelected || food))}>
           Add to {meal}
         </button>
+        <button
+          type="button"
+          className="btn btn-bxkr-outline"
+          onClick={onToggleFavourite}
+          title={isFavourite ? "Unfavourite" : "Favourite"}
+        >
+          <i className={isFavourite ? "fas fa-star text-warning" : "far fa-star"} />
+        </button>
       </div>
+
+      <div className="fw-bold">
+        {food.name} ({food.brand}) — {round2(food.calories)} kcal/100g
+      </div>
+      {hasServing && (
+        <div className="small text-dim">
+          Serving: {food.servingSize}
+          {food.caloriesPerServing != null && ` — ${round2(food.caloriesPerServing)} kcal/serving`}
+        </div>
+      )}
     </div>
   );
 }
