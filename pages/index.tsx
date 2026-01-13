@@ -114,14 +114,14 @@ export default function Home() {
     [mounted]
   );
 
-  // Gate SWR until we have a client-computed week key
+  // Weekly overview (key is null until mounted to avoid SSR mismatch)
   const { data: weeklyOverview, isLoading: overviewLoading } = useSWR(
     weekStartKey ? `/api/weekly/overview?week=${weekStartKey}` : null,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 }
   );
 
-  // Profile for Premium gating (no schema/API changes)
+  // Profile for Premium gating
   const profileKey =
     mounted && session?.user?.email
       ? `/api/profile?email=${encodeURIComponent(session.user.email)}`
@@ -246,6 +246,33 @@ export default function Home() {
   const workoutHref = workoutLocked ? "#" : workoutHrefBase;
   const habitHref = habitsLocked ? "#" : habitHrefBase;
 
+  // Top-level memos for WeeklyCircles (avoid calling hooks inside conditionals)
+  const dayStreak = useMemo(() => {
+    let streak = 0;
+    for (const d of weekDays) {
+      const st = weekStatus[formatYMD(d)];
+      if (!st) break;
+      if (d < selectedDay && st.allDone) streak++;
+      else if (d < selectedDay && !st.allDone) streak = 0;
+      if (isSameDay(d, selectedDay)) break;
+    }
+    return streak;
+  }, [weekDays, weekStatus, selectedDay]);
+
+  const weeklyProgressPercent = useMemo(() => {
+    const { totalTasks, completedTasks } = derivedWeeklyTotals;
+    if (!totalTasks) return 0;
+    return Math.round((completedTasks / totalTasks) * 100);
+  }, [derivedWeeklyTotals]);
+
+  const weeklyWorkoutsCompleted = useMemo(() => {
+    const completedFromTotals = Number(weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0);
+    if (Number.isFinite(completedFromTotals)) return Math.max(0, Math.min(3, completedFromTotals));
+    const days = (weeklyOverview?.days as ApiDay[]) || [];
+    const count = days.reduce((acc, d) => acc + (d?.workoutDone ? 1 : 0), 0);
+    return Math.max(0, Math.min(3, count));
+  }, [weeklyOverview]);
+
   const accentMicro = "#ff8a2a";
   const showLoadingBar = status === "loading" || !mounted;
 
@@ -313,44 +340,9 @@ export default function Home() {
         {weeklyOverview?.days && mounted && (
           <div style={{ marginBottom: 12 }}>
             <WeeklyCircles
-              weeklyProgressPercent={useMemo(() => {
-                const { totalTasks, completedTasks } = ((): { totalTasks: number; completedTasks: number } => {
-                  const days = (weeklyOverview?.days as any[]) || [];
-                  let total = 0;
-                  let done = 0;
-                  for (const o of days) {
-                    const { isFriday, hasWorkout, workoutDone, nutritionLogged, habitAllDone, checkinComplete } =
-                      deriveDayBooleans(o);
-                    total += 1 + 1 + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
-                    done +=
-                      (nutritionLogged ? 1 : 0) +
-                      (habitAllDone ? 1 : 0) +
-                      (hasWorkout && workoutDone ? 1 : 0) +
-                      (isFriday && checkinComplete ? 1 : 0);
-                  }
-                  return { totalTasks: total, completedTasks: done };
-                })();
-                if (!totalTasks) return 0;
-                return Math.round((completedTasks / totalTasks) * 100);
-              }, [weeklyOverview])}
-              weeklyWorkoutsCompleted={useMemo(() => {
-                const completedFromTotals = Number(weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0);
-                if (Number.isFinite(completedFromTotals)) return Math.max(0, Math.min(3, completedFromTotals));
-                const days = (weeklyOverview?.days as ApiDay[]) || [];
-                const count = days.reduce((acc, d) => acc + (d?.workoutDone ? 1 : 0), 0);
-                return Math.max(0, Math.min(3, count));
-              }, [weeklyOverview])}
-              dayStreak={useMemo(() => {
-                let streak = 0;
-                for (const d of weekDays) {
-                  const st = weekStatus[formatYMD(d)];
-                  if (!st) break;
-                  if (d < selectedDay && st.allDone) streak++;
-                  else if (d < selectedDay && !st.allDone) streak = 0;
-                  if (isSameDay(d, selectedDay)) break;
-                }
-                return streak;
-              }, [weekDays, weekStatus, selectedDay])}
+              weeklyProgressPercent={weeklyProgressPercent}
+              weeklyWorkoutsCompleted={weeklyWorkoutsCompleted}
+              dayStreak={dayStreak}
             />
           </div>
         )}
