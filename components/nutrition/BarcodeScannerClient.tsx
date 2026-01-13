@@ -13,7 +13,7 @@ export default function BarcodeScannerClient({
   isOpen: boolean;
   onClose: () => void;
   onFoundFood: (food: Food) => void;
-  onLookupBarcode: (code: string) => Promise<void>;
+  onLookupBarcode: (code: string) => Promise<Food | undefined>;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const codeReaderRef = useRef<any>(null);
@@ -78,7 +78,13 @@ export default function BarcodeScannerClient({
               const code = result.getText();
               try {
                 setLookupLoading(true);
-                await onLookupBarcode(code);
+                const found = await onLookupBarcode(code);
+                if (!found) {
+                  setScanError("No product found for this barcode. You can add a manual food.");
+                } else {
+                  onFoundFood(found);
+                  onClose();
+                }
               } catch {
                 setScanError("Barcode lookup failed. Please try again or enter manually.");
               } finally {
@@ -120,7 +126,13 @@ export default function BarcodeScannerClient({
     }
     try {
       setLookupLoading(true);
-      await onLookupBarcode(barcodeInput.trim());
+      const found = await onLookupBarcode(barcodeInput.trim());
+      if (!found) {
+        setScanError("No product found for this barcode. You can add a manual food.");
+      } else {
+        onFoundFood(found);
+        onClose();
+      }
     } finally {
       setLookupLoading(false);
     }
