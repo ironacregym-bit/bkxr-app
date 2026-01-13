@@ -12,26 +12,9 @@ const COLORS = {
   fat: "#ff4fa3",
 };
 
-export type MacroTotals = {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-};
-
-export type MacroGoals = {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-};
-
-export type MacroProgress = {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-};
+export type MacroTotals = { calories: number; protein: number; carbs: number; fat: number };
+export type MacroGoals = { calories: number; protein: number; carbs: number; fat: number };
+export type MacroProgress = { calories: number; protein: number; carbs: number; fat: number };
 
 function round2(n: number | undefined | null) {
   return n !== undefined && n !== null ? Number(n).toFixed(2) : "-";
@@ -65,6 +48,7 @@ export default function MacrosCard({
           </p>
         </div>
       </div>
+
       <div className="col-6 d-flex justify-content-center">
         <div style={{ position: "relative", width: 180, height: 180 }}>
           <div style={{ position: "absolute", top: 0, left: 0, width: 180, height: 180 }}>
