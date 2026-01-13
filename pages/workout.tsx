@@ -25,15 +25,8 @@ ChartJS.register(LineElement, PointElement, CategoryScale, LinearScale, Tooltip,
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-// ---- Brand + card styling ---------------------------------------------------
+// ---- Brand ------------------------------------------------------------------
 const ACCENT = "#FF8A2A";
-const CARD: React.CSSProperties = {
-  background: "rgba(255,255,255,0.05)",
-  borderRadius: 16,
-  padding: 16,
-  backdropFilter: "blur(10px)",
-  boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-};
 
 // ---- Small date helpers -----------------------------------------------------
 function formatDateKeyLocal(d: Date): string {
@@ -109,6 +102,15 @@ export default function WorkoutHubPage() {
         calories_burned: Number(c.calories_burned || 0),
         sets_completed: Number(c.sets_completed || 0),
         weight_completed_with: c.weight_completed_with ?? null,
+        // Try to read a workout name without changing schema
+        workout_name:
+          c.workout_name ??
+          c.name ??
+          c.title ??
+          c.workout?.name ??
+          c.workout_title ??
+          c.plan_name ??
+          null,
       }))
       .filter((c: any) => !!c.completed_date)
       .sort(
@@ -137,75 +139,66 @@ export default function WorkoutHubPage() {
         }}
       >
         {/* Header */}
-        <div className="d-flex align-items-center justify-content-between mb-3">
-          <div>
-            <h1 className="h4 mb-0" style={{ fontWeight: 700 }}>
-              Train
-            </h1>
-            <small style={{ opacity: 0.75 }}>Build momentum today</small>
+        <div className="mb-3">
+          <div className="d-flex align-items-center justify-content-between">
+            <div>
+              <h1 className="h4 mb-0" style={{ fontWeight: 700 }}>
+                Train
+              </h1>
+              <small style={{ opacity: 0.75 }}>Build momentum today</small>
+            </div>
           </div>
-          <div className="d-flex gap-2">
-            <Link
-              href="/workouts"
-              className="btn btn-sm"
-              style={{
-                borderRadius: 24,
-                color: "#fff",
-                background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
-                boxShadow: `0 0 14px ${ACCENT}66`,
-              }}
-            >
-              Browse Workouts
-            </Link>
-            <Link
-              href="/workouts/new?visibility=private"
-              className="btn btn-outline-light btn-sm"
-              style={{ borderRadius: 24 }}
-            >
-              Create
-            </Link>
-          </div>
+
+          {/* Today’s Workout + Freestyle CTA (UI-only; soft-fail) */}
+          <TodaysWorkoutHeader email={userEmail} />
         </div>
 
         {/* Tiles */}
         <section className="row gx-3">
           {/* Workout History */}
           <div className="col-12 col-md-6 mb-3">
-            <div style={{ ...CARD, height: "100%" }}>
+            <div className="futuristic-card p-3" style={{ height: "100%" }}>
               <h6 className="mb-3" style={{ fontWeight: 700 }}>
                 Workout History
               </h6>
 
               {historyPreview.length ? (
-                historyPreview.map((c: any, idx: number) => (
-                  <div key={idx} className="mb-2">
-                    <small className="text-muted">
-                      {new Date(c.completed_date).toLocaleDateString(undefined, {
-                        day: "numeric",
-                        month: "short",
-                      })}
-                    </small>
-                    <div>
-                      {Math.round(c.calories_burned || 0)} kcal · {c.sets_completed || 0} sets
-                    </div>
-                    {c.weight_completed_with != null && (
-                      <div className="small text-muted">
-                        Weight used: {c.weight_completed_with}
+                historyPreview.map((c: any, idx: number) => {
+                  const dateText = new Date(c.completed_date).toLocaleDateString(
+                    undefined,
+                    { day: "numeric", month: "short" }
+                  );
+                  const nameText = c.workout_name || "Workout";
+                  return (
+                    <div key={idx} className="mb-2 d-flex justify-content-between">
+                      <div>
+                        <div className="fw-semibold">
+                          {nameText} <span className="text-dim">— {dateText}</span>
+                        </div>
+                        <div>
+                          {Math.round(c.calories_burned || 0)} kcal · {c.sets_completed || 0} sets
+                        </div>
+                        {c.weight_completed_with != null && (
+                          <div className="small text-dim">Weight used: {c.weight_completed_with}</div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))
+                      <Link
+                        href="/history"
+                        className="btn btn-link text-dim"
+                        aria-label={`View details for ${nameText}`}
+                      >
+                        <i className="fas fa-chevron-right" />
+                      </Link>
+                    </div>
+                  );
+                })
               ) : histPrimaryErr ? (
                 <div className="text-muted">Couldn’t load history</div>
               ) : (
                 <div className="text-muted">No history yet</div>
               )}
 
-              <Link
-                href="/history"
-                className="btn btn-outline-light btn-sm mt-2"
-                style={{ borderRadius: 24 }}
-              >
+              <Link href="/history" className="btn btn-outline-light btn-sm mt-2" style={{ borderRadius: 24 }}>
                 View More
               </Link>
             </div>
@@ -213,7 +206,7 @@ export default function WorkoutHubPage() {
 
           {/* Benchmarks + Graphs */}
           <div className="col-12 col-md-6 mb-3">
-            <div style={{ ...CARD, height: "100%" }}>
+            <div className="futuristic-card p-3" style={{ height: "100%" }}>
               <h6 className="mb-3" style={{ fontWeight: 700 }}>
                 Benchmarks
               </h6>
@@ -233,6 +226,138 @@ export default function WorkoutHubPage() {
 
       <BottomNav />
     </>
+  );
+}
+
+// ---- Header: Today’s Workout (UI-only; soft-fail) ----------------------------
+function TodaysWorkoutHeader({ email }: { email?: string | null }) {
+  // Try planned online workout for today
+  const { data: planned, error: plannedErr } = useSWR(
+    email ? `/api/workouts/planned/today?email=${encodeURIComponent(email)}` : null,
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
+  );
+
+  // Try booked gym class for today
+  const { data: booked, error: bookedErr } = useSWR(
+    email ? `/api/classes/today?email=${encodeURIComponent(email)}` : null,
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
+  );
+
+  // Pick the best available source (no schema changes)
+  const plannedItem =
+    planned?.result || planned?.item || planned?.workout || planned?.today || planned?.data || null;
+  const bookedItem =
+    booked?.result || booked?.item || booked?.class || booked?.today || booked?.data || null;
+
+  const item = plannedItem || bookedItem || null;
+
+  // Render
+  if (plannedErr && bookedErr) {
+    return (
+      <div className="futuristic-card p-3 mt-2">
+        <div className="d-flex align-items-center justify-content-between">
+          <div>
+            <div className="fw-semibold">Planned today</div>
+            <div className="small text-dim">Unable to load today’s plan. You can still browse or start a freestyle session.</div>
+          </div>
+          <div className="d-flex gap-2">
+            <Link
+              href="/workouts"
+              className="btn btn-sm"
+              style={{
+                borderRadius: 24,
+                color: "#fff",
+                background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                boxShadow: `0 0 14px ${ACCENT}66`,
+              }}
+            >
+              Browse Workouts
+            </Link>
+            <Link href="/workouts/new?mode=freestyle" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
+              Start a freestyle session
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!item) {
+    return (
+      <div className="futuristic-card p-3 mt-2">
+        <div className="d-flex align-items-center justify-content-between">
+          <div>
+            <div className="fw-semibold">No plan today</div>
+            <div className="small text-dim">It’s a good day for Upper Body — try “Heavy Bag Intervals”.</div>
+          </div>
+          <div className="d-flex gap-2">
+            <Link
+              href="/workouts"
+              className="btn btn-sm"
+              style={{
+                borderRadius: 24,
+                color: "#fff",
+                background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                boxShadow: `0 0 14px ${ACCENT}66`,
+              }}
+            >
+              Browse Workouts
+            </Link>
+            <Link href="/workouts/new?mode=freestyle" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
+              Start a freestyle session
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Derive display fields safely
+  const name =
+    item.name || item.title || item.workout_name || item.class_name || item.plan_name || "Workout";
+  const time =
+    item.time ||
+    item.start_time ||
+    item.start ||
+    item.starts_at ||
+    item.session_time ||
+    null;
+  const gym =
+    item.gym_name || item.location || item.gym || item.venue || null;
+
+  return (
+    <div className="futuristic-card p-3 mt-2">
+      <div className="d-flex align-items-center justify-content-between">
+        <div className="me-2">
+          <div className="fw-semibold">
+            {name}
+            {time ? <span className="text-dim"> • {String(time)}</span> : null}
+          </div>
+          {gym ? <div className="small text-dim">Booked at {gym}</div> : <div className="small text-dim">Planned today</div>}
+        </div>
+        <div className="d-flex gap-2">
+          {gym ? (
+            <Link href="/classes/today" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
+              Check in
+            </Link>
+          ) : null}
+          <Link
+            href="/workouts/start/today"
+            className="btn btn-sm"
+            style={{
+              borderRadius: 24,
+              color: "#fff",
+              background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+              boxShadow: `0 0 14px ${ACCENT}66`,
+            }}
+          >
+            Start
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -258,17 +383,13 @@ function BenchmarksList({ email }: { email?: string | null }) {
       {data.results.slice(0, 3).map((r: any, i: number) => (
         <div key={i} className="mb-2">
           <div className="fw-semibold">{r.name}</div>
-          <div className="small text-muted">
+          <div className="small text-dim">
             {r.value} {r.unit} · {r.date ? new Date(r.date).toLocaleDateString() : ""}
           </div>
         </div>
       ))}
       <div className="mt-2 d-flex gap-2">
-        <Link
-          href="/benchmarks"
-          className="btn btn-outline-light btn-sm"
-          style={{ borderRadius: 24 }}
-        >
+        <Link href="/benchmarks" className="btn btn-outline-light btn-sm" style={{ borderRadius: 24 }}>
           View
         </Link>
         <Link
@@ -445,16 +566,12 @@ function ExerciseLibrary() {
     : [];
 
   return (
-    <section style={{ ...CARD, marginTop: 4 }}>
+    <section className="futuristic-card p-3" style={{ marginTop: 4 }}>
       <div className="d-flex justify-content-between align-items-center">
         <h6 className="m-0" style={{ fontWeight: 700 }}>
           Exercise Library
         </h6>
-        <Link
-          href="/exercises"
-          className="btn btn-outline-light btn-sm"
-          style={{ borderRadius: 24 }}
-        >
+        <Link href="/exercises" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
           Browse
         </Link>
       </div>
@@ -485,32 +602,29 @@ function ExerciseLibrary() {
           <div className="text-muted">No exercises found for {activeType}.</div>
         )}
 
-        {items.slice(0, 6).map((ex: any) => (
-          <div
-            key={ex.id ?? ex.exercise_id ?? ex.Name}
-            className="d-flex align-items-center justify-content-between bxkr-card p-3 mb-2"
-          >
-            <div>
-              <div className="fw-semibold">{ex.name ?? ex.Name}</div>
-              <div className="small text-muted">
-                {ex.type ?? ex.Type ?? "Uncategorised"}
-              </div>
-            </div>
+        {items.slice(0, 6).map((ex: any) => {
+          const exId = ex.id ?? ex.exercise_id ?? ex.Name;
+          const exName = ex.name ?? ex.Name ?? "Exercise";
+          const exType = ex.type ?? ex.Type ?? "Uncategorised";
+          return (
             <Link
-              href={`/exercises/${encodeURIComponent(ex.id ?? ex.exercise_id ?? ex.Name)}`}
-              className="btn btn-sm"
-              style={{
-                borderRadius: 24,
-                color: "#0b0f14",
-                background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
-                boxShadow: `0 0 12px ${ACCENT}66`,
-              }}
+              key={exId}
+              href={`/exercises/${encodeURIComponent(exId)}`}
+              className="text-decoration-none"
+              style={{ color: "inherit" }}
+              aria-label={`Open ${exName}`}
             >
-              View
+              <div className="futuristic-card p-3 mb-2 d-flex align-items-center justify-content-between">
+                <div>
+                  <div className="fw-semibold">{exName}</div>
+                  <div className="small text-dim">{exType}</div>
+                </div>
+                <i className="fas fa-chevron-right text-dim" />
+              </div>
             </Link>
-          </div>
-        ))}
+          );
+        })}
       </div>
-       </section>
+    </section>
   );
 }
