@@ -23,48 +23,69 @@ export default function StepFinishTrial({
     subscription_status !== "active" && subscription_status !== "trialing";
 
   return (
-    <section className="futuristic-card p-4 mb-3 d-flex flex-column justify-content-center" style={{ minHeight: "65vh" }}>
+    <section
+      className="futuristic-card p-4 mb-3 d-flex flex-column justify-content-between"
+      style={{ minHeight: "65vh" }}
+    >
+      {/* Premium trial offer (single parent card only) */}
       {showTrial && (
-        <div className="futuristic-card p-3 mb-3">
-          <h5 className="mb-2">Start Your 14‑Day Free Trial</h5>
+        <div className="mb-3">
+          <h5 className="mb-2">Try Premium Features — 14‑Day Free Trial</h5>
           <p className="text-dim">
-            Unlock all BXKR features: structured boxing & kettlebell sessions, habit tracking,
-            nutrition logging, weekly breakdowns and accountability.
+            Unlock everything in BXKR Premium: advanced boxing & kettlebell
+            programming, progress analytics, habit automation, nutrition
+            insights, and priority updates.
           </p>
-          <ul className="small text-dim mb-2">
+          <ul className="small text-dim mb-3" style={{ paddingLeft: "1.2rem" }}>
             <li>No card required today</li>
             <li>Cancel anytime</li>
-            <li>Full access for 14 days</li>
+            <li>Full premium access for 14 days</li>
           </ul>
+
           <div className="d-flex gap-2">
             <button
               className="btn btn-bxkr"
               onClick={startTrial}
               disabled={saving}
-              style={{ background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, borderRadius: 24 }}
+              style={{
+                background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                borderRadius: 24,
+              }}
             >
-              {saving ? "Starting…" : "Start Free Trial"}
+              {saving ? "Starting…" : "Start Free Premium Trial"}
             </button>
           </div>
         </div>
       )}
 
-      <div className="futuristic-card p-3 mb-3">
-        <h5 className="mb-2">All Set!</h5>
-        <p className="text-dim">
-          BXKR tailors your training to your metrics, job type, workout type and fighting style.
+      {/* Completion message (still within the single parent card) */}
+      <div className="mb-3">
+        <h5 className="mb-2">All Set on the Free Tier</h5>
+        <p className="text-dim mb-0">
+          Your onboarding details are saved. You’re on the <strong>free tier</strong>:
+          core workout tracking and basic features. Upgrade to Premium anytime
+          for full plans, deeper analytics, weekly coaching‑style nudges, and
+          priority updates.
         </p>
       </div>
 
-      <div className="d-flex justify-content-between" id="onb-page-nav">
-        <button className="btn btn-bxkr-outline" onClick={back} disabled={isFirstStep || saving}>
+      {/* Local navigation for this step */}
+      <div className="d-flex justify-content-between">
+        <button
+          className="btn btn-bxkr-outline"
+          onClick={back}
+          disabled={isFirstStep || saving}
+        >
           ← Back
         </button>
         <button
           className="btn btn-bxkr"
           onClick={finish}
           disabled={saving}
-          style={{ background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, borderRadius: 24 }}
+          style={{
+            background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+            borderRadius: 24,
+          }}
         >
           Finish → Home
           {saving && <span className="inline-spinner ms-2" />}
