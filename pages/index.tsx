@@ -93,18 +93,18 @@ type UserAccess = {
 export default function Home() {
   const { data: session, status } = useSession();
 
-  // Mount flag to defer client-only values
+  // Mount guard to avoid SSR/CSR mismatch
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // Greeting computed on client to avoid SSR/CSR mismatch
+  // Greeting computed on client
   const [timeGreeting, setTimeGreeting] = useState<string>("");
   useEffect(() => {
     const h = new Date().getHours();
     setTimeGreeting(h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening");
   }, []);
 
-  // Week and key derived after mount to avoid timezone-based SSR mismatch
+  // Week and key derived after mount
   const weekDays = useMemo(() => (mounted ? getWeek() : []), [mounted]);
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
 
@@ -121,7 +121,7 @@ export default function Home() {
     { revalidateOnFocus: false, dedupingInterval: 60_000 }
   );
 
-  // Profile for Premium gating
+  // Profile for Premium gating (API unchanged; just reading flags)
   const profileKey =
     mounted && session?.user?.email
       ? `/api/profile?email=${encodeURIComponent(session.user.email)}`
@@ -223,13 +223,13 @@ export default function Home() {
   const workoutIds = selectedStatus.workoutIds || [];
   const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
 
-  // Original hrefs
+  // Base hrefs (before gating)
   const workoutHrefBase = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
   const nutritionHref = `/nutrition?date=${selectedDateKey}`;
   const habitHrefBase = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
 
-  // Premium gating
+  // Premium gating (logic only; no pills/padlocks here)
   const isPremium = Boolean(
     (profile?.subscription_status === "active" || profile?.subscription_status === "trialing") ||
     profile?.membership_status === "gym_member"
@@ -242,11 +242,15 @@ export default function Home() {
   const workoutLocked = !isPremium && isWedOrFri;
   const habitsLocked = !isPremium;
 
-  // Apply locks to hrefs (UI-only)
+  // Apply locks to hrefs (UI-only; DailyTasksCard will show inline locks)
   const workoutHref = workoutLocked ? "#" : workoutHrefBase;
   const habitHref = habitsLocked ? "#" : habitHrefBase;
 
-  // Top-level memos for WeeklyCircles (avoid calling hooks inside conditionals)
+  // Header accents
+  const accentMicro = "#ff8a2a";
+  const showLoadingBar = status === "loading" || !mounted;
+
+  // Top-level memos for WeeklyCircles (avoid conditional hooks)
   const dayStreak = useMemo(() => {
     let streak = 0;
     for (const d of weekDays) {
@@ -272,9 +276,6 @@ export default function Home() {
     const count = days.reduce((acc, d) => acc + (d?.workoutDone ? 1 : 0), 0);
     return Math.max(0, Math.min(3, count));
   }, [weeklyOverview]);
-
-  const accentMicro = "#ff8a2a";
-  const showLoadingBar = status === "loading" || !mounted;
 
   return (
     <>
@@ -355,19 +356,12 @@ export default function Home() {
               const dk = formatYMD(d);
               const st = weekStatus[dk];
 
-              // Padlock for non-premium on Wed/Fri (visual cue only)
-              const wd = d.getDay();
-              const lockThisWorkoutDay = !isPremium && (wd === 3 || wd === 5);
-
               if (!st) {
                 return (
                   <div key={i} style={{ width: 44 }}>
                     {/* Weekday label: fontWeight 500 */}
                     <div style={{ fontSize: "0.8rem", opacity: 0.6, fontWeight: 500 }}>
                       {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
-                      {lockThisWorkoutDay && (
-                        <i className="fas fa-lock ms-1" style={{ opacity: 0.6, fontSize: "0.8rem" }} />
-                      )}
                     </div>
                     <div className="bxkr-day-pill" style={{ opacity: 0.5 }}>
                       <span style={{ fontWeight: 500 }}>{d.getDate()}</span>
@@ -376,7 +370,7 @@ export default function Home() {
                 );
               }
 
-              const ringColor = st.allDone ? "#64c37a" : isSelected ? accentMicro : "rgba(255,255,255,0.3)";
+              const ringColor = st.allDone ? "#64c37a" : isSelected ? "#ff8a2a" : "rgba(255,255,255,0.3)";
               const boxShadow = isSelected ? `0 0 8px ${ringColor}` : st.allDone ? `0 0 3px ${ringColor}` : "none";
 
               return (
@@ -384,9 +378,6 @@ export default function Home() {
                   {/* Weekday label: fontWeight 500 */}
                   <div style={{ fontSize: "0.8rem", color: "#fff", opacity: 0.85, marginBottom: 4, fontWeight: 500 }}>
                     {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
-                    {lockThisWorkoutDay && (
-                      <i className="fas fa-lock ms-1" style={{ opacity: 0.85, fontSize: "0.8rem" }} />
-                    )}
                   </div>
                   <div
                     className={`bxkr-day-pill ${st.allDone ? "completed" : ""}`}
@@ -417,38 +408,6 @@ export default function Home() {
               );
             })}
           </div>
-        )}
-
-        {/* ===== Lock notices (subtle, above Daily Tasks) ===== */}
-        {mounted && (
-          <>
-            {workoutLocked && (
-              <div
-                className="bxkr-chip mb-2"
-                style={{
-                  borderColor: "#ff8a2a",
-                  color: "#fff",
-                  boxShadow: "0 0 8px rgba(255,138,42,0.45)",
-                }}
-                aria-live="polite"
-              >
-                🔒 Wednesday & Friday workouts are Premium. Enter your Iron Acre code or start a free trial to unlock.
-              </div>
-            )}
-            {habitsLocked && (
-              <div
-                className="bxkr-chip mb-2"
-                style={{
-                  borderColor: "rgba(255,255,255,0.35)",
-                  color: "#fff",
-                  boxShadow: "0 0 6px rgba(255,255,255,0.25)",
-                }}
-                aria-live="polite"
-              >
-                🔒 Daily Habits are Premium. Unlock via Iron Acre code or free trial.
-              </div>
-            )}
-          </>
         )}
 
         {/* ===== Daily Tasks Card (selected day) ===== */}
