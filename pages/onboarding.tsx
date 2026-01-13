@@ -24,6 +24,7 @@ const ACCENT = "#FF8A2A";
  * - Dynamic total step count used for header
  * - Consistent sticky bottom CTA bar with safe-area padding
  * - Tiny "Saved" pill auto-hides after 1.5s
+ * - Global CTA hidden on the final step (uses StepFinishTrial's local CTA)
  */
 export default function OnboardingPage() {
   const { data: session, status } = useSession();
@@ -100,7 +101,7 @@ export default function OnboardingPage() {
     let tdee = bmr * af;
     if (goal === "lose") tdee *= 0.85;
     else if (goal === "tone") tdee *= 1.0;
-    else if (goal === "gain") tdee *= 1.10;
+    else if (goal === "gain") tdee *= 1.1;
 
     const proteinG = Math.round((goal === "lose" ? 2.0 : 1.8) * weight);
     const fatG = Math.round(Math.min(120, Math.max(40, 0.8 * weight)));
@@ -120,13 +121,6 @@ export default function OnboardingPage() {
     (profile.weight_kg ?? 0) > 0 &&
     !!profile.activity_factor &&
     !!profile.goal_primary;
-
-  const trialDaysLeft = useMemo(() => {
-    if (!profile.trial_end) return null;
-    const ms = new Date(profile.trial_end).getTime() - Date.now();
-    const d = Math.ceil(ms / (1000 * 60 * 60 * 24));
-    return d > 0 ? d : 0;
-  }, [profile.trial_end]);
 
   // Total steps: Metrics (0), Job+Goal (1), Finish Trial (2)
   const totalSteps = 3;
@@ -340,33 +334,33 @@ export default function OnboardingPage() {
           />
         )}
 
-        {/* Sticky Navigation (uniform across steps) */}
-        <div
-          id="onb-page-nav"
-          style={{
-            position: "sticky",
-            bottom: 0,
-            paddingTop: 10,
-            paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
-            background:
-              "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.35) 40%, rgba(0,0,0,0.65) 100%)",
-            backdropFilter: "blur(10px)",
-            WebkitBackdropFilter: "blur(10px)",
-            borderTop: "1px solid rgba(255,255,255,0.08)",
-            zIndex: 5,
-          }}
-          className="d-flex justify-content-between"
-        >
-          <button
-            className="btn btn-bxkr-outline"
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-            disabled={isFirstStep || saving}
-            style={{ borderRadius: 24 }}
-            aria-label="Back"
+        {/* Sticky Navigation (hidden on final step so no global Save button) */}
+        {!isLastStep && (
+          <div
+            id="onb-page-nav"
+            style={{
+              position: "sticky",
+              bottom: 0,
+              paddingTop: 10,
+              paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+              background:
+                "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.35) 40%, rgba(0,0,0,0.65) 100%)",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
+              borderTop: "1px solid rgba(255,255,255,0.08)",
+              zIndex: 5,
+            }}
+            className="d-flex justify-content-between"
           >
-            ← Back
-          </button>
-          {!isLastStep ? (
+            <button
+              className="btn btn-bxkr-outline"
+              onClick={() => setStep((s) => Math.max(0, s - 1))}
+              disabled={isFirstStep || saving}
+              style={{ borderRadius: 24 }}
+              aria-label="Back"
+            >
+              ← Back
+            </button>
             <button
               className="btn btn-bxkr"
               onClick={() => autoSave(step + 1)}
@@ -377,19 +371,8 @@ export default function OnboardingPage() {
               Next →
               {saving && <span className="inline-spinner ms-2" />}
             </button>
-          ) : (
-            <button
-              className="btn btn-bxkr"
-              onClick={() => autoSave()}
-              disabled={saving}
-              style={{ background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, borderRadius: 24 }}
-              aria-label="Save"
-            >
-              Save
-              {saving && <span className="inline-spinner ms-2" />}
-            </button>
-          )}
-        </div>
+          </div>
+        )}
       </main>
 
       <BottomNav />
