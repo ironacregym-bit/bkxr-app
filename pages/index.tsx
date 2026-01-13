@@ -84,6 +84,12 @@ type DayStatus = {
   workoutIds: string[];
 };
 
+/** Minimal profile fields to determine Premium access */
+type UserAccess = {
+  subscription_status?: string | null;
+  membership_status?: string | null;
+};
+
 export default function Home() {
   const { data: session, status } = useSession();
 
@@ -114,6 +120,16 @@ export default function Home() {
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 }
   );
+
+  // Profile for Premium gating (no schema/API changes)
+  const profileKey =
+    mounted && session?.user?.email
+      ? `/api/profile?email=${encodeURIComponent(session.user.email)}`
+      : null;
+  const { data: profile } = useSWR<UserAccess>(profileKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60_000,
+  });
 
   const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
   const [weekLoading, setWeekLoading] = useState(false);
@@ -206,40 +222,31 @@ export default function Home() {
   const hasWorkoutToday = Boolean(selectedStatus.hasWorkout);
   const workoutIds = selectedStatus.workoutIds || [];
   const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
-  const workoutHref = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
+
+  // Original hrefs
+  const workoutHrefBase = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
   const nutritionHref = `/nutrition?date=${selectedDateKey}`;
-  const habitHref = `/habit?date=${selectedDateKey}`;
+  const habitHrefBase = `/habit?date=${selectedDateKey}`;
   const checkinHref = `/checkin`;
 
-  // Contextual metrics used elsewhere
-  const dayStreak = useMemo(() => {
-    let streak = 0;
-    for (const d of weekDays) {
-      const st = weekStatus[formatYMD(d)];
-      if (!st) break;
-      if (d < selectedDay && st.allDone) streak++;
-      else if (d < selectedDay && !st.allDone) streak = 0;
-      if (isSameDay(d, selectedDay)) break;
-    }
-    return streak;
-  }, [weekDays, weekStatus, selectedDay]);
+  // Premium gating
+  const isPremium = Boolean(
+    (profile?.subscription_status === "active" || profile?.subscription_status === "trialing") ||
+    profile?.membership_status === "gym_member"
+  );
 
-  const weeklyProgressPercent = useMemo(() => {
-    const { totalTasks, completedTasks } = derivedWeeklyTotals;
-    if (!totalTasks) return 0;
-    return Math.round((completedTasks / totalTasks) * 100);
-  }, [derivedWeeklyTotals]);
+  // Wed & Fri lock (0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat)
+  const weekday = selectedDay.getDay();
+  const isWedOrFri = weekday === 3 || weekday === 5;
 
-  const weeklyWorkoutsCompleted = useMemo(() => {
-    const completedFromTotals = Number(weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0);
-    if (Number.isFinite(completedFromTotals)) return Math.max(0, Math.min(3, completedFromTotals));
-    const days = (weeklyOverview?.days as ApiDay[]) || [];
-    const count = days.reduce((acc, d) => acc + (d?.workoutDone ? 1 : 0), 0);
-    return Math.max(0, Math.min(3, count));
-  }, [weeklyOverview]);
+  const workoutLocked = !isPremium && isWedOrFri;
+  const habitsLocked = !isPremium;
+
+  // Apply locks to hrefs (UI-only)
+  const workoutHref = workoutLocked ? "#" : workoutHrefBase;
+  const habitHref = habitsLocked ? "#" : habitHrefBase;
 
   const accentMicro = "#ff8a2a";
-
   const showLoadingBar = status === "loading" || !mounted;
 
   return (
@@ -306,9 +313,44 @@ export default function Home() {
         {weeklyOverview?.days && mounted && (
           <div style={{ marginBottom: 12 }}>
             <WeeklyCircles
-              weeklyProgressPercent={weeklyProgressPercent}
-              weeklyWorkoutsCompleted={weeklyWorkoutsCompleted}
-              dayStreak={dayStreak}
+              weeklyProgressPercent={useMemo(() => {
+                const { totalTasks, completedTasks } = ((): { totalTasks: number; completedTasks: number } => {
+                  const days = (weeklyOverview?.days as any[]) || [];
+                  let total = 0;
+                  let done = 0;
+                  for (const o of days) {
+                    const { isFriday, hasWorkout, workoutDone, nutritionLogged, habitAllDone, checkinComplete } =
+                      deriveDayBooleans(o);
+                    total += 1 + 1 + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
+                    done +=
+                      (nutritionLogged ? 1 : 0) +
+                      (habitAllDone ? 1 : 0) +
+                      (hasWorkout && workoutDone ? 1 : 0) +
+                      (isFriday && checkinComplete ? 1 : 0);
+                  }
+                  return { totalTasks: total, completedTasks: done };
+                })();
+                if (!totalTasks) return 0;
+                return Math.round((completedTasks / totalTasks) * 100);
+              }, [weeklyOverview])}
+              weeklyWorkoutsCompleted={useMemo(() => {
+                const completedFromTotals = Number(weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0);
+                if (Number.isFinite(completedFromTotals)) return Math.max(0, Math.min(3, completedFromTotals));
+                const days = (weeklyOverview?.days as ApiDay[]) || [];
+                const count = days.reduce((acc, d) => acc + (d?.workoutDone ? 1 : 0), 0);
+                return Math.max(0, Math.min(3, count));
+              }, [weeklyOverview])}
+              dayStreak={useMemo(() => {
+                let streak = 0;
+                for (const d of weekDays) {
+                  const st = weekStatus[formatYMD(d)];
+                  if (!st) break;
+                  if (d < selectedDay && st.allDone) streak++;
+                  else if (d < selectedDay && !st.allDone) streak = 0;
+                  if (isSameDay(d, selectedDay)) break;
+                }
+                return streak;
+              }, [weekDays, weekStatus, selectedDay])}
             />
           </div>
         )}
@@ -321,12 +363,19 @@ export default function Home() {
               const dk = formatYMD(d);
               const st = weekStatus[dk];
 
+              // Padlock for non-premium on Wed/Fri (visual cue only)
+              const wd = d.getDay();
+              const lockThisWorkoutDay = !isPremium && (wd === 3 || wd === 5);
+
               if (!st) {
                 return (
                   <div key={i} style={{ width: 44 }}>
                     {/* Weekday label: fontWeight 500 */}
                     <div style={{ fontSize: "0.8rem", opacity: 0.6, fontWeight: 500 }}>
                       {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
+                      {lockThisWorkoutDay && (
+                        <i className="fas fa-lock ms-1" style={{ opacity: 0.6, fontSize: "0.8rem" }} />
+                      )}
                     </div>
                     <div className="bxkr-day-pill" style={{ opacity: 0.5 }}>
                       <span style={{ fontWeight: 500 }}>{d.getDate()}</span>
@@ -343,6 +392,9 @@ export default function Home() {
                   {/* Weekday label: fontWeight 500 */}
                   <div style={{ fontSize: "0.8rem", color: "#fff", opacity: 0.85, marginBottom: 4, fontWeight: 500 }}>
                     {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
+                    {lockThisWorkoutDay && (
+                      <i className="fas fa-lock ms-1" style={{ opacity: 0.85, fontSize: "0.8rem" }} />
+                    )}
                   </div>
                   <div
                     className={`bxkr-day-pill ${st.allDone ? "completed" : ""}`}
@@ -373,6 +425,38 @@ export default function Home() {
               );
             })}
           </div>
+        )}
+
+        {/* ===== Lock notices (subtle, above Daily Tasks) ===== */}
+        {mounted && (
+          <>
+            {workoutLocked && (
+              <div
+                className="bxkr-chip mb-2"
+                style={{
+                  borderColor: "#ff8a2a",
+                  color: "#fff",
+                  boxShadow: "0 0 8px rgba(255,138,42,0.45)",
+                }}
+                aria-live="polite"
+              >
+                🔒 Wednesday & Friday workouts are Premium. Enter your Iron Acre code or start a free trial to unlock.
+              </div>
+            )}
+            {habitsLocked && (
+              <div
+                className="bxkr-chip mb-2"
+                style={{
+                  borderColor: "rgba(255,255,255,0.35)",
+                  color: "#fff",
+                  boxShadow: "0 0 6px rgba(255,255,255,0.25)",
+                }}
+                aria-live="polite"
+              >
+                🔒 Daily Habits are Premium. Unlock via Iron Acre code or free trial.
+              </div>
+            )}
+          </>
         )}
 
         {/* ===== Daily Tasks Card (selected day) ===== */}
