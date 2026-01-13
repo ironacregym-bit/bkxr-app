@@ -33,6 +33,9 @@ const ALLOWED_KEYS = new Set([
   // goals
   "goal_primary",    // "lose" | "tone" | "gain"
   "goal_intensity",  // "small" | "large" | "maint" | "lean"
+  // 🔐 premium access flags
+  "subscription_status", // "active" | "trialing" | "canceled" | etc. (string pass-through)
+  "membership_status",   // "gym_member" | "online" | "none" | etc.
 ]);
 
 interface ProfileResponse {
@@ -68,6 +71,10 @@ interface ProfileResponse {
   // onboarding extras
   equipment: { bodyweight?: boolean; kettlebell?: boolean; dumbbell?: boolean } | null;
   preferences: { boxing_focus?: boolean; kettlebell_focus?: boolean; schedule_days?: number } | null;
+
+  // 🔐 premium access flags
+  subscription_status: string | null;
+  membership_status: string | null;
 }
 
 function toIsoStringOrEmpty(value: any): string {
@@ -137,6 +144,10 @@ function buildProfileResponse(email: string, data: Record<string, any> = {}): Pr
     // onboarding extras
     equipment: data.equipment ?? null,
     preferences: data.preferences ?? null,
+
+    // 🔐 premium access flags (pass-through; string or null)
+    subscription_status: typeof data.subscription_status === "string" ? data.subscription_status : null,
+    membership_status: typeof data.membership_status === "string" ? data.membership_status : null,
   };
 }
 
@@ -152,7 +163,7 @@ function filterPatchBody(body: any): Record<string, any> {
 
     if (val === null || val === undefined) continue; // ⛔️ skip null/undefined to avoid wipes
 
-    // Normalise strings
+    // Normalise strings (lowercase for specific fields)
     if (typeof val === "string") {
       let v = val.trim();
       if (targetKey === "sex" || targetKey === "goal_primary" || targetKey === "goal_intensity") {
@@ -194,6 +205,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             goal_primary: null, goal_intensity: null,
             equipment: null, preferences: null, gym_id: null,
             location: "", role: null, created_at: "", last_login_at: "",
+            subscription_status: null, membership_status: null,
           })
         );
       }
