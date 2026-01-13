@@ -35,7 +35,15 @@ export default function DailyTasksCard({
 }: Props) {
   const isFriday = dayLabel.toLowerCase().startsWith("fri");
 
-  const rowStyle = (done: boolean, accent: string): React.CSSProperties => ({
+  // Lock detection driven purely by hrefs coming from the page
+  const workoutLocked = hrefs.workout === "#";
+  const habitsLocked = hrefs.habit === "#";
+
+  const rowStyle = (
+    done: boolean,
+    accent: string,
+    locked?: boolean
+  ): React.CSSProperties => ({
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
@@ -50,8 +58,9 @@ export default function DailyTasksCard({
     boxShadow: done
       ? "0 0 12px rgba(100,195,122,0.5)"
       : `0 0 10px ${accent}33`,
-    cursor: "pointer",
+    cursor: locked ? "not-allowed" : "pointer",
     transition: "transform .18s ease, box-shadow .18s ease",
+    opacity: locked ? 0.85 : 1,
   });
 
   const iconWrap: React.CSSProperties = {
@@ -66,7 +75,25 @@ export default function DailyTasksCard({
     fontWeight: 600,
   };
 
-  const onHover = (e: React.MouseEvent<HTMLDivElement>) => {
+  const premiumTag = (accent: string): JSX.Element => (
+    <span
+      style={{
+        marginLeft: 8,
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontSize: "0.7rem",
+        fontWeight: 700,
+        color: "#0a0a0c",
+        background: accent,
+        boxShadow: `0 0 8px ${accent}77`,
+      }}
+    >
+      Premium
+    </span>
+  );
+
+  const onHover = (e: React.MouseEvent<HTMLDivElement>, locked?: boolean) => {
+    if (locked) return;
     (e.currentTarget.style.transform as any) = "scale(1.02)";
     (e.currentTarget.style.boxShadow as any) = "0 0 18px rgba(255,138,42,0.6)";
   };
@@ -75,17 +102,37 @@ export default function DailyTasksCard({
     (e.currentTarget.style.boxShadow as any) = "";
   };
 
+  // Reusable row render helpers (to avoid repeating Link/# conditionals)
+  const RowWrapper: React.FC<{ href: string; locked?: boolean; children: React.ReactNode }> = ({
+    href,
+    locked,
+    children,
+  }) => {
+    if (locked || href === "#") {
+      return (
+        <div aria-disabled="true" role="button" tabIndex={-1}>
+          {children}
+        </div>
+      );
+    }
+    return (
+      <Link href={href}>
+        {children as any}
+      </Link>
+    );
+  };
+
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ fontWeight: 800, fontSize: "1.15rem", marginBottom: 12 }}>
         {dayLabel} Tasks
       </div>
 
-      {/* Nutrition */}
-      <Link href={hrefs.nutrition}>
+      {/* Nutrition (never locked) */}
+      <RowWrapper href={hrefs.nutrition}>
         <div
           style={rowStyle(nutritionLogged, "#4fa3a5")}
-          onMouseEnter={onHover}
+          onMouseEnter={(e) => onHover(e, false)}
           onMouseLeave={onLeave}
         >
           <span style={iconWrap}>
@@ -98,52 +145,68 @@ export default function DailyTasksCard({
               : "Not logged"}
           </span>
         </div>
-      </Link>
+      </RowWrapper>
 
-      {/* Workout */}
+      {/* Workout (locked on Wed/Fri for free → lock icon & Premium tag inline) */}
       {hasWorkout && (
-        <Link href={hrefs.workout}>
+        <RowWrapper href={hrefs.workout} locked={workoutLocked}>
           <div
-            style={rowStyle(workoutDone, "#5b7c99")}
-            onMouseEnter={onHover}
+            style={rowStyle(workoutDone, "#5b7c99", workoutLocked)}
+            onMouseEnter={(e) => onHover(e, workoutLocked)}
             onMouseLeave={onLeave}
+            aria-label={workoutLocked ? "Workout (Premium locked)" : "Workout"}
           >
             <span style={iconWrap}>
-              <i className="fas fa-dumbbell" style={{ color: "#5b7c99" }} />
+              {workoutLocked ? (
+                <i className="fas fa-lock" style={{ color: "#5b7c99" }} />
+              ) : (
+                <i className="fas fa-dumbbell" style={{ color: "#5b7c99" }} />
+              )}
               <span>Workout</span>
+              {workoutLocked && premiumTag("#5b7c99")}
             </span>
             <span style={valueStyle}>
               {workoutDone
-                ? `${workoutSummary?.calories || 0} kcal${workoutSummary?.duration ? ` · ${Math.round(workoutSummary.duration)} min` : ""}${workoutSummary?.weightUsed ? ` · ${workoutSummary.weightUsed}` : ""}`
+                ? `${workoutSummary?.calories || 0} kcal${
+                    workoutSummary?.duration ? ` · ${Math.round(workoutSummary.duration)} min` : ""
+                  }${workoutSummary?.weightUsed ? ` · ${workoutSummary.weightUsed}` : ""}`
+                : workoutLocked
+                ? "Locked"
                 : "Pending"}
             </span>
           </div>
-        </Link>
+        </RowWrapper>
       )}
 
-      {/* Habits */}
-      <Link href={hrefs.habit}>
+      {/* Habits (locked on free → lock icon & Premium tag inline) */}
+      <RowWrapper href={hrefs.habit} locked={habitsLocked}>
         <div
-          style={rowStyle(habitAllDone, "#9b6fa3")}
-          onMouseEnter={onHover}
+          style={rowStyle(habitAllDone, "#9b6fa3", habitsLocked)}
+          onMouseEnter={(e) => onHover(e, habitsLocked)}
           onMouseLeave={onLeave}
+          aria-label={habitsLocked ? "Daily Habit (Premium locked)" : "Daily Habit"}
         >
           <span style={iconWrap}>
-            <i className="fas fa-check-circle" style={{ color: "#9b6fa3" }} />
+            {habitsLocked ? (
+              <i className="fas fa-lock" style={{ color: "#9b6fa3" }} />
+            ) : (
+              <i className="fas fa-check-circle" style={{ color: "#9b6fa3" }} />
+            )}
             <span>Daily Habit</span>
+            {habitsLocked && premiumTag("#9b6fa3")}
           </span>
           <span style={valueStyle}>
-            {habitSummary ? `${habitSummary.completed}/${habitSummary.total} tasks` : "Not started"}
+            {habitSummary ? `${habitSummary.completed}/${habitSummary.total} tasks` : habitsLocked ? "Locked" : "Not started"}
           </span>
         </div>
-      </Link>
+      </RowWrapper>
 
-      {/* Weekly Check-In */}
+      {/* Weekly Check-In (unchanged; visible only on Fridays) */}
       {isFriday && (
-        <Link href={hrefs.checkin}>
+        <RowWrapper href={hrefs.checkin}>
           <div
             style={rowStyle(checkinComplete, "#c9a34e")}
-            onMouseEnter={onHover}
+            onMouseEnter={(e) => onHover(e, false)}
             onMouseLeave={onLeave}
           >
             <span style={iconWrap}>
@@ -164,7 +227,7 @@ export default function DailyTasksCard({
                 : "Not done"}
             </span>
           </div>
-        </Link>
+        </RowWrapper>
       )}
     </div>
   );
