@@ -199,11 +199,7 @@ export default function WorkoutHubPage() {
                 <div className="text-muted">No history yet</div>
               )}
 
-              <Link
-                href="/history"
-                className="btn btn-outline-light btn-sm mt-2"
-                style={{ borderRadius: 24 }}
-              >
+              <Link href="/history" className="btn btn-outline-light btn-sm mt-2" style={{ borderRadius: 24 }}>
                 View More
               </Link>
             </div>
@@ -258,18 +254,20 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
 
   const item = plannedItem || bookedItem || null;
 
-  // Render
+  // Error state: show CTAs to book or log
   if (plannedErr && bookedErr) {
     return (
       <div className="futuristic-card p-3 mt-2">
         <div className="d-flex align-items-center justify-content-between">
           <div>
             <div className="fw-semibold">Planned today</div>
-            <div className="small text-dim">Unable to load today’s plan. You can still browse or start a freestyle session.</div>
+            <div className="small text-dim">
+              Unable to load today’s plan. You can still book a class or log a freestyle session.
+            </div>
           </div>
           <div className="d-flex gap-2">
             <Link
-              href="/workouts"
+              href="/classes"
               className="btn btn-sm"
               style={{
                 borderRadius: 24,
@@ -278,10 +276,10 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
                 boxShadow: `0 0 14px ${ACCENT}66`,
               }}
             >
-              Browse Workouts
+              Book an in‑person session
             </Link>
             <Link href="/workouts/new?mode=freestyle" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
-              Start a freestyle session
+              Log a freestyle session
             </Link>
           </div>
         </div>
@@ -289,17 +287,18 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
     );
   }
 
+  // Nothing scheduled/planned: offer booking + freestyle logging
   if (!item) {
     return (
       <div className="futuristic-card p-3 mt-2">
         <div className="d-flex align-items-center justify-content-between">
           <div>
-            <div className="fw-semibold">No plan today</div>
-            <div className="small text-dim">It’s a good day for Upper Body — try “Heavy Bag Intervals”.</div>
+            <div className="fw-semibold">Nothing scheduled today</div>
+            <div className="small text-dim">Secure your spot or log your own training.</div>
           </div>
           <div className="d-flex gap-2">
             <Link
-              href="/workouts"
+              href="/classes"
               className="btn btn-sm"
               style={{
                 borderRadius: 24,
@@ -308,10 +307,10 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
                 boxShadow: `0 0 14px ${ACCENT}66`,
               }}
             >
-              Browse Workouts
+              Book an in‑person session
             </Link>
             <Link href="/workouts/new?mode=freestyle" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
-              Start a freestyle session
+              Log a freestyle session
             </Link>
           </div>
         </div>
@@ -319,18 +318,17 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
     );
   }
 
-  // Derive display fields safely
-  const name =
+  // Derive display fields safely for scheduled/ planned item
+  const name: string =
     item.name || item.title || item.workout_name || item.class_name || item.plan_name || "Workout";
-  const time =
+  const time: string | null =
     item.time ||
     item.start_time ||
     item.start ||
     item.starts_at ||
     item.session_time ||
     null;
-  const gym =
-    item.gym_name || item.location || item.gym || item.venue || null;
+  const gym: string | null = item.gym_name || item.location || item.gym || item.venue || null;
 
   return (
     <div className="futuristic-card p-3 mt-2">
@@ -394,7 +392,11 @@ function BenchmarksList({ email }: { email?: string | null }) {
         </div>
       ))}
       <div className="mt-2 d-flex gap-2">
-        <Link href="/benchmarks" className="btn btn-outline-light btn-sm" style={{ borderRadius: 24 }}>
+        <Link
+          href="/benchmarks"
+          className="btn btn-outline-light btn-sm"
+          style={{ borderRadius: 24 }}
+        >
           View
         </Link>
         <Link
