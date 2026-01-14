@@ -7,7 +7,8 @@ import { useSession } from "next-auth/react";
 import { getSession } from "next-auth/react";
 import type { GetServerSideProps, GetServerSidePropsContext } from "next";
 import useSWR from "swr";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/router";
 import BottomNav from "../components/BottomNav";
 import BxkrBanner from "../components/BxkrBanner";
 
@@ -23,7 +24,7 @@ export const getServerSideProps: GetServerSideProps = async (
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-// Helpers aligned with index.tsx
+// ---- Helpers aligned with your other pages ----
 function formatYMD(d: Date) {
   const n = new Date(d);
   n.setHours(0, 0, 0, 0);
@@ -68,7 +69,7 @@ async function compressImage(file: File, maxW = 1200, quality = 0.7): Promise<st
       URL.revokeObjectURL(blobUrl);
       resolve(dataUrl);
     };
-    img.onerror = (e) => {
+    img.onerror = () => {
       URL.revokeObjectURL(blobUrl);
       reject(new Error("Failed to load image"));
     };
@@ -96,27 +97,67 @@ type CheckInEntry = {
 
 export default function CheckInPage() {
   const { data: session } = useSession();
-  const today = new Date();
-  const thisFriday = useMemo(() => fridayOfWeek(today), [today]);
-  const thisFridayYMD = formatYMD(thisFriday);
+  const router = useRouter();
 
+  // --- Read ?date=YYYY-MM-DD (from Progress "Edit" link) ---
+  const urlDateParam = useMemo(() => {
+    if (!router.isReady) return null;
+    const raw = Array.isArray(router.query.date) ? router.query.date[0] : router.query.date;
+    return typeof raw === "string" ? raw : null;
+  }, [router.isReady, router.query.date]);
+
+  // Validate/parse date param; fallback to "today" if missing/invalid.
+  const selectedBaseDate = useMemo(() => {
+    if (urlDateParam && /^\d{4}-\d{2}-\d{2}$/.test(urlDateParam)) {
+      const d = new Date(urlDateParam + "T00:00:00");
+      if (!isNaN(d.getTime())) return d;
+    }
+    return new Date();
+  }, [urlDateParam]);
+
+  // Compute the Friday of the selected week (your schema key)
+  const selectedFriday = useMemo(() => fridayOfWeek(selectedBaseDate), [selectedBaseDate]);
+  const selectedFridayYMD = formatYMD(selectedFriday);
+
+  // Load the entry for the selected week
   const { data, mutate } = useSWR<{ entry?: CheckInEntry }>(
-    `/api/checkins/weekly?week=${encodeURIComponent(formatYMD(today))}`,
+    `/api/checkins/weekly?week=${encodeURIComponent(selectedFridayYMD)}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 30_000 }
   );
   const alreadySubmitted = !!data?.entry;
 
-  // Form state (maps to your check_ins fields)
+  // -------- Form state (maps to your check_ins fields) --------
   const [notes, setNotes] = useState("");
   const [weeklyGoalsAchieved, setWeeklyGoalsAchieved] = useState<boolean>(false);
   const [nextWeekGoals, setNextWeekGoals] = useState<string>("");
-  const [avgSleep, setAvgSleep] = useState<string>("7"); // string to match your sample
+  const [avgSleep, setAvgSleep] = useState<string>("7");
   const [bodyFatPct, setBodyFatPct] = useState<string>("");
   const [energyLevels, setEnergyLevels] = useState<string>("7");
   const [stressLevels, setStressLevels] = useState<string>("4");
   const [caloriesDiff, setCaloriesDiff] = useState<string>("6");
   const [weight, setWeight] = useState<string>("");
+
+  // Optional: prefill if there's an existing entry
+  useEffect(() => {
+    if (!data?.entry) return;
+    const e = data.entry;
+    setNotes(e.notes || "");
+    setWeeklyGoalsAchieved(Boolean(e.weekly_goals_achieved));
+    setNextWeekGoals(e.next_week_goals || "");
+    setAvgSleep(e.averge_hours_of_sleep || "7");
+    setBodyFatPct(e.body_fat_pct || "");
+    setEnergyLevels(e.energy_levels || "7");
+    setStressLevels(e.stress_levels || "4");
+    setCaloriesDiff(e.calories_difficulty || "6");
+    setWeight(
+      typeof e.weight === "number" && Number.isFinite(e.weight) ? String(e.weight) : ""
+    );
+    // photos are large; show but don't push into inputs unless user picks anew
+    if (e.progress_photo_front) setPhotoFront(e.progress_photo_front);
+    if (e.progress_photo_side) setPhotoSide(e.progress_photo_side);
+    if (e.progress_photo_back) setPhotoBack(e.progress_photo_back);
+  }, [data?.entry]);
 
   // Photos + refs for reset
   const [photoFront, setPhotoFront] = useState<string>("");
@@ -133,7 +174,7 @@ export default function CheckInPage() {
       if (slot === "front") setPhotoFront(dataUrl);
       if (slot === "side") setPhotoSide(dataUrl);
       if (slot === "back") setPhotoBack(dataUrl);
-    } catch (e) {
+    } catch {
       alert("Failed to process photo. Try a smaller image.");
     }
   }
@@ -174,7 +215,7 @@ export default function CheckInPage() {
 
     try {
       const res = await fetch(
-        `/api/checkins/weekly?week=${encodeURIComponent(formatYMD(today))}`,
+        `/api/checkins/weekly?week=${encodeURIComponent(selectedFridayYMD)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -187,19 +228,11 @@ export default function CheckInPage() {
         return;
       }
       mutate(); // refresh SWR cache
-      // reset form
-      setNotes("");
-      setWeeklyGoalsAchieved(false);
-      setNextWeekGoals("");
-      setAvgSleep("7");
-      setBodyFatPct("");
-      setEnergyLevels("7");
-      setStressLevels("4");
-      setCaloriesDiff("6");
-      setWeight("");
-      clearPhoto("front");
-      clearPhoto("side");
-      clearPhoto("back");
+
+      // If you want to keep values after save, remove the resets below
+      // reset form to what's saved in the backend
+      // (You could also leave current state; this ensures a clean slate)
+      // We'll re-prefill from GET due to the effect above.
     } catch (err) {
       console.error(err);
       alert("Network error submitting check-in");
@@ -236,7 +269,7 @@ export default function CheckInPage() {
             <div className="fw-semibold">{session?.user?.name || "Athlete"}</div>
           </div>
           <div className="text-end small" style={{ opacity: 0.85 }}>
-            Week’s Friday: <strong>{thisFridayYMD}</strong>
+            Week’s Friday: <strong>{selectedFridayYMD}</strong>
           </div>
         </div>
 
@@ -248,7 +281,7 @@ export default function CheckInPage() {
         {alreadySubmitted ? (
           <BxkrBanner
             title="All set"
-            message="Your weekly check‑in is already submitted for this week."
+            message={`Your weekly check‑in is already submitted for ${selectedFridayYMD}.`}
             href="#checkin-form"
             iconLeft="fas fa-clipboard-check"
             accentColor="#64c37a"
@@ -257,7 +290,7 @@ export default function CheckInPage() {
         ) : (
           <BxkrBanner
             title="Check‑in due"
-            message="Submit your weekly check‑in for this week."
+            message={`Submit your weekly check‑in for ${selectedFridayYMD}.`}
             href="#checkin-form"
             iconLeft="fas fa-clipboard-list"
             accentColor="#FF8A2A"
@@ -280,7 +313,11 @@ export default function CheckInPage() {
                   value={avgSleep}
                   onChange={(e) => setAvgSleep(e.target.value)}
                   placeholder="e.g., 7"
-                  style={{ background: "rgba(255,255,255,0.08)", color: "#fff", borderColor: "rgba(255,255,255,0.15)" }}
+                  style={{
+                    background: "rgba(255,255,255,0.08)",
+                    color: "#fff",
+                    borderColor: "rgba(255,255,255,0.15)",
+                  }}
                 />
               </div>
               <div className="col-12 col-md-6">
@@ -293,7 +330,11 @@ export default function CheckInPage() {
                   value={bodyFatPct}
                   onChange={(e) => setBodyFatPct(e.target.value)}
                   placeholder="e.g., 14.9"
-                  style={{ background: "rgba(255,255,255,0.08)", color: "#fff", borderColor: "rgba(255,255,255,0.15)" }}
+                  style={{
+                    background: "rgba(255,255,255,0.08)",
+                    color: "#fff",
+                    borderColor: "rgba(255,255,255,0.15)",
+                  }}
                 />
               </div>
 
@@ -346,7 +387,11 @@ export default function CheckInPage() {
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
                   placeholder="e.g., 75.4"
-                  style={{ background: "rgba(255,255,255,0.08)", color: "#fff", borderColor: "rgba(255,255,255,0.15)" }}
+                  style={{
+                    background: "rgba(255,255,255,0.08)",
+                    color: "#fff",
+                    borderColor: "rgba(255,255,255,0.15)",
+                  }}
                 />
               </div>
 
@@ -373,7 +418,11 @@ export default function CheckInPage() {
                   value={nextWeekGoals}
                   onChange={(e) => setNextWeekGoals(e.target.value)}
                   placeholder='e.g., "3 BXKR Workouts"'
-                  style={{ background: "rgba(255,255,255,0.08)", color: "#fff", borderColor: "rgba(255,255,255,0.15)" }}
+                  style={{
+                    background: "rgba(255,255,255,0.08)",
+                    color: "#fff",
+                    borderColor: "rgba(255,255,255,0.15)",
+                  }}
                 />
               </div>
             </div>
@@ -387,13 +436,20 @@ export default function CheckInPage() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="How did your week go? Anything notable?"
-                style={{ background: "rgba(255,255,255,0.08)", color: "#fff", borderColor: "rgba(255,255,255,0.15)" }}
+                style={{
+                  background: "rgba(255,255,255,0.08)",
+                  color: "#fff",
+                  borderColor: "rgba(255,255,255,0.15)",
+                }}
               />
             </div>
 
             {/* Progress Photos */}
             <div className="mt-3">
-              <div className="fw-bold mb-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", paddingBottom: 6 }}>
+              <div
+                className="fw-bold mb-2"
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", paddingBottom: 6 }}
+              >
                 Progress Photos
               </div>
 
@@ -418,7 +474,12 @@ export default function CheckInPage() {
                       onChange={(e) => onPickPhoto("front", e.target.files?.[0])}
                     />
                     {photoFront && (
-                      <button type="button" className="btn btn-outline-light btn-sm mt-2" style={{ borderRadius: 24 }} onClick={() => clearPhoto("front")}>
+                      <button
+                        type="button"
+                        className="btn btn-outline-light btn-sm mt-2"
+                        style={{ borderRadius: 24 }}
+                        onClick={() => clearPhoto("front")}
+                      >
                         Remove
                       </button>
                     )}
@@ -445,7 +506,12 @@ export default function CheckInPage() {
                       onChange={(e) => onPickPhoto("side", e.target.files?.[0])}
                     />
                     {photoSide && (
-                      <button type="button" className="btn btn-outline-light btn-sm mt-2" style={{ borderRadius: 24 }} onClick={() => clearPhoto("side")}>
+                      <button
+                        type="button"
+                        className="btn btn-outline-light btn-sm mt-2"
+                        style={{ borderRadius: 24 }}
+                        onClick={() => clearPhoto("side")}
+                      >
                         Remove
                       </button>
                     )}
@@ -472,7 +538,12 @@ export default function CheckInPage() {
                       onChange={(e) => onPickPhoto("back", e.target.files?.[0])}
                     />
                     {photoBack && (
-                      <button type="button" className="btn btn-outline-light btn-sm mt-2" style={{ borderRadius: 24 }} onClick={() => clearPhoto("back")}>
+                      <button
+                        type="button"
+                        className="btn btn-outline-light btn-sm mt-2"
+                        style={{ borderRadius: 24 }}
+                        onClick={() => clearPhoto("back")}
+                      >
                         Remove
                       </button>
                     )}
@@ -497,26 +568,60 @@ export default function CheckInPage() {
         {/* Previous submission snapshot (if any) */}
         {alreadySubmitted && data?.entry && (
           <div className="futuristic-card p-3 mt-3">
-            <div className="fw-bold mb-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", paddingBottom: 6 }}>
-              This week’s submission
+            <div
+              className="fw-bold mb-2"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", paddingBottom: 6 }}
+            >
+              Submission for {selectedFridayYMD}
             </div>
             <div className="row g-3">
-              <div className="col-12 col-md-3"><small className="text-muted">Sleep</small><div>{data.entry.averge_hours_of_sleep || "-"}</div></div>
-              <div className="col-12 col-md-3"><small className="text-muted">Body fat %</small><div>{data.entry.body_fat_pct || "-"}</div></div>
-              <div className="col-12 col-md-3"><small className="text-muted">Energy</small><div>{data.entry.energy_levels || "-"}</div></div>
-              <div className="col-12 col-md-3"><small className="text-muted">Stress</small><div>{data.entry.stress_levels || "-"}</div></div>
-              <div className="col-12 col-md-3"><small className="text-muted">Calories difficulty</small><div>{data.entry.calories_difficulty || "-"}</div></div>
-              <div className="col-12 col-md-3"><small className="text-muted">Weight (kg)</small><div>{data.entry.weight ?? "-"}</div></div>
-              <div className="col-12 col-md-6"><small className="text-muted">Goals achieved</small><div>{String(data.entry.weekly_goals_achieved ?? false)}</div></div>
-              <div className="col-12"><small className="text-muted">Next week goals</small><div>{data.entry.next_week_goals || "-"}</div></div>
-              <div className="col-12"><small className="text-muted">Notes</small><div>{data.entry.notes || "-"}</div></div>
+              <div className="col-12 col-md-3">
+                <small className="text-muted">Sleep</small>
+                <div>{data.entry.averge_hours_of_sleep || "-"}</div>
+              </div>
+              <div className="col-12 col-md-3">
+                <small className="text-muted">Body fat %</small>
+                <div>{data.entry.body_fat_pct || "-"}</div>
+              </div>
+              <div className="col-12 col-md-3">
+                <small className="text-muted">Energy</small>
+                <div>{data.entry.energy_levels || "-"}</div>
+              </div>
+              <div className="col-12 col-md-3">
+                <small className="text-muted">Stress</small>
+                <div>{data.entry.stress_levels || "-"}</div>
+              </div>
+              <div className="col-12 col-md-3">
+                <small className="text-muted">Calories difficulty</small>
+                <div>{data.entry.calories_difficulty || "-"}</div>
+              </div>
+              <div className="col-12 col-md-3">
+                <small className="text-muted">Weight (kg)</small>
+                <div>{data.entry.weight ?? "-"}</div>
+              </div>
+              <div className="col-12 col-md-6">
+                <small className="text-muted">Goals achieved</small>
+                <div>{String(data.entry.weekly_goals_achieved ?? false)}</div>
+              </div>
+              <div className="col-12">
+                <small className="text-muted">Next week goals</small>
+                <div>{data.entry.next_week_goals || "-"}</div>
+              </div>
+              <div className="col-12">
+                <small className="text-muted">Notes</small>
+                <div>{data.entry.notes || "-"}</div>
+              </div>
             </div>
             <div className="row g-3 mt-2">
               {data.entry.progress_photo_front && (
                 <div className="col-12 col-md-4">
                   <div className="glass-card p-2">
                     <div className="fw-semibold mb-2">Front</div>
-                    <img src={data.entry.progress_photo_front} alt="Front" style={{ width: "100%", height: "auto", borderRadius: 12 }} />
+                    <img
+                      src={data.entry.progress_photo_front}
+                      alt="Front"
+                      style={{ width: "100%", height: "auto", borderRadius: 12 }}
+                    />
                   </div>
                 </div>
               )}
@@ -524,7 +629,11 @@ export default function CheckInPage() {
                 <div className="col-12 col-md-4">
                   <div className="glass-card p-2">
                     <div className="fw-semibold mb-2">Side</div>
-                    <img src={data.entry.progress_photo_side} alt="Side" style={{ width: "100%", height: "auto", borderRadius: 12 }} />
+                    <img
+                      src={data.entry.progress_photo_side}
+                      alt="Side"
+                      style={{ width: "100%", height: "auto", borderRadius: 12 }}
+                    />
                   </div>
                 </div>
               )}
@@ -532,7 +641,11 @@ export default function CheckInPage() {
                 <div className="col-12 col-md-4">
                   <div className="glass-card p-2">
                     <div className="fw-semibold mb-2">Back</div>
-                    <img src={data.entry.progress_photo_back} alt="Back" style={{ width: "100%", height: "auto", borderRadius: 12 }} />
+                    <img
+                      src={data.entry.progress_photo_back}
+                      alt="Back"
+                      style={{ width: "100%", height: "auto", borderRadius: 12 }}
+                    />
                   </div>
                 </div>
               )}
