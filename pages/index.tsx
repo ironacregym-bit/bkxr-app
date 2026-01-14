@@ -12,12 +12,15 @@ import DailyTasksCard from "../components/DailyTasksCard";
 import WeeklyCircles from "../components/dashboard/WeeklyCircles";
 import NotificationsBanner from "../components/NotificationsBanner";
 
-export const getServerSideProps: GetServerSideProps = async (
-  context: GetServerSidePropsContext
-) => {
+
+export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getSession(context);
   if (!session) {
-    return { redirect: { destination: "/landing", permanent: false } };
+    // Optional: preserve the intended destination so we can return after sign-in
+    const callbackUrl = encodeURIComponent(context.resolvedUrl || "/");
+    return {
+      redirect: { destination: `/register?callbackUrl=${callbackUrl}`, permanent: false },
+    };
   }
   return { props: {} };
 };
