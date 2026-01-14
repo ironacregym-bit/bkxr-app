@@ -47,8 +47,6 @@ export default function WorkoutHubPage() {
   const { data: session } = useSession();
   const userEmail = session?.user?.email || null;
 
-  // Prefer: /api/completions/history?email=&limit=5
-  // Fallback: /api/completions/index?user_email&from&to (last 90 days)
   const todayKey = formatDateKeyLocal(new Date());
   const fromKey = formatDateKeyLocal(subDays(new Date(), 90));
 
@@ -56,14 +54,12 @@ export default function WorkoutHubPage() {
     ? `/api/completions/history?email=${encodeURIComponent(userEmail)}&limit=5`
     : null;
 
-  // try history first
   const { data: histPrimary, error: histPrimaryErr } = useSWR(historyUrl, fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     dedupingInterval: 30_000,
   });
 
-  // if history endpoint missing, try index range
   const useFallback = !!histPrimaryErr;
   const historyRangeUrl =
     userEmail && useFallback
@@ -78,7 +74,6 @@ export default function WorkoutHubPage() {
     dedupingInterval: 30_000,
   });
 
-  // Normalise whatever shape we get back
   const historyPreview = useMemo(() => {
     const src =
       histPrimary?.results ||
@@ -103,7 +98,6 @@ export default function WorkoutHubPage() {
         calories_burned: Number(c.calories_burned || 0),
         sets_completed: Number(c.sets_completed || 0),
         weight_completed_with: c.weight_completed_with ?? null,
-        // Try to read a workout name without changing schema
         workout_name:
           c.workout_name ??
           c.name ??
@@ -232,21 +226,18 @@ export default function WorkoutHubPage() {
 
 // ---- Header: Today’s Workout (UI-only; soft-fail) ----------------------------
 function TodaysWorkoutHeader({ email }: { email?: string | null }) {
-  // Try planned online workout for today
   const { data: planned, error: plannedErr } = useSWR(
     email ? `/api/workouts/planned/today?email=${encodeURIComponent(email)}` : null,
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
   );
 
-  // Try booked gym class for today
   const { data: booked, error: bookedErr } = useSWR(
     email ? `/api/classes/today?email=${encodeURIComponent(email)}` : null,
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
   );
 
-  // Pick the best available source (no schema changes)
   const plannedItem =
     planned?.result || planned?.item || planned?.workout || planned?.today || planned?.data || null;
   const bookedItem =
@@ -254,7 +245,7 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
 
   const item = plannedItem || bookedItem || null;
 
-  // Error state: show CTAs to book or log
+  // Error: suggest booking/logging
   if (plannedErr && bookedErr) {
     return (
       <div className="futuristic-card p-3 mt-2">
@@ -266,8 +257,8 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
             </div>
           </div>
           <div className="d-flex gap-2">
-            <Link
-              href="/classes"
+            <a
+              href="https://bkxr-app.vercel.app/schedule"
               className="btn btn-sm"
               style={{
                 borderRadius: 24,
@@ -277,8 +268,8 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
               }}
             >
               Book an in‑person session
-            </Link>
-            <Link href="/workouts/new?mode=freestyle" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
+            </a>
+            <Link href="/workouts/freestyle" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
               Log a freestyle session
             </Link>
           </div>
@@ -287,7 +278,7 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
     );
   }
 
-  // Nothing scheduled/planned: offer booking + freestyle logging
+  // Nothing scheduled/planned: booking + freestyle logging
   if (!item) {
     return (
       <div className="futuristic-card p-3 mt-2">
@@ -297,8 +288,8 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
             <div className="small text-dim">Secure your spot or log your own training.</div>
           </div>
           <div className="d-flex gap-2">
-            <Link
-              href="/classes"
+            <a
+              href="https://bkxr-app.vercel.app/schedule"
               className="btn btn-sm"
               style={{
                 borderRadius: 24,
@@ -308,8 +299,8 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
               }}
             >
               Book an in‑person session
-            </Link>
-            <Link href="/workouts/new?mode=freestyle" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
+            </a>
+            <Link href="/workouts/freestyle" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
               Log a freestyle session
             </Link>
           </div>
@@ -318,7 +309,7 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
     );
   }
 
-  // Derive display fields safely for scheduled/ planned item
+  // Render scheduled/planned item
   const name: string =
     item.name || item.title || item.workout_name || item.class_name || item.plan_name || "Workout";
   const time: string | null =
@@ -392,11 +383,7 @@ function BenchmarksList({ email }: { email?: string | null }) {
         </div>
       ))}
       <div className="mt-2 d-flex gap-2">
-        <Link
-          href="/benchmarks"
-          className="btn btn-outline-light btn-sm"
-          style={{ borderRadius: 24 }}
-        >
+        <Link href="/benchmarks" className="btn btn-outline-light btn-sm" style={{ borderRadius: 24 }}>
           View
         </Link>
         <Link
@@ -418,9 +405,6 @@ function BenchmarksList({ email }: { email?: string | null }) {
 
 // ---- Benchmark Graphs (weight & sets per kettlebell part) -------------------
 function BenchmarkGraphs({ email }: { email?: string | null }) {
-  // Expected endpoint: /api/benchmarks/series?email=...
-  // Shape expectation (flexible):
-  // [{ part: "Kettlebell Swing", date: "...", weight: 24, sets: 5 }, ...]
   const { data, error } = useSWR(
     email ? `/api/benchmarks/series?email=${encodeURIComponent(email)}` : null,
     fetcher,
@@ -430,7 +414,6 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
     }
   );
 
-  // Soft-fail messaging if endpoint not present
   if (error) {
     return (
       <div className="text-muted">
@@ -445,7 +428,6 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
     return <div className="text-muted">No benchmark history yet.</div>;
   }
 
-  // Group by kettlebell part (or exercise name fallback)
   const groups: Record<string, any[]> = {};
   for (const row of series) {
     const key =
@@ -461,7 +443,6 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
   return (
     <div>
       {Object.entries(groups).map(([part, rows]) => {
-        // sort by date ascending for a clean line
         const sorted = rows
           .map((r) => ({
             date:
@@ -515,7 +496,7 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
               yAxisID: "y1",
             },
           ],
-        };
+        } as const;
         const options = {
           responsive: true,
           plugins: {
