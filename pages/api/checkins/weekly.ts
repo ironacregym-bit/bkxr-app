@@ -2,7 +2,7 @@
 // /pages/api/checkins/weekly.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next"; // ✅ consistent import
 import { authOptions } from "../auth/[...nextauth]";
 import { hasRole } from "../../../lib/rbac";
 
@@ -39,7 +39,6 @@ const COLLECTION = "check_ins";
 // Basic server-side validation for image data URLs to avoid oversized docs
 function isValidImageDataUrl(s: unknown): s is string {
   if (typeof s !== "string") return false;
-  // Accept JPEG/PNG/WebP; add more types if needed
   return (
     s.startsWith("data:image/jpeg") ||
     s.startsWith("data:image/png") ||
@@ -50,7 +49,7 @@ function isValidImageDataUrl(s: unknown): s is string {
 const MAX_DATAURL_LEN = 900_000; // ~900 KB per photo (client compresses already)
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const session = await getServerSession(req, res, authOptions);
+  const session = await getServerSession(req, res, authOptions); // ✅
   if (!session) return res.status(401).json({ error: "Not signed in" });
   if (!hasRole(session, ["user", "gym", "admin"])) {
     return res.status(403).json({ error: "Forbidden" });
@@ -64,7 +63,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const weekQ = String(req.query.week || formatYMD(new Date()));
   if (!isYMD(weekQ)) return res.status(400).json({ error: "Invalid week format. Use YYYY-MM-DD." });
 
-  const weekDate = new Date(`${weekQ}T00:00:00Z`);
+  // ✅ Use local midnight to avoid DST/locale surprises
+  const weekDate = new Date(`${weekQ}T00:00:00`);
+  if (isNaN(weekDate.getTime())) return res.status(400).json({ error: "Invalid week date" });
+
   const friday = fridayOfWeek(weekDate);
   const fridayYMD = formatYMD(friday);
 
@@ -75,11 +77,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const snap = await docRef.get();
       if (!snap.exists) {
-        // index code expects { entry: null } when not found
-        return res.status(200).json({ entry: null, entries: [] });
+        return res.status(200).json({ entry: null, entries: [], fridayYMD, id: docId });
       }
       const data = snap.data() || {};
-      return res.status(200).json({ entry: data, entries: [data] });
+      return res.status(200).json({ entry: data, entries: [data], fridayYMD, id: docId });
     } catch (err: any) {
       console.error("GET check-in error:", err?.message || err);
       return res.status(500).json({ error: "Failed to read check-in" });
@@ -128,23 +129,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? String(body.progress_photo_back)
         : undefined;
 
+    // [Optional] explicit deletions
+    const clear_front = body.clear_photo_front === true;
+    const clear_side = body.clear_photo_side === true;
+    const clear_back = body.clear_photo_back === true;
+
     // Size guards (if too large, drop with a warning; client compresses already)
     if (progress_photo_front && progress_photo_front.length > MAX_DATAURL_LEN) {
-      console.warn(
-        `[checkins] front photo too large (${progress_photo_front.length}). Dropping.`
-      );
+      console.warn(`[checkins] front photo too large (${progress_photo_front.length}). Dropping.`);
       progress_photo_front = undefined;
     }
     if (progress_photo_side && progress_photo_side.length > MAX_DATAURL_LEN) {
-      console.warn(
-        `[checkins] side photo too large (${progress_photo_side.length}). Dropping.`
-      );
+      console.warn(`[checkins] side photo too large (${progress_photo_side.length}). Dropping.`);
       progress_photo_side = undefined;
     }
     if (progress_photo_back && progress_photo_back.length > MAX_DATAURL_LEN) {
-      console.warn(
-        `[checkins] back photo too large (${progress_photo_back.length}). Dropping.`
-      );
+      console.warn(`[checkins] back photo too large (${progress_photo_back.length}). Dropping.`);
       progress_photo_back = undefined;
     }
 
@@ -153,15 +153,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const snap = await tx.get(docRef);
         const base = snap.exists ? (snap.data() || {}) : {};
 
-        const next = {
+        const next: any = {
           ...base,
           id: docId,
           user_email: userEmail,
-          week_friday_date: friday, // stored as JS Date by client SDK
+          week_friday_date: friday, // Firestore Timestamp via client SDK
           week_friday_ymd: fridayYMD,
           updated_at: new Date(),
-
-          // Only include when provided to avoid clobbering previous values
           ...(averge_hours_of_sleep !== undefined && { averge_hours_of_sleep }),
           ...(body_fat_pct !== undefined && { body_fat_pct }),
           ...(energy_levels !== undefined && { energy_levels }),
@@ -171,24 +169,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ...(next_week_goals !== undefined && { next_week_goals }),
           ...(notes !== undefined && { notes }),
           ...(weight !== undefined && { weight }),
-
-          ...(progress_photo_front !== undefined && { progress_photo_front }),
-          ...(progress_photo_side !== undefined && { progress_photo_side }),
-          ...(progress_photo_back !== undefined && { progress_photo_back }),
         };
 
+        // Photos (set, keep, or explicitly clear)
+        if (progress_photo_front !== undefined) next.progress_photo_front = progress_photo_front;
+        if (progress_photo_side !== undefined)  next.progress_photo_side  = progress_photo_side;
+        if (progress_photo_back !== undefined)  next.progress_photo_back  = progress_photo_back;
+        if (clear_front) delete next.progress_photo_front;
+        if (clear_side)  delete next.progress_photo_side;
+        if (clear_back)  delete next.progress_photo_back;
+
         if (!snap.exists) {
-          (next as any).created_at = new Date();
-          (next as any).date_completed = new Date(); // compatibility with earlier reads
+          next.created_at = new Date();
+          next.date_completed = new Date(); // compatibility with earlier reads
         }
 
         tx.set(docRef, next, { merge: true });
       });
 
       const saved = (await docRef.get()).data() || null;
-      return res
-        .status(200)
-        .json({ ok: true, entry: saved, entries: saved ? [saved] : [] });
+      return res.status(200).json({ ok: true, entry: saved, entries: saved ? [saved] : [], fridayYMD, id: docId });
     } catch (err: any) {
       console.error("POST check-in error:", err?.message || err);
       return res.status(500).json({ error: "Failed to upsert check-in" });
