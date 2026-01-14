@@ -18,6 +18,9 @@ import {
   LinearScale,
   Tooltip,
   Legend,
+  type ChartData,
+  type ChartOptions,
+  type ChartDataset,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
@@ -47,6 +50,8 @@ export default function WorkoutHubPage() {
   const { data: session } = useSession();
   const userEmail = session?.user?.email || null;
 
+  // Prefer: /api/completions/history?email=&limit=5
+  // Fallback: /api/completions/index?user_email&from&to (last 90 days)
   const todayKey = formatDateKeyLocal(new Date());
   const fromKey = formatDateKeyLocal(subDays(new Date(), 90));
 
@@ -54,12 +59,14 @@ export default function WorkoutHubPage() {
     ? `/api/completions/history?email=${encodeURIComponent(userEmail)}&limit=5`
     : null;
 
+  // try history first
   const { data: histPrimary, error: histPrimaryErr } = useSWR(historyUrl, fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     dedupingInterval: 30_000,
   });
 
+  // if history endpoint missing, try index range
   const useFallback = !!histPrimaryErr;
   const historyRangeUrl =
     userEmail && useFallback
@@ -74,6 +81,7 @@ export default function WorkoutHubPage() {
     dedupingInterval: 30_000,
   });
 
+  // Normalise whatever shape we get back
   const historyPreview = useMemo(() => {
     const src =
       histPrimary?.results ||
@@ -98,6 +106,7 @@ export default function WorkoutHubPage() {
         calories_burned: Number(c.calories_burned || 0),
         sets_completed: Number(c.sets_completed || 0),
         weight_completed_with: c.weight_completed_with ?? null,
+        // Try to read a workout name without changing schema
         workout_name:
           c.workout_name ??
           c.name ??
@@ -159,10 +168,10 @@ export default function WorkoutHubPage() {
 
               {historyPreview.length ? (
                 historyPreview.map((c: any, idx: number) => {
-                  const dateText = new Date(c.completed_date).toLocaleDateString(
-                    undefined,
-                    { day: "numeric", month: "short" }
-                  );
+                  const dateText = new Date(c.completed_date).toLocaleDateString(undefined, {
+                    day: "numeric",
+                    month: "short",
+                  });
                   const nameText = c.workout_name || "Workout";
                   return (
                     <div key={idx} className="mb-2 d-flex justify-content-between">
@@ -193,7 +202,11 @@ export default function WorkoutHubPage() {
                 <div className="text-muted">No history yet</div>
               )}
 
-              <Link href="/history" className="btn btn-outline-light btn-sm mt-2" style={{ borderRadius: 24 }}>
+              <Link
+                href="/history"
+                className="btn btn-outline-light btn-sm mt-2"
+                style={{ borderRadius: 24 }}
+              >
                 View More
               </Link>
             </div>
@@ -226,12 +239,14 @@ export default function WorkoutHubPage() {
 
 // ---- Header: Today’s Workout (UI-only; soft-fail) ----------------------------
 function TodaysWorkoutHeader({ email }: { email?: string | null }) {
+  // Planned online workout for today (stub returns null unless you wire it)
   const { data: planned, error: plannedErr } = useSWR(
     email ? `/api/workouts/planned/today?email=${encodeURIComponent(email)}` : null,
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
   );
 
+  // Booked gym class for today
   const { data: booked, error: bookedErr } = useSWR(
     email ? `/api/classes/today?email=${encodeURIComponent(email)}` : null,
     fetcher,
@@ -259,6 +274,8 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
           <div className="d-flex gap-2">
             <a
               href="https://bkxr-app.vercel.app/schedule"
+              target="_blank"
+              rel="noopener noreferrer"
               className="btn btn-sm"
               style={{
                 borderRadius: 24,
@@ -290,6 +307,8 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
           <div className="d-flex gap-2">
             <a
               href="https://bkxr-app.vercel.app/schedule"
+              target="_blank"
+              rel="noopener noreferrer"
               className="btn btn-sm"
               style={{
                 borderRadius: 24,
@@ -313,12 +332,7 @@ function TodaysWorkoutHeader({ email }: { email?: string | null }) {
   const name: string =
     item.name || item.title || item.workout_name || item.class_name || item.plan_name || "Workout";
   const time: string | null =
-    item.time ||
-    item.start_time ||
-    item.start ||
-    item.starts_at ||
-    item.session_time ||
-    null;
+    item.time || item.start_time || item.start || item.starts_at || item.session_time || null;
   const gym: string | null = item.gym_name || item.location || item.gym || item.venue || null;
 
   return (
@@ -405,6 +419,9 @@ function BenchmarksList({ email }: { email?: string | null }) {
 
 // ---- Benchmark Graphs (weight & sets per kettlebell part) -------------------
 function BenchmarkGraphs({ email }: { email?: string | null }) {
+  // Expected endpoint: /api/benchmarks/series?email=...
+  // Shape expectation (flexible):
+  // [{ part: "Kettlebell Swing", date: "...", weight: 24, sets: 5 }, ...]
   const { data, error } = useSWR(
     email ? `/api/benchmarks/series?email=${encodeURIComponent(email)}` : null,
     fetcher,
@@ -414,6 +431,7 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
     }
   );
 
+  // Soft-fail messaging if endpoint not present
   if (error) {
     return (
       <div className="text-muted">
@@ -428,6 +446,7 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
     return <div className="text-muted">No benchmark history yet.</div>;
   }
 
+  // Group by kettlebell part (or exercise name fallback)
   const groups: Record<string, any[]> = {};
   for (const row of series) {
     const key =
@@ -443,6 +462,7 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
   return (
     <div>
       {Object.entries(groups).map(([part, rows]) => {
+        // sort by date ascending for a clean line
         const sorted = rows
           .map((r) => ({
             date:
@@ -475,7 +495,8 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
         const weightData = sorted.map((r) => (r.weight != null ? r.weight : 0));
         const setsData = sorted.map((r) => (r.sets != null ? r.sets : 0));
 
-        const dataCfg = {
+        // ---- Typed chart config (fix build error) ----
+        const dataCfg: ChartData<"line"> = {
           labels,
           datasets: [
             {
@@ -485,7 +506,7 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
               backgroundColor: "rgba(255,138,42,0.2)",
               tension: 0.3,
               pointRadius: 3,
-            },
+            } as ChartDataset<"line">,
             {
               label: "Sets",
               data: setsData,
@@ -494,14 +515,15 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
               tension: 0.3,
               pointRadius: 3,
               yAxisID: "y1",
-            },
+            } as ChartDataset<"line">,
           ],
-        } as const;
-        const options = {
+        };
+
+        const options: ChartOptions<"line"> = {
           responsive: true,
           plugins: {
             legend: { labels: { color: "#e9eef6" } },
-            tooltip: { mode: "index" as const, intersect: false },
+            tooltip: { mode: "index", intersect: false },
           },
           scales: {
             x: {
@@ -513,12 +535,12 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
               grid: { color: "rgba(255,255,255,0.08)" },
             },
             y1: {
-              position: "right" as const,
+              position: "right",
               ticks: { color: "#9fb0c3" },
               grid: { drawOnChartArea: false },
             },
           },
-        } as const;
+        };
 
         return (
           <div key={part} className="mb-3">
