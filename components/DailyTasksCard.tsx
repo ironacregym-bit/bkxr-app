@@ -4,18 +4,33 @@ import Link from "next/link";
 
 type Props = {
   dayLabel: string;
+
   nutritionSummary?: { calories: number; protein: number };
   nutritionLogged: boolean;
+
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
   hasWorkout: boolean;
   workoutDone: boolean;
+
   habitSummary?: { completed: number; total: number };
   habitAllDone: boolean;
+
   checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number };
   checkinComplete: boolean;
-  hrefs: { nutrition: string; workout: string; habit: string; checkin: string };
+
+  hrefs: {
+    nutrition: string;
+    workout: string;
+    habit: string;
+    checkin: string;
+    freestyle?: string;    // new optional
+  };
+
   userCalorieTarget?: number;
   userProteinTarget?: number;
+
+  freestyleLogged?: boolean; 
+  freestyleSummary?: { activity?: string; duration?: number; calories?: number };
 };
 
 export default function DailyTasksCard({
@@ -31,12 +46,13 @@ export default function DailyTasksCard({
   checkinComplete,
   hrefs,
   userCalorieTarget = 2000,
-  userProteinTarget = 150
+  userProteinTarget = 150,
+  freestyleLogged = false,
+  freestyleSummary
 }: Props) {
   const isFriday = dayLabel.toLowerCase().startsWith("fri");
 
-  // Lock detection driven purely by hrefs coming from the page
-  const workoutLocked = hrefs.workout === "#";
+  const workoutLocked = hrefs.workout === "#"; 
   const habitsLocked = hrefs.habit === "#";
 
   const rowStyle = (
@@ -92,17 +108,6 @@ export default function DailyTasksCard({
     </span>
   );
 
-  const onHover = (e: React.MouseEvent<HTMLDivElement>, locked?: boolean) => {
-    if (locked) return;
-    (e.currentTarget.style.transform as any) = "scale(1.02)";
-    (e.currentTarget.style.boxShadow as any) = "0 0 18px rgba(255,138,42,0.6)";
-  };
-  const onLeave = (e: React.MouseEvent<HTMLDivElement>) => {
-    (e.currentTarget.style.transform as any) = "scale(1)";
-    (e.currentTarget.style.boxShadow as any) = "";
-  };
-
-  // Reusable row render helpers (to avoid repeating Link/# conditionals)
   const RowWrapper: React.FC<{ href: string; locked?: boolean; children: React.ReactNode }> = ({
     href,
     locked,
@@ -115,12 +120,19 @@ export default function DailyTasksCard({
         </div>
       );
     }
-    return (
-      <Link href={href}>
-        {children as any}
-      </Link>
-    );
+    return <Link href={href}>{children as any}</Link>;
   };
+
+  const freestyleHref = hrefs.freestyle ?? "/workouts/freestyle";
+
+  const freestyleValue = (() => {
+    if (!freestyleLogged) return "Optional · Not logged";
+    const parts: string[] = [];
+    if (freestyleSummary?.calories) parts.push(`${freestyleSummary.calories} kcal`);
+    if (freestyleSummary?.duration) parts.push(`${freestyleSummary.duration} min`);
+    if (freestyleSummary?.activity) parts.push(freestyleSummary.activity);
+    return parts.join(" · ") || "Logged";
+  })();
 
   return (
     <div style={{ marginBottom: 20 }}>
@@ -128,13 +140,9 @@ export default function DailyTasksCard({
         {dayLabel} Tasks
       </div>
 
-      {/* Nutrition (never locked) */}
+      {/* Nutrition (always available) */}
       <RowWrapper href={hrefs.nutrition}>
-        <div
-          style={rowStyle(nutritionLogged, "#4fa3a5")}
-          onMouseEnter={(e) => onHover(e, false)}
-          onMouseLeave={onLeave}
-        >
+        <div style={rowStyle(nutritionLogged, "#4fa3a5")}>
           <span style={iconWrap}>
             <i className="fas fa-utensils" style={{ color: "#4fa3a5" }} />
             <span>Nutrition</span>
@@ -147,15 +155,10 @@ export default function DailyTasksCard({
         </div>
       </RowWrapper>
 
-      {/* Workout (locked on Wed/Fri for free → lock icon & Premium tag inline) */}
+      {/* Workout (premium-locked for some users) */}
       {hasWorkout && (
         <RowWrapper href={hrefs.workout} locked={workoutLocked}>
-          <div
-            style={rowStyle(workoutDone, "#5b7c99", workoutLocked)}
-            onMouseEnter={(e) => onHover(e, workoutLocked)}
-            onMouseLeave={onLeave}
-            aria-label={workoutLocked ? "Workout (Premium locked)" : "Workout"}
-          >
+          <div style={rowStyle(workoutDone, "#5b7c99", workoutLocked)}>
             <span style={iconWrap}>
               {workoutLocked ? (
                 <i className="fas fa-lock" style={{ color: "#5b7c99" }} />
@@ -178,14 +181,20 @@ export default function DailyTasksCard({
         </RowWrapper>
       )}
 
-      {/* Habits (locked on free → lock icon & Premium tag inline) */}
+      {/* Freestyle Session — OPTIONAL — never locked — never counts towards streak */}
+      <RowWrapper href={freestyleHref}>
+        <div style={rowStyle(freestyleLogged, "#ff7f32")}>
+          <span style={iconWrap}>
+            <i className="fas fa-stopwatch" style={{ color: "#ff7f32" }} />
+            <span>Freestyle Session</span>
+          </span>
+          <span style={valueStyle}>{freestyleValue}</span>
+        </div>
+      </RowWrapper>
+
+      {/* Habits */}
       <RowWrapper href={hrefs.habit} locked={habitsLocked}>
-        <div
-          style={rowStyle(habitAllDone, "#9b6fa3", habitsLocked)}
-          onMouseEnter={(e) => onHover(e, habitsLocked)}
-          onMouseLeave={onLeave}
-          aria-label={habitsLocked ? "Daily Habit (Premium locked)" : "Daily Habit"}
-        >
+        <div style={rowStyle(habitAllDone, "#9b6fa3", habitsLocked)}>
           <span style={iconWrap}>
             {habitsLocked ? (
               <i className="fas fa-lock" style={{ color: "#9b6fa3" }} />
@@ -196,22 +205,22 @@ export default function DailyTasksCard({
             {habitsLocked && premiumTag("#9b6fa3")}
           </span>
           <span style={valueStyle}>
-            {habitSummary ? `${habitSummary.completed}/${habitSummary.total} tasks` : habitsLocked ? "Locked" : "Not started"}
+            {habitSummary
+              ? `${habitSummary.completed}/${habitSummary.total} tasks`
+              : habitsLocked
+              ? "Locked"
+              : "Not started"}
           </span>
         </div>
       </RowWrapper>
 
-      {/* Weekly Check-In (unchanged; visible only on Fridays) */}
+      {/* Weekly Check‑In */}
       {isFriday && (
         <RowWrapper href={hrefs.checkin}>
-          <div
-            style={rowStyle(checkinComplete, "#c9a34e")}
-            onMouseEnter={(e) => onHover(e, false)}
-            onMouseLeave={onLeave}
-          >
+          <div style={rowStyle(checkinComplete, "#c9a34e")}>
             <span style={iconWrap}>
               <i className="fas fa-clipboard-list" style={{ color: "#c9a34e" }} />
-              <span>Check-In</span>
+              <span>Check‑In</span>
             </span>
             <span style={valueStyle}>
               {checkinSummary
