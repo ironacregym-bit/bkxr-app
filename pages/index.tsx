@@ -56,6 +56,14 @@ function startOfAlignedWeek(d: Date) {
   s.setHours(0, 0, 0, 0);
   return s;
 }
+// NEW: compute the Friday for a given date (Mon-based week)
+function fridayOfWeek(d: Date) {
+  const s = startOfAlignedWeek(d);
+  const f = new Date(s);
+  f.setDate(s.getDate() + 4);
+  f.setHours(0, 0, 0, 0);
+  return f;
+}
 
 /** Day payload from /api/weekly/overview */
 type ApiDay = {
@@ -238,7 +246,10 @@ export default function Home() {
   const workoutHrefBase = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
   const nutritionHref = `/nutrition?date=${selectedDateKey}`;
   const habitHrefBase = `/habit?date=${selectedDateKey}`;
-  const checkinHref = `/checkin`;
+
+  // NEW: deep-link check-in to the specific Friday for the selected day
+  const selectedFridayYMD = formatYMD(fridayOfWeek(selectedDay));
+  const checkinHref = `/checkin?date=${encodeURIComponent(selectedFridayYMD)}`;
 
   // Premium gating (logic only; no pills/padlocks here)
   const isPremium = Boolean(
@@ -264,9 +275,9 @@ export default function Home() {
     const params = new URLSearchParams();
     params.set("from", selectedDateKey);
     params.set("to", selectedDateKey);
-    // Include user email if your API supports it (harmless if ignored)
     if (session?.user?.email) params.set("user_email", session.user.email);
-    return `/api/completions/index?${params.toString()}`;
+    // FIXED: unified route path is /api/completions (not /api/completions/index)
+    return `/api/completions?${params.toString()}`;
   }, [mounted, selectedDateKey, session?.user?.email]);
 
   const { data: dayCompletions } = useSWR<{ results?: Completion[]; items?: Completion[]; completions?: Completion[]; data?: Completion[] }>(
@@ -506,10 +517,10 @@ export default function Home() {
               nutrition: nutritionHref,
               workout: workoutHref,
               habit: habitHref,
-              checkin: checkinHref,
-              freestyle: "/workouts/freestyle", // NEW: explicit freestyle route
+              checkin: checkinHref,              // <-- deep link to specific Friday
+              freestyle: "/workouts/freestyle",  // optional task
             }}
-            // NEW: freestyle (optional) props
+            // Freestyle (optional) props
             freestyleLogged={freestyleLogged}
             freestyleSummary={freestyleSummary}
           />
