@@ -5,8 +5,9 @@ import Head from "next/head";
 import Link from "next/link";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import BottomNav from "../components/BottomNav";
+import ExerciseLibrary from "../components/train/ExerciseLibrary";
 
 // Charts
 import {
@@ -198,7 +199,11 @@ export default function WorkoutHubPage() {
                 <div className="text-muted">No history yet</div>
               )}
 
-              <Link href="/history" className="btn btn-outline-light btn-sm mt-2" style={{ borderRadius: 24 }}>
+              <Link
+                href="/history"
+                className="btn btn-outline-light btn-sm mt-2"
+                style={{ borderRadius: 24 }}
+              >
                 View More
               </Link>
             </div>
@@ -220,7 +225,7 @@ export default function WorkoutHubPage() {
           </div>
         </section>
 
-        {/* Exercise Library with filters */}
+        {/* Exercise Library with filters (external component) */}
         <ExerciseLibrary />
       </main>
 
@@ -530,7 +535,7 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
               grid: { drawOnChartArea: false },
             },
           },
-        };
+        } as const;
 
         return (
           <div key={part} className="mb-3">
@@ -542,89 +547,5 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
         );
       })}
     </div>
-  );
-}
-
-// ---- Exercise Library with filters -----------------------------------------
-function ExerciseLibrary() {
-  // Tabs used to filter Types per your schema (no schema changes)
-  const TYPES = ["All", "Boxing", "Kettlebell", "Warm up", "Mobility", "Weights", "Bodyweight"] as const;
-  const [activeType, setActiveType] = useState<(typeof TYPES)[number]>("All");
-
-  const url =
-    activeType === "All"
-      ? "/api/exercises"
-      : `/api/exercises?type=${encodeURIComponent(activeType)}`;
-
-  const { data, error, isLoading } = useSWR(url, fetcher, {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-  });
-
-  const items = Array.isArray(data?.results || data?.items || data?.exercises)
-    ? (data.results || data.items || data.exercises)
-    : [];
-
-  return (
-    <section className="futuristic-card p-3" style={{ marginTop: 4 }}>
-      <div className="d-flex justify-content-between align-items-center">
-        <h6 className="m-0" style={{ fontWeight: 700 }}>
-          Exercise Library
-        </h6>
-        <Link href="/exercises" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
-          Browse
-        </Link>
-      </div>
-
-      {/* Filter chips */}
-      <div className="d-flex flex-wrap gap-2 mt-3">
-        {TYPES.map((t) => (
-          <button
-            key={t}
-            className="bxkr-chip"
-            onClick={() => setActiveType(t)}
-            style={{
-              borderColor: activeType === t ? ACCENT : "rgba(255,255,255,0.12)",
-              color: activeType === t ? ACCENT : "#e9eef6",
-            }}
-            aria-pressed={activeType === t}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {/* List */}
-      <div className="mt-3">
-        {isLoading && <div className="text-muted">Loading exercises…</div>}
-        {error && <div className="text-danger">Failed to load exercises.</div>}
-        {!isLoading && !error && items.length === 0 && (
-          <div className="text-muted">No exercises found for {activeType}.</div>
-        )}
-
-        {items.slice(0, 6).map((ex: any) => {
-          const exId = ex.id ?? ex.exercise_id ?? ex.Name;
-          const exName = ex.name ?? ex.Name ?? "Exercise";
-          const exType = ex.type ?? ex.Type ?? "Uncategorised";
-          return (
-            <Link
-              key={exId}
-              href={`/exercises/${encodeURIComponent(exId)}`}
-              className="text-decoration-none"
-              style={{ color: "inherit" }}
-              aria-label={`Open ${exName}`}
-            >
-              <div className="futuristic-card p-3 mb-2 d-flex align-items-center justify-content-between">
-                <div>
-                  <div className="fw-semibold">{exName}</div>
-                  <div className="small text-dim">{exType}</div>
-                </div>
-                <i className="fas fa-chevron-right text-dim" />
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-    </section>
   );
 }
