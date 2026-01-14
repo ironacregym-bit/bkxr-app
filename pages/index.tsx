@@ -38,6 +38,7 @@ function getWeek(): Date[] {
   });
 }
 function formatYMD(d: Date) {
+  // en-CA gives YYYY-MM-DD
   return d.toLocaleDateString("en-CA");
 }
 function isSameDay(a: Date, b: Date) {
@@ -88,6 +89,15 @@ type DayStatus = {
 type UserAccess = {
   subscription_status?: string | null;
   membership_status?: string | null;
+};
+
+/** Minimal completion shape for freestyle detection */
+type Completion = {
+  is_freestyle?: boolean;
+  activity_type?: string | null;
+  duration_minutes?: number | null;
+  calories_burned?: number | null;
+  completed_date?: string | { toDate?: () => Date };
 };
 
 export default function Home() {
@@ -146,6 +156,7 @@ export default function Home() {
       (o.habitSummary ? o.habitSummary.completed >= o.habitSummary.total && o.habitSummary.total > 0 : false);
     const checkinComplete = Boolean(o.checkinComplete) || Boolean(o.checkinSummary);
 
+    // NOTE: Freestyle is optional and does NOT contribute to 'allDone'
     const allDone =
       (!hasWorkout || workoutDone) &&
       nutritionLogged &&
@@ -177,7 +188,7 @@ export default function Home() {
     setWeekLoading(false);
   }, [weeklyOverview]);
 
-  // Weekly totals
+  // Weekly totals (freestyle still intentionally ignored)
   const derivedWeeklyTotals = useMemo(() => {
     const days = (weeklyOverview?.days as any[]) || [];
     let totalTasks = 0;
@@ -246,12 +257,74 @@ export default function Home() {
   const workoutHref = workoutLocked ? "#" : workoutHrefBase;
   const habitHref = habitsLocked ? "#" : habitHrefBase;
 
+  // ---- Freestyle detection (optional task; does not affect streak/allDone) ----
+  // We fetch completions for the selected day and derive freestyle info.
+  const completionsKey = useMemo(() => {
+    if (!mounted) return null;
+    const params = new URLSearchParams();
+    params.set("from", selectedDateKey);
+    params.set("to", selectedDateKey);
+    // Include user email if your API supports it (harmless if ignored)
+    if (session?.user?.email) params.set("user_email", session.user.email);
+    return `/api/completions/index?${params.toString()}`;
+  }, [mounted, selectedDateKey, session?.user?.email]);
+
+  const { data: dayCompletions } = useSWR<{ results?: Completion[]; items?: Completion[]; completions?: Completion[]; data?: Completion[] }>(
+    completionsKey,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
+
+  // Extract freestyle entries for the selected day (if any)
+  const { freestyleLogged, freestyleSummary } = useMemo(() => {
+    const src =
+      dayCompletions?.results ||
+      dayCompletions?.items ||
+      dayCompletions?.completions ||
+      dayCompletions?.data ||
+      [];
+    const arr: Completion[] = Array.isArray(src) ? src : [];
+
+    // Filter to is_freestyle === true and completed_date matching the day (defensive normalisation)
+    const sameDay = (v: any) => {
+      try {
+        const dt =
+          v?.toDate?.() instanceof Date ? v.toDate() :
+          v ? new Date(v) : null;
+        if (!dt || isNaN(dt.getTime())) return false;
+        return formatYMD(dt) === selectedDateKey;
+      } catch {
+        return false;
+      }
+    };
+
+    const freestyle = arr.filter((c) => c?.is_freestyle === true && sameDay(c.completed_date));
+    if (!freestyle.length) {
+      return { freestyleLogged: false, freestyleSummary: undefined as undefined | { activity?: string; duration?: number; calories?: number } };
+    }
+
+    // Summarise: total duration & calories for the day; last activity label for flavour
+    const totalCalories = freestyle.reduce((sum, c) => sum + (Number(c.calories_burned) || 0), 0);
+    const totalDuration = freestyle.reduce((sum, c) => sum + (Number(c.duration_minutes) || 0), 0);
+    const lastActivity = freestyle[freestyle.length - 1]?.activity_type || undefined;
+
+    return {
+      freestyleLogged: true,
+      freestyleSummary: {
+        activity: typeof lastActivity === "string" ? lastActivity : undefined,
+        duration: totalDuration || undefined,
+        calories: totalCalories || undefined,
+      },
+    };
+  }, [dayCompletions, selectedDateKey]);
+
   // Header accents
   const accentMicro = "#ff8a2a";
   const showLoadingBar = status === "loading" || !mounted;
 
   // Top-level memos for WeeklyCircles (avoid conditional hooks)
   const dayStreak = useMemo(() => {
+    // NOTE: streak logic intentionally ignores freestyle (optional)
     let streak = 0;
     for (const d of weekDays) {
       const st = weekStatus[formatYMD(d)];
@@ -434,7 +507,11 @@ export default function Home() {
               workout: workoutHref,
               habit: habitHref,
               checkin: checkinHref,
+              freestyle: "/workouts/freestyle", // NEW: explicit freestyle route
             }}
+            // NEW: freestyle (optional) props
+            freestyleLogged={freestyleLogged}
+            freestyleSummary={freestyleSummary}
           />
         )}
 
