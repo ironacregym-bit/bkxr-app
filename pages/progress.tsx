@@ -5,6 +5,7 @@
 import Head from "next/head";
 import Link from "next/link";
 import useSWR from "swr";
+import useSWRInfinite from "swr/infinite";
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
@@ -31,7 +32,7 @@ const fetcher = (u: string) => fetch(u).then((r) => {
   return r.json();
 });
 
-// ---- Helpers
+// ---- Helpers ---------------------------------------------------------------
 const ACCENT = "#FF8A2A";
 const fmtYMD = (d: Date) => d.toISOString().slice(0, 10);
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
@@ -42,7 +43,7 @@ const toISO = (v: any) => {
   } catch { return null; }
 };
 
-// ---- Shapes
+// ---- Shapes ---------------------------------------------------------------
 type Completion = {
   id?: string;
   user_email?: string | null;
@@ -72,7 +73,7 @@ type CompletionsIndexResp = {
 type CheckinRow = { date: string; weight_kg: number | null; body_fat_pct: number | null; photo_url?: string | null };
 type CheckinsSeriesResp = { results: CheckinRow[] };
 
-// ---- Page
+// ---- Page -----------------------------------------------------------------
 export default function ProgressPage() {
   const { data: session } = useSession();
   const [mounted, setMounted] = useState(false);
@@ -80,23 +81,43 @@ export default function ProgressPage() {
 
   const email = session?.user?.email || null;
 
-  // Window for stats
-  const now = new Date();
-  const fromDate = addDays(new Date(now), -90);
-  const fromKey = fmtYMD(fromDate);
-  const toKey = fmtYMD(now);
+  // -------- All‑time completions (paged) -----------------------------------
+  // We pull all pages (up to a high cap) and build "all‑time" stats + charts.
+  const PAGE_LIMIT = 500;
+  const getKey = (pageIndex: number, previousPageData: CompletionsIndexResp | null) => {
+    if (!mounted || !email) return null;
+    if (previousPageData && !previousPageData.nextCursor) return null; // end
+    const params = new URLSearchParams();
+    params.set("user_email", email);
+    params.set("limit", String(PAGE_LIMIT));
+    if (pageIndex > 0 && previousPageData?.nextCursor) {
+      params.set("cursor", previousPageData.nextCursor);
+    }
+    // NOTE: unified route is /api/completions (NOT /api/completions/index)
+    return `/api/completions?${params.toString()}`;
+  };
 
-  // Completions (90d) via your single endpoint
-  const completionsKey = mounted && email
-    ? `/api/completions/index?from=${encodeURIComponent(fromKey)}&to=${encodeURIComponent(toKey)}&user_email=${encodeURIComponent(email)}&limit=500`
-    : null;
-
-  const { data: compsData } = useSWR<CompletionsIndexResp>(completionsKey, fetcher, {
+  const {
+    data: pages,
+    error: compsErr,
+    isValidating: compsLoading,
+  } = useSWRInfinite<CompletionsIndexResp>(getKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
+    // Optional cap to prevent runaway paging; increase if needed
+    // initialSize: 4, // ~2000 rows
   });
 
-  // Check-ins (optional). If this API isn’t present, we soft-fail in UI
+  const allCompletions: Completion[] = useMemo(() => {
+    const flatten: Completion[] = [];
+    for (const p of pages || []) {
+      const src = p?.results || p?.items || p?.completions || p?.data || [];
+      if (Array.isArray(src)) flatten.push(...src);
+    }
+    return flatten;
+  }, [pages]);
+
+  // -------- Check‑ins series (optional) ------------------------------------
   const checkinsKey = mounted && email
     ? `/api/checkins/series?email=${encodeURIComponent(email)}&limit=180`
     : null;
@@ -107,21 +128,22 @@ export default function ProgressPage() {
     shouldRetryOnError: false,
   });
 
-  // Normalised completions source
-  const comps: Completion[] = useMemo(() => {
-    const src = compsData?.results || compsData?.items || compsData?.completions || compsData?.data || [];
-    return Array.isArray(src) ? src : [];
-  }, [compsData]);
+  const latestCheckin = useMemo<CheckinRow | null>(() => {
+    const arr = checkins?.results || [];
+    return arr.length ? arr[0] : null; // series API returns newest-first
+    // (Charts below reverse to ascending for Chart.js)
+  }, [checkins]);
 
-  // Aggregate daily calories and sessions
-  const daily = useMemo(() => {
-    const map: Record<string, { calories: number; sessions: number }> = {};
-    const daySet = new Set<string>();
+  // -------- All‑time aggregates from completions ---------------------------
+  const { dailySeriesAsc, kpis, topLoads } = useMemo(() => {
+    // Build daily totals (calories, sessions) across ALL completions
+    const dailyMap = new Map<string, { calories: number; sessions: number }>();
+    const dayKeysSet = new Set<string>();
+    const loads: { weight_kg: number; when: string }[] = [];
     let totalCalories = 0;
     let totalSessions = 0;
-    const loads: { weight_kg: number; when: string }[] = [];
 
-    for (const c of comps) {
+    for (const c of allCompletions) {
       const iso =
         toISO((c as any).completed_date) ||
         toISO((c as any).started_at) ||
@@ -130,13 +152,16 @@ export default function ProgressPage() {
 
       const key = iso.slice(0, 10);
       const cal = Number(c.calories_burned) || 0;
-      totalCalories += cal; totalSessions += 1; daySet.add(key);
+      totalCalories += cal;
+      totalSessions += 1;
+      dayKeysSet.add(key);
 
-      if (!map[key]) map[key] = { calories: 0, sessions: 0 };
-      map[key].calories += cal;
-      map[key].sessions += 1;
+      const entry = dailyMap.get(key) || { calories: 0, sessions: 0 };
+      entry.calories += cal;
+      entry.sessions += 1;
+      dailyMap.set(key, entry);
 
-      // Heaviest weights from both aggregate and benchmark parts
+      // Heaviest loads (agg + benchmark parts)
       const aggW = Number(c.weight_completed_with);
       if (Number.isFinite(aggW) && aggW > 0) loads.push({ weight_kg: aggW, when: iso });
       if (c.benchmark_metrics && typeof c.benchmark_metrics === "object") {
@@ -147,49 +172,98 @@ export default function ProgressPage() {
       }
     }
 
-    // Current streak: consecutive days up to today that appear in daySet
+    // Current streak: consecutive workout days up to today
+    const today = new Date();
     let currentStreak = 0;
-    for (let i = 0; i < 365; i++) {
-      const d = addDays(new Date(now), -i);
+    for (let i = 0; i < 3650; i++) { // up to ~10 years
+      const d = addDays(new Date(today), -i);
       const k = fmtYMD(d);
-      if (daySet.has(k)) currentStreak++;
+      if (dayKeysSet.has(k)) currentStreak++;
       else break;
     }
 
-    // Max streak in window
-    let maxStreak = 0, run = 0;
-    for (let i = 90; i >= 0; i--) {
-      const d = addDays(new Date(now), -i);
-      const k = fmtYMD(d);
-      if (daySet.has(k)) { run++; maxStreak = Math.max(maxStreak, run); } else run = 0;
+    // Max streak across history
+    const sortedDayKeysAsc = Array.from(dayKeysSet).sort((a, b) => a.localeCompare(b));
+    let maxStreak = 0;
+    let run = 0;
+    let prev: string | null = null;
+    for (const k of sortedDayKeysAsc) {
+      if (!prev) {
+        run = 1; prev = k; maxStreak = Math.max(maxStreak, run);
+        continue;
+      }
+      const prevDate = new Date(prev);
+      const thisDate = new Date(k);
+      const diffDays = Math.round((+thisDate - +prevDate) / (1000 * 60 * 60 * 24));
+      if (diffDays === 1) {
+        run++;
+      } else {
+        run = 1;
+      }
+      prev = k;
+      maxStreak = Math.max(maxStreak, run);
     }
 
-    const series = Object.entries(map)
+    // Sorted daily series (ascending) for Chart.js
+    let seriesAsc = Array.from(dailyMap.entries())
       .map(([dateKey, v]) => ({ dateKey, ...v }))
       .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+
+    // Auto‑compress to weekly if too many points for mobile smoothness
+    const MAX_POINTS = 180;
+    if (seriesAsc.length > MAX_POINTS) {
+      // Simple ISO week grouping (Mon-based): YYYY-Www
+      const toWeekKey = (ymd: string) => {
+        const d = new Date(ymd + "T00:00:00");
+        // ISO week: Thursday trick
+        const day = (d.getDay() + 6) % 7; // 0..6 (Mon..Sun)
+        const thursday = addDays(d, 3 - day);
+        const year = thursday.getFullYear();
+        const oneJan = new Date(year, 0, 1);
+        const week = Math.round((+thursday - +oneJan) / (7 * 24 * 3600 * 1000)) + 1;
+        const ww = String(week).padStart(2, "0");
+        return `${year}-W${ww}`;
+      };
+
+      const wkMap = new Map<string, { calories: number; sessions: number; lastDate: string }>();
+      for (const s of seriesAsc) {
+        const wk = toWeekKey(s.dateKey);
+        const e = wkMap.get(wk) || { calories: 0, sessions: 0, lastDate: s.dateKey };
+        e.calories += s.calories;
+        e.sessions += s.sessions;
+        // track last date in week to keep roughly chronological spacing
+        if (s.dateKey > e.lastDate) e.lastDate = s.dateKey;
+        wkMap.set(wk, e);
+      }
+      seriesAsc = Array.from(wkMap.entries())
+        .map(([wk, v]) => ({ dateKey: v.lastDate, calories: v.calories, sessions: v.sessions }))
+        .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+    }
 
     const topLoads = loads.sort((a, b) => b.weight_kg - a.weight_kg).slice(0, 5);
 
     return {
-      series,
-      totals: { sessions: totalSessions, calories: totalCalories },
-      currentStreak,
-      maxStreak,
+      dailySeriesAsc: seriesAsc,
+      kpis: {
+        sessions: totalSessions,
+        calories: totalCalories,
+        currentStreak,
+        maxStreak,
+      },
       topLoads,
     };
-  }, [comps, now]);
+  }, [allCompletions]);
 
-  // Latest check-in (newest first expected from /checkins/series)
-  const latestCheckin = useMemo<CheckinRow | null>(() => {
-    const arr = checkins?.results || [];
-    return arr.length ? arr[0] : null;
-  }, [checkins]);
-
-  // ---- Charts (typed to avoid readonly dataset build errors)
+  // -------- Charts (typed to avoid readonly dataset build errors) ----------
+  // Weight & Body Fat charts only plot check-in data. X-axis naturally ends at the latest check-in.
   const weightChart = useMemo(() => {
-    const src = (checkins?.results || []).slice().reverse(); // ascend
+    if (checkinsErr) {
+      return null;
+    }
+    const src = (checkins?.results || []).slice().reverse(); // ascending
     const labels = src.map(r => new Date(r.date).toLocaleDateString(undefined, { day: "numeric", month: "short" }));
     const data = src.map(r => (typeof r.weight_kg === "number" ? r.weight_kg : null));
+
     const chartData: ChartData<"line"> = {
       labels,
       datasets: [
@@ -212,12 +286,16 @@ export default function ProgressPage() {
       },
     };
     return { chartData, options };
-  }, [checkins]);
+  }, [checkins, checkinsErr]);
 
   const bodyFatChart = useMemo(() => {
-    const src = (checkins?.results || []).slice().reverse();
+    if (checkinsErr) {
+      return null;
+    }
+    const src = (checkins?.results || []).slice().reverse(); // ascending
     const labels = src.map(r => new Date(r.date).toLocaleDateString(undefined, { day: "numeric", month: "short" }));
     const data = src.map(r => (typeof r.body_fat_pct === "number" ? r.body_fat_pct : null));
+
     const chartData: ChartData<"line"> = {
       labels,
       datasets: [
@@ -240,17 +318,19 @@ export default function ProgressPage() {
       },
     };
     return { chartData, options };
-  }, [checkins]);
+  }, [checkins, checkinsErr]);
 
+  // Calories chart → all time (already compressed weekly if very long)
   const caloriesChart = useMemo(() => {
-    const src = daily.series; // already ascending
+    const src = dailySeriesAsc; // ascending
     const labels = src.map(r => new Date(r.dateKey).toLocaleDateString(undefined, { day: "numeric", month: "short" }));
     const data = src.map(r => r.calories);
+
     const chartData: ChartData<"line"> = {
       labels,
       datasets: [
         {
-          label: "Calories burned",
+          label: "Calories burned (all time)",
           data,
           borderColor: ACCENT,
           backgroundColor: "rgba(255,138,42,0.25)",
@@ -268,16 +348,7 @@ export default function ProgressPage() {
       },
     };
     return { chartData, options };
-  }, [daily.series]);
-
-  const kpis = useMemo(() => ({
-    sessions: daily.totals.sessions,
-    calories: daily.totals.calories,
-    currentStreak: daily.currentStreak,
-    maxStreak: daily.maxStreak,
-  }), [daily]);
-
-  const topLoads = daily.topLoads;
+  }, [dailySeriesAsc]);
 
   return (
     <>
@@ -300,32 +371,27 @@ export default function ProgressPage() {
             </Link>
             <a
               href="https://bkxr-app.vercel.app/schedule"
-              className="btn btn-sm"
-              style={{
-                borderRadius: 24,
-                color: "#fff",
-                background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
-                boxShadow: `0 0 14px ${ACCENT}66`,
-              }}
               target="_blank"
               rel="noopener noreferrer"
+              className="btn btn-sm"
+              style={{ borderRadius: 24, color: "#fff", background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, boxShadow: `0 0 14px ${ACCENT}66` }}
             >
               Book a class
             </a>
           </div>
         </div>
 
-        {/* KPIs */}
+        {/* KPIs (all‑time) */}
         <section className="row gx-3">
           <div className="col-6 col-md-3 mb-3">
             <div className="futuristic-card p-3">
-              <div className="small text-dim">Sessions (90d)</div>
+              <div className="small text-dim">Sessions (all time)</div>
               <div className="h4 m-0">{kpis.sessions}</div>
             </div>
           </div>
           <div className="col-6 col-md-3 mb-3">
             <div className="futuristic-card p-3">
-              <div className="small text-dim">Calories (90d)</div>
+              <div className="small text-dim">Calories (all time)</div>
               <div className="h4 m-0">{kpis.calories}</div>
             </div>
           </div>
@@ -350,7 +416,7 @@ export default function ProgressPage() {
               <h6 className="mb-2" style={{ fontWeight: 700 }}>Weight</h6>
               {checkinsErr
                 ? <div className="text-dim">No check‑ins yet.</div>
-                : <Line data={weightChart.chartData} options={weightChart.options} />
+                : (weightChart ? <Line data={weightChart.chartData} options={weightChart.options} /> : <div className="text-dim">No check‑ins yet.</div>)
               }
             </div>
           </div>
@@ -360,20 +426,22 @@ export default function ProgressPage() {
               <h6 className="mb-2" style={{ fontWeight: 700 }}>Body fat</h6>
               {checkinsErr
                 ? <div className="text-dim">No check‑ins yet.</div>
-                : <Line data={bodyFatChart.chartData} options={bodyFatChart.options} />
+                : (bodyFatChart ? <Line data={bodyFatChart.chartData} options={bodyFatChart.options} /> : <div className="text-dim">No check‑ins yet.</div>)
               }
             </div>
           </div>
 
           <div className="col-12 mb-3">
             <div className="futuristic-card p-3">
-              <h6 className="mb-2" style={{ fontWeight: 700 }}>Calories burned (daily)</h6>
+              <h6 className="mb-2" style={{ fontWeight: 700 }}>Calories burned (all time)</h6>
               <Line data={caloriesChart.chartData} options={caloriesChart.options} />
+              {compsLoading && <div className="small text-dim mt-1">Loading more history…</div>}
+              {compsErr && <div className="small text-danger mt-1">Unable to load all-time data.</div>}
             </div>
           </div>
         </section>
 
-        {/* Recent kettlebell loads + Latest check-in */}
+        {/* Recent kettlebell loads + Latest check‑in */}
         <section className="row gx-3">
           <div className="col-12 col-md-6 mb-3">
             <div className="futuristic-card p-3">
