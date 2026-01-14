@@ -7,15 +7,15 @@ import { usePathname } from "next/navigation";
 
 export default function BottomNav() {
   const { data: session } = useSession();
-  const role = session?.user?.role;
+  const role = (session?.user as any)?.role;
   const pathname = usePathname();
 
-  // Base nav items
+  // Base nav items (Schedule -> Progress with fa-chart-line)
   const navItems = [
     { href: "/", icon: "fa-home", label: "Home" },
     { href: "/workout", icon: "fa-dumbbell", label: "Train" },
     { href: "/nutrition", icon: "fa-utensils", label: "Nutrition" },
-    { href: "/schedule", icon: "fa-calendar-alt", label: "Schedule" },
+    { href: "/progress", icon: "fa-chart-line", label: "Progress" }, // <-- updated
     { href: "/more", icon: "fa-ellipsis-h", label: "More" },
   ];
 
@@ -41,11 +41,18 @@ export default function BottomNav() {
       }}
     >
       {navItems.map((item) => {
-        const isActive = pathname === item.href || (item.href === "/more" && pathname.startsWith("/more"));
+        const targetHref = item.href === "/more" ? moreHref : item.href;
+        const isActive =
+          pathname === targetHref ||
+          // Mark /more as active for any nested path under /more
+          (item.href === "/more" && pathname.startsWith("/more")) ||
+          // Mark /progress as active for nested routes under progress if you add them later
+          (item.href === "/progress" && pathname.startsWith("/progress"));
+
         return (
           <Link
             key={item.href}
-            href={item.href === "/more" ? moreHref : item.href}
+            href={targetHref}
             style={{
               display: "flex",
               flexDirection: "column",
@@ -65,7 +72,7 @@ export default function BottomNav() {
                 justifyContent: "center",
                 alignItems: "center",
                 transition: "all 0.3s ease",
-                boxShadow: isActive ? "0 0 12px #ff7f32" : "none", // Only active gets neon orange glow
+                boxShadow: isActive ? "0 0 12px #ff7f32" : "none", // Active gets neon orange glow
               }}
             >
               <i
@@ -74,7 +81,7 @@ export default function BottomNav() {
                   fontSize: "22px",
                   color: isActive ? "#ff7f32" : "#fff", // Active icon orange, others white
                 }}
-              ></i>
+              />
             </div>
             <div
               style={{
