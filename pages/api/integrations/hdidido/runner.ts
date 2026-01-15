@@ -1,9 +1,9 @@
 
 // pages/api/integrations/hdidido/runner.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import firestore from "../../../lib/firestoreClient";
-import { BookingRequest, BookingRun } from "../../../lib/hdidido/types";
-import { decryptJson } from "../../../lib/crypto";
+import firestore from "../../../../lib/firestoreClient";
+import { BookingRequest, BookingRun } from "../../../../lib/hdidido/types";
+import { decryptJson } from "../../../../lib/crypto";
 import * as playwright from "playwright-core";
 
 const HOWDIDIDO_LOGIN_URL = "https://www.howdidido.com/Account/Login"; // public login URL
