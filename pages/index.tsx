@@ -632,7 +632,7 @@ export default function Home() {
       <BottomNav />
 
       {/* Add to Home Screen Prompt */}
-      <AddToHomeScreen />
+      {!(onboarding && onboarding.complete === false) && <AddToHomeScreen />}
     </>
   );
 }
