@@ -25,13 +25,7 @@ export default function Document() {
         <link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#ff7f32" />
 
         {/* Font Awesome (CDN) – consider local hosting; add SRI for security */}
-        <link
-          rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-          integrity="sha512-REPLACE_WITH_REAL_HASH"
-          crossOrigin="anonymous"
-          referrerPolicy="no-referrer"
-        />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
 
         {/* ===== Global Safe Area Spacer for BottomNav ===== */}
         <style>{`
