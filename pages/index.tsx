@@ -5,13 +5,12 @@ import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
-import AddToHomeScreen from "../components/AddToHomeScreen";
+// Removed: import AddToHomeScreen from "../components/AddToHomeScreen";
 import { getSession } from "next-auth/react";
-import type { GetServerSideProps, GetServerSidePropsContext } from "next";
+import type { GetServerSideProps } from "next";
 import DailyTasksCard from "../components/DailyTasksCard";
 import WeeklyCircles from "../components/dashboard/WeeklyCircles";
 import NotificationsBanner from "../components/NotificationsBanner";
-
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getSession(context);
@@ -41,7 +40,6 @@ function getWeek(): Date[] {
   });
 }
 function formatYMD(d: Date) {
-  // en-CA gives YYYY-MM-DD
   return d.toLocaleDateString("en-CA");
 }
 function isSameDay(a: Date, b: Date) {
@@ -59,7 +57,6 @@ function startOfAlignedWeek(d: Date) {
   s.setHours(0, 0, 0, 0);
   return s;
 }
-// NEW: compute the Friday for a given date (Mon-based week)
 function fridayOfWeek(d: Date) {
   const s = startOfAlignedWeek(d);
   const f = new Date(s);
@@ -68,7 +65,6 @@ function fridayOfWeek(d: Date) {
   return f;
 }
 
-/** Day payload from /api/weekly/overview */
 type ApiDay = {
   dateKey: string;
   hasWorkout?: boolean;
@@ -96,13 +92,11 @@ type DayStatus = {
   workoutIds: string[];
 };
 
-/** Minimal profile fields to determine Premium access */
 type UserAccess = {
   subscription_status?: string | null;
   membership_status?: string | null;
 };
 
-/** Minimal completion shape for freestyle detection */
 type Completion = {
   is_freestyle?: boolean;
   activity_type?: string | null;
@@ -111,7 +105,6 @@ type Completion = {
   completed_date?: string | { toDate?: () => Date };
 };
 
-// Onboarding status (blocks UI with a modal if incomplete)
 type OnboardingStatus = {
   complete: boolean;
   missing: string[];
@@ -143,7 +136,6 @@ export default function Home() {
     [mounted]
   );
 
-  // Weekly overview (key is null until mounted to avoid SSR mismatch)
   const { data: weeklyOverview, isLoading: overviewLoading } = useSWR(
     weekStartKey ? `/api/weekly/overview?week=${weekStartKey}` : null,
     fetcher,
@@ -168,7 +160,6 @@ export default function Home() {
     dedupingInterval: 60_000,
   });
 
-
   const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
   const [weekLoading, setWeekLoading] = useState(false);
 
@@ -184,7 +175,6 @@ export default function Home() {
       (o.habitSummary ? o.habitSummary.completed >= o.habitSummary.total && o.habitSummary.total > 0 : false);
     const checkinComplete = Boolean(o.checkinComplete) || Boolean(o.checkinSummary);
 
-    // NOTE: Freestyle is optional and does NOT contribute to 'allDone'
     const allDone =
       (!hasWorkout || workoutDone) &&
       nutritionLogged &&
@@ -216,7 +206,6 @@ export default function Home() {
     setWeekLoading(false);
   }, [weeklyOverview]);
 
-  // Weekly totals (freestyle still intentionally ignored)
   const derivedWeeklyTotals = useMemo(() => {
     const days = (weeklyOverview?.days as any[]) || [];
     let totalTasks = 0;
@@ -238,7 +227,6 @@ export default function Home() {
     return (weeklyOverview.days as ApiDay[]).find((d) => d.dateKey === selectedDateKey);
   }, [weeklyOverview, selectedDateKey]);
 
-  // Normalise check-in summary for downstream components
   const checkinSummaryNormalized = useMemo(() => {
     const s = selectedDayData?.checkinSummary as
       | { weight?: number; body_fat_pct?: number; bodyFat?: number; weightChange?: number; bfChange?: number }
@@ -262,41 +250,33 @@ export default function Home() {
   const workoutIds = selectedStatus.workoutIds || [];
   const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
 
-  // Base hrefs (before gating)
   const workoutHrefBase = hasWorkoutToday && hasWorkoutId ? `/workout/${workoutIds[0]}` : "#";
   const nutritionHref = `/nutrition?date=${selectedDateKey}`;
   const habitHrefBase = `/habit?date=${selectedDateKey}`;
 
-  // NEW: deep-link check-in to the specific Friday for the selected day
   const selectedFridayYMD = formatYMD(fridayOfWeek(selectedDay));
   const checkinHref = `/checkin?date=${encodeURIComponent(selectedFridayYMD)}`;
 
-  // Premium gating (logic only; no pills/padlocks here)
   const isPremium = Boolean(
     (profile?.subscription_status === "active" || profile?.subscription_status === "trialing") ||
     profile?.membership_status === "gym_member"
   );
 
-  // Wed & Fri lock (0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat)
   const weekday = selectedDay.getDay();
   const isWedOrFri = weekday === 3 || weekday === 5;
 
   const workoutLocked = !isPremium && isWedOrFri;
   const habitsLocked = !isPremium;
 
-  // Apply locks to hrefs (UI-only; DailyTasksCard will show inline locks)
   const workoutHref = workoutLocked ? "#" : workoutHrefBase;
   const habitHref = habitsLocked ? "#" : habitHrefBase;
 
-  // ---- Freestyle detection (optional task; does not affect streak/allDone) ----
-  // We fetch completions for the selected day and derive freestyle info.
   const completionsKey = useMemo(() => {
     if (!mounted) return null;
     const params = new URLSearchParams();
     params.set("from", selectedDateKey);
     params.set("to", selectedDateKey);
     if (session?.user?.email) params.set("user_email", session.user.email);
-    // FIXED: unified route path is /api/completions (not /api/completions/index)
     return `/api/completions?${params.toString()}`;
   }, [mounted, selectedDateKey, session?.user?.email]);
 
@@ -306,7 +286,6 @@ export default function Home() {
     { revalidateOnFocus: false, dedupingInterval: 30_000 }
   );
 
-  // Extract freestyle entries for the selected day (if any)
   const { freestyleLogged, freestyleSummary } = useMemo(() => {
     const src =
       dayCompletions?.results ||
@@ -316,7 +295,6 @@ export default function Home() {
       [];
     const arr: Completion[] = Array.isArray(src) ? src : [];
 
-    // Filter to is_freestyle === true and completed_date matching the day (defensive normalisation)
     const sameDay = (v: any) => {
       try {
         const dt =
@@ -334,7 +312,6 @@ export default function Home() {
       return { freestyleLogged: false, freestyleSummary: undefined as undefined | { activity?: string; duration?: number; calories?: number } };
     }
 
-    // Summarise: total duration & calories for the day; last activity label for flavour
     const totalCalories = freestyle.reduce((sum, c) => sum + (Number(c.calories_burned) || 0), 0);
     const totalDuration = freestyle.reduce((sum, c) => sum + (Number(c.duration_minutes) || 0), 0);
     const lastActivity = freestyle[freestyle.length - 1]?.activity_type || undefined;
@@ -349,13 +326,10 @@ export default function Home() {
     };
   }, [dayCompletions, selectedDateKey]);
 
-  // Header accents
   const accentMicro = "#ff8a2a";
   const showLoadingBar = status === "loading" || !mounted;
 
-  // Top-level memos for WeeklyCircles (avoid conditional hooks)
   const dayStreak = useMemo(() => {
-    // NOTE: streak logic intentionally ignores freestyle (optional)
     let streak = 0;
     for (const d of weekDays) {
       const st = weekStatus[formatYMD(d)];
@@ -441,7 +415,7 @@ export default function Home() {
           <NotificationsBanner />
         </section>
 
-        {/* ===== Weekly Circles (three separate futuristic cards with slight separators) ===== */}
+        {/* ===== Weekly Circles ===== */}
         {weeklyOverview?.days && mounted && (
           <div style={{ marginBottom: 12 }}>
             <WeeklyCircles
@@ -452,7 +426,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* ===== Calendar (inline week pills) ===== */}
+        {/* ===== Calendar ===== */}
         {mounted && (
           <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
             {weekDays.map((d, i) => {
@@ -463,7 +437,6 @@ export default function Home() {
               if (!st) {
                 return (
                   <div key={i} style={{ width: 44 }}>
-                    {/* Weekday label: fontWeight 500 */}
                     <div style={{ fontSize: "0.8rem", opacity: 0.6, fontWeight: 500 }}>
                       {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
                     </div>
@@ -479,7 +452,6 @@ export default function Home() {
 
               return (
                 <div key={i} style={{ width: 44, cursor: "pointer" }} onClick={() => setSelectedDay(d)}>
-                  {/* Weekday label: fontWeight 500 */}
                   <div style={{ fontSize: "0.8rem", color: "#fff", opacity: 0.85, marginBottom: 4, fontWeight: 500 }}>
                     {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
                   </div>
@@ -514,7 +486,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* ===== Daily Tasks Card (selected day) ===== */}
+        {/* ===== Daily Tasks Card ===== */}
         {mounted && selectedDayData && (
           <DailyTasksCard
             dayLabel={`${selectedDay.toLocaleDateString(undefined, {
@@ -530,34 +502,28 @@ export default function Home() {
             workoutDone={Boolean(selectedStatus.workoutDone)}
             habitSummary={selectedDayData.habitSummary}
             habitAllDone={Boolean(selectedStatus.habitAllDone)}
-            // normalised summary so components can read body_fat_pct or bodyFat
             checkinSummary={checkinSummaryNormalized as any}
             checkinComplete={Boolean(selectedStatus.checkinComplete)}
             hrefs={{
-              nutrition: nutritionHref,
+              nutrition: `/nutrition?date=${selectedDateKey}`,
               workout: workoutHref,
               habit: habitHref,
-              checkin: checkinHref,              // <-- deep link to specific Friday
-              freestyle: "/workouts/freestyle",  // optional task
+              checkin: `/checkin?date=${encodeURIComponent(formatYMD(fridayOfWeek(selectedDay)))}`,
+              freestyle: "/workouts/freestyle",
             }}
-            // Freestyle (optional) props
             freestyleLogged={freestyleLogged}
             freestyleSummary={freestyleSummary}
           />
         )}
 
-
         {/* Workout loading fallback */}
         {mounted && hasWorkoutToday && !hasWorkoutId && (
-          <div
-            className="text-center"
-            style={{ opacity: 0.8, fontSize: "0.9rem", marginTop: 8 }}
-          >
+          <div className="text-center" style={{ opacity: 0.8, fontSize: "0.9rem", marginTop: 8 }}>
             Loading workout details… <span className="inline-spinner" />
           </div>
         )}
-        
-        {/* Onboarding blocking modal (inline, no extra component) */}
+
+        {/* Onboarding blocking modal */}
         {mounted && onboarding && onboarding.complete === false && (
           <div
             role="dialog"
@@ -591,11 +557,11 @@ export default function Home() {
                   Let’s finish your setup
                 </h2>
               </div>
-        
+
               <p style={{ opacity: 0.9 }}>
                 To unlock your personalised BXKR experience, please complete onboarding.
               </p>
-        
+
               {Array.isArray(onboarding.missing) && onboarding.missing.length > 0 ? (
                 <>
                   <div className="small text-dim mb-2">Missing:</div>
@@ -606,7 +572,7 @@ export default function Home() {
                   </ul>
                 </>
               ) : null}
-        
+
               <div className="mt-3 d-flex gap-2">
                 <a
                   href="/onboarding"
@@ -627,12 +593,10 @@ export default function Home() {
             </div>
           </div>
         )}
-        </main>   {/* <-- keep </main> OUTSIDE the modal block */}
+      </main>
+
       {/* Bottom Navigation */}
       <BottomNav />
-
-      {/* Add to Home Screen Prompt */}
-      {!(onboarding && onboarding.complete === false) && <AddToHomeScreen />}
     </>
   );
 }
