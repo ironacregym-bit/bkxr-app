@@ -57,7 +57,12 @@ type ExerciseListItem = { id: string; exercise_name: string; type?: string };
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const ACCENT = "#FF8A2A";
 
-// ---------- Boxing helpers ----------
+/* Deep clone helper to avoid depending on structuredClone */
+function deepClone<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj));
+}
+
+/* ---------- Boxing helpers ---------- */
 const P = {
   JAB: { kind: "punch", code: "jab" } as const,
   CROSS: { kind: "punch", code: "cross" } as const,
@@ -73,7 +78,10 @@ const D = {
   PARRY: { kind: "defence", code: "parry" } as const,
 };
 
-function boxingRound(kind: "Basics" | "Speed" | "Power" | "Defensive" | "Engine", name = kind): { name: string; combos: [BoxingCombo, BoxingCombo, BoxingCombo] } {
+function boxingRound(
+  kind: "Basics" | "Speed" | "Power" | "Defensive" | "Engine",
+  name = kind
+): { name: string; combos: [BoxingCombo, BoxingCombo, BoxingCombo] } {
   if (kind === "Basics") {
     return {
       name,
@@ -125,7 +133,7 @@ function boxingRound(kind: "Basics" | "Speed" | "Power" | "Defensive" | "Engine"
   };
 }
 
-// ---------- KB suggestions library (names for fuzzy match) ----------
+/* ---------- KB suggestions library (names for fuzzy match) ---------- */
 const KB_SUGGESTIONS = {
   ENGINE: ["Goblet Squat", "Deadlift", "Plank Up-Downs"],
   POWER: ["Swing", "Pushups", "Lunges"],
@@ -137,13 +145,15 @@ const KB_SUGGESTIONS = {
 // Fuzzy find best matching exercise_id by name (case-insensitive contains)
 function fuzzyFindId(exercises: ExerciseListItem[], label: string): string | null {
   const target = label.toLowerCase();
-  // exact contains
+  // direct contains
   const direct = exercises.find((e) => e.exercise_name?.toLowerCase().includes(target));
   if (direct) return direct.id;
 
-  // common alternates (minor variations)
+  // minor normalisation
   const normalised = target.replace(/\s+/g, " ").replace(/-/g, " ").trim();
-  const alt = exercises.find((e) => e.exercise_name?.toLowerCase().replace(/\s+/g, " ").replace(/-/g, " ").includes(normalised));
+  const alt = exercises.find((e) =>
+    e.exercise_name?.toLowerCase().replace(/\s+/g, " ").replace(/-/g, " ").includes(normalised)
+  );
   return alt ? alt.id : null;
 }
 
@@ -151,9 +161,9 @@ function fuzzyFindId(exercises: ExerciseListItem[], label: string): string | nul
 function buildKbRoundItems(
   kind: "ENGINE" | "POWER" | "LADDER" | "CORE" | "LOAD",
   order: number,
-  exercises: ExerciseListItem[],
+  exercises: ExerciseListItem[]
 ) {
-  const labels = KB_SUGGESTIONS[kind];
+  const labels = KB_SUGGESTIONS[kind as keyof typeof KB_SUGGESTIONS] as string[];
   const items = labels.map((label, idx) => {
     const id = fuzzyFindId(exercises, label);
     // rep/time suggestions
@@ -161,11 +171,13 @@ function buildKbRoundItems(
       kind === "ENGINE" ? (idx < 2 ? "6" : "6") :
       kind === "POWER" ? "8-10" :
       kind === "LADDER" ? "2/4/6" :
-      kind === "CORE" ? (label.toLowerCase().includes("plank") ? undefined : (label === "Full Body Crunch" ? "16" : "20")) :
-      kind === "LOAD" ? (label.toLowerCase().includes("lunges") ? "8" : "6") : undefined;
+      kind === "CORE"
+        ? (label.toLowerCase().includes("plank") ? undefined : label === "Full Body Crunch" ? "16" : "20")
+        : kind === "LOAD"
+        ? (label.toLowerCase().includes("lunges") ? "8" : "6")
+        : undefined;
 
-    const time_s =
-      kind === "CORE" && label.toLowerCase().includes("plank") ? 30 : undefined;
+    const time_s = kind === "CORE" && label.toLowerCase().includes("plank") ? 30 : undefined;
 
     return {
       desired_label: label,
@@ -176,11 +188,13 @@ function buildKbRoundItems(
     };
   });
 
-  const style: KBStyle = kind === "ENGINE" || kind === "LOAD" ? "AMRAP" : (kind === "POWER" || kind === "CORE" ? "EMOM" : "LADDER");
+  const style: KBStyle =
+    kind === "ENGINE" || kind === "LOAD" ? "AMRAP" : kind === "POWER" || kind === "CORE" ? "EMOM" : "LADDER";
 
   return { style, order, items };
 }
 
+/* ---------------- Component ---------------- */
 export default function QuickCreateWorkout() {
   const { data: session, status } = useSession();
   const role = (session?.user as any)?.role || "user";
@@ -219,11 +233,11 @@ export default function QuickCreateWorkout() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // Build a full WorkoutCreatePayload from current form
+  /* Build a full WorkoutCreatePayload from current form */
   function generatePayload(): WorkoutCreatePayload {
     // Boxing (Rounds 1–5)
     const boxingKinds = ["Basics", "Speed", "Power", "Defensive", "Engine"] as const;
-    const boxingRounds = boxingKinds.map((k, i) => boxingRound(k, `${k}`));
+    const boxingRounds = boxingKinds.map((k) => boxingRound(k, `${k}`));
 
     // Kettlebell (Rounds 6–10)
     const kbKinds = ["ENGINE", "POWER", "LADDER", "CORE", "LOAD"] as const;
@@ -251,19 +265,22 @@ export default function QuickCreateWorkout() {
       notes: notes.trim() || undefined,
       video_url: videoUrl.trim() || undefined,
       is_benchmark: !!isBenchmark,
-      benchmark_name: isBenchmark ? (benchmarkName.trim() || undefined) : undefined,
-      boxing: { rounds: boxingRounds as any },
+      benchmark_name: isBenchmark ? benchmarkName.trim() || undefined : undefined,
+      boxing: { rounds: boxingRounds as any }, // keep simple for strict TS compatibility
       kettlebell: { rounds: kbBuilt as any },
     };
   }
 
-  function computeUnmapped(p?: WorkoutCreatePayload): Array<{ roundIdx: number; itemIdx: number; desired?: string }> {
+  /* Find unmapped KB items (exercise_id === "") for friendly picker */
+  function computeUnmapped(
+    p?: WorkoutCreatePayload
+  ): Array<{ roundIdx: number; itemIdx: number; desired?: string }> {
     if (!p) return [];
     const list: Array<{ roundIdx: number; itemIdx: number; desired?: string }> = [];
     p.kettlebell.rounds.forEach((r, ri) => {
       r.items.forEach((it, ii) => {
         if (!String(it.exercise_id).trim()) {
-          // Try to write desired label based on our library (best effort)
+          // Attempt to guess a "desired" label based on our library (best effort only)
           const desired = (KB_SUGGESTIONS as any)[(r.name || "").toUpperCase()]?.[ii];
           list.push({ roundIdx: ri, itemIdx: ii, desired });
         }
@@ -275,7 +292,7 @@ export default function QuickCreateWorkout() {
   function updatePreviewItem(roundIdx: number, itemIdx: number, exercise_id: string) {
     setPreview((prev) => {
       if (!prev) return prev;
-      const next = structuredClone(prev);
+      const next = deepClone(prev);
       next.kettlebell.rounds[roundIdx].items[itemIdx].exercise_id = exercise_id;
       return next;
     });
@@ -284,7 +301,8 @@ export default function QuickCreateWorkout() {
   function validatePayload(p?: WorkoutCreatePayload): string | null {
     if (!p) return "No workout generated.";
     if (!p.workout_name) return "Workout name is required.";
-    // Boxing: each round must have 3 combos with at least 1 action
+
+    // Boxing: 5 rounds; each has 3 combos with ≥1 action
     for (let r = 0; r < p.boxing.rounds.length; r++) {
       const combos = p.boxing.rounds[r].combos;
       if (!combos || combos.length !== 3) return `Boxing round ${r + 1} must have 3 combos.`;
@@ -305,7 +323,7 @@ export default function QuickCreateWorkout() {
     return null;
   }
 
-  // Actions
+  /* Actions */
   function handleGenerate() {
     setMsg(null);
     const p = generatePayload();
@@ -317,13 +335,14 @@ export default function QuickCreateWorkout() {
     setMsg(null);
     try {
       const j = JSON.parse(rawJson);
-      // minimal sanity checks
+      // Minimal sanity checks
       if (!j || typeof j !== "object") throw new Error("Invalid JSON");
       if (!j.workout_name) throw new Error("Missing `workout_name`");
       if (!j.boxing?.rounds || !Array.isArray(j.boxing.rounds) || j.boxing.rounds.length !== 5)
         throw new Error("`boxing.rounds` must be an array of 5");
       if (!j.kettlebell?.rounds || !Array.isArray(j.kettlebell.rounds) || j.kettlebell.rounds.length !== 5)
         throw new Error("`kettlebell.rounds` must be an array of 5");
+
       setPreview(j as WorkoutCreatePayload);
       setTab("paste");
     } catch (e: any) {
@@ -358,12 +377,14 @@ export default function QuickCreateWorkout() {
     }
   }
 
-  // Derived
-  const unmapped = useMemo(() => computeUnmapped(preview), [preview]);
+  /* Derived (TS fix: coerce null → undefined) */
+  const unmapped = useMemo(() => computeUnmapped(preview || undefined), [preview]);
 
   return (
     <>
-      <Head><title>Quick Create Workout • Admin</title></Head>
+      <Head>
+        <title>Quick Create Workout • Admin</title>
+      </Head>
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         {!mounted || status === "loading" ? (
@@ -372,7 +393,7 @@ export default function QuickCreateWorkout() {
           <div className="py-4">
             <h3>Access Denied</h3>
             <p>You do not have permission to view this page.</p>
-            <Link href="/more" className="btn btn-outline-secondary">← Back</Link>
+            <Link href="/more" className="btn btn-outline-secondary mt-2">← Back</Link>
           </div>
         ) : (
           <>
@@ -382,17 +403,25 @@ export default function QuickCreateWorkout() {
                 <h2 className="m-0">Quick Create Workout</h2>
               </div>
               <div className="btn-group">
-                <button className={`btn btn-${tab === "generate" ? "bxkr" : "outline-light"}`} onClick={() => setTab("generate")}>
+                <button
+                  className={`btn btn-${tab === "generate" ? "bxkr" : "outline-light"}`}
+                  onClick={() => setTab("generate")}
+                >
                   Generate
                 </button>
-                <button className={`btn btn-${tab === "paste" ? "bxkr" : "outline-light"}`} onClick={() => setTab("paste")}>
+                <button
+                  className={`btn btn-${tab === "paste" ? "bxkr" : "outline-light"}`}
+                  onClick={() => setTab("paste")}
+                >
                   Paste JSON
                 </button>
               </div>
             </div>
 
             {msg && (
-              <div className={`alert ${msg.toLowerCase().startsWith("error") ? "alert-danger" : "alert-info"}`}>{msg}</div>
+              <div className={`alert ${msg.toLowerCase().startsWith("error") ? "alert-danger" : "alert-info"}`}>
+                {msg}
+              </div>
             )}
 
             {/* Generate tab */}
@@ -404,11 +433,17 @@ export default function QuickCreateWorkout() {
                 <div className="row g-2">
                   <div className="col-12 col-md-3">
                     <label className="form-label">Visibility</label>
-                    <select className="form-select" value={visibility} onChange={(e) => setVisibility(e.target.value as "global" | "private")}>
+                    <select
+                      className="form-select"
+                      value={visibility}
+                      onChange={(e) => setVisibility(e.target.value as "global" | "private")}
+                    >
                       <option value="global">Global (everyone)</option>
                       <option value="private">Private (owner only)</option>
                     </select>
-                    {visibility === "private" && <small className="text-muted">Owner: {ownerEmail || "(unknown)"}</small>}
+                    {visibility === "private" && (
+                      <small className="text-muted">Owner: {ownerEmail || "(unknown)"}</small>
+                    )}
                   </div>
                   <div className="col-12 col-md-3">
                     <label className="form-label">Workout name</label>
@@ -416,29 +451,59 @@ export default function QuickCreateWorkout() {
                   </div>
                   <div className="col-12 col-md-3">
                     <label className="form-label">Focus</label>
-                    <input className="form-control" value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="e.g., Engine / Power" />
+                    <input
+                      className="form-control"
+                      value={focus}
+                      onChange={(e) => setFocus(e.target.value)}
+                      placeholder="e.g., Engine / Power"
+                    />
                   </div>
                   <div className="col-12 col-md-3">
                     <label className="form-label">Video URL</label>
-                    <input className="form-control" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://…" />
+                    <input
+                      className="form-control"
+                      value={videoUrl}
+                      onChange={(e) => setVideoUrl(e.target.value)}
+                      placeholder="https://…"
+                    />
                   </div>
                   <div className="col-12 col-md-6">
                     <div className="form-check mt-2">
-                      <input className="form-check-input" type="checkbox" id="isBenchmark" checked={isBenchmark} onChange={(e) => setIsBenchmark(e.target.checked)} />
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="isBenchmark"
+                        checked={isBenchmark}
+                        onChange={(e) => setIsBenchmark(e.target.checked)}
+                      />
                       <label htmlFor="isBenchmark" className="form-check-label">Is benchmark?</label>
                     </div>
                     {isBenchmark && (
-                      <input className="form-control mt-2" value={benchmarkName} onChange={(e) => setBenchmarkName(e.target.value)} placeholder="Benchmark name (optional)" />
+                      <input
+                        className="form-control mt-2"
+                        value={benchmarkName}
+                        onChange={(e) => setBenchmarkName(e.target.value)}
+                        placeholder="Benchmark name (optional)"
+                      />
                     )}
                   </div>
                   <div className="col-12">
                     <label className="form-label">Notes (optional)</label>
-                    <textarea className="form-control" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" />
+                    <textarea
+                      className="form-control"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Optional notes"
+                    />
                   </div>
                 </div>
 
                 <div className="mt-2">
-                  <button className="btn" style={{ color: "#fff", background: ACCENT, borderRadius: 24, boxShadow: `0 0 14px ${ACCENT}66` }} onClick={handleGenerate}>
+                  <button
+                    className="btn"
+                    style={{ color: "#fff", background: ACCENT, borderRadius: 24, boxShadow: `0 0 14px ${ACCENT}66` }}
+                    onClick={handleGenerate}
+                  >
                     Generate
                   </button>
                 </div>
@@ -475,7 +540,11 @@ export default function QuickCreateWorkout() {
               >
                 <div className="d-flex align-items-center justify-content-between mb-2">
                   <h5 className="m-0">Preview</h5>
-                  <button className="btn btn-bxkr" onClick={handleSave} disabled={busy || computeUnmapped(preview).length > 0}>
+                  <button
+                    className="btn btn-bxkr"
+                    onClick={handleSave}
+                    disabled={busy || unmapped.length > 0}
+                  >
                     {busy ? "Saving…" : "Save Workout"}
                   </button>
                 </div>
@@ -487,7 +556,10 @@ export default function QuickCreateWorkout() {
                     {preview.boxing.rounds.map((r, i) => (
                       <li key={`bx-${i}`} className="mb-1">
                         <span className="fw-semibold">Round {i + 1} — {r.name}</span>
-                        <span className="text-dim"> • {r.combos.map((c) => c.actions.map(a => ("code" in a ? a.code : "")).join("-")).join(" | ")}</span>
+                        <span className="text-dim">
+                          {" "}
+                          • {r.combos.map((c) => c.actions.map((a) => ("code" in a ? a.code : "")).join("-")).join(" | ")}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -508,21 +580,19 @@ export default function QuickCreateWorkout() {
                               <div key={`kbi-${i}-${idx}`} className="d-flex align-items-center gap-2 mb-1">
                                 <span>#{it.order} · {label}</span>
                                 {!it.exercise_id && (
-                                  <>
-                                    <select
-                                      className="form-select form-select-sm"
-                                      style={{ width: "auto" }}
-                                      value={it.exercise_id}
-                                      onChange={(e) => updatePreviewItem(i, idx, e.target.value)}
-                                    >
-                                      <option value="">— Select exercise —</option>
-                                      {exercises.map((e) => (
-                                        <option key={e.id} value={e.id}>
-                                          {e.exercise_name} {e.type ? `• ${e.type}` : ""}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </>
+                                  <select
+                                    className="form-select form-select-sm"
+                                    style={{ width: "auto" }}
+                                    value={it.exercise_id}
+                                    onChange={(e) => updatePreviewItem(i, idx, e.target.value)}
+                                  >
+                                    <option value="">— Select exercise —</option>
+                                    {exercises.map((e) => (
+                                      <option key={e.id} value={e.id}>
+                                        {e.exercise_name} {e.type ? `• ${e.type}` : ""}
+                                      </option>
+                                    ))}
+                                  </select>
                                 )}
                                 {it.reps ? <span className="text-dim"> • Reps: {it.reps}</span> : null}
                                 {typeof it.time_s === "number" ? <span className="text-dim"> • {it.time_s}s</span> : null}
