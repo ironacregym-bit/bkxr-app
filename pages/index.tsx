@@ -1,5 +1,5 @@
 
-// pages/index.tsx
+// pages/index.tsx x2
 import Head from "next/head";
 import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
