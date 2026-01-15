@@ -10,10 +10,10 @@ export default function Register() {
   const router = useRouter();
   const ACCENT = "#FF8A2A";
 
-  // Redirect authenticated users to onboarding
+  // Redirect authenticated users to home
   useEffect(() => {
     if (status === "authenticated") {
-      router.replace("/onboarding");
+      router.replace("/");
     }
   }, [status, router]);
 
@@ -41,7 +41,7 @@ export default function Register() {
     try {
       const res = await signIn("email", {
         email,
-        callbackUrl: "/onboarding",
+        callbackUrl: "/",
         redirect: false,
       });
       if (res && !res.error) {
@@ -83,7 +83,7 @@ export default function Register() {
             Sign in to <span style={{ color: ACCENT }}>register</span> or log in
           </h1>
           <p className="text-dim mt-2 mb-0">
-            Continue with Google or request a one‑tap magic link by email. You’ll complete onboarding next.
+            Continue with Google or request a one‑tap magic link by email. Youll be able to log straight in!
           </p>
         </section>
 
@@ -92,7 +92,7 @@ export default function Register() {
           <div className="d-grid gap-2">
             <button
               className="bxkr-btn"
-              onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
+              onClick={() => signIn("google", { callbackUrl: "/" })}
               disabled={status === "loading"}
             >
               Continue with Google
