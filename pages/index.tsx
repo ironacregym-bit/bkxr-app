@@ -111,6 +111,14 @@ type Completion = {
   completed_date?: string | { toDate?: () => Date };
 };
 
+// Onboarding status (blocks UI with a modal if incomplete)
+type OnboardingStatus = {
+  complete: boolean;
+  missing: string[];
+  outstanding: { id: string; key: string; title: string; description: string; targetPath: string }[];
+  profile?: any;
+};
+
 export default function Home() {
   const { data: session, status } = useSession();
 
@@ -151,6 +159,15 @@ export default function Home() {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
+
+  // Onboarding check to display Modal over the top
+  const onboardingKey =
+    mounted && session?.user?.email ? "/api/onboarding/status" : null;
+  const { data: onboarding } = useSWR<OnboardingStatus>(onboardingKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60_000,
+  });
+
 
   const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
   const [weekLoading, setWeekLoading] = useState(false);
@@ -542,6 +559,76 @@ export default function Home() {
             Loading workout details… <span className="inline-spinner" />
           </div>
         )}
+        
+{/* Onboarding blocking modal (inline, no extra component) */}
+{mounted && onboarding && onboarding.complete === false && (
+  <div
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="onboarding-title"
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.6)",
+      backdropFilter: "blur(6px)",
+      zIndex: 3000,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+    }}
+  >
+    <div
+      className="futuristic-card"
+      style={{
+        width: "min(520px, 92vw)",
+        padding: 20,
+        borderRadius: 16,
+        color: "#fff",
+        textAlign: "left",
+      }}
+    >
+      <div className="d-flex align-items-center gap-2 mb-2">
+        <i className="fas fa-user-check" style={{ color: "#ff8a2a" }} />
+        <h2 id="onboarding-title" className="h5 m-0" style={{ fontWeight: 800 }}>
+          Let’s finish your setup
+        </h2>
+      </div>
+
+      <p style={{ opacity: 0.9 }}>
+        To unlock your personalised BXKR experience, please complete onboarding.
+      </p>
+
+      {Array.isArray(onboarding.missing) && onboarding.missing.length > 0 ? (
+        <>
+          <div className="small text-dim mb-2">Missing:</div>
+          <ul className="small" style={{ lineHeight: 1.6 }}>
+            {onboarding.missing.map((k) => (
+              <li key={k}>{k.replaceAll("_", " ")}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      <div className="mt-3 d-flex gap-2">
+        <a
+          href="/onboarding"
+          className="btn btn-bxkr"
+          style={{ borderRadius: 24 }}
+          aria-label="Continue onboarding"
+        >
+          Continue onboarding
+        </a>
+        <a
+          href="/landing"
+          className="btn btn-outline-light"
+          style={{ borderRadius: 24 }}
+        >
+          Learn more
+        </a>
+      </div>
+    </div>
+
       </main>
 
       {/* Bottom Navigation */}
