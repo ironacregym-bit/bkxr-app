@@ -1,8 +1,13 @@
+
 {
   "crons": [
     {
       "path": "/api/notify/cron/monday-kickoff",
       "schedule": "0 7 * * 1"
+    },
+    {
+      "path": "/api/integrations/hdidido/runner",
+      "schedule": "*/1 * * * *"
     }
   ]
 }
