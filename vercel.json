@@ -4,6 +4,6 @@
     {
       "path": "/api/notify/cron/monday-kickoff",
       "schedule": "0 7 * * 1"
-    },
+    }
   ]
 }
