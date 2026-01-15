@@ -1,48 +1,58 @@
+
 import { Html, Head, Main, NextScript } from "next/document";
 
 export default function Document() {
   return (
     <Html lang="en">
       <Head>
+        {/* PWA: Manifest (ensure this file exists at /public) */}
+        {/* If your file is manifest.webmanifest, switch href accordingly */}
+        <link rel="manifest" href="/manifest.json" crossOrigin="use-credentials" />
+
+        {/* Theme / Colours for PWA UI */}
+        <meta name="theme-color" content="#0E0F12" />
         <meta name="mobile-web-app-capable" content="yes" />
-        {/* PWA Manifest */}
-        <link rel="manifest" href="/manifest.json" />
 
-        {/* Font Awesome */}
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
-
-        {/* App Icons */}
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-        <link rel="icon" href="/icons/icon-192.png" />
-
-        {/* Theme / Colours */}
-        <meta name="theme-color" content="#000000" />
-
-        {/* iOS PWA Settings */}
+        {/* iOS PWA */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="BXKR" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
+
+        {/* Favicons / icons */}
+        <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+        {/* Optional pinned tab for Safari (macOS) */}
+        <link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#ff7f32" />
+
+        {/* Font Awesome (CDN) – consider local hosting; add SRI for security */}
+        <link
+          rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+          integrity="sha512-REPLACE_WITH_REAL_HASH"
+          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
+        />
 
         {/* ===== Global Safe Area Spacer for BottomNav ===== */}
         <style>{`
           :root {
-            /* Height of the fixed BottomNav (pill container + padding).
-               Tweak once here if you change the BottomNav size. */
             --bxkr-bottomnav-height: 84px;
           }
-
           /* Ensure content isn't obscured by the fixed BottomNav or iOS home indicator */
           body {
             padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--bxkr-bottomnav-height));
+            background-color: #0E0F12; /* matches theme for flashes */
           }
-
-          /* Optional: smooth scrolling feel and prevent bounce issues */
           html, body {
             overscroll-behavior: contain;
           }
+
+          /* Optional: standalone tweaks (when installed) */
+          @media all and (display-mode: standalone) {
+            body { background-color: #0E0F12; }
+          }
         `}</style>
       </Head>
-
       <body>
         <Main />
         <NextScript />
