@@ -19,7 +19,7 @@ type Member = { full_name: string; club_id?: string; hdidido_email?: string };
 
 export default function HdididoQueueAdmin() {
   const { status } = useSession(); // Optional: you can guard admin roles on the server/API already
-  const [requesterEmail, setRequesterEmail] = useState("ironacregym@gmail.com");
+  const [requesterEmail, setRequesterEmail] = useState("ben.jones1974@hotmail.co.uk");
   const [bookingType, setBookingType] = useState<"competition"|"casual">("casual");
   const [clubName, setClubName] = useState("Ipswich GC");
   const [targetDate, setTargetDate] = useState("");
