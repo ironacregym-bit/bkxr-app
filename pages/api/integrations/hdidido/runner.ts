@@ -82,13 +82,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      // ---- Launch serverless Chromium locally (no external WS/token) ----
-      const chromium = await import("@sparticuz/chromium");
+      // ---- LAUNCH SERVERLESS CHROMIUM LOCALLY (fix: destructure default export) ----
+      const { default: chromium } = await import("@sparticuz/chromium");
       const playwright = await import("playwright-core");
 
       const browser = await playwright.chromium.launch({
-        args: chromium.args,
-        executablePath: await chromium.executablePath(),
+        args: chromium.args,                            // <-- args exists on the default export
+        executablePath: await chromium.executablePath(),// <-- async path resolver
         headless: true
       });
 
