@@ -2,6 +2,18 @@
 // pages/api/integrations/hdidido/runner.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 
+/**
+ * Minimal hard-coded smoke path with robust login (native + MS/Azure),
+ * then direct navigation to BookingAdd and a Confirm click.
+ *
+ * ENV REQUIRED:
+ *  - CRON_SECRET           (for auth)
+ *  - HDIDIDO_PASSWORD      (password for USER_EMAIL below)
+ *
+ * Optional:
+ *  - APP_BASE_URL          (used by other flows; not required here)
+ */
+
 // --- Constants: login first URL and hard-coded BookingAdd target
 const LOGIN_URL = "https://www.howdidido.com/Account/Login";
 const USER_EMAIL = "ben.jones1974@hotmail.co.uk";
@@ -159,7 +171,6 @@ async function loginNative(page: import("playwright-core").Page, email: string, 
     'input[type="submit"]',
   ];
 
-  // wait for email input across frames (with retries)
   const emailFound = await waitForAnyInFrames(page, emailSels, 12000, 300);
   if (!emailFound) return false;
 
@@ -177,7 +188,6 @@ async function loginNative(page: import("playwright-core").Page, email: string, 
 }
 
 async function loginMicrosoft(page: import("playwright-core").Page, email: string, password: string) {
-  // Email page
   const emailSel = (await page.$('#i0116')) || (await page.$('input[name="loginfmt"]')) || (await page.$('input[type="email"]'));
   if (!emailSel) return false;
 
@@ -189,7 +199,6 @@ async function loginMicrosoft(page: import("playwright-core").Page, email: strin
   await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
   await dismissUpgradeModal(page);
 
-  // Password page
   const passSel = (await page.$('#i0118')) || (await page.$('input[name="passwd"]')) || (await page.$('input[type="password"]'));
   if (!passSel) throw new Error("Microsoft login: password input not found");
   await passSel.fill(password);
@@ -201,7 +210,6 @@ async function loginMicrosoft(page: import("playwright-core").Page, email: strin
   await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
   await dismissUpgradeModal(page);
 
-  // Stay signed in?
   const stayNo = await page.$('#idBtn_Back');
   if (stayNo) { await stayNo.click().catch(() => {}); }
   else {
@@ -247,21 +255,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await dismissUpgradeModal(page);
     await nukeOverlays(page);
 
-    // If Microsoft page is already shown on main frame, use MS flow first
     let loggedIn = false;
     if (/login\.microsoftonline\.com/i.test(page.url())) {
       loggedIn = await loginMicrosoft(page, USER_EMAIL, password);
     } else {
-      // Try native first (frame-aware), then MS (in case the page jumps)
       try { loggedIn = await loginNative(page, USER_EMAIL, password); } catch {}
       if (!loggedIn) {
-        // If native didn’t find inputs, maybe we were redirected to MS (or inputs in a frame)
         loggedIn = await loginMicrosoft(page, USER_EMAIL, password);
       }
     }
 
     if (!loggedIn) {
-      // Capture a small screenshot for debugging
       let screenshot_b64: string | undefined;
       try {
         const buf = await page.screenshot({ type: "jpeg", quality: 70 });
@@ -290,10 +294,62 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await acceptCookies(page);
     await dismissUpgradeModal(page);
 
-    let bookingShot: string | undefined;
+    // Snapshot before confirm (for debugging)
+    let bookingShotBefore: string | undefined;
     try {
       const buf = await page.screenshot({ type: "jpeg", quality: 70 });
-      bookingShot = `data:image/jpeg;base64,${buf.toString("base64")}`;
+      bookingShotBefore = `data:image/jpeg;base64,${buf.toString("base64")}`;
+    } catch {}
+
+    // --- 3) Click Confirm
+    // ID from your markup: #btn-confirm-and-pay (text "Confirm" in #btn-confirm-and-pay-text)
+    let confirmResult = "confirm_not_found";
+    try {
+      const confirmSel = '#btn-confirm-and-pay';
+      const confirmTextSel = '#btn-confirm-and-pay-text';
+      // Make sure any overlays are cleared before waiting/clicking
+      await dismissUpgradeModal(page);
+      await nukeOverlays(page);
+
+      // Wait up to 12s for the button to appear
+      const btn = await page.waitForSelector(confirmSel, { timeout: 12000, state: "visible" }).catch(() => null);
+      if (btn) {
+        await btn.scrollIntoViewIfNeeded().catch(() => {});
+        // Optional: ensure text says Confirm
+        const spanText = await page.$(confirmTextSel).then(h => h?.textContent() ?? "").catch(() => "");
+        // Click it
+        await btn.click({ timeout: 2000 }).catch(() => {});
+        await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+        await dismissUpgradeModal(page);
+
+        // Heuristics to infer success:
+        // - button disappears or becomes disabled
+        // - text changes from "Confirm"
+        // - presence of common success keywords
+        const stillThere = await page.$(confirmSel);
+        const disabled = await page.$(`${confirmSel}[disabled]`);
+        const textNow = await page.$(confirmTextSel).then(h => h?.textContent() ?? "").catch(() => "");
+        const successCue =
+          (await page.$('text=/Success|Confirmed|Reserved|Booking reference|Reservation/i')) ||
+          (await page.$('text=/Thank you|completed/i'));
+
+        if (!stillThere || disabled || (spanText?.trim() || "").toLowerCase() !== (textNow?.trim() || "").toLowerCase() || successCue) {
+          confirmResult = "confirm_clicked_success";
+        } else {
+          confirmResult = "confirm_clicked_but_unclear";
+        }
+      } else {
+        confirmResult = "confirm_not_found";
+      }
+    } catch (e: any) {
+      confirmResult = `confirm_click_error: ${e?.message || "unknown"}`;
+    }
+
+    // Snapshot after confirm (for debugging)
+    let bookingShotAfter: string | undefined;
+    try {
+      const buf = await page.screenshot({ type: "jpeg", quality: 70 });
+      bookingShotAfter = `data:image/jpeg;base64,${buf.toString("base64")}`;
     } catch {}
 
     await ctx.close();
@@ -303,11 +359,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ok: true,
       outcome: "success",
       user: USER_EMAIL,
-      step: "login-then-bookingadd",
+      step: "login-then-bookingadd-confirm",
       bookingUrl: BOOKING_ADD_URL,
+      confirm_result: confirmResult,
       screenshots: {
         post_login: loginShot,
-        booking_page: bookingShot
+        booking_before_confirm: bookingShotBefore,
+        booking_after_confirm: bookingShotAfter
       }
     });
   } catch (err: any) {
