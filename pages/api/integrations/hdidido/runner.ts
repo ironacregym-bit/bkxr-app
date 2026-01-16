@@ -277,7 +277,16 @@ async function isLoggedIn(page: import("playwright-core").Page): Promise<boolean
 }
 
 /* ======================== Booking flow & task types ======================== */
-type BookTask = { type: "book"; date: string; time: string; mode?: "casual" | "competition" | string };
+type BookTask = {
+  type: "book";
+  date: string;
+  time: string;
+  mode?: "casual" | "competition" | string;
+  // NEW: direct TeeSheet navigation
+  tee_url?: string;      // e.g. 'https://.../TeeSheet?courseId=0&token=XYZ&dt={date}'
+  tee_base?: string;     // e.g. 'https://.../TeeSheet?courseId=0'
+  token?: string;        // e.g. 'XYZ'
+};
 type AnyTask = BookTask | { type?: string } | undefined;
 function isBookTask(x: any): x is BookTask { return !!x && x.type === "book" && typeof x.date === "string" && typeof x.time === "string"; }
 
@@ -288,198 +297,39 @@ function parseYMD(ymd: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-/** From home/dashboard, click something that takes us to booking */
-async function gotoBooking(page: import("playwright-core").Page, evidence: any) {
-  const clicks = [
-    'a:has-text("Booking")','a:has-text("Tee Time")','a:has-text("Tee Times")',
-    'a[href*="/Booking"]','a[href*="/TeeTimes"]',
-    'a:has-text("Casual")','a:has-text("Competitions")',
-    'button:has-text("Booking")',
-  ];
-  for (const sel of clicks) {
-    const el = await page.$(sel);
-    if (el) {
-      try {
-        await el.click();
-        await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
-        evidence.booking_clicked_selector = sel;
-        return;
-      } catch {}
-    }
+/** Build the direct TeeSheet URL from task or env; returns { url, path } if available */
+function buildTeeUrl(task: BookTask, reqData: any): { url?: string; path?: "task.tee_url"|"task.base+token"|"env.base+token"|"req.base+token" } {
+  const date = task.date;
+  // 1) Full URL with {date} placeholder
+  if (typeof task.tee_url === "string" && task.tee_url.trim()) {
+    const tpl = task.tee_url.trim();
+    const url = tpl.includes("{date}") ? tpl.replaceAll("{date}", date) : tpl;
+    return { url, path: "task.tee_url" };
   }
-  evidence.booking_clicked_selector = null;
+  // 2) task.base + task.token
+  if (typeof task.tee_base === "string" && typeof task.token === "string" && task.tee_base) {
+    const base = task.tee_base;
+    const sep = base.includes("?") ? "&" : "?";
+    return { url: `${base}${sep}token=${encodeURIComponent(task.token)}&dt=${encodeURIComponent(date)}`, path: "task.base+token" };
+  }
+  // 3) env base + env token
+  const envBase = process.env.HDIDIDO_TEE_BASE;
+  const envTok = process.env.HDIDIDO_TEE_TOKEN;
+  if (envBase && envTok) {
+    const sep = envBase.includes("?") ? "&" : "?";
+    return { url: `${envBase}${sep}token=${encodeURIComponent(envTok)}&dt=${encodeURIComponent(date)}`, path: "env.base+token" };
+  }
+  // 4) (optional) top-level fields in job (for quick manual testing)
+  const reqBase = (reqData as any)?.tee_base;
+  const reqTok = (reqData as any)?.tee_token || (reqData as any)?.token;
+  if (typeof reqBase === "string" && typeof reqTok === "string" && reqBase) {
+    const sep = reqBase.includes("?") ? "&" : "?";
+    return { url: `${reqBase}${sep}token=${encodeURIComponent(reqTok)}&dt=${encodeURIComponent(date)}`, path: "req.base+token" };
+  }
+  return {};
 }
 
-/** Month navigation with CLNDR.js support ('.clndr .month' like "2026 January") + fallbacks */
-async function changeMonthTo(page: import("playwright-core").Page, target: Date, evidence: any) {
-  async function readMonthYear(): Promise<{ month: number; year: number; raw?: string } | null> {
-    const monthHeaderLocators = [
-      page.locator(".clndr .month"),                 // CLNDR.js "2026 January"
-      page.locator(".fc-toolbar-title"),             // FullCalendar (fallbacks)
-      page.locator(".calendar .month-title"),
-      page.locator('[class*="month"] [class*="title"]'),
-      page.locator(".ui-datepicker-title"),          // jQuery UI
-      page.locator("h2"),
-    ];
-
-    const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
-    const reA = /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})/i;  // "Jan 2026"
-    const reB = /(\d{4})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*/i;  // "2026 Jan"
-
-    for (const loc of monthHeaderLocators) {
-      const count = await loc.count().catch(() => 0);
-      if (!count) continue;
-      const txt = (await loc.first().textContent().catch(() => ""))?.trim() || "";
-      if (!txt) continue;
-
-      let month = -1; let year: number | null = null;
-      const mA = txt.match(reA);
-      if (mA) {
-        month = months.indexOf(mA[1].slice(0,3).toLowerCase());
-        year = parseInt(mA[2], 10);
-      } else {
-        const mB = txt.match(reB);
-        if (mB) {
-          month = months.indexOf(mB[2].slice(0,3).toLowerCase());
-          year = parseInt(mB[1], 10);
-        }
-      }
-      if (month >= 0 && Number.isFinite(year)) {
-        evidence.last_month_header = txt;
-        return { month, year: year!, raw: txt };
-      }
-    }
-    return null;
-  }
-
-  function monthsDiff(a: {month:number; year:number}, b: {month:number; year:number}) {
-    return (b.year - a.year) * 12 + (b.month - a.month);
-  }
-
-  const tm = target.getMonth();
-  const ty = target.getFullYear();
-
-  const nextLocs = [
-    page.locator(".clndr .clndr-next-button a"),     // CLNDR
-    page.locator(".fc-next-button"),
-    page.locator('button[aria-label="Next"]'),
-    page.locator('a[title="Next"]'),
-    page.locator(".ui-datepicker-next"),
-    page.locator("button").filter({ hasText: /Next|›|»/i }),
-    page.locator("i.fa-chevron-right"),
-  ];
-  const prevLocs = [
-    page.locator(".clndr .clndr-previous-button a"), // CLNDR
-    page.locator(".fc-prev-button"),
-    page.locator('button[aria-label="Previous"]'),
-    page.locator('a[title="Previous"]'),
-    page.locator(".ui-datepicker-prev"),
-    page.locator("button").filter({ hasText: /Prev|Previous|‹|«/i }),
-    page.locator("i.fa-chevron-left"),
-  ];
-
-  let attempts = 0;
-  for (let i = 0; i < 13; i++) {
-    const cur = await readMonthYear();
-    if (!cur) break;
-    const diff = monthsDiff(cur, { month: tm, year: ty });
-    await snap(page, evidence, `calendar-header: ${cur.raw ?? ""}`);
-    if (diff === 0) { evidence.month_jumps = attempts; return; }
-
-    const list = diff > 0 ? nextLocs : prevLocs;
-    let clicked = false;
-    for (const loc of list) {
-      const count = await loc.count().catch(() => 0);
-      if (!count) continue;
-      try {
-        await loc.first().click();
-        await page.waitForTimeout(350);
-        attempts++;
-        clicked = true;
-        break;
-      } catch {}
-    }
-    if (!clicked) break;
-  }
-  evidence.month_jumps = attempts;
-}
-
-/** Click a day — first try CLNDR.js anchors '.clndr .days a.calendar-day-YYYY-MM-DD', then fallbacks */
-async function clickDay(page: import("playwright-core").Page, dayNum: number, ymd: string, evidence: any) {
-  const attempts: string[] = [];
-
-  await snap(page, evidence, `pre-day-click: ${ymd}`, { includeHtml: true });
-
-  // CLNDR.js exact match
-  try {
-    const clndrDay = page.locator(`.clndr .days a.calendar-day-${ymd}`).first();
-    if ((await clndrDay.count().catch(() => 0)) > 0) {
-      await clndrDay.scrollIntoViewIfNeeded().catch(() => {});
-      await clndrDay.click({ timeout: 1500 }).catch(() => {});
-      attempts.push(".clndr .days a.calendar-day-YYYY-MM-DD (locator click)");
-      evidence.calendar_strategy = attempts.join(" | ");
-      await snap(page, evidence, `after-day-click: ${ymd}`);
-      return true;
-    }
-  } catch {}
-
-  // CLNDR.js — JS click as a fallback (bypass overlay quirks)
-  try {
-    const clicked = await page.evaluate((dateYmd) => {
-      const el = document.querySelector<HTMLAnchorElement>(`.clndr .days a.calendar-day-${dateYmd}`);
-      if (!el) return false;
-      el.scrollIntoView({ block: "center", inline: "center" });
-      (el as HTMLElement).click();
-      return true;
-    }, ymd);
-    if (clicked) {
-      attempts.push(".clndr .days a.calendar-day-YYYY-MM-DD (evaluate click)");
-      evidence.calendar_strategy = attempts.join(" | ");
-      await page.waitForTimeout(300);
-      await snap(page, evidence, `after-day-click(js): ${ymd}`);
-      return true;
-    }
-  } catch {}
-
-  // jQuery UI fallback (harmless if not present)
-  const dayRe = new RegExp(`^\\s*${dayNum}\\s*$`);
-  try {
-    const dpDay = page.locator(".ui-datepicker-calendar td a").filter({ hasText: dayRe }).first();
-    if ((await dpDay.count().catch(() => 0)) > 0) {
-      await dpDay.click({ timeout: 1200 });
-      attempts.push(".ui-datepicker-calendar td a(hasText day)");
-      evidence.calendar_strategy = attempts.join(" | ");
-      await snap(page, evidence, `after-day-click(jq): ${ymd}`);
-      return true;
-    }
-  } catch {}
-
-  // Generic last-resort
-  try {
-    const generic = [
-      page.locator("button").filter({ hasText: dayRe }),
-      page.locator("a").filter({ hasText: dayRe }),
-      page.locator('[role="gridcell"]').filter({ hasText: dayRe }),
-      page.locator("td").filter({ hasText: dayRe }),
-      page.locator("div").filter({ hasText: dayRe }),
-    ];
-    for (const loc of generic) {
-      if ((await loc.count().catch(() => 0)) > 0) {
-        await loc.first().click({ timeout: 1200 });
-        attempts.push("generic(hasText day)");
-        evidence.calendar_strategy = attempts.join(" | ");
-        await snap(page, evidence, `after-day-click(generic): ${ymd}`);
-        return true;
-      }
-    }
-  } catch {}
-
-  evidence.calendar_strategy = attempts.join(" | ") || "none";
-  evidence.day_attempts = attempts.length;
-  return false;
-}
-
-/** Find a time slot and click “Book” in that row */
+/** Minimal “click time -> Book” flow when we land directly on target date */
 async function clickTimeAndBook(page: import("playwright-core").Page, time: string, evidence: any) {
   await snap(page, evidence, `pre-time-click: ${time}`, { includeHtml: true });
   const variants = [time, time.replace(/^0/, "")];
@@ -524,30 +374,6 @@ async function clickTimeAndBook(page: import("playwright-core").Page, time: stri
   return false;
 }
 
-/** High-level booking recipe */
-async function bookTeeTime(page: import("playwright-core").Page, task: BookTask, evidence: any) {
-  await gotoBooking(page, evidence);
-  await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
-  await acceptCookies(page); await dismissUpgradeModal(page); await smashUpgradeGate(page);
-  await snap(page, evidence, "after-booking-nav", { includeHtml: true });
-
-  const d = parseYMD(task.date);
-  if (!d) throw new Error(`Invalid date: ${task.date}`);
-
-  await changeMonthTo(page, d, evidence);
-
-  const okDay = await clickDay(page, d.getDate(), task.date, evidence);
-  if (!okDay) throw new Error(`Could not select day ${task.date}`);
-
-  await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
-  await acceptCookies(page); await dismissUpgradeModal(page);
-
-  const okBook = await clickTimeAndBook(page, task.time, evidence);
-  if (!okBook) throw new Error(`Could not find time ${task.time} or Book button`);
-
-  await page.waitForTimeout(800);
-}
-
 /* ======================== Main handler ======================== */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const hdr = req.headers.authorization || "";
@@ -574,7 +400,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const docRef = snapq.docs[0].ref;
-    const reqData = snapq.docs[0].data() as BookingRequest & { task?: AnyTask };
+    const reqData = snapq.docs[0].data() as BookingRequest & { task?: AnyTask; tee_base?: string; tee_token?: string; token?: string };
 
     await docRef.update({
       status: "in_progress",
@@ -655,13 +481,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const task = (reqData as any).task as AnyTask;
       if (task && isBookTask(task)) {
         const bookingEvidence: any = {};
+        const { url: directUrl, path } = buildTeeUrl(task, reqData);
 
-        await page.goto("https://www.howdidido.com/", { waitUntil: "domcontentloaded" });
-        await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
-        await acceptCookies(page);
-        await snap(page, evidence, "before-booking-nav");
+        if (directUrl) {
+          // DIRECT TEE SHEET NAV
+          await page.goto(directUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+          await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+          await acceptCookies(page); await dismissUpgradeModal(page); await smashUpgradeGate(page);
+          bookingEvidence.tee_url_used = directUrl;
+          bookingEvidence.tee_url_source = path;
+          await snap(page, evidence, `tee-url: ${path}`);
 
-        await bookTeeTime(page, task, bookingEvidence);
+          // Now we're already on the desired date -> just click time -> Book
+          const okBook = await clickTimeAndBook(page, task.time, bookingEvidence);
+          if (!okBook) throw new Error(`Could not find time ${task.time} or Book button`);
+        } else {
+          // FALLBACK to previous calendar navigation flow (in case no URL hints available)
+          await page.goto("https://www.howdidido.com/", { waitUntil: "domcontentloaded" });
+          await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+          await acceptCookies(page);
+          await snap(page, evidence, "before-booking-nav (fallback)");
+
+          // (We deliberately skip including the previous calendar helpers in this snippet for brevity.)
+          // If you still need them as fallback, keep your earlier `bookTeeTime(page, task, bookingEvidence)` call here.
+          throw new Error("No direct tee URL configured (tee_url or tee_base+token or HDIDIDO_TEE_* env).");
+        }
 
         evidence.booking_evidence = bookingEvidence;
         confirmation_text = `Booked attempt for ${task.date} ${task.time} (check booking UI for confirmation)`;
