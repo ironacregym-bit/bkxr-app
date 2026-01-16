@@ -35,7 +35,6 @@ async function acceptCookies(page: import("playwright-core").Page) {
       const el = await page.$(sel);
       if (el) {
         await el.click({ timeout: 1500 }).catch(() => {});
-        // brief pause to allow DOM to update
         await page.waitForTimeout(300);
         break;
       }
@@ -46,7 +45,6 @@ async function acceptCookies(page: import("playwright-core").Page) {
 /** Dismiss the app-upgrade/version modal or any blocking overlay, best-effort */
 async function dismissUpgradeModal(page: import("playwright-core").Page) {
   const selectors = [
-    // probable modal actions
     'button:has-text("Later")',
     'button:has-text("Not now")',
     'button:has-text("Continue")',
@@ -54,24 +52,18 @@ async function dismissUpgradeModal(page: import("playwright-core").Page) {
     'button:has-text("Dismiss")',
     'a:has-text("Close")',
     'a:has-text("Dismiss")',
-
-    // close icons / bootstrap dismissors
     'button[aria-label*="close" i]',
     'button[title*="close" i]',
     '.modal-header .btn-close',
     '.modal .btn-close',
     '.modal [data-bs-dismiss="modal"]',
     '.modal .close',
-
-    // backdrop (last resort)
     '.modal-backdrop'
   ];
-
   for (const sel of selectors) {
     try {
       const el = await page.$(sel);
       if (!el) continue;
-
       if (sel === '.modal-backdrop') {
         await page.click('.modal-backdrop', { position: { x: 10, y: 10 }, timeout: 800 }).catch(() => {});
       } else {
@@ -80,13 +72,63 @@ async function dismissUpgradeModal(page: import("playwright-core").Page) {
       await page.waitForTimeout(350);
     } catch { /* ignore */ }
   }
-
-  // Some modals respond to Escape
   try { await page.keyboard.press("Escape"); } catch {}
   await page.waitForTimeout(150);
 }
 
-/** Collect debug evidence (title, url, html snippet, screenshot) */
+/** Nuclear option: remove obvious overlays and restore scroll */
+async function nukeOverlays(page: import("playwright-core").Page) {
+  try {
+    await page.evaluate(() => {
+      const kill = (el: Element) => el.parentNode?.removeChild(el);
+      const all = Array.from(document.querySelectorAll<HTMLElement>("*"));
+      for (const el of all) {
+        const s = window.getComputedStyle(el);
+        const z = parseInt(s.zIndex || "0", 10);
+        const dialog = el.getAttribute("role") === "dialog" || el.className.toString().toLowerCase().includes("modal");
+        if ((s.position === "fixed" || s.position === "sticky" || dialog) && z >= 1000) {
+          try { kill(el); } catch {}
+        }
+      }
+      document.body.style.overflow = "auto";
+    });
+  } catch { /* ignore */ }
+  await page.waitForTimeout(200);
+}
+
+/** List frame URLs for evidence */
+function listFrameUrls(page: import("playwright-core").Page) {
+  return page.frames().map(f => ({ name: f.name(), url: f.url() }));
+}
+
+/** Find first element matching any of selectors across all frames */
+async function findInFrames(page: import("playwright-core").Page, selectors: string[]) {
+  for (const frame of page.frames()) {
+    for (const sel of selectors) {
+      try {
+        const handle = await frame.$(sel);
+        if (handle) return { frame, handle, selector: sel };
+      } catch {}
+    }
+  }
+  return null;
+}
+
+/** Click across frames */
+async function clickInFrames(page: import("playwright-core").Page, selectors: string[]) {
+  const found = await findInFrames(page, selectors);
+  if (!found) return false;
+  try { await found.handle.click(); return true; } catch { return false; }
+}
+
+/** Fill across frames */
+async function fillInFrames(page: import("playwright-core").Page, selectors: string[], value: string) {
+  const found = await findInFrames(page, selectors);
+  if (!found) return false;
+  try { await found.handle.fill(value); return true; } catch { return false; }
+}
+
+/** Collect debug evidence (title, url, html snippet, screenshot, frames) */
 async function collectEvidence(page: import("playwright-core").Page) {
   const url = page.url();
   const title = await page.title().catch(() => "");
@@ -100,103 +142,91 @@ async function collectEvidence(page: import("playwright-core").Page) {
     const buf = await page.screenshot({ type: "jpeg", quality: 60, fullPage: false });
     screenshot_b64 = `data:image/jpeg;base64,${buf.toString("base64")}`;
   } catch {}
-  return { url, title, htmlSnippet, screenshot_b64 };
+  const frames = listFrameUrls(page);
+  return { url, title, htmlSnippet, screenshot_b64, frames };
 }
 
-/** Try native HowDidiDo login (email/password on same page) */
+/** Try native HowDidiDo login (email/password on same page) — frame-aware */
 async function tryNativeLogin(page: import("playwright-core").Page, username: string, password: string) {
-  // Wait a beat for late DOM injection
   await page.waitForTimeout(600);
   await dismissUpgradeModal(page);
 
-  const emailSel = await page.$(
-    'input[type="email"], input[name="Email"], input[id="Email"], input[name="email"], input[id*="email"]'
-  );
-  if (!emailSel) return false; // not the native variant
-  await emailSel.fill(username);
+  const emailFilled = await fillInFrames(page, [
+    'input[type="email"]', 'input[name="Email"]', 'input[id="Email"]',
+    'input[name="email"]', 'input[id*="email"]'
+  ], username);
 
-  const passSel = await page.$(
-    'input[type="password"], input[name="Password"], input[id="Password"], input[id*="password"]'
-  );
-  if (!passSel) return false; // likely an IdP flow instead of native
-  await passSel.fill(password);
+  // If no email element anywhere, not the native variant
+  if (!emailFilled) return false;
 
-  const submitSel =
-    (await page.$('button[type="submit"]')) ||
-    (await page.$('button:has-text("Sign In")')) ||
-    (await page.$('button:has-text("Log in")')) ||
-    (await page.$('input[type="submit"]'));
-  if (!submitSel) throw new Error("Login submit button not found (native form)");
-  await submitSel.click();
+  const passFilled = await fillInFrames(page, [
+    'input[type="password"]', 'input[name="Password"]', 'input[id="Password"]',
+    'input[id*="password"]', 'input[name="password"]'
+  ], password);
+  if (!passFilled) return false;
 
-  // Give time for post-login
+  const clicked = await clickInFrames(page, [
+    'button[type="submit"]',
+    'button:has-text("Sign In")',
+    'button:has-text("Log in")',
+    'input[type="submit"]'
+  ]);
+  if (!clicked) throw new Error("Login submit button not found (native form)");
+
   await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
   await dismissUpgradeModal(page);
+  await nukeOverlays(page);
 
-  // Success cues
   const successCues = [
     'text=Sign out', 'text=My Account',
     'a[href*="/account"]', 'a[href*="/dashboard"]'
   ];
-  for (const cue of successCues) {
-    if (await page.$(cue)) return true;
-  }
-  return false;
+  const ok = await findInFrames(page, successCues);
+  return !!ok;
 }
 
-/** Try Microsoft / Azure AD login flow */
+/** Try Microsoft / Azure AD login flow — frame-aware and resilient */
 async function tryMicrosoftLogin(page: import("playwright-core").Page, username: string, password: string) {
   await page.waitForTimeout(600);
   await dismissUpgradeModal(page);
+  await nukeOverlays(page);
 
-  // First page: email field (#i0116 or name=loginfmt), then Next (#idSIButton9)
-  const emailInput =
-    (await page.$('#i0116')) ||
-    (await page.$('input[name="loginfmt"]')) ||
-    (await page.$('input[type="email"]'));
-  if (!emailInput) return false; // not an MS page
-  await emailInput.fill(username);
+  const emailOk = await fillInFrames(page, ['#i0116', 'input[name="loginfmt"]', 'input[type="email"]'], username);
+  if (!emailOk) return false; // not on MS login
 
-  const nextBtn = (await page.$('#idSIButton9')) || (await page.$('input[type="submit"]'));
-  if (!nextBtn) throw new Error("Microsoft login: Next button not found");
-  await nextBtn.click();
+  const nextOk = await clickInFrames(page, ['#idSIButton9', 'input[type="submit"]', 'button:has-text("Next")']);
+  if (!nextOk) throw new Error("Microsoft login: Next button not found");
 
-  // Wait for password page
   await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
   await dismissUpgradeModal(page);
+  await nukeOverlays(page);
 
-  const passInput =
-    (await page.$('#i0118')) ||
-    (await page.$('input[name="passwd"]')) ||
-    (await page.$('input[type="password"]'));
-  if (!passInput) throw new Error("Microsoft login: password input not found");
-  await passInput.fill(password);
+  const passOk = await fillInFrames(page, ['#i0118', 'input[name="passwd"]', 'input[type="password"]'], password);
+  if (!passOk) throw new Error("Microsoft login: password input not found");
 
-  const signInBtn = (await page.$('#idSIButton9')) || (await page.$('input[type="submit"]'));
-  if (!signInBtn) throw new Error("Microsoft login: Sign in button not found");
-  await signInBtn.click();
+  const signOk = await clickInFrames(page, ['#idSIButton9', 'input[type="submit"]', 'button:has-text("Sign in")']);
+  if (!signOk) throw new Error("Microsoft login: Sign in button not found");
 
-  // “Stay signed in?” screen — choose No (or Yes)
   await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
   await dismissUpgradeModal(page);
+  await nukeOverlays(page);
 
-  const stayNo = await page.$('#idBtn_Back');
-  const stayYes = await page.$('#idSIButton9');
-  if (stayNo) await stayNo.click().catch(() => {});
-  else if (stayYes) await stayYes.click().catch(() => {});
+  // Stay signed in?
+  const stayNo = await clickInFrames(page, ['#idBtn_Back', 'button:has-text("No")']);
+  if (!stayNo) {
+    await clickInFrames(page, ['#idSIButton9', 'button:has-text("Yes")']).catch(() => {});
+  }
 
-  // Wait to get back to HowDidiDo
   await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
   await dismissUpgradeModal(page);
+  await nukeOverlays(page);
 
   const successCues = [
     'text=Sign out', 'text=My Account',
     'a[href*="/account"]', 'a[href*="/dashboard"]'
   ];
-  for (const cue of successCues) {
-    if (await page.$(cue)) return true;
-  }
-  return false;
+  const ok = await findInFrames(page, successCues);
+  return !!ok;
 }
 
 /**
@@ -205,12 +235,10 @@ async function tryMicrosoftLogin(page: import("playwright-core").Page, username:
  * NOTE: Keep Node.js Serverless runtime (do NOT export runtime: 'edge').
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // ---- Guard: only allow authorised schedulers (GitHub Actions / proxy) ----
   const hdr = req.headers.authorization || "";
   if (hdr !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -218,7 +246,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const now = new Date().toISOString();
 
-    // Claim exactly one due job (status==queued and run_at <= now)
+    // Claim one due job
     const snap = await firestore
       .collection("golf_booking_requests")
       .where("status", "==", "queued")
@@ -250,66 +278,61 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let evidence: any = {};
 
     try {
-      // ---- Credentials resolution ----
+      // Credentials: job-encrypted > env fallback
       let creds: { username?: string; password?: string } | undefined;
       if (reqData.enc_credentials_b64) {
-        try { creds = decryptJson(reqData.enc_credentials_b64); } catch { /* ignore */ }
+        try { creds = decryptJson(reqData.enc_credentials_b64); } catch {}
       }
       const username = creds?.username || process.env.HDIDIDO_EMAIL || "";
       const password = creds?.password || process.env.HDIDIDO_PASSWORD || "";
-
       if (!username || !password) {
-        throw new Error("No HowDidiDo credentials provided (enc_credentials_b64 or env HDIDIDO_EMAIL/HDIDIDO_PASSWORD required)");
+        throw new Error("No HowDidiDo credentials (enc_credentials_b64 or env HDIDIDO_EMAIL/HDIDIDO_PASSWORD)");
       }
 
-      // ---- Launch Playwright with @sparticuz/chromium (serverless) ----
+      // Playwright on serverless chromium
       const { default: chromium } = await import("@sparticuz/chromium");
       const playwright = await import("playwright-core");
-
       const browser = await playwright.chromium.launch({
         args: chromium.args,
         executablePath: await chromium.executablePath(),
         headless: true
       });
-
       const ctx = await browser.newContext({
         viewport: { width: 1280, height: 800 },
-        userAgent:
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+        userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
       });
       const page = await ctx.newPage();
 
-      // ---- Navigate, accept cookies, dismiss upgrade modal ----
-      await page.goto(HOWDIDIDO_LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      // Navigate and clear blockers
+      await page.goto(HOWDIDIDO_LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
       await acceptCookies(page);
       await dismissUpgradeModal(page);
+      await nukeOverlays(page);
 
-      // ---- Try native login; if not found, try Microsoft/Azure AD ----
+      // Try native then MS
       let loggedIn = false;
       try {
         await dismissUpgradeModal(page);
+        await nukeOverlays(page);
         loggedIn = await tryNativeLogin(page, username, password);
-      } catch {
-        // proceed to Microsoft if native throws
-      }
+      } catch { /* continue */ }
+
       if (!loggedIn) {
         await dismissUpgradeModal(page);
+        await nukeOverlays(page);
         loggedIn = await tryMicrosoftLogin(page, username, password);
       }
 
-      // Final guard: if still not logged in, collect evidence and fail
       if (!loggedIn) {
         evidence = await collectEvidence(page);
         throw new Error("Could not detect a successful login (modal/IdP variant blocked inputs).");
       }
 
-      // Success
       confirmation_text = `Login OK as ${username.replace(/(.{2}).+(@.*)/, "$1***$2")}`;
       evidence = await collectEvidence(page);
 
       await ctx.close();
       await browser.close();
-
       outcome = "success";
     } catch (err: any) {
       errorMsg = err?.message || String(err);
@@ -325,21 +348,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await docRef.update({ status: outcome });
 
-    // Notify requester (you can mute during testing)
     const who = reqData.requester_email;
     if (who) {
       if (outcome === "success") {
-        await notify(
-          who,
-          "HowDidiDo login ✅",
-          confirmation_text || "Logged in successfully."
-        );
+        await notify(who, "HowDidiDo login ✅", confirmation_text || "Logged in successfully.");
       } else {
-        await notify(
-          who,
-          "HowDidiDo login failed ❌",
-          errorMsg || "Unknown error"
-        );
+        await notify(who, "HowDidiDo login failed ❌", errorMsg || "Unknown error");
       }
     }
 
