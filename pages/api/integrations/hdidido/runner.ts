@@ -296,29 +296,44 @@ async function gotoBooking(page: import("playwright-core").Page, evidence: any) 
   evidence.booking_clicked_selector = null;
 }
 
-/** Month navigation that supports FullCalendar and jQuery-UI datepicker */
+/** Month navigation with CLNDR.js support ('.clndr .month' like "2026 January") + fallbacks */
 async function changeMonthTo(page: import("playwright-core").Page, target: Date, evidence: any) {
   async function readMonthYear(): Promise<{ month: number; year: number; raw?: string } | null> {
     const monthHeaderLocators = [
-      page.locator(".fc-toolbar-title"),              // FullCalendar
+      page.locator(".clndr .month"),                 // CLNDR.js "2026 January"
+      page.locator(".fc-toolbar-title"),             // FullCalendar
       page.locator(".calendar .month-title"),
       page.locator('[class*="month"] [class*="title"]'),
-      page.locator(".ui-datepicker-title"),           // jQuery UI
-      page.locator("h2"),                             // generic
+      page.locator(".ui-datepicker-title"),          // jQuery UI
+      page.locator("h2"),
     ];
-    const monthRe = /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})/i;
+
     const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+    const reA = /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})/i;  // "Jan 2026"
+    const reB = /(\d{4})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*/i;  // "2026 Jan"
 
     for (const loc of monthHeaderLocators) {
-      const filtered = loc.filter({ hasText: monthRe });
-      const count = await filtered.count().catch(() => 0);
+      const count = await loc.count().catch(() => 0);
       if (!count) continue;
-      const text = (await filtered.first().textContent().catch(() => ""))?.trim() || "";
-      const m = text.match(monthRe);
-      if (!m) continue;
-      const month = months.indexOf(m[1].slice(0,3).toLowerCase());
-      const year = parseInt(m[2], 10);
-      if (month >= 0 && Number.isFinite(year)) return { month, year, raw: text };
+      const txt = (await loc.first().textContent().catch(() => ""))?.trim() || "";
+      if (!txt) continue;
+
+      let month = -1; let year: number | null = null;
+
+      const mA = txt.match(reA);
+      if (mA) {
+        month = months.indexOf(mA[1].slice(0,3).toLowerCase());
+        year = parseInt(mA[2], 10);
+      } else {
+        const mB = txt.match(reB);
+        if (mB) {
+          month = months.indexOf(mB[2].slice(0,3).toLowerCase());
+          year = parseInt(mB[1], 10);
+        }
+      }
+      if (month >= 0 && Number.isFinite(year)) {
+        return { month, year: year!, raw: txt };
+      }
     }
     return null;
   }
@@ -330,19 +345,22 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
   const tm = target.getMonth();
   const ty = target.getFullYear();
 
+  // Prefer CLNDR.js arrows first
   const nextLocs = [
+    page.locator(".clndr .clndr-next-button a"),
     page.locator(".fc-next-button"),
     page.locator('button[aria-label="Next"]'),
     page.locator('a[title="Next"]'),
-    page.locator(".ui-datepicker-next"),             // jQuery UI
+    page.locator(".ui-datepicker-next"),
     page.locator("button").filter({ hasText: /Next|›|»/i }),
     page.locator("i.fa-chevron-right"),
   ];
   const prevLocs = [
+    page.locator(".clndr .clndr-previous-button a"),
     page.locator(".fc-prev-button"),
     page.locator('button[aria-label="Previous"]'),
     page.locator('a[title="Previous"]'),
-    page.locator(".ui-datepicker-prev"),             // jQuery UI
+    page.locator(".ui-datepicker-prev"),
     page.locator("button").filter({ hasText: /Prev|Previous|‹|«/i }),
     page.locator("i.fa-chevron-left"),
   ];
@@ -375,23 +393,22 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
   evidence.month_jumps = attempts;
 }
 
-/** Try multiple strategies to click a given day in the currently visible month */
+/** Click a day — first try CLNDR.js anchors '.clndr .days a.calendar-day-YYYY-MM-DD', then fallbacks */
 async function clickDay(page: import("playwright-core").Page, dayNum: number, ymd: string, evidence: any) {
   const attempts: string[] = [];
-  const dayRe = new RegExp(`^\\s*${dayNum}\\s*$`);
 
-  // Strategy A: FullCalendar data-date and clickable number
+  // CLNDR.js: <a class="day calendar-day-YYYY-MM-DD ...">DD</a>
   try {
-    const cell = page.locator(`.fc-daygrid-day[data-date="${ymd}"] .fc-daygrid-day-number`).first();
-    if ((await cell.count().catch(() => 0)) > 0) {
-      await cell.click({ timeout: 1200 });
-      attempts.push("fc-daygrid-day[data-date] .fc-daygrid-day-number");
+    const clndrDay = page.locator(`.clndr .days a.calendar-day-${ymd}`).first();
+    if ((await clndrDay.count().catch(() => 0)) > 0) {
+      await clndrDay.click({ timeout: 1200 });
+      attempts.push(".clndr .days a.calendar-day-YYYY-MM-DD");
       evidence.calendar_strategy = attempts.join(" | ");
       return true;
     }
   } catch {}
 
-  // Strategy B: any element with data-date="YYYY-MM-DD"
+  // Generic data-date fallback (just in case)
   try {
     const anyDataDate = page.locator(`[data-date="${ymd}"]`).first();
     if ((await anyDataDate.count().catch(() => 0)) > 0) {
@@ -402,29 +419,8 @@ async function clickDay(page: import("playwright-core").Page, dayNum: number, ym
     }
   } catch {}
 
-  // Strategy C: aria-label variants ("January 18, 2026" | "Sun Jan 18 2026")
-  const monthsLong = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const monthsShort = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const d = parseYMD(ymd)!;
-  const labelCandidates = [
-    `${monthsLong[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`,
-    `${monthsShort[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`,
-    // loose variant some calendars use:
-    `${monthsShort[d.getMonth()]} ${d.getDate()} ${d.getFullYear()}`,
-  ];
-  for (const lab of labelCandidates) {
-    try {
-      const ariaCell = page.locator(`[aria-label="${lab}"]`).first();
-      if ((await ariaCell.count().catch(() => 0)) > 0) {
-        await ariaCell.click({ timeout: 1200 });
-        attempts.push(`[aria-label="${lab}"]`);
-        evidence.calendar_strategy = attempts.join(" | ");
-        return true;
-      }
-    } catch {}
-  }
-
-  // Strategy D: jQuery-UI datepicker grid: .ui-datepicker-calendar td a (day number)
+  // jQuery UI fallback (not likely on your page, but harmless)
+  const dayRe = new RegExp(`^\\s*${dayNum}\\s*$`);
   try {
     const dpDay = page.locator(".ui-datepicker-calendar td a").filter({ hasText: dayRe }).first();
     if ((await dpDay.count().catch(() => 0)) > 0) {
@@ -435,7 +431,7 @@ async function clickDay(page: import("playwright-core").Page, dayNum: number, ym
     }
   } catch {}
 
-  // Strategy E: generic button/anchor/gridcell with exact day text
+  // Generic last-resort
   try {
     const generic = [
       page.locator("button").filter({ hasText: dayRe }),
@@ -448,30 +444,6 @@ async function clickDay(page: import("playwright-core").Page, dayNum: number, ym
       if ((await loc.count().catch(() => 0)) > 0) {
         await loc.first().click({ timeout: 1200 });
         attempts.push("generic(hasText day)");
-        evidence.calendar_strategy = attempts.join(" | ");
-        return true;
-      }
-    }
-  } catch {}
-
-  // Strategy F: Some pages hide calendar until a date input is focused
-  try {
-    const dateInputs = page.locator('input[type="date"], input[name*="date" i], input[id*="date" i]');
-    if ((await dateInputs.count().catch(() => 0)) > 0) {
-      await dateInputs.first().click({ timeout: 800 }).catch(() => {});
-      await page.waitForTimeout(250);
-      // re-attempt jQuery‑UI/FullCalendar strategies quickly
-      const dpDay2 = page.locator(".ui-datepicker-calendar td a").filter({ hasText: dayRe }).first();
-      if ((await dpDay2.count().catch(() => 0)) > 0) {
-        await dpDay2.click({ timeout: 1200 });
-        attempts.push("openDateInput -> .ui-datepicker-calendar td a");
-        evidence.calendar_strategy = attempts.join(" | ");
-        return true;
-      }
-      const fcCell2 = page.locator(`.fc-daygrid-day[data-date="${ymd}"] .fc-daygrid-day-number`).first();
-      if ((await fcCell2.count().catch(() => 0)) > 0) {
-        await fcCell2.click({ timeout: 1200 });
-        attempts.push("openDateInput -> fc-daygrid-day-number");
         evidence.calendar_strategy = attempts.join(" | ");
         return true;
       }
