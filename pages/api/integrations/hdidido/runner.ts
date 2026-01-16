@@ -8,7 +8,6 @@ import { decryptJson } from "../../../../lib/crypto";
 const HOWDIDIDO_LOGIN_URL = "https://www.howdidido.com/Account/Login";
 
 /* ======================== Notifier ======================== */
-
 async function notify(email: string, title: string, body: string) {
   const base = process.env.APP_BASE_URL;
   if (!base) return;
@@ -22,7 +21,6 @@ async function notify(email: string, title: string, body: string) {
 }
 
 /* ======================== Session persistence ======================== */
-
 const rootDoc = firestore.collection("integrations").doc("howdidido");
 const sessionsCol = rootDoc.collection("sessions");
 
@@ -41,7 +39,6 @@ async function saveStorageState(email: string, storageState: any) {
 }
 
 /* ======================== Blockers handling ======================== */
-
 async function acceptCookies(page: import("playwright-core").Page) {
   const selectors = [
     'button:has-text("OK")','a:has-text("OK")',
@@ -126,7 +123,6 @@ async function nukeOverlays(page: import("playwright-core").Page) {
 }
 
 /* ======================== Cross-frame helpers & evidence ======================== */
-
 function listFrameUrls(page: import("playwright-core").Page) {
   return page.frames().map(f => ({ name: f.name(), url: f.url() }));
 }
@@ -148,6 +144,29 @@ async function fillInFrames(page: import("playwright-core").Page, selectors: str
   if (!found) return false;
   try { await found.handle.fill(value); return true; } catch { return false; }
 }
+
+type EvidenceScreen = { label: string; url: string; title: string; screenshot_b64?: string; htmlSnippet?: string };
+async function snap(page: import("playwright-core").Page, evidence: any, label: string, opts?: { includeHtml?: boolean }) {
+  try {
+    const url = page.url();
+    const title = (await page.title().catch(() => "")) || "";
+    let screenshot_b64: string | undefined;
+    try {
+      const buf = await page.screenshot({ type: "jpeg", quality: 60, fullPage: false });
+      screenshot_b64 = `data:image/jpeg;base64,${buf.toString("base64")}`;
+    } catch {}
+    let htmlSnippet: string | undefined;
+    if (opts?.includeHtml) {
+      try {
+        const html = await page.content();
+        htmlSnippet = html.slice(0, 6144);
+      } catch {}
+    }
+    if (!Array.isArray(evidence.screens)) evidence.screens = [];
+    (evidence.screens as EvidenceScreen[]).push({ label, url, title, screenshot_b64, htmlSnippet });
+  } catch {}
+}
+
 async function collectEvidence(page: import("playwright-core").Page) {
   const url = page.url();
   const title = await page.title().catch(() => "");
@@ -160,7 +179,6 @@ async function collectEvidence(page: import("playwright-core").Page) {
 }
 
 /* ======================== Login flows ======================== */
-
 async function tryNativeDirect(page: import("playwright-core").Page, username: string, password: string) {
   const emailCandidates = ['#Email','input[name="Email"]','input[type="email"]','input[name="email"]','input[id*="email"]','input[type="text"]'];
   const passCandidates  = ['#Password','input[name="Password"]','input[type="password"]','input[id*="password"]','input[name="password"]'];
@@ -171,7 +189,6 @@ async function tryNativeDirect(page: import("playwright-core").Page, username: s
   if (!passEl) return false;
 
   await emailEl.fill(username); await passEl.fill(password);
-
   const loginButton =
     (await page.$('button:has-text("Log in")')) ||
     (await page.$('a:has-text("Log in")')) ||
@@ -260,12 +277,9 @@ async function isLoggedIn(page: import("playwright-core").Page): Promise<boolean
 }
 
 /* ======================== Booking flow & task types ======================== */
-
 type BookTask = { type: "book"; date: string; time: string; mode?: "casual" | "competition" | string };
 type AnyTask = BookTask | { type?: string } | undefined;
-function isBookTask(x: any): x is BookTask {
-  return !!x && x.type === "book" && typeof x.date === "string" && typeof x.time === "string";
-}
+function isBookTask(x: any): x is BookTask { return !!x && x.type === "book" && typeof x.date === "string" && typeof x.time === "string"; }
 
 function parseYMD(ymd: string): Date | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
@@ -301,7 +315,7 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
   async function readMonthYear(): Promise<{ month: number; year: number; raw?: string } | null> {
     const monthHeaderLocators = [
       page.locator(".clndr .month"),                 // CLNDR.js "2026 January"
-      page.locator(".fc-toolbar-title"),             // FullCalendar
+      page.locator(".fc-toolbar-title"),             // FullCalendar (fallbacks)
       page.locator(".calendar .month-title"),
       page.locator('[class*="month"] [class*="title"]'),
       page.locator(".ui-datepicker-title"),          // jQuery UI
@@ -319,7 +333,6 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
       if (!txt) continue;
 
       let month = -1; let year: number | null = null;
-
       const mA = txt.match(reA);
       if (mA) {
         month = months.indexOf(mA[1].slice(0,3).toLowerCase());
@@ -332,6 +345,7 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
         }
       }
       if (month >= 0 && Number.isFinite(year)) {
+        evidence.last_month_header = txt;
         return { month, year: year!, raw: txt };
       }
     }
@@ -345,9 +359,8 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
   const tm = target.getMonth();
   const ty = target.getFullYear();
 
-  // Prefer CLNDR.js arrows first
   const nextLocs = [
-    page.locator(".clndr .clndr-next-button a"),
+    page.locator(".clndr .clndr-next-button a"),     // CLNDR
     page.locator(".fc-next-button"),
     page.locator('button[aria-label="Next"]'),
     page.locator('a[title="Next"]'),
@@ -356,7 +369,7 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
     page.locator("i.fa-chevron-right"),
   ];
   const prevLocs = [
-    page.locator(".clndr .clndr-previous-button a"),
+    page.locator(".clndr .clndr-previous-button a"), // CLNDR
     page.locator(".fc-prev-button"),
     page.locator('button[aria-label="Previous"]'),
     page.locator('a[title="Previous"]'),
@@ -368,14 +381,12 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
   let attempts = 0;
   for (let i = 0; i < 13; i++) {
     const cur = await readMonthYear();
-    evidence.last_month_header = cur?.raw || evidence.last_month_header || null;
     if (!cur) break;
     const diff = monthsDiff(cur, { month: tm, year: ty });
+    await snap(page, evidence, `calendar-header: ${cur.raw ?? ""}`);
     if (diff === 0) { evidence.month_jumps = attempts; return; }
 
-    const goNext = diff > 0;
-    const list = goNext ? nextLocs : prevLocs;
-
+    const list = diff > 0 ? nextLocs : prevLocs;
     let clicked = false;
     for (const loc of list) {
       const count = await loc.count().catch(() => 0);
@@ -397,29 +408,40 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
 async function clickDay(page: import("playwright-core").Page, dayNum: number, ymd: string, evidence: any) {
   const attempts: string[] = [];
 
-  // CLNDR.js: <a class="day calendar-day-YYYY-MM-DD ...">DD</a>
+  await snap(page, evidence, `pre-day-click: ${ymd}`, { includeHtml: true });
+
+  // CLNDR.js exact match
   try {
     const clndrDay = page.locator(`.clndr .days a.calendar-day-${ymd}`).first();
     if ((await clndrDay.count().catch(() => 0)) > 0) {
-      await clndrDay.click({ timeout: 1200 });
-      attempts.push(".clndr .days a.calendar-day-YYYY-MM-DD");
+      await clndrDay.scrollIntoViewIfNeeded().catch(() => {});
+      await clndrDay.click({ timeout: 1500 }).catch(() => {});
+      attempts.push(".clndr .days a.calendar-day-YYYY-MM-DD (locator click)");
       evidence.calendar_strategy = attempts.join(" | ");
+      await snap(page, evidence, `after-day-click: ${ymd}`);
       return true;
     }
   } catch {}
 
-  // Generic data-date fallback (just in case)
+  // CLNDR.js — JS click as a fallback (bypass overlay quirks)
   try {
-    const anyDataDate = page.locator(`[data-date="${ymd}"]`).first();
-    if ((await anyDataDate.count().catch(() => 0)) > 0) {
-      await anyDataDate.click({ timeout: 1200 });
-      attempts.push('[data-date="YYYY-MM-DD"]');
+    const clicked = await page.evaluate((dateYmd) => {
+      const el = document.querySelector<HTMLAnchorElement>(`.clndr .days a.calendar-day-${dateYmd}`);
+      if (!el) return false;
+      el.scrollIntoView({ block: "center", inline: "center" });
+      (el as HTMLElement).click();
+      return true;
+    }, ymd);
+    if (clicked) {
+      attempts.push(".clndr .days a.calendar-day-YYYY-MM-DD (evaluate click)");
       evidence.calendar_strategy = attempts.join(" | ");
+      await page.waitForTimeout(300);
+      await snap(page, evidence, `after-day-click(js): ${ymd}`);
       return true;
     }
   } catch {}
 
-  // jQuery UI fallback (not likely on your page, but harmless)
+  // jQuery UI fallback (harmless if not present)
   const dayRe = new RegExp(`^\\s*${dayNum}\\s*$`);
   try {
     const dpDay = page.locator(".ui-datepicker-calendar td a").filter({ hasText: dayRe }).first();
@@ -427,6 +449,7 @@ async function clickDay(page: import("playwright-core").Page, dayNum: number, ym
       await dpDay.click({ timeout: 1200 });
       attempts.push(".ui-datepicker-calendar td a(hasText day)");
       evidence.calendar_strategy = attempts.join(" | ");
+      await snap(page, evidence, `after-day-click(jq): ${ymd}`);
       return true;
     }
   } catch {}
@@ -445,6 +468,7 @@ async function clickDay(page: import("playwright-core").Page, dayNum: number, ym
         await loc.first().click({ timeout: 1200 });
         attempts.push("generic(hasText day)");
         evidence.calendar_strategy = attempts.join(" | ");
+        await snap(page, evidence, `after-day-click(generic): ${ymd}`);
         return true;
       }
     }
@@ -457,6 +481,7 @@ async function clickDay(page: import("playwright-core").Page, dayNum: number, ym
 
 /** Find a time slot and click “Book” in that row */
 async function clickTimeAndBook(page: import("playwright-core").Page, time: string, evidence: any) {
+  await snap(page, evidence, `pre-time-click: ${time}`, { includeHtml: true });
   const variants = [time, time.replace(/^0/, "")];
   for (const v of variants) {
     try {
@@ -466,12 +491,16 @@ async function clickTimeAndBook(page: import("playwright-core").Page, time: stri
         const bookInRow = row.locator('xpath=ancestor::*[self::tr or self::*][1]').locator('text=/^\\s*Book\\s*$/i').first();
         if (await bookInRow.count().catch(() => 0)) {
           await bookInRow.click({ timeout: 2000 }).catch(()=>{});
-          evidence.time_clicked = v; evidence.book_clicked = true; return true;
+          evidence.time_clicked = v; evidence.book_clicked = true;
+          await snap(page, evidence, `after-book-click: ${v}`);
+          return true;
         }
         const nearbyBook = page.locator(`text=${v}`).locator('..').locator('text=/^\\s*Book\\s*$/i').first();
         if (await nearbyBook.count().catch(() => 0)) {
           await nearbyBook.click({ timeout: 2000 }).catch(()=>{});
-          evidence.time_clicked = v; evidence.book_clicked = true; return true;
+          evidence.time_clicked = v; evidence.book_clicked = true;
+          await snap(page, evidence, `after-book-click(nearby): ${v}`);
+          return true;
         }
       }
     } catch {}
@@ -484,7 +513,12 @@ async function clickTimeAndBook(page: import("playwright-core").Page, time: stri
         (await page.$('button:has-text("Book")')) ||
         (await page.$('a:has-text("Book")')) ||
         (await page.$('input[type="button"][value="Book"]'));
-      if (bookBtn) { await bookBtn.click().catch(()=>{}); evidence.time_clicked = v; evidence.book_clicked = true; return true; }
+      if (bookBtn) {
+        await bookBtn.click().catch(()=>{});
+        evidence.time_clicked = v; evidence.book_clicked = true;
+        await snap(page, evidence, `after-book-click(fallback): ${v}`);
+        return true;
+      }
     }
   }
   return false;
@@ -495,6 +529,7 @@ async function bookTeeTime(page: import("playwright-core").Page, task: BookTask,
   await gotoBooking(page, evidence);
   await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
   await acceptCookies(page); await dismissUpgradeModal(page); await smashUpgradeGate(page);
+  await snap(page, evidence, "after-booking-nav", { includeHtml: true });
 
   const d = parseYMD(task.date);
   if (!d) throw new Error(`Invalid date: ${task.date}`);
@@ -514,7 +549,6 @@ async function bookTeeTime(page: import("playwright-core").Page, task: BookTask,
 }
 
 /* ======================== Main handler ======================== */
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const hdr = req.headers.authorization || "";
   if (hdr !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -527,7 +561,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const now = new Date().toISOString();
 
-    const snap = await firestore
+    const snapq = await firestore
       .collection("golf_booking_requests")
       .where("status", "==", "queued")
       .where("run_at", "<=", now)
@@ -535,12 +569,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .limit(1)
       .get();
 
-    if (snap.empty) {
+    if (snapq.empty) {
       return res.status(200).json({ ok: true, message: "No due jobs" });
     }
 
-    const docRef = snap.docs[0].ref;
-    const reqData = snap.docs[0].data() as BookingRequest & { task?: AnyTask };
+    const docRef = snapq.docs[0].ref;
+    const reqData = snapq.docs[0].data() as BookingRequest & { task?: AnyTask };
 
     await docRef.update({
       status: "in_progress",
@@ -590,6 +624,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await acceptCookies(page);
         reusedSession = await isLoggedIn(page);
       }
+      await snap(page, evidence, reusedSession ? "home (reused session)" : "home (pre-login)");
 
       if (!reusedSession) {
         await page.goto(HOWDIDIDO_LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -606,13 +641,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           loggedIn = await tryMicrosoftLogin(page, username, password);
         }
         if (!loggedIn) {
-          evidence = await collectEvidence(page);
+          evidence = { ...evidence, ...(await collectEvidence(page)) };
           throw new Error("Could not detect a successful login (modal/IdP variant blocked inputs).");
         }
 
         const state = await ctx.storageState();
         await saveStorageState(username, state);
       }
+
+      await snap(page, evidence, "home (post-login)");
 
       // ----- Task routing
       const task = (reqData as any).task as AnyTask;
@@ -622,6 +659,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await page.goto("https://www.howdidido.com/", { waitUntil: "domcontentloaded" });
         await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
         await acceptCookies(page);
+        await snap(page, evidence, "before-booking-nav");
 
         await bookTeeTime(page, task, bookingEvidence);
 
