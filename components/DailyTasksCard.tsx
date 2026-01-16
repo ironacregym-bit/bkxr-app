@@ -1,36 +1,49 @@
 
+// components/DailyTasksCard.tsx
 import React from "react";
 import Link from "next/link";
 
 type Props = {
   dayLabel: string;
 
+  // Nutrition
   nutritionSummary?: { calories: number; protein: number };
   nutritionLogged: boolean;
 
+  // Planned workout (the day’s programmed session)
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
   hasWorkout: boolean;
   workoutDone: boolean;
 
+  // Habits
   habitSummary?: { completed: number; total: number };
   habitAllDone: boolean;
 
+  // Weekly check-in
   checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number };
   checkinComplete: boolean;
 
+  // Hrefs (use "#" to lock)
   hrefs: {
     nutrition: string;
     workout: string;
     habit: string;
     checkin: string;
-    freestyle?: string;    // new optional
+    freestyle?: string; // optional, defaults to /workouts/freestyle
   };
 
+  // Targets
   userCalorieTarget?: number;
   userProteinTarget?: number;
 
-  freestyleLogged?: boolean; 
-  freestyleSummary?: { activity?: string; duration?: number; calories?: number };
+  // Freestyle (from /api/completions?summary=day)
+  freestyleLogged?: boolean;
+  freestyleSummary?: {
+    activity_type?: string | null;
+    duration?: number | null;           // minutes
+    calories_burned?: number | null;    // kcal
+    weight_completed_with?: number | null;
+  };
 };
 
 export default function DailyTasksCard({
@@ -51,8 +64,7 @@ export default function DailyTasksCard({
   freestyleSummary
 }: Props) {
   const isFriday = dayLabel.toLowerCase().startsWith("fri");
-
-  const workoutLocked = hrefs.workout === "#"; 
+  const workoutLocked = hrefs.workout === "#";
   const habitsLocked = hrefs.habit === "#";
 
   const rowStyle = (
@@ -71,9 +83,7 @@ export default function DailyTasksCard({
     backdropFilter: "blur(8px)",
     border: `1px solid ${done ? "rgba(100,195,122,0.35)" : "rgba(255,255,255,0.12)"}`,
     color: "#fff",
-    boxShadow: done
-      ? "0 0 12px rgba(100,195,122,0.5)"
-      : `0 0 10px ${accent}33`,
+    boxShadow: done ? "0 0 12px rgba(100,195,122,0.5)" : `0 0 10px ${accent}33`,
     cursor: locked ? "not-allowed" : "pointer",
     transition: "transform .18s ease, box-shadow .18s ease",
     opacity: locked ? 0.85 : 1,
@@ -86,10 +96,7 @@ export default function DailyTasksCard({
     fontWeight: 600,
   };
 
-  const valueStyle: React.CSSProperties = {
-    opacity: 0.9,
-    fontWeight: 600,
-  };
+  const valueStyle: React.CSSProperties = { opacity: 0.9, fontWeight: 600 };
 
   const premiumTag = (accent: string): JSX.Element => (
     <span
@@ -120,7 +127,11 @@ export default function DailyTasksCard({
         </div>
       );
     }
-    return <Link href={href}>{children as any}</Link>;
+    return (
+      <Link href={href} aria-label="Open task">
+        {children as any}
+      </Link>
+    );
   };
 
   const freestyleHref = hrefs.freestyle ?? "/workouts/freestyle";
@@ -128,9 +139,10 @@ export default function DailyTasksCard({
   const freestyleValue = (() => {
     if (!freestyleLogged) return "Optional · Not logged";
     const parts: string[] = [];
-    if (freestyleSummary?.calories) parts.push(`${freestyleSummary.calories} kcal`);
-    if (freestyleSummary?.duration) parts.push(`${freestyleSummary.duration} min`);
-    if (freestyleSummary?.activity) parts.push(freestyleSummary.activity);
+    if (freestyleSummary?.activity_type) parts.push(freestyleSummary.activity_type);
+    if (typeof freestyleSummary?.duration === "number") parts.push(`${freestyleSummary.duration} min`);
+    if (typeof freestyleSummary?.calories_burned === "number") parts.push(`${freestyleSummary.calories_burned} kcal`);
+    // if you later want weight: if (typeof freestyleSummary?.weight_completed_with === "number") parts.push(`${freestyleSummary.weight_completed_with} kg`);
     return parts.join(" · ") || "Logged";
   })();
 
@@ -140,9 +152,9 @@ export default function DailyTasksCard({
         {dayLabel} Tasks
       </div>
 
-      {/* Nutrition (always available) */}
+      {/* Nutrition */}
       <RowWrapper href={hrefs.nutrition}>
-        <div style={rowStyle(nutritionLogged, "#4fa3a5")}>
+        <div style={rowStyle(nutritionLogged, "#4fa3a5")} aria-live="polite" aria-label="Nutrition">
           <span style={iconWrap}>
             <i className="fas fa-utensils" style={{ color: "#4fa3a5" }} />
             <span>Nutrition</span>
@@ -155,10 +167,10 @@ export default function DailyTasksCard({
         </div>
       </RowWrapper>
 
-      {/* Workout (premium-locked for some users) */}
+      {/* Planned Workout */}
       {hasWorkout && (
         <RowWrapper href={hrefs.workout} locked={workoutLocked}>
-          <div style={rowStyle(workoutDone, "#5b7c99", workoutLocked)}>
+          <div style={rowStyle(workoutDone, "#5b7c99", workoutLocked)} aria-label="Planned workout" aria-live="polite">
             <span style={iconWrap}>
               {workoutLocked ? (
                 <i className="fas fa-lock" style={{ color: "#5b7c99" }} />
@@ -181,9 +193,9 @@ export default function DailyTasksCard({
         </RowWrapper>
       )}
 
-      {/* Freestyle Session — OPTIONAL — never locked — never counts towards streak */}
+      {/* Freestyle Session — always available; never streak-gated */}
       <RowWrapper href={freestyleHref}>
-        <div style={rowStyle(freestyleLogged, "#ff7f32")}>
+        <div style={rowStyle(!!freestyleLogged, "#ff7f32")} aria-label="Freestyle session" aria-live="polite">
           <span style={iconWrap}>
             <i className="fas fa-stopwatch" style={{ color: "#ff7f32" }} />
             <span>Freestyle Session</span>
@@ -194,7 +206,7 @@ export default function DailyTasksCard({
 
       {/* Habits */}
       <RowWrapper href={hrefs.habit} locked={habitsLocked}>
-        <div style={rowStyle(habitAllDone, "#9b6fa3", habitsLocked)}>
+        <div style={rowStyle(habitAllDone, "#9b6fa3", habitsLocked)} aria-label="Daily habit" aria-live="polite">
           <span style={iconWrap}>
             {habitsLocked ? (
               <i className="fas fa-lock" style={{ color: "#9b6fa3" }} />
@@ -205,19 +217,15 @@ export default function DailyTasksCard({
             {habitsLocked && premiumTag("#9b6fa3")}
           </span>
           <span style={valueStyle}>
-            {habitSummary
-              ? `${habitSummary.completed}/${habitSummary.total} tasks`
-              : habitsLocked
-              ? "Locked"
-              : "Not started"}
+            {habitSummary ? `${habitSummary.completed}/${habitSummary.total} tasks` : habitsLocked ? "Locked" : "Not started"}
           </span>
         </div>
       </RowWrapper>
 
-      {/* Weekly Check‑In */}
+      {/* Weekly Check‑In (Friday) */}
       {isFriday && (
         <RowWrapper href={hrefs.checkin}>
-          <div style={rowStyle(checkinComplete, "#c9a34e")}>
+          <div style={rowStyle(checkinComplete, "#c9a34e")} aria-label="Weekly check-in" aria-live="polite">
             <span style={iconWrap}>
               <i className="fas fa-clipboard-list" style={{ color: "#c9a34e" }} />
               <span>Check‑In</span>
