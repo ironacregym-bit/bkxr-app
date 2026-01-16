@@ -7,7 +7,7 @@ import { decryptJson } from "../../../../lib/crypto";
 
 const HOWDIDIDO_LOGIN_URL = "https://www.howdidido.com/Account/Login";
 
-// Optional: tiny helper to send a user notification using your existing endpoint
+// Minimal notifier using your existing /api/notify/emit
 async function notify(email: string, title: string, body: string) {
   const base = process.env.APP_BASE_URL;
   if (!base) return;
@@ -15,20 +15,25 @@ async function notify(email: string, title: string, body: string) {
     await fetch(`${base}/api/notify/emit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to_email: email, title, body, ttl_seconds: 3600 }),
+      body: JSON.stringify({
+        to_email: email,
+        title,
+        body,
+        ttl_seconds: 3600
+      })
     });
   } catch {
-    // ignore
+    // ignore notify errors
   }
 }
 
-// IMPORTANT: Do not export an Edge runtime here. Keep default Node.js serverless.
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  // ---- Secure the endpoint so only your scheduler can trigger it ----
+/**
+ * Runner entrypoint.
+ * Security: requires Authorization: Bearer <CRON_SECRET>
+ * NOTE: Keep Node.js Serverless runtime (do NOT export runtime: 'edge').
+ */
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // ---- Guard: only allow authorised schedulers (GitHub Actions / proxy) ----
   const hdr = req.headers.authorization || "";
   if (hdr !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -41,7 +46,7 @@ export default async function handler(
   try {
     const now = new Date().toISOString();
 
-    // Claim one due job atomically: status=queued and run_at ≤ now
+    // Claim exactly one due job (status==queued and run_at <= now)
     const snap = await firestore
       .collection("golf_booking_requests")
       .where("status", "==", "queued")
@@ -59,12 +64,12 @@ export default async function handler(
 
     await docRef.update({
       status: "in_progress",
-      attempts: (reqData.attempts ?? 0) + 1,
+      attempts: (reqData.attempts ?? 0) + 1
     });
 
     const runRef = await firestore.collection("golf_booking_runs").add({
       request_id: docRef.id,
-      started_at: now,
+      started_at: now
     } as BookingRun);
 
     let outcome: "success" | "failed" = "failed";
@@ -72,38 +77,47 @@ export default async function handler(
     let confirmation_text: string | undefined;
 
     try {
-      // Optional credentials (not used in Step 1)
+      // Optional credentials (will be used in Step 2 – login flow)
       let creds: { username?: string; password?: string } | undefined;
       if (reqData.enc_credentials_b64) {
         try {
           creds = decryptJson(reqData.enc_credentials_b64);
         } catch {
-          // carry on without creds
+          // continue without creds if decrypt fails
         }
       }
 
-      // Dynamic import ensures module resolution only at runtime in the function
+      // Dynamic import at runtime to keep build lean
       const playwright = await import("playwright-core");
 
-      // Connect to a hosted browser over CDP (recommended on Vercel)
       const ws = process.env.BROWSER_WS_ENDPOINT;
       if (!ws) throw new Error("BROWSER_WS_ENDPOINT not set");
 
+      // Prefer standard Playwright connect (works best with Browserless /playwright?token=...)
+      // Fallback to connectOverCDP if provider expects CDP.
       let browser: any;
       try {
-        // @ts-ignore: connectOverCDP is available on chromium in playwright-core
-        browser = await (playwright.chromium as any).connectOverCDP(ws);
-      } catch {
         browser = await (playwright.chromium as any).connect(ws);
+      } catch (e1: any) {
+        try {
+          // @ts-ignore - connectOverCDP exists on chromium
+          browser = await (playwright.chromium as any).connectOverCDP(ws);
+        } catch (e2: any) {
+          const err1 = e1?.message || String(e1);
+          const err2 = e2?.message || String(e2);
+          throw new Error(
+            `Failed to connect to hosted browser.\nconnect(): ${err1}\nconnectOverCDP(): ${err2}`
+          );
+        }
       }
 
       const ctx = await browser.newContext();
       const page = await ctx.newPage();
 
-      // Step 1: connectivity check only (we'll add real booking in Step 2)
+      // Step 1: connectivity check only (we will implement full login+booking in Step 2)
       await page.goto(HOWDIDIDO_LOGIN_URL, {
         waitUntil: "domcontentloaded",
-        timeout: 30000,
+        timeout: 30_000
       });
       confirmation_text = `Loaded: ${await page.title()}`;
 
@@ -120,12 +134,12 @@ export default async function handler(
       finished_at: finished,
       outcome,
       error: errorMsg,
-      evidence: { confirmation_text },
+      evidence: { confirmation_text }
     } as Partial<BookingRun>);
 
     await docRef.update({ status: outcome });
 
-    // Notify requester
+    // Notify requester (you can mute this while testing if you prefer)
     const who = reqData.requester_email;
     if (outcome === "success") {
       await notify(
@@ -141,7 +155,7 @@ export default async function handler(
       );
     }
 
-    return res.status(200).json({ ok: true, outcome, error: errorMsg });
+    return res.status(200).json({ ok: true, outcome, error: errorMsg || null });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || "Server error" });
   }
