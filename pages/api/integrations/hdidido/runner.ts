@@ -7,7 +7,7 @@ import { decryptJson } from "../../../../lib/crypto";
 
 const HOWDIDIDO_LOGIN_URL = "https://www.howdidido.com/Account/Login";
 
-// Minimal notifier using your existing /api/notify/emit
+// --- Minimal notifier using your existing /api/notify/emit
 async function notify(email: string, title: string, body: string) {
   const base = process.env.APP_BASE_URL;
   if (!base) return;
@@ -17,12 +17,14 @@ async function notify(email: string, title: string, body: string) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ to_email: email, title, body, ttl_seconds: 3600 })
     });
-  } catch { /* ignore */ }
+  } catch { /* ignore notify errors */ }
 }
 
-/** Try to accept cookies when present (soft-fail, best-effort) */
+// --- Consent (now includes explicit OK)
 async function acceptCookies(page: import("playwright-core").Page) {
   const selectors = [
+    'button:has-text("OK")',
+    'a:has-text("OK")',
     'button:has-text("Accept")',
     'button:has-text("Accept All")',
     'button:has-text("Agree")',
@@ -38,11 +40,65 @@ async function acceptCookies(page: import("playwright-core").Page) {
         await page.waitForTimeout(300);
         break;
       }
-    } catch { /* ignore */ }
+    } catch {}
   }
 }
 
-/** Dismiss the app-upgrade/version modal or any blocking overlay, best-effort */
+// --- “Use the app / upgrade” gate: click obvious actions + remove overlays
+async function smashUpgradeGate(page: import("playwright-core").Page) {
+  const buttonTexts = [
+    "Use web version",
+    "Continue in browser",
+    "Continue to site",
+    "Continue",
+    "Open web",
+    "Skip",
+    "Not now",
+    "Later",
+    "Close",
+    "Dismiss",
+    "X"
+  ];
+  for (const txt of buttonTexts) {
+    try {
+      const btn =
+        (await page.$(`button:has-text("${txt}")`)) ||
+        (await page.$(`a:has-text("${txt}")`));
+      if (btn) {
+        await btn.click({ timeout: 1000 }).catch(() => {});
+        await page.waitForTimeout(300);
+      }
+    } catch {}
+  }
+
+  // Kill high‑z overlays, especially those that look like app banners/modals
+  try {
+    await page.evaluate(() => {
+      const kill = (el: Element) => el.parentNode?.removeChild(el);
+      const looksLikeUpgrade = (s: string) => /upgrade|update|install|app|smartbanner/i.test(s);
+      const all = Array.from(document.querySelectorAll<HTMLElement>("*"));
+      for (const el of all) {
+        const s = window.getComputedStyle(el);
+        const idc = `${el.id || ""} ${el.className?.toString() || ""}`;
+        const z = parseInt(s.zIndex || "0", 10);
+        const dialogish =
+          el.getAttribute("role") === "dialog" ||
+          /modal/i.test(el.className?.toString() || "");
+        const fixedish =
+          s.position === "fixed" || s.position === "sticky" || dialogish;
+        if (fixedish && (z >= 100 || looksLikeUpgrade(idc))) {
+          try { kill(el); } catch {}
+        }
+      }
+      document.documentElement.style.overflow = "auto";
+      document.body.style.overflow = "auto";
+      document.body.style.pointerEvents = "auto";
+    });
+  } catch {}
+  await page.waitForTimeout(200);
+}
+
+// --- Gentle modal dismissal (bootstrap, escape, etc.)
 async function dismissUpgradeModal(page: import("playwright-core").Page) {
   const selectors = [
     'button:has-text("Later")',
@@ -69,14 +125,14 @@ async function dismissUpgradeModal(page: import("playwright-core").Page) {
       } else {
         await el.click({ timeout: 800 }).catch(() => {});
       }
-      await page.waitForTimeout(350);
-    } catch { /* ignore */ }
+      await page.waitForTimeout(250);
+    } catch {}
   }
   try { await page.keyboard.press("Escape"); } catch {}
   await page.waitForTimeout(150);
 }
 
-/** Nuclear option: remove obvious overlays and restore scroll */
+// --- “Nuke overlays” (fallback): remove any high‑z fixed/sticky elements
 async function nukeOverlays(page: import("playwright-core").Page) {
   try {
     await page.evaluate(() => {
@@ -85,23 +141,25 @@ async function nukeOverlays(page: import("playwright-core").Page) {
       for (const el of all) {
         const s = window.getComputedStyle(el);
         const z = parseInt(s.zIndex || "0", 10);
-        const dialog = el.getAttribute("role") === "dialog" || el.className.toString().toLowerCase().includes("modal");
-        if ((s.position === "fixed" || s.position === "sticky" || dialog) && z >= 1000) {
+        const dialog =
+          el.getAttribute("role") === "dialog" ||
+          (el.className?.toString() || "").toLowerCase().includes("modal");
+        if ((s.position === "fixed" || s.position === "sticky" || dialog) && z >= 100) {
           try { kill(el); } catch {}
         }
       }
       document.body.style.overflow = "auto";
     });
-  } catch { /* ignore */ }
+  } catch {}
   await page.waitForTimeout(200);
 }
 
-/** List frame URLs for evidence */
+// --- Diagnostics: list frames
 function listFrameUrls(page: import("playwright-core").Page) {
   return page.frames().map(f => ({ name: f.name(), url: f.url() }));
 }
 
-/** Find first element matching any of selectors across all frames */
+// --- Find/click/fill across frames
 async function findInFrames(page: import("playwright-core").Page, selectors: string[]) {
   for (const frame of page.frames()) {
     for (const sel of selectors) {
@@ -113,22 +171,18 @@ async function findInFrames(page: import("playwright-core").Page, selectors: str
   }
   return null;
 }
-
-/** Click across frames */
 async function clickInFrames(page: import("playwright-core").Page, selectors: string[]) {
   const found = await findInFrames(page, selectors);
   if (!found) return false;
   try { await found.handle.click(); return true; } catch { return false; }
 }
-
-/** Fill across frames */
 async function fillInFrames(page: import("playwright-core").Page, selectors: string[], value: string) {
   const found = await findInFrames(page, selectors);
   if (!found) return false;
   try { await found.handle.fill(value); return true; } catch { return false; }
 }
 
-/** Collect debug evidence (title, url, html snippet, screenshot, frames) */
+// --- Evidence
 async function collectEvidence(page: import("playwright-core").Page) {
   const url = page.url();
   const title = await page.title().catch(() => "");
@@ -146,35 +200,73 @@ async function collectEvidence(page: import("playwright-core").Page) {
   return { url, title, htmlSnippet, screenshot_b64, frames };
 }
 
-/** Try native HowDidiDo login (email/password on same page) — frame-aware */
+/** Try the exact native selectors seen on the page screenshot */
+async function tryNativeDirect(page: import("playwright-core").Page, username: string, password: string) {
+  // Target the obvious IDs/labels first
+  const emailCandidates = ['#Email', 'input[name="Email"]', 'input[type="email"]', 'input[name="email"]', 'input[id*="email"]', 'input[type="text"]'];
+  const passCandidates  = ['#Password', 'input[name="Password"]', 'input[type="password"]', 'input[id*="password"]', 'input[name="password"]'];
+
+  let emailEl = null;
+  for (const sel of emailCandidates) { emailEl = await page.$(sel); if (emailEl) break; }
+  if (!emailEl) return false;
+
+  let passEl = null;
+  for (const sel of passCandidates) { passEl = await page.$(sel); if (passEl) break; }
+  if (!passEl) return false;
+
+  await emailEl.fill(username);
+  await passEl.fill(password);
+
+  // Button might be <button> or <a>, so match both
+  const loginButton =
+    (await page.$('button:has-text("Log in")')) ||
+    (await page.$('a:has-text("Log in")')) ||
+    (await page.$('button[type="submit"]')) ||
+    (await page.$('input[type="submit"]'));
+  if (!loginButton) throw new Error('Login submit not found (native direct)');
+
+  await loginButton.click({ timeout: 2000 }).catch(() => {});
+  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+
+  // Success cues on same/main frame
+  const ok =
+    (await page.$('text=Sign out')) ||
+    (await page.$('text=My Account')) ||
+    (await page.$('a[href*="/account"]')) ||
+    (await page.$('a[href*="/dashboard"]'));
+  return !!ok;
+}
+
+// --- Native login (frame‑aware fallback)
 async function tryNativeLogin(page: import("playwright-core").Page, username: string, password: string) {
   await page.waitForTimeout(600);
   await dismissUpgradeModal(page);
+  await smashUpgradeGate(page);
 
   const emailFilled = await fillInFrames(page, [
     'input[type="email"]', 'input[name="Email"]', 'input[id="Email"]',
-    'input[name="email"]', 'input[id*="email"]'
+    'input[name="email"]', 'input[id*="email"]', 'input[type="text"]'
   ], username);
-
-  // If no email element anywhere, not the native variant
   if (!emailFilled) return false;
 
   const passFilled = await fillInFrames(page, [
+    '#Password',
     'input[type="password"]', 'input[name="Password"]', 'input[id="Password"]',
     'input[id*="password"]', 'input[name="password"]'
   ], password);
   if (!passFilled) return false;
 
   const clicked = await clickInFrames(page, [
-    'button[type="submit"]',
-    'button:has-text("Sign In")',
     'button:has-text("Log in")',
+    'a:has-text("Log in")',
+    'button[type="submit"]',
     'input[type="submit"]'
   ]);
   if (!clicked) throw new Error("Login submit button not found (native form)");
 
   await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
   await dismissUpgradeModal(page);
+  await smashUpgradeGate(page);
   await nukeOverlays(page);
 
   const successCues = [
@@ -185,20 +277,79 @@ async function tryNativeLogin(page: import("playwright-core").Page, username: st
   return !!ok;
 }
 
-/** Try Microsoft / Azure AD login flow — frame-aware and resilient */
+// --- Azure AD / Microsoft login (works if main navigates or if inside a frame)
 async function tryMicrosoftLogin(page: import("playwright-core").Page, username: string, password: string) {
   await page.waitForTimeout(600);
   await dismissUpgradeModal(page);
+  await smashUpgradeGate(page);
   await nukeOverlays(page);
 
+  // Case A: site redirected main page to Microsoft
+  const onAzureMain = /login\.microsoftonline\.com/i.test(page.url());
+  if (onAzureMain) {
+    const emailInputMain =
+      (await page.$('#i0116')) ||
+      (await page.$('input[name="loginfmt"]')) ||
+      (await page.$('input[type="email"]'));
+    if (!emailInputMain) return false;
+    await emailInputMain.fill(username);
+
+    const nextBtnMain = (await page.$('#idSIButton9')) || (await page.$('input[type="submit"]'));
+    if (!nextBtnMain) throw new Error("Microsoft login: Next button not found");
+    await nextBtnMain.click();
+
+    await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
+    await dismissUpgradeModal(page);
+    await smashUpgradeGate(page);
+    await nukeOverlays(page);
+
+    const passInputMain =
+      (await page.$('#i0118')) ||
+      (await page.$('input[name="passwd"]')) ||
+      (await page.$('input[type="password"]'));
+    if (!passInputMain) throw new Error("Microsoft login: password input not found");
+    await passInputMain.fill(password);
+
+    const signInBtnMain = (await page.$('#idSIButton9')) || (await page.$('input[type="submit"]'));
+    if (!signInBtnMain) throw new Error("Microsoft login: Sign in button not found");
+    await signInBtnMain.click();
+
+    await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
+    await dismissUpgradeModal(page);
+    await smashUpgradeGate(page);
+    await nukeOverlays(page);
+
+    // Stay signed in?
+    const stayNoMain = await page.$('#idBtn_Back');
+    if (stayNoMain) await stayNoMain.click().catch(() => {});
+    else {
+      const stayYesMain = await page.$('#idSIButton9');
+      if (stayYesMain) await stayYesMain.click().catch(() => {});
+    }
+
+    await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
+    await dismissUpgradeModal(page);
+    await smashUpgradeGate(page);
+    await nukeOverlays(page);
+
+    const okMain =
+      (await page.$('text=Sign out')) ||
+      (await page.$('text=My Account')) ||
+      (await page.$('a[href*="/account"]')) ||
+      (await page.$('a[href*="/dashboard"]'));
+    return !!okMain;
+  }
+
+  // Case B: Microsoft is inside an iframe
   const emailOk = await fillInFrames(page, ['#i0116', 'input[name="loginfmt"]', 'input[type="email"]'], username);
-  if (!emailOk) return false; // not on MS login
+  if (!emailOk) return false;
 
   const nextOk = await clickInFrames(page, ['#idSIButton9', 'input[type="submit"]', 'button:has-text("Next")']);
   if (!nextOk) throw new Error("Microsoft login: Next button not found");
 
   await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
   await dismissUpgradeModal(page);
+  await smashUpgradeGate(page);
   await nukeOverlays(page);
 
   const passOk = await fillInFrames(page, ['#i0118', 'input[name="passwd"]', 'input[type="password"]'], password);
@@ -209,9 +360,9 @@ async function tryMicrosoftLogin(page: import("playwright-core").Page, username:
 
   await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
   await dismissUpgradeModal(page);
+  await smashUpgradeGate(page);
   await nukeOverlays(page);
 
-  // Stay signed in?
   const stayNo = await clickInFrames(page, ['#idBtn_Back', 'button:has-text("No")']);
   if (!stayNo) {
     await clickInFrames(page, ['#idSIButton9', 'button:has-text("Yes")']).catch(() => {});
@@ -219,6 +370,7 @@ async function tryMicrosoftLogin(page: import("playwright-core").Page, username:
 
   await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
   await dismissUpgradeModal(page);
+  await smashUpgradeGate(page);
   await nukeOverlays(page);
 
   const successCues = [
@@ -246,7 +398,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const now = new Date().toISOString();
 
-    // Claim one due job
+    // Claim exactly one due job
     const snap = await firestore
       .collection("golf_booking_requests")
       .where("status", "==", "queued")
@@ -278,7 +430,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let evidence: any = {};
 
     try {
-      // Credentials: job-encrypted > env fallback
+      // Credentials: per‑job (encrypted) > env fallback
       let creds: { username?: string; password?: string } | undefined;
       if (reqData.enc_credentials_b64) {
         try { creds = decryptJson(reqData.enc_credentials_b64); } catch {}
@@ -289,7 +441,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         throw new Error("No HowDidiDo credentials (enc_credentials_b64 or env HDIDIDO_EMAIL/HDIDIDO_PASSWORD)");
       }
 
-      // Playwright on serverless chromium
+      // Launch serverless Chromium
       const { default: chromium } = await import("@sparticuz/chromium");
       const playwright = await import("playwright-core");
       const browser = await playwright.chromium.launch({
@@ -303,22 +455,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
       const page = await ctx.newPage();
 
-      // Navigate and clear blockers
+      // Go to login + clear blockers
       await page.goto(HOWDIDIDO_LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
-      await acceptCookies(page);
+      await acceptCookies(page);        // now clicks the green "OK"
       await dismissUpgradeModal(page);
+      await smashUpgradeGate(page);
       await nukeOverlays(page);
 
-      // Try native then MS
+      // 1) Try the exact native selectors first (as in your screenshot)
       let loggedIn = false;
       try {
-        await dismissUpgradeModal(page);
-        await nukeOverlays(page);
-        loggedIn = await tryNativeLogin(page, username, password);
-      } catch { /* continue */ }
+        loggedIn = await tryNativeDirect(page, username, password);
+      } catch { /* ignore and fall through */ }
 
+      // 2) Fallback: broader native (frame‑aware) if direct failed
       if (!loggedIn) {
         await dismissUpgradeModal(page);
+        await smashUpgradeGate(page);
+        await nukeOverlays(page);
+        try {
+          loggedIn = await tryNativeLogin(page, username, password);
+        } catch { /* ignore */ }
+      }
+
+      // 3) Fallback: Microsoft/Azure AD flow if needed
+      if (!loggedIn) {
+        await dismissUpgradeModal(page);
+        await smashUpgradeGate(page);
         await nukeOverlays(page);
         loggedIn = await tryMicrosoftLogin(page, username, password);
       }
@@ -348,6 +511,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await docRef.update({ status: outcome });
 
+    // Notify requester
     const who = reqData.requester_email;
     if (who) {
       if (outcome === "success") {
