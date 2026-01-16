@@ -95,6 +95,127 @@ type CheckInEntry = {
   notes?: string;
 };
 
+/** --- New: Reusable photo picker field with camera OR library + drop support --- */
+function PhotoField({
+  label,
+  value,
+  onChangeDataUrl,
+  onClear,
+}: {
+  label: "Front" | "Side" | "Back";
+  value: string;
+  onChangeDataUrl: (dataUrl: string) => void;
+  onClear: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  async function handleFile(file?: File) {
+    if (!file) return;
+    try {
+      const dataUrl = await compressImage(file, 1200, 0.72);
+      onChangeDataUrl(dataUrl);
+    } catch {
+      alert("Failed to process photo. Try a smaller image.");
+    }
+  }
+
+  // "Choose from library": ensure capture is removed, then click
+  function chooseFromLibrary() {
+    const el = inputRef.current;
+    if (!el) return;
+    el.removeAttribute("capture");       // <- critical: allow gallery/library
+    el.click();
+  }
+
+  // "Take photo": set capture to environment (rear camera), then click
+  function takePhoto() {
+    const el = inputRef.current;
+    if (!el) return;
+    el.setAttribute("capture", "environment");
+    el.click();
+  }
+
+  function onInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    handleFile(file);
+  }
+
+  // Drag-and-drop for desktop
+  function onDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(true);
+  }
+  function onDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+  }
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    handleFile(file);
+  }
+
+  return (
+    <div className="glass-card p-2">
+      <div className="fw-semibold mb-2">{label}</div>
+
+      {/* Preview / Dropzone */}
+      <div
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        style={{
+          border: `1px dashed ${dragOver ? "#FF8A2A" : "rgba(255,255,255,0.25)"}`,
+          borderRadius: 12,
+          padding: 8,
+          background: "rgba(255,255,255,0.03)",
+          transition: "border-color .15s ease",
+        }}
+      >
+        {value ? (
+          <img src={value} alt={`${label} preview`} style={{ width: "100%", height: "auto", borderRadius: 8 }} />
+        ) : (
+          <div className="text-muted small" style={{ padding: "18px 8px" }}>
+            Drop an image here (desktop) or use the buttons below.
+          </div>
+        )}
+      </div>
+
+      {/* Hidden input used by both buttons */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="form-control"
+        style={{ display: "none" }}
+        onChange={onInputChange}
+      />
+
+      <div className="d-flex gap-2 mt-2">
+        <button type="button" className="btn btn-outline-light btn-sm" onClick={takePhoto} title="Open camera">
+          <i className="fas fa-camera me-1" />
+          Take photo
+        </button>
+        <button type="button" className="btn btn-outline-light btn-sm" onClick={chooseFromLibrary} title="Pick from library">
+          <i className="fas fa-images me-1" />
+          Choose from library
+        </button>
+        {value && (
+          <button type="button" className="btn btn-outline-danger btn-sm ms-auto" onClick={onClear} title="Remove photo">
+            Remove
+          </button>
+        )}
+      </div>
+
+      <small className="text-muted d-block mt-2">
+        Photos are compressed on-device (JPEG ~72% quality, max 1200px wide) before upload.
+      </small>
+    </div>
+  );
+}
+
 export default function CheckInPage() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -127,7 +248,7 @@ export default function CheckInPage() {
   );
   const alreadySubmitted = !!data?.entry;
 
-  // -------- Form state (maps to your check_ins fields) --------
+  // -------- Form state --------
   const [notes, setNotes] = useState("");
   const [weeklyGoalsAchieved, setWeeklyGoalsAchieved] = useState<boolean>(false);
   const [nextWeekGoals, setNextWeekGoals] = useState<string>("");
@@ -137,6 +258,11 @@ export default function CheckInPage() {
   const [stressLevels, setStressLevels] = useState<string>("4");
   const [caloriesDiff, setCaloriesDiff] = useState<string>("6");
   const [weight, setWeight] = useState<string>("");
+
+  // Photos
+  const [photoFront, setPhotoFront] = useState<string>("");
+  const [photoSide, setPhotoSide] = useState<string>("");
+  const [photoBack, setPhotoBack] = useState<string>("");
 
   // Optional: prefill if there's an existing entry
   useEffect(() => {
@@ -150,49 +276,11 @@ export default function CheckInPage() {
     setEnergyLevels(e.energy_levels || "7");
     setStressLevels(e.stress_levels || "4");
     setCaloriesDiff(e.calories_difficulty || "6");
-    setWeight(
-      typeof e.weight === "number" && Number.isFinite(e.weight) ? String(e.weight) : ""
-    );
-    // photos are large; show but don't push into inputs unless user picks anew
+    setWeight(typeof e.weight === "number" && Number.isFinite(e.weight) ? String(e.weight) : "");
     if (e.progress_photo_front) setPhotoFront(e.progress_photo_front);
     if (e.progress_photo_side) setPhotoSide(e.progress_photo_side);
     if (e.progress_photo_back) setPhotoBack(e.progress_photo_back);
   }, [data?.entry]);
-
-  // Photos + refs for reset
-  const [photoFront, setPhotoFront] = useState<string>("");
-  const [photoSide, setPhotoSide] = useState<string>("");
-  const [photoBack, setPhotoBack] = useState<string>("");
-  const frontRef = useRef<HTMLInputElement>(null);
-  const sideRef = useRef<HTMLInputElement>(null);
-  const backRef = useRef<HTMLInputElement>(null);
-
-  async function onPickPhoto(slot: "front" | "side" | "back", file?: File) {
-    if (!file) return;
-    try {
-      const dataUrl = await compressImage(file, 1200, 0.72);
-      if (slot === "front") setPhotoFront(dataUrl);
-      if (slot === "side") setPhotoSide(dataUrl);
-      if (slot === "back") setPhotoBack(dataUrl);
-    } catch {
-      alert("Failed to process photo. Try a smaller image.");
-    }
-  }
-
-  function clearPhoto(slot: "front" | "side" | "back") {
-    if (slot === "front") {
-      setPhotoFront("");
-      if (frontRef.current) frontRef.current.value = "";
-    }
-    if (slot === "side") {
-      setPhotoSide("");
-      if (sideRef.current) sideRef.current.value = "";
-    }
-    if (slot === "back") {
-      setPhotoBack("");
-      if (backRef.current) backRef.current.value = "";
-    }
-  }
 
   async function submitCheckIn(e: React.FormEvent) {
     e.preventDefault();
@@ -228,11 +316,6 @@ export default function CheckInPage() {
         return;
       }
       mutate(); // refresh SWR cache
-
-      // If you want to keep values after save, remove the resets below
-      // reset form to what's saved in the backend
-      // (You could also leave current state; this ensures a clean slate)
-      // We'll re-prefill from GET due to the effect above.
     } catch (err) {
       console.error(err);
       alert("Network error submitting check-in");
@@ -313,11 +396,7 @@ export default function CheckInPage() {
                   value={avgSleep}
                   onChange={(e) => setAvgSleep(e.target.value)}
                   placeholder="e.g., 7"
-                  style={{
-                    background: "rgba(255,255,255,0.08)",
-                    color: "#fff",
-                    borderColor: "rgba(255,255,255,0.15)",
-                  }}
+                  style={{ background: "rgba(255,255,255,0.08)", color: "#fff", borderColor: "rgba(255,255,255,0.15)" }}
                 />
               </div>
               <div className="col-12 col-md-6">
@@ -330,50 +409,25 @@ export default function CheckInPage() {
                   value={bodyFatPct}
                   onChange={(e) => setBodyFatPct(e.target.value)}
                   placeholder="e.g., 14.9"
-                  style={{
-                    background: "rgba(255,255,255,0.08)",
-                    color: "#fff",
-                    borderColor: "rgba(255,255,255,0.15)",
-                  }}
+                  style={{ background: "rgba(255,255,255,0.08)", color: "#fff", borderColor: "rgba(255,255,255,0.15)" }}
                 />
               </div>
 
               <div className="col-12 col-md-4">
                 <label className="form-label">Energy (1–10)</label>
-                <input
-                  type="range"
-                  min={1}
-                  max={10}
-                  value={Number(energyLevels)}
-                  onChange={(e) => setEnergyLevels(e.target.value)}
-                  className="form-range"
-                />
+                <input type="range" min={1} max={10} value={Number(energyLevels)} onChange={(e) => setEnergyLevels(e.target.value)} className="form-range" />
                 <small style={{ opacity: 0.75 }}>{energyLevels}</small>
               </div>
 
               <div className="col-12 col-md-4">
                 <label className="form-label">Stress (1–10)</label>
-                <input
-                  type="range"
-                  min={1}
-                  max={10}
-                  value={Number(stressLevels)}
-                  onChange={(e) => setStressLevels(e.target.value)}
-                  className="form-range"
-                />
+                <input type="range" min={1} max={10} value={Number(stressLevels)} onChange={(e) => setStressLevels(e.target.value)} className="form-range" />
                 <small style={{ opacity: 0.75 }}>{stressLevels}</small>
               </div>
 
               <div className="col-12 col-md-4">
                 <label className="form-label">Calories difficulty (1–10)</label>
-                <input
-                  type="range"
-                  min={1}
-                  max={10}
-                  value={Number(caloriesDiff)}
-                  onChange={(e) => setCaloriesDiff(e.target.value)}
-                  className="form-range"
-                />
+                <input type="range" min={1} max={10} value={Number(caloriesDiff)} onChange={(e) => setCaloriesDiff(e.target.value)} className="form-range" />
                 <small style={{ opacity: 0.75 }}>{caloriesDiff}</small>
               </div>
 
@@ -387,24 +441,14 @@ export default function CheckInPage() {
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
                   placeholder="e.g., 75.4"
-                  style={{
-                    background: "rgba(255,255,255,0.08)",
-                    color: "#fff",
-                    borderColor: "rgba(255,255,255,0.15)",
-                  }}
+                  style={{ background: "rgba(255,255,255,0.08)", color: "#fff", borderColor: "rgba(255,255,255,0.15)" }}
                 />
               </div>
 
               <div className="col-12 col-md-6">
                 <label className="form-label">Weekly goals achieved?</label>
                 <div className="form-check form-switch">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    id="goalsAchieved"
-                    checked={weeklyGoalsAchieved}
-                    onChange={(e) => setWeeklyGoalsAchieved(e.target.checked)}
-                  />
+                  <input className="form-check-input" type="checkbox" id="goalsAchieved" checked={weeklyGoalsAchieved} onChange={(e) => setWeeklyGoalsAchieved(e.target.checked)} />
                   <label className="form-check-label" htmlFor="goalsAchieved">
                     {weeklyGoalsAchieved ? "Yes" : "No"}
                   </label>
@@ -418,11 +462,7 @@ export default function CheckInPage() {
                   value={nextWeekGoals}
                   onChange={(e) => setNextWeekGoals(e.target.value)}
                   placeholder='e.g., "3 BXKR Workouts"'
-                  style={{
-                    background: "rgba(255,255,255,0.08)",
-                    color: "#fff",
-                    borderColor: "rgba(255,255,255,0.15)",
-                  }}
+                  style={{ background: "rgba(255,255,255,0.08)", color: "#fff", borderColor: "rgba(255,255,255,0.15)" }}
                 />
               </div>
             </div>
@@ -436,123 +476,44 @@ export default function CheckInPage() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="How did your week go? Anything notable?"
-                style={{
-                  background: "rgba(255,255,255,0.08)",
-                  color: "#fff",
-                  borderColor: "rgba(255,255,255,0.15)",
-                }}
+                style={{ background: "rgba(255,255,255,0.08)", color: "#fff", borderColor: "rgba(255,255,255,0.15)" }}
               />
             </div>
 
-            {/* Progress Photos */}
+            {/* Progress Photos (updated with PhotoField) */}
             <div className="mt-3">
-              <div
-                className="fw-bold mb-2"
-                style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", paddingBottom: 6 }}
-              >
+              <div className="fw-bold mb-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", paddingBottom: 6 }}>
                 Progress Photos
               </div>
 
               <div className="row g-3">
-                {/* Front */}
                 <div className="col-12 col-md-4">
-                  <div className="glass-card p-2">
-                    <div className="fw-semibold mb-2">Front</div>
-                    {photoFront ? (
-                      <div className="mb-2" style={{ borderRadius: 12, overflow: "hidden" }}>
-                        <img src={photoFront} alt="Front preview" style={{ width: "100%", height: "auto" }} />
-                      </div>
-                    ) : (
-                      <div className="text-muted mb-2">No photo yet</div>
-                    )}
-                    <input
-                      ref={frontRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="form-control"
-                      onChange={(e) => onPickPhoto("front", e.target.files?.[0])}
-                    />
-                    {photoFront && (
-                      <button
-                        type="button"
-                        className="btn btn-outline-light btn-sm mt-2"
-                        style={{ borderRadius: 24 }}
-                        onClick={() => clearPhoto("front")}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
+                  <PhotoField
+                    label="Front"
+                    value={photoFront}
+                    onChangeDataUrl={(url) => setPhotoFront(url)}
+                    onClear={() => setPhotoFront("")}
+                  />
                 </div>
 
-                {/* Side */}
                 <div className="col-12 col-md-4">
-                  <div className="glass-card p-2">
-                    <div className="fw-semibold mb-2">Side</div>
-                    {photoSide ? (
-                      <div className="mb-2" style={{ borderRadius: 12, overflow: "hidden" }}>
-                        <img src={photoSide} alt="Side preview" style={{ width: "100%", height: "auto" }} />
-                      </div>
-                    ) : (
-                      <div className="text-muted mb-2">No photo yet</div>
-                    )}
-                    <input
-                      ref={sideRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="form-control"
-                      onChange={(e) => onPickPhoto("side", e.target.files?.[0])}
-                    />
-                    {photoSide && (
-                      <button
-                        type="button"
-                        className="btn btn-outline-light btn-sm mt-2"
-                        style={{ borderRadius: 24 }}
-                        onClick={() => clearPhoto("side")}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
+                  <PhotoField
+                    label="Side"
+                    value={photoSide}
+                    onChangeDataUrl={(url) => setPhotoSide(url)}
+                    onClear={() => setPhotoSide("")}
+                  />
                 </div>
 
-                {/* Back */}
                 <div className="col-12 col-md-4">
-                  <div className="glass-card p-2">
-                    <div className="fw-semibold mb-2">Back</div>
-                    {photoBack ? (
-                      <div className="mb-2" style={{ borderRadius: 12, overflow: "hidden" }}>
-                        <img src={photoBack} alt="Back preview" style={{ width: "100%", height: "auto" }} />
-                      </div>
-                    ) : (
-                      <div className="text-muted mb-2">No photo yet</div>
-                    )}
-                    <input
-                      ref={backRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="form-control"
-                      onChange={(e) => onPickPhoto("back", e.target.files?.[0])}
-                    />
-                    {photoBack && (
-                      <button
-                        type="button"
-                        className="btn btn-outline-light btn-sm mt-2"
-                        style={{ borderRadius: 24 }}
-                        onClick={() => clearPhoto("back")}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
+                  <PhotoField
+                    label="Back"
+                    value={photoBack}
+                    onChangeDataUrl={(url) => setPhotoBack(url)}
+                    onClear={() => setPhotoBack("")}
+                  />
                 </div>
               </div>
-              <small className="text-muted d-block mt-2">
-                Tip: Photos are compressed on-device (JPEG ~72% quality, max 1200px wide) and stored as data URLs to keep uploads fast.
-              </small>
             </div>
 
             {/* Submit */}
@@ -568,10 +529,7 @@ export default function CheckInPage() {
         {/* Previous submission snapshot (if any) */}
         {alreadySubmitted && data?.entry && (
           <div className="futuristic-card p-3 mt-3">
-            <div
-              className="fw-bold mb-2"
-              style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", paddingBottom: 6 }}
-            >
+            <div className="fw-bold mb-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", paddingBottom: 6 }}>
               Submission for {selectedFridayYMD}
             </div>
             <div className="row g-3">
@@ -617,11 +575,7 @@ export default function CheckInPage() {
                 <div className="col-12 col-md-4">
                   <div className="glass-card p-2">
                     <div className="fw-semibold mb-2">Front</div>
-                    <img
-                      src={data.entry.progress_photo_front}
-                      alt="Front"
-                      style={{ width: "100%", height: "auto", borderRadius: 12 }}
-                    />
+                    <img src={data.entry.progress_photo_front} alt="Front" style={{ width: "100%", height: "auto", borderRadius: 12 }} />
                   </div>
                 </div>
               )}
@@ -629,11 +583,7 @@ export default function CheckInPage() {
                 <div className="col-12 col-md-4">
                   <div className="glass-card p-2">
                     <div className="fw-semibold mb-2">Side</div>
-                    <img
-                      src={data.entry.progress_photo_side}
-                      alt="Side"
-                      style={{ width: "100%", height: "auto", borderRadius: 12 }}
-                    />
+                    <img src={data.entry.progress_photo_side} alt="Side" style={{ width: "100%", height: "auto", borderRadius: 12 }} />
                   </div>
                 </div>
               )}
@@ -641,11 +591,7 @@ export default function CheckInPage() {
                 <div className="col-12 col-md-4">
                   <div className="glass-card p-2">
                     <div className="fw-semibold mb-2">Back</div>
-                    <img
-                      src={data.entry.progress_photo_back}
-                      alt="Back"
-                      style={{ width: "100%", height: "auto", borderRadius: 12 }}
-                    />
+                    <img src={data.entry.progress_photo_back} alt="Back" style={{ width: "100%", height: "auto", borderRadius: 12 }} />
                   </div>
                 </div>
               )}
