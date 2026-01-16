@@ -1,5 +1,4 @@
 
-// pages/api/completions/index.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { getServerSession } from "next-auth/next";
@@ -8,25 +7,32 @@ import { authOptions } from "../auth/[...nextauth]";
 /** Safely normalise any Firestore/Date-like value to ISO string */
 function isoFromAny(v: any): string | null {
   try {
-    const d =
-      v?.toDate?.() instanceof Date
-        ? v.toDate()
-        : v
-        ? new Date(v)
-        : null;
+    const d = v?.toDate?.() instanceof Date ? v.toDate() : v ? new Date(v) : null;
     if (!d || isNaN(d.getTime())) return null;
     return d.toISOString();
   } catch {
     return null;
   }
 }
-
 /** Clamp and parse number param */
 function clampInt(n: any, min: number, max: number, fallback: number): number {
   const v = Number(n);
   if (!Number.isFinite(v)) return fallback;
   return Math.min(max, Math.max(min, Math.floor(v)));
 }
+/** Build start/end Date for Y-M-D */
+function dayRange(dateYMD: string): { from: Date; to: Date } | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYMD)) return null;
+  const d = new Date(`${dateYMD}T00:00:00`);
+  if (isNaN(d.getTime())) return null;
+  const from = new Date(d);
+  const to = new Date(d);
+  to.setHours(23, 59, 59, 999);
+  return { from, to };
+}
+
+// Keep this as your canonical collection
+const COLLECTION = "workoutCompletions";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -41,20 +47,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const from = (req.query.from as string | undefined)?.trim();
   const to = (req.query.to as string | undefined)?.trim();
   const user_email_param = (req.query.user_email as string | undefined)?.trim();
+
   const cursorId = (req.query.cursor as string | undefined)?.trim() || null;
   const limit = clampInt(req.query.limit, 1, 500, 200);
 
-  // ---- MODE A: Back-compat "did I complete this workout?" check (email + workout_id) ----
-  // Only when from/to are NOT provided, we treat as point-check to preserve existing behaviour.
-  if (email && workout_id && !from && !to) {
-    try {
-      const docId = `${email}_${workout_id}`;
-      const docRef = firestore.collection("workoutCompletions").doc(docId);
-      const docSnap = await docRef.get();
+  const summary = (req.query.summary as string | undefined)?.toLowerCase();
+  const dateYMD = (req.query.date as string | undefined)?.trim();
+  const plannedId = (req.query.planned_workout_id as string | undefined)?.trim();
 
+  // ---- MODE A: Point-check: "did I complete this workout?"
+  // Only when from/to/summary are NOT provided.
+  if (email && workout_id && !from && !to && !summary) {
+    try {
+      // Legacy composite id check
+      const compositeId = `${email}_${workout_id}`;
+      const legacyDoc = await firestore.collection(COLLECTION).doc(compositeId).get();
+
+      if (legacyDoc.exists) {
+        return res.status(200).json({
+          completed: true,
+          entry: { id: legacyDoc.id, ...(legacyDoc.data() as any) },
+        });
+      }
+
+      // Fallback: query by fields (works with auto-IDs)
+      const q = await firestore
+        .collection(COLLECTION)
+        .where("user_email", "==", email)
+        .where("workout_id", "==", workout_id)
+        .limit(1)
+        .get();
+
+      const hit = q.docs[0];
       return res.status(200).json({
-        completed: docSnap.exists,
-        entry: docSnap.exists ? docSnap.data() : null,
+        completed: !!hit,
+        entry: hit ? { id: hit.id, ...(hit.data() as any) } : null,
       });
     } catch (err: any) {
       console.error("[completions/index:point] error:", err?.message || err);
@@ -62,7 +89,94 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // ---- MODE B: Range listing for a user (from/to [+ user_email]) ----
+  // ---- MODE C: Day summary (freestyle + planned) for Daily Tasks
+  // /api/completions?summary=day&date=YYYY-MM-DD[&user_email=...][&planned_workout_id=...]
+  if (summary === "day" && dateYMD) {
+    try {
+      const session = await getServerSession(req, res, authOptions);
+      if (!session?.user?.email) return res.status(401).json({ error: "Unauthorized" });
+      const effectiveEmail = user_email_param || session.user.email;
+
+      const range = dayRange(dateYMD);
+      if (!range) return res.status(400).json({ error: "Invalid date" });
+
+      // Query 1: completed_date in day
+      const q1Snap = await firestore
+        .collection(COLLECTION)
+        .where("user_email", "==", effectiveEmail)
+        .where("completed_date", ">=", range.from)
+        .where("completed_date", "<=", range.to)
+        .get();
+
+      // Query 2: created_at in day (fallback for entries that might not set completed_date)
+      const q2Snap = await firestore
+        .collection(COLLECTION)
+        .where("user_email", "==", effectiveEmail)
+        .where("created_at", ">=", range.from)
+        .where("created_at", "<=", range.to)
+        .get();
+
+      // Merge unique docs by id
+      const byId = new Map<string, FirebaseFirestore.DocumentData>();
+      q1Snap.docs.forEach((d) => byId.set(d.id, d.data()));
+      q2Snap.docs.forEach((d) => byId.set(d.id, d.data()));
+
+      let freestyleLogged = false;
+      let freestyleDuration = 0;
+      let freestyleCalories = 0;
+      let freestyleActivity: string | undefined;
+
+      let plannedWorkoutDone = false;
+
+      for (const [id, xAny] of byId) {
+        const x = xAny as any;
+
+        const isFreestyle =
+          x.is_freestyle === true || String(x.is_freestyle).toLowerCase() === "true";
+        const cals = Number.isFinite(Number(x.calories_burned))
+          ? Number(x.calories_burned)
+          : 0;
+        const mins = Number.isFinite(Number(x.duration_minutes))
+          ? Number(x.duration_minutes)
+          : 0;
+
+        if (isFreestyle) {
+          freestyleLogged = true;
+          freestyleCalories += cals;
+          freestyleDuration += mins;
+          if (x.activity_type && !freestyleActivity) freestyleActivity = String(x.activity_type);
+        }
+
+        if (plannedId && x.workout_id === plannedId) {
+          plannedWorkoutDone = true;
+        }
+      }
+
+      return res.status(200).json({
+        date: dateYMD,
+        user_email: effectiveEmail,
+        planned: {
+          workout_id: plannedId || null,
+          done: plannedId ? plannedWorkoutDone : false,
+        },
+        freestyle: {
+          logged: freestyleLogged,
+          summary: freestyleLogged
+            ? {
+                activity: freestyleActivity || "Freestyle",
+                duration: freestyleDuration,
+                calories: freestyleCalories,
+              }
+            : null,
+        },
+      });
+    } catch (err: any) {
+      console.error("[completions/index:summary-day] error:", err?.message || err);
+      return res.status(500).json({ error: "Failed to build day summary" });
+    }
+  }
+
+  // ---- MODE B: Range listing for a user (from/to [+ user_email])
   try {
     const session = await getServerSession(req, res, authOptions);
     if (!session?.user?.email) {
@@ -92,7 +206,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Base query: user + order by completed_date desc
     let q = firestore
-      .collection("workoutCompletions")
+      .collection(COLLECTION)
       .where("user_email", "==", effectiveEmail)
       .orderBy("completed_date", "desc") as FirebaseFirestore.Query;
 
@@ -107,10 +221,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Cursor pagination
     if (cursorId) {
-      const cursorDoc = await firestore.collection("workoutCompletions").doc(cursorId).get();
-      if (cursorDoc.exists) {
-        q = q.startAfter(cursorDoc);
-      }
+      const cursorDoc = await firestore.collection(COLLECTION).doc(cursorId).get();
+      if (cursorDoc.exists) q = q.startAfter(cursorDoc);
     }
 
     q = q.limit(limit);
@@ -121,15 +233,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Normalise timestamps to ISO; keep key fields stable
     const results = docs.map((c) => {
       const completedIso =
-        isoFromAny(c.completed_date) ||
-        isoFromAny(c.started_at) ||
-        isoFromAny(c.created_at);
+        isoFromAny(c.completed_date) || isoFromAny(c.started_at) || isoFromAny(c.created_at);
 
       return {
         id: c.id,
         user_email: c.user_email || null,
 
-        // quick-log fields (freestyle)
+        // quick-log fields (freestyle/planned both supported)
         is_freestyle: c.is_freestyle === true || String(c.is_freestyle).toLowerCase() === "true",
         activity_type: c.activity_type ?? null,
         duration_minutes: Number.isFinite(Number(c.duration_minutes)) ? Number(c.duration_minutes) : null,
@@ -143,10 +253,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sets_completed: Number.isFinite(Number(c.sets_completed)) ? Number(c.sets_completed) : null,
         weight_completed_with: Number.isFinite(Number(c.weight_completed_with)) ? Number(c.weight_completed_with) : null,
 
-        completed_date: completedIso,          // ISO
-        started_at: isoFromAny(c.started_at),  // ISO
-        created_at: isoFromAny(c.created_at),  // ISO
-        updated_at: isoFromAny(c.updated_at),  // ISO
+        completed_date: completedIso,         // ISO
+        started_at: isoFromAny(c.started_at), // ISO
+        created_at: isoFromAny(c.created_at), // ISO
+        updated_at: isoFromAny(c.updated_at), // ISO
 
         // passthrough (forward-compat)
         ...c,
