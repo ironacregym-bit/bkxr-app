@@ -1,5 +1,4 @@
 
-// pages/admin/exercises/create.tsx
 "use client";
 
 import Head from "next/head";
@@ -8,7 +7,7 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import BottomNav from "../../../components/BottomNav";
-import ExercisesContent from "./Content"; // <-- rename your content file to Content.tsx
+import ExercisesContent from "../../../components/admin/exercises/Content"; // <-- updated path
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -24,7 +23,6 @@ export default function CreateExercisesPage() {
   const role = (session?.user as any)?.role || "user";
   const isAllowed = !!session && (role === "admin" || role === "gym");
 
-  // IMPORTANT: call SWR unconditionally; gate it with a null key.
   const swrKey = mounted && isAllowed ? "/api/exercises?limit=500" : null;
   const { data } = useSWR(swrKey, fetcher, {
     revalidateOnFocus: false,
@@ -37,12 +35,10 @@ export default function CreateExercisesPage() {
       <Head><title>Create Exercise • Admin</title></Head>
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
-        {/* Top bar (do not return early; render gates below) */}
         <div className="d-flex align-items-center justify-content-between mb-3">
           <Link href="/admin" className="btn btn-outline-secondary">← Back to Admin</Link>
         </div>
 
-        {/* UI gates only; hooks above always ran */}
         {!mounted || status === "loading" ? (
           <div className="container py-4">Checking access…</div>
         ) : !isAllowed ? (
