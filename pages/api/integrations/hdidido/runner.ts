@@ -155,7 +155,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
     }
 
-    return res.status(200).json({ ok: true, outcome, error: errorMsg || null });
+    
+  const ws = process.env.BROWSER_WS_ENDPOINT || "";
+  const maskedWs = ws.replace(/(token=)[^&]+/i, "$1***");
+  const hasToken = /\btoken=/.test(ws);
+  return res.status(200).json({ ok: true, outcome, error: errorMsg || null, maskedWs, hasToken });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || "Server error" });
   }
