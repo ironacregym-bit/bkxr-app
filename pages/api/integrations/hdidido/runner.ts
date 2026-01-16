@@ -15,12 +15,7 @@ async function notify(email: string, title: string, body: string) {
     await fetch(`${base}/api/notify/emit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        to_email: email,
-        title,
-        body,
-        ttl_seconds: 3600
-      })
+      body: JSON.stringify({ to_email: email, title, body, ttl_seconds: 3600 })
     });
   } catch {
     // ignore notify errors
@@ -87,29 +82,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      // Dynamic import at runtime to keep build lean
+      // ---- Launch serverless Chromium locally (no external WS/token) ----
+      const chromium = await import("@sparticuz/chromium");
       const playwright = await import("playwright-core");
 
-      const ws = process.env.BROWSER_WS_ENDPOINT;
-      if (!ws) throw new Error("BROWSER_WS_ENDPOINT not set");
-
-      // Prefer standard Playwright connect (works best with Browserless /playwright?token=...)
-      // Fallback to connectOverCDP if provider expects CDP.
-      let browser: any;
-      try {
-        browser = await (playwright.chromium as any).connect(ws);
-      } catch (e1: any) {
-        try {
-          // @ts-ignore - connectOverCDP exists on chromium
-          browser = await (playwright.chromium as any).connectOverCDP(ws);
-        } catch (e2: any) {
-          const err1 = e1?.message || String(e1);
-          const err2 = e2?.message || String(e2);
-          throw new Error(
-            `Failed to connect to hosted browser.\nconnect(): ${err1}\nconnectOverCDP(): ${err2}`
-          );
-        }
-      }
+      const browser = await playwright.chromium.launch({
+        args: chromium.args,
+        executablePath: await chromium.executablePath(),
+        headless: true
+      });
 
       const ctx = await browser.newContext();
       const page = await ctx.newPage();
@@ -155,11 +136,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
     }
 
-    
-  const ws = process.env.BROWSER_WS_ENDPOINT || "";
-  const maskedWs = ws.replace(/(token=)[^&]+/i, "$1***");
-  const hasToken = /\btoken=/.test(ws);
-  return res.status(200).json({ ok: true, outcome, error: errorMsg || null, maskedWs, hasToken });
+    return res.status(200).json({ ok: true, outcome, error: errorMsg || null });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || "Server error" });
   }
