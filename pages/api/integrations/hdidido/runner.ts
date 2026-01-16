@@ -276,50 +276,55 @@ async function isLoggedIn(page: import("playwright-core").Page): Promise<boolean
   return !loginInputs;
 }
 
-/* ======================== Booking flow & task types ======================== */
+/* ======================== Task types & direct URL builders ======================== */
 type BookTask = {
   type: "book";
-  date: string;
-  time: string;
+  date: string;       // "YYYY-MM-DD"
+  time: string;       // "HH:mm" (24h)
   mode?: "casual" | "competition" | string;
-  // NEW: direct TeeSheet navigation
-  tee_url?: string;      // e.g. 'https://.../TeeSheet?courseId=0&token=XYZ&dt={date}'
-  tee_base?: string;     // e.g. 'https://.../TeeSheet?courseId=0'
-  token?: string;        // e.g. 'XYZ'
+
+  // Preferred: direct BookingAdd template containing {dateTime}
+  booking_add_url?: string;
+
+  // Also supported (older direct-tee paths)
+  tee_url?: string;   // supports {date}
+  tee_base?: string;  // base URL (we append token & dt)
+  token?: string;     // token to append with tee_base
 };
 type AnyTask = BookTask | { type?: string } | undefined;
-function isBookTask(x: any): x is BookTask { return !!x && x.type === "book" && typeof x.date === "string" && typeof x.time === "string"; }
 
-function parseYMD(ymd: string): Date | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
-  if (!m) return null;
-  const d = new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00`);
-  return isNaN(d.getTime()) ? null : d;
+function isBookTask(x: any): x is BookTask {
+  return !!x && x.type === "book" && typeof x.date === "string" && typeof x.time === "string";
 }
 
-/** Build the direct TeeSheet URL from task or env; returns { url, path } if available */
+function buildBookingAddUrl(task: BookTask): { url?: string } {
+  if (!task.booking_add_url) return {};
+  // "YYYY-MM-DDTHH:mm", encode ":" as %3A etc.
+  const dt = encodeURIComponent(`${task.date}T${task.time}`);
+  let url = task.booking_add_url.replaceAll("{dateTime}", dt);
+  url = url.replaceAll("{date}", encodeURIComponent(task.date))
+           .replaceAll("{time}", encodeURIComponent(task.time));
+  return { url };
+}
+
 function buildTeeUrl(task: BookTask, reqData: any): { url?: string; path?: "task.tee_url"|"task.base+token"|"env.base+token"|"req.base+token" } {
   const date = task.date;
-  // 1) Full URL with {date} placeholder
   if (typeof task.tee_url === "string" && task.tee_url.trim()) {
     const tpl = task.tee_url.trim();
     const url = tpl.includes("{date}") ? tpl.replaceAll("{date}", date) : tpl;
     return { url, path: "task.tee_url" };
   }
-  // 2) task.base + task.token
   if (typeof task.tee_base === "string" && typeof task.token === "string" && task.tee_base) {
     const base = task.tee_base;
     const sep = base.includes("?") ? "&" : "?";
     return { url: `${base}${sep}token=${encodeURIComponent(task.token)}&dt=${encodeURIComponent(date)}`, path: "task.base+token" };
   }
-  // 3) env base + env token
   const envBase = process.env.HDIDIDO_TEE_BASE;
   const envTok = process.env.HDIDIDO_TEE_TOKEN;
   if (envBase && envTok) {
     const sep = envBase.includes("?") ? "&" : "?";
     return { url: `${envBase}${sep}token=${encodeURIComponent(envTok)}&dt=${encodeURIComponent(date)}`, path: "env.base+token" };
   }
-  // 4) (optional) top-level fields in job (for quick manual testing)
   const reqBase = (reqData as any)?.tee_base;
   const reqTok = (reqData as any)?.tee_token || (reqData as any)?.token;
   if (typeof reqBase === "string" && typeof reqTok === "string" && reqBase) {
@@ -329,7 +334,7 @@ function buildTeeUrl(task: BookTask, reqData: any): { url?: string; path?: "task
   return {};
 }
 
-/** Minimal “click time -> Book” flow when we land directly on target date */
+/* ======================== Minimal time->Book click (for direct landing) ======================== */
 async function clickTimeAndBook(page: import("playwright-core").Page, time: string, evidence: any) {
   await snap(page, evidence, `pre-time-click: ${time}`, { includeHtml: true });
   const variants = [time, time.replace(/^0/, "")];
@@ -481,10 +486,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const task = (reqData as any).task as AnyTask;
       if (task && isBookTask(task)) {
         const bookingEvidence: any = {};
-        const { url: directUrl, path } = buildTeeUrl(task, reqData);
 
-        if (directUrl) {
-          // DIRECT TEE SHEET NAV
+        // Preferred path: direct BookingAdd
+        const { url: bookingAddUrl } = buildBookingAddUrl(task);
+        if (bookingAddUrl) {
+          await page.goto(bookingAddUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+          await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+          await acceptCookies(page); await dismissUpgradeModal(page); await smashUpgradeGate(page);
+          bookingEvidence.booking_add_url_used = bookingAddUrl;
+          await snap(page, evidence, "booking-add: loaded");
+
+          // If BookingAdd lands on the exact tee slot and requires a confirm, add it here later.
+          const okBook = await clickTimeAndBook(page, task.time, bookingEvidence);
+          // Some BookingAdd pages already act as the start of booking — if no time list, okBook may be false. That's fine.
+          if (!okBook) {
+            // Still consider "opened" a success stage; we can refine with a confirm step later if needed.
+            bookingEvidence.time_click_skipped = true;
+          }
+
+          evidence.booking_evidence = bookingEvidence;
+          confirmation_text = `Opened BookingAdd for ${task.date} ${task.time}`;
+        } else {
+          // Secondary: direct TeeSheet URL if provided
+          const { url: directUrl, path } = buildTeeUrl(task, reqData);
+          if (!directUrl) {
+            throw new Error("No direct booking URL configured (booking_add_url or tee_url/tee_base+token/HDIDIDO_TEE_* env).");
+          }
           await page.goto(directUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
           await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
           await acceptCookies(page); await dismissUpgradeModal(page); await smashUpgradeGate(page);
@@ -492,23 +519,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           bookingEvidence.tee_url_source = path;
           await snap(page, evidence, `tee-url: ${path}`);
 
-          // Now we're already on the desired date -> just click time -> Book
           const okBook = await clickTimeAndBook(page, task.time, bookingEvidence);
           if (!okBook) throw new Error(`Could not find time ${task.time} or Book button`);
-        } else {
-          // FALLBACK to previous calendar navigation flow (in case no URL hints available)
-          await page.goto("https://www.howdidido.com/", { waitUntil: "domcontentloaded" });
-          await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
-          await acceptCookies(page);
-          await snap(page, evidence, "before-booking-nav (fallback)");
 
-          // (We deliberately skip including the previous calendar helpers in this snippet for brevity.)
-          // If you still need them as fallback, keep your earlier `bookTeeTime(page, task, bookingEvidence)` call here.
-          throw new Error("No direct tee URL configured (tee_url or tee_base+token or HDIDIDO_TEE_* env).");
+          evidence.booking_evidence = bookingEvidence;
+          confirmation_text = `Booked attempt for ${task.date} ${task.time} (check booking UI for confirmation)`;
         }
-
-        evidence.booking_evidence = bookingEvidence;
-        confirmation_text = `Booked attempt for ${task.date} ${task.time} (check booking UI for confirmation)`;
       } else {
         confirmation_text = reusedSession
           ? `Session OK (reused) as ${username.replace(/(.{2}).+(@.*)/, "$1***$2")}`
