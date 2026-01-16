@@ -1,5 +1,5 @@
 
-// pages/admin/exercises/content.tsx
+// pages/admin/exercises/Content.tsx
 "use client";
 
 import * as React from "react";
@@ -10,7 +10,7 @@ type ExerciseForm = {
   type: string;
   equipment: string;
   video_url: string;
-  met_value: string; // keep as string for controlled input; convert on save
+  met_value: string; // keep as string; convert on save
   description: string;
 };
 
@@ -22,29 +22,49 @@ type ExerciseListItem = {
   equipment?: string;
 };
 
-type Props = {
-  // Provide the exercises from your parent (already fetched/gated)
-  exercises: ExerciseListItem[];
-};
+type Props = { exercises: ExerciseListItem[] };
 
-const fetchJson = async (url: string, init?: RequestInit) => {
-  const res = await fetch(url, init);
+const EXAMPLE_JSON = JSON.stringify(
+  [
+    {
+      exercise_name: "Kettlebell Swings",
+      exercise_id: "Kettlebell Swings",
+      type: "Kettlebell",
+      equipment: "Kettlebell",
+      met_value: 8.0,
+      description: "Hinge, snap hips; arms relaxed."
+    },
+    {
+      exercise_name: "Pushups",
+      type: "Bodyweight",
+      equipment: "Bodyweight",
+      description: "Hands under shoulders; body in one line."
+    }
+  ],
+  null,
+  2
+);
+
+async function postJson(url: string, body: any) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json?.error || "Request failed");
   return json;
-};
+}
 
 export default function ExercisesContent({ exercises }: Props) {
-  // UI tabs for right pane
+  // Tabs on right
   const [tab, setTab] = React.useState<"form" | "paste">("form");
 
-  // Selected exercise from the sidebar (edit mode) or null for new
+  // Selected (edit) vs new
   const [selected, setSelected] = React.useState<ExerciseListItem | null>(null);
-
-  // Whether to mirror exercise_id from exercise_name (create flow)
   const [autoId, setAutoId] = React.useState<boolean>(true);
 
-  // Main form (create/edit)
+  // Form state
   const [form, setForm] = React.useState<ExerciseForm>({
     exercise_id: "",
     exercise_name: "",
@@ -52,17 +72,15 @@ export default function ExercisesContent({ exercises }: Props) {
     equipment: "",
     video_url: "",
     met_value: "",
-    description: "",
+    description: ""
   });
 
-  // Keep exercise_id == exercise_name while autoId is on
+  // Keep ID mirrored while autoId ON
   React.useEffect(() => {
-    if (autoId) {
-      setForm((f) => ({ ...f, exercise_id: f.exercise_name }));
-    }
-  }, [form.exercise_name, autoId]);
+    if (autoId) setForm((f) => ({ ...f, exercise_id: f.exercise_name }));
+  }, [autoId, form.exercise_name]);
 
-  // If an item is selected for edit, disable autoId to allow manual control
+  // Editing existing → disable autoId
   React.useEffect(() => {
     if (selected) setAutoId(false);
   }, [selected]);
@@ -77,7 +95,7 @@ export default function ExercisesContent({ exercises }: Props) {
       equipment: ex.equipment || "",
       video_url: "",
       met_value: "",
-      description: "",
+      description: ""
     });
   }
 
@@ -92,34 +110,25 @@ export default function ExercisesContent({ exercises }: Props) {
       equipment: "",
       video_url: "",
       met_value: "",
-      description: "",
+      description: ""
     });
   }
 
   const [saving, setSaving] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
 
-  async function saveOne(payload: ExerciseForm, upsert: boolean): Promise<{ ok: boolean; error?: string }> {
-    try {
-      const body = {
-        exercise_id: payload.exercise_id?.trim(),
-        exercise_name: payload.exercise_name.trim(),
-        type: payload.type.trim(),
-        equipment: payload.equipment.trim(),
-        video_url: payload.video_url.trim(),
-        met_value: payload.met_value ? Number(payload.met_value) : null,
-        description: payload.description.trim(),
-      };
-      const url = `/api/exercises/create${upsert ? "?upsert=true" : ""}`;
-      await fetchJson(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      return { ok: true };
-    } catch (e: any) {
-      return { ok: false, error: e?.message || "Failed to save exercise" };
-    }
+  async function saveOne(payload: ExerciseForm, upsert: boolean) {
+    const body = {
+      exercise_id: payload.exercise_id?.trim(),
+      exercise_name: payload.exercise_name.trim(),
+      type: payload.type.trim(),
+      equipment: payload.equipment.trim(),
+      video_url: payload.video_url.trim(),
+      met_value: payload.met_value ? Number(payload.met_value) : null,
+      description: payload.description.trim()
+    };
+    const url = `/api/exercises/create${upsert ? "?upsert=true" : ""}`;
+    return postJson(url, body);
   }
 
   async function handleSave() {
@@ -128,11 +137,9 @@ export default function ExercisesContent({ exercises }: Props) {
     try {
       if (!form.exercise_name.trim()) throw new Error("Exercise name is required.");
       if (!form.exercise_id.trim()) throw new Error("Exercise ID is required.");
-      const upsert = !!selected;
-      const result = await saveOne(form, upsert);
-      if (!result.ok) throw new Error(result.error);
-      setMsg(upsert ? "Exercise updated ✅" : "Exercise created ✅");
-      if (!upsert) resetToNew();
+      await saveOne(form, !!selected);
+      setMsg(selected ? "Exercise updated ✅" : "Exercise created ✅");
+      if (!selected) resetToNew();
     } catch (e: any) {
       setMsg(e?.message || "Save failed");
     } finally {
@@ -140,7 +147,7 @@ export default function ExercisesContent({ exercises }: Props) {
     }
   }
 
-  // -------- Bulk/JSON quick add (right pane) --------
+  // Bulk / paste JSON
   const [rawJson, setRawJson] = React.useState<string>("");
   const [bulkBusy, setBulkBusy] = React.useState(false);
   const [bulkMsg, setBulkMsg] = React.useState<string | null>(null);
@@ -148,10 +155,7 @@ export default function ExercisesContent({ exercises }: Props) {
 
   function normalizeIncoming(obj: any): ExerciseForm {
     const name = String(obj.exercise_name || obj.name || "").trim();
-    const id =
-      obj.exercise_id != null && String(obj.exercise_id).trim().length > 0
-        ? String(obj.exercise_id).trim()
-        : name;
+    const id = obj.exercise_id && String(obj.exercise_id).trim().length > 0 ? String(obj.exercise_id).trim() : name;
     return {
       exercise_id: id,
       exercise_name: name,
@@ -159,7 +163,7 @@ export default function ExercisesContent({ exercises }: Props) {
       equipment: String(obj.equipment || "").trim(),
       video_url: String(obj.video_url || "").trim(),
       met_value: obj.met_value != null && obj.met_value !== "" ? String(obj.met_value) : "",
-      description: String(obj.description || "").trim(),
+      description: String(obj.description || "").trim()
     };
   }
 
@@ -169,7 +173,7 @@ export default function ExercisesContent({ exercises }: Props) {
     setBulkResult(null);
     try {
       if (!rawJson.trim()) throw new Error("Paste JSON first.");
-      const parsed: any = JSON.parse(rawJson);
+      const parsed = JSON.parse(rawJson);
       const arr: any[] = Array.isArray(parsed) ? parsed : [parsed];
       if (!arr.length) throw new Error("No items found in JSON.");
 
@@ -179,15 +183,16 @@ export default function ExercisesContent({ exercises }: Props) {
 
       for (let i = 0; i < arr.length; i++) {
         const rec = normalizeIncoming(arr[i]);
-        if (!rec.exercise_name) {
-          failed++; details.push(`Item ${i + 1}: Missing exercise_name`); continue;
+        if (!rec.exercise_name) { failed++; details.push(`Item ${i + 1}: Missing exercise_name`); continue; }
+        if (!rec.exercise_id) { failed++; details.push(`Item ${i + 1}: Missing exercise_id (and could not infer)`); continue; }
+
+        try {
+          await saveOne(rec, true); // upsert for bulk
+          success++;
+        } catch (err: any) {
+          failed++;
+          details.push(`Item ${i + 1} (${rec.exercise_name}): ${err?.message || "save failed"}`);
         }
-        if (!rec.exercise_id) {
-          failed++; details.push(`Item ${i + 1}: Missing exercise_id (and could not infer from name)`); continue;
-        }
-        const result = await saveOne(rec, /* upsert */ true);
-        if (result.ok) success++;
-        else { failed++; details.push(`Item ${i + 1} (${rec.exercise_name}): ${result.error}`); }
       }
 
       setBulkResult({ success, failed, details });
@@ -199,38 +204,14 @@ export default function ExercisesContent({ exercises }: Props) {
     }
   }
 
-  // A stable example JSON (memoised once; not conditional hook)
-  const exampleJson = React.useMemo(
-    () =>
-      JSON.stringify(
-        [
-          {
-            exercise_name: "Kettlebell Swings",
-            exercise_id: "Kettlebell Swings",
-            type: "Kettlebell",
-            equipment: "Kettlebell",
-            met_value: 8.0,
-            description: "Hinge, snap hips; arms relaxed."
-          },
-          {
-            exercise_name: "Pushups",
-            type: "Bodyweight",
-            equipment: "Bodyweight",
-            description: "Hands under shoulders; body in one line."
-          }
-        ],
-        null,
-        2
-      ),
-    []
-  );
-
-  // ---------- Render (no early returns; no conditional hooks) ----------
   return (
     <div className="row">
       {/* Sidebar (desktop) */}
       <aside className="col-md-4 d-none d-md-block">
-        <div className="bxkr-card p-3" style={{ background: "rgba(255,255,255,0.05)", borderRadius: 12, maxHeight: "70vh", overflow: "auto" }}>
+        <div
+          className="bxkr-card p-3"
+          style={{ background: "rgba(255,255,255,0.05)", borderRadius: 12, maxHeight: "70vh", overflow: "auto" }}
+        >
           <div className="d-flex align-items-center justify-content-between mb-2">
             <h6 className="m-0">Exercises</h6>
             <button className="btn btn-sm btn-outline-light" onClick={resetToNew}>+ New</button>
@@ -251,9 +232,7 @@ export default function ExercisesContent({ exercises }: Props) {
                     title="Click to edit"
                   >
                     <div className="fw-semibold">{ex.exercise_name}</div>
-                    <div className="text-dim">
-                      {ex.type ? `• ${ex.type}` : ""} {ex.equipment ? `• ${ex.equipment}` : ""}
-                    </div>
+                    <div className="text-dim">{ex.type ? `• ${ex.type}` : ""} {ex.equipment ? `• ${ex.equipment}` : ""}</div>
                   </li>
                 );
               })}
@@ -262,9 +241,8 @@ export default function ExercisesContent({ exercises }: Props) {
         </div>
       </aside>
 
-      {/* Right pane: form / paste JSON */}
+      {/* Right pane */}
       <section className="col-12 col-md-8">
-        {/* Tab buttons (desktop up top; mobile shown here too) */}
         <div className="btn-group mb-2">
           <button className={`btn btn-${tab === "form" ? "bxkr" : "outline-light"}`} onClick={() => setTab("form")}>Form</button>
           <button className={`btn btn-${tab === "paste" ? "bxkr" : "outline-light"}`} onClick={() => setTab("paste")}>Paste JSON</button>
@@ -302,61 +280,32 @@ export default function ExercisesContent({ exercises }: Props) {
                     <label htmlFor="autoId" className="form-check-label ms-1">Auto ID from name</label>
                   </div>
                 </div>
-                <small className="text-muted">
-                  Per your rule, <code>exercise_id</code> = <code>exercise_name</code>. Disable to override.
-                </small>
+                <small className="text-muted">Per your rule, <code>exercise_id</code> = <code>exercise_name</code>. Disable to override.</small>
               </div>
 
               <div className="col-6 col-lg-3">
                 <label className="form-label">Type</label>
-                <input
-                  className="form-control"
-                  value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value })}
-                  placeholder="Kettlebell / Boxing / Bodyweight / Weights / Warm up"
-                />
+                <input className="form-control" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} placeholder="Kettlebell / Boxing / Bodyweight / Weights / Warm up" />
               </div>
 
               <div className="col-6 col-lg-3">
                 <label className="form-label">Equipment</label>
-                <input
-                  className="form-control"
-                  value={form.equipment}
-                  onChange={(e) => setForm({ ...form, equipment: e.target.value })}
-                  placeholder="Kettlebell / Dumbbell / Bodyweight"
-                />
+                <input className="form-control" value={form.equipment} onChange={(e) => setForm({ ...form, equipment: e.target.value })} placeholder="Kettlebell / Dumbbell / Bodyweight" />
               </div>
 
               <div className="col-12 col-lg-6">
                 <label className="form-label">Video URL</label>
-                <input
-                  className="form-control"
-                  value={form.video_url}
-                  onChange={(e) => setForm({ ...form, video_url: e.target.value })}
-                  placeholder="https://…"
-                />
+                <input className="form-control" value={form.video_url} onChange={(e) => setForm({ ...form, video_url: e.target.value })} placeholder="https://…" />
               </div>
 
               <div className="col-6 col-lg-3">
                 <label className="form-label">MET value (optional)</label>
-                <input
-                  className="form-control"
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  value={form.met_value}
-                  onChange={(e) => setForm({ ...form, met_value: e.target.value })}
-                />
+                <input className="form-control" type="number" min={0} step={0.1} value={form.met_value} onChange={(e) => setForm({ ...form, met_value: e.target.value })} />
               </div>
 
               <div className="col-12">
                 <label className="form-label">Description</label>
-                <textarea
-                  className="form-control"
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  placeholder="Coaching cues, standards, regressions"
-                />
+                <textarea className="form-control" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Coaching cues, standards, regressions" />
               </div>
             </div>
 
@@ -364,9 +313,7 @@ export default function ExercisesContent({ exercises }: Props) {
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? "Saving…" : (selected ? "Save changes" : "Create Exercise")}
               </button>
-              {selected && (
-                <button className="btn btn-outline-light" onClick={resetToNew}>New exercise</button>
-              )}
+              {selected && <button className="btn btn-outline-light" onClick={resetToNew}>New exercise</button>}
             </div>
           </div>
         )}
@@ -383,19 +330,14 @@ export default function ExercisesContent({ exercises }: Props) {
               rows={12}
               value={rawJson}
               onChange={(e) => setRawJson(e.target.value)}
-              placeholder={exampleJson}
+              placeholder={EXAMPLE_JSON}
             />
 
             <div className="mt-2 d-flex gap-2">
               <button className="btn btn-outline-light" onClick={handleBulkInsert} disabled={bulkBusy}>
                 {bulkBusy ? "Saving…" : "Validate & Save"}
               </button>
-              <button
-                className="btn btn-secondary"
-                onClick={() => setRawJson(exampleJson)}
-                disabled={bulkBusy}
-                title="Insert example JSON"
-              >
+              <button className="btn btn-secondary" onClick={() => setRawJson(EXAMPLE_JSON)} disabled={bulkBusy} title="Insert example JSON">
                 Insert example
               </button>
             </div>
@@ -409,9 +351,7 @@ export default function ExercisesContent({ exercises }: Props) {
                 {bulkResult.details.length > 0 && (
                   <details className="mt-2">
                     <summary className="small">Details</summary>
-                    <ul className="small mt-2">
-                      {bulkResult.details.map((d, i) => <li key={i}>{d}</li>)}
-                    </ul>
+                    <ul className="small mt-2">{bulkResult.details.map((d, i) => <li key={i}>{d}</li>)}</ul>
                   </details>
                 )}
               </div>
@@ -419,7 +359,7 @@ export default function ExercisesContent({ exercises }: Props) {
           </section>
         )}
 
-        {/* Mobile-only quick list (when no sidebar) */}
+        {/* Mobile recent list */}
         <section className="bxkr-card p-3 d-md-none">
           <h6 className="fw-semibold mb-2">Recent exercises</h6>
           {exercises.length === 0 ? (
