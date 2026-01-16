@@ -1,4 +1,5 @@
 
+// pages/api/completions/index.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { getServerSession } from "next-auth/next";
@@ -31,7 +32,7 @@ function dayRange(dateYMD: string): { from: Date; to: Date } | null {
   return { from, to };
 }
 
-// Keep this as your canonical collection
+// Canonical collection name (do not change)
 const COLLECTION = "workoutCompletions";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -108,7 +109,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .where("completed_date", "<=", range.to)
         .get();
 
-      // Query 2: created_at in day (fallback for entries that might not set completed_date)
+      // Query 2: created_at in day (fallback for older docs that may not set completed_date)
       const q2Snap = await firestore
         .collection(COLLECTION)
         .where("user_email", "==", effectiveEmail)
@@ -121,34 +122,78 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       q1Snap.docs.forEach((d) => byId.set(d.id, d.data()));
       q2Snap.docs.forEach((d) => byId.set(d.id, d.data()));
 
-      let freestyleLogged = false;
-      let freestyleDuration = 0;
-      let freestyleCalories = 0;
-      let freestyleActivity: string | undefined;
-
+      // Aggregate plan/freestyle
       let plannedWorkoutDone = false;
 
-      for (const [id, xAny] of byId) {
+      // Track latest freestyle entry for the day (by completed_date, else created_at)
+      let freestyleLatestTs = -Infinity;
+      let freestyle:
+        | {
+            activity_type: string | null;
+            duration: number | null;              // minutes
+            calories_burned: number | null;       // kcal
+            weight_completed_with: number | null; // kg or null
+          }
+        | null = null;
+
+      for (const [, xAny] of byId) {
         const x = xAny as any;
 
-        const isFreestyle =
-          x.is_freestyle === true || String(x.is_freestyle).toLowerCase() === "true";
-        const cals = Number.isFinite(Number(x.calories_burned))
-          ? Number(x.calories_burned)
-          : 0;
-        const mins = Number.isFinite(Number(x.duration_minutes))
-          ? Number(x.duration_minutes)
-          : 0;
+        // Determine timestamp for "latest"
+        const tCompleted =
+          x.completed_date?.toDate?.() instanceof Date
+            ? x.completed_date.toDate()
+            : x.completed_date
+            ? new Date(x.completed_date)
+            : null;
+        const tCreated =
+          x.created_at?.toDate?.() instanceof Date
+            ? x.created_at.toDate()
+            : x.created_at
+            ? new Date(x.created_at)
+            : null;
 
-        if (isFreestyle) {
-          freestyleLogged = true;
-          freestyleCalories += cals;
-          freestyleDuration += mins;
-          if (x.activity_type && !freestyleActivity) freestyleActivity = String(x.activity_type);
-        }
+        const ts =
+          tCompleted && !isNaN(tCompleted.getTime())
+            ? tCompleted.getTime()
+            : tCreated && !isNaN(tCreated.getTime())
+            ? tCreated.getTime()
+            : -Infinity;
 
+        // Planned workout done?
         if (plannedId && x.workout_id === plannedId) {
           plannedWorkoutDone = true;
+        }
+
+        // Freestyle capture (canonical names; duration fallback)
+        const isFreestyle =
+          x.is_freestyle === true || String(x.is_freestyle).toLowerCase() === "true";
+        if (isFreestyle && ts > freestyleLatestTs) {
+          freestyleLatestTs = ts;
+
+          const act =
+            typeof x.activity_type === "string" ? (x.activity_type as string) : null;
+          // prefer new "duration" (minutes), fallback to legacy "duration_minutes"
+          const dur = Number.isFinite(Number(x.duration))
+            ? Number(x.duration)
+            : Number.isFinite(Number(x.duration_minutes))
+            ? Number(x.duration_minutes)
+            : null;
+
+          const cals = Number.isFinite(Number(x.calories_burned))
+            ? Number(x.calories_burned)
+            : null;
+
+          const wt = Number.isFinite(Number(x.weight_completed_with))
+            ? Number(x.weight_completed_with)
+            : null;
+
+          freestyle = {
+            activity_type: act,
+            duration: dur,
+            calories_burned: cals,
+            weight_completed_with: wt,
+          };
         }
       }
 
@@ -159,15 +204,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           workout_id: plannedId || null,
           done: plannedId ? plannedWorkoutDone : false,
         },
+        // Freestyle summary uses canonical field names:
+        // { activity_type, duration, calories_burned, weight_completed_with }
         freestyle: {
-          logged: freestyleLogged,
-          summary: freestyleLogged
-            ? {
-                activity: freestyleActivity || "Freestyle",
-                duration: freestyleDuration,
-                calories: freestyleCalories,
-              }
-            : null,
+          logged: !!freestyle,
+          summary: freestyle,
         },
       });
     } catch (err: any) {
@@ -239,26 +280,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         id: c.id,
         user_email: c.user_email || null,
 
-        // quick-log fields (freestyle/planned both supported)
+        // Quick-log fields (regular + freestyle supported). Range mode
+        // stays as before — it exposes duration_minutes, not duration.
         is_freestyle: c.is_freestyle === true || String(c.is_freestyle).toLowerCase() === "true",
         activity_type: c.activity_type ?? null,
-        duration_minutes: Number.isFinite(Number(c.duration_minutes)) ? Number(c.duration_minutes) : null,
-        calories_burned: Number.isFinite(Number(c.calories_burned)) ? Number(c.calories_burned) : null,
+        duration_minutes: Number.isFinite(Number(c.duration_minutes))
+          ? Number(c.duration_minutes)
+          : null,
+        calories_burned: Number.isFinite(Number(c.calories_burned))
+          ? Number(c.calories_burned)
+          : null,
         rpe: Number.isFinite(Number(c.rpe)) ? Number(c.rpe) : null,
 
-        // compatibility fields
+        // Compatibility fields
         is_benchmark: c.is_benchmark === true || String(c.is_benchmark).toLowerCase() === "true",
         benchmark_metrics: c.benchmark_metrics ?? null,
         workout_id: c.workout_id ?? null,
         sets_completed: Number.isFinite(Number(c.sets_completed)) ? Number(c.sets_completed) : null,
-        weight_completed_with: Number.isFinite(Number(c.weight_completed_with)) ? Number(c.weight_completed_with) : null,
+        weight_completed_with: Number.isFinite(Number(c.weight_completed_with))
+          ? Number(c.weight_completed_with)
+          : null,
 
-        completed_date: completedIso,         // ISO
+        completed_date: completedIso, // ISO
         started_at: isoFromAny(c.started_at), // ISO
         created_at: isoFromAny(c.created_at), // ISO
         updated_at: isoFromAny(c.updated_at), // ISO
 
-        // passthrough (forward-compat)
+        // Passthrough (forward-compat)
         ...c,
       };
     });
