@@ -101,7 +101,7 @@ async function smashUpgradeGate(page: import("playwright-core").Page) {
           try { kill(el); } catch {}
         }
       }
-      document.documentElement.style.overflow = "auto";
+      (document.documentElement as HTMLElement).style.overflow = "auto";
       document.body.style.overflow = "auto";
       document.body.style.pointerEvents = "auto";
     });
@@ -375,29 +375,37 @@ async function gotoBooking(page: import("playwright-core").Page, evidence: any) 
   }
 }
 
+/** UPDATED: no regex-in-CSS; use Locator API with hasText regex for month title */
 async function changeMonthTo(page: import("playwright-core").Page, target: Date, evidence: any) {
   async function readMonthYear(): Promise<{ month: number; year: number } | null> {
-    const candidates = [
-      '.fc-toolbar-title',
-      '.calendar .month-title',
-      '[class*="month"] [class*="title"]',
-      'h2:has-text(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i)',
+    const monthHeaderLocators = [
+      page.locator(".fc-toolbar-title"),
+      page.locator(".calendar .month-title"),
+      page.locator('[class*="month"] [class*="title"]'),
+      page.locator("h2"), // generic — will be filtered by hasText regex
     ];
-    for (const sel of candidates) {
-      const t = await page.$(sel);
-      if (t) {
-        const txt = (await t.textContent())?.trim() || "";
-        const m = txt.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})/i);
-        if (m) {
-          const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
-          const month = months.indexOf(m[1].slice(0,3).toLowerCase());
-          const year = parseInt(m[2],10);
-          if (month >= 0) return { month, year };
-        }
+
+    const monthRe = /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})/i;
+    const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+
+    for (const loc of monthHeaderLocators) {
+      const filtered = loc.filter({ hasText: monthRe });
+      const count = await filtered.count().catch(() => 0);
+      if (!count) continue;
+
+      const text = (await filtered.first().textContent().catch(() => ""))?.trim() || "";
+      const m = text.match(monthRe);
+      if (!m) continue;
+
+      const month = months.indexOf(m[1].slice(0,3).toLowerCase());
+      const year = parseInt(m[2], 10);
+      if (month >= 0 && Number.isFinite(year)) {
+        return { month, year };
       }
     }
     return null;
   }
+
   function monthsDiff(a: {month:number; year:number}, b: {month:number; year:number}) {
     return (b.year - a.year) * 12 + (b.month - a.month);
   }
@@ -405,8 +413,8 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
   const tm = target.getMonth();
   const ty = target.getFullYear();
 
-  const nextSelectors = ['.fc-next-button','button[aria-label="Next"]','a[title="Next"]','button:has-text(">")','i.fa-chevron-right'];
-  const prevSelectors = ['.fc-prev-button','button[aria-label="Previous"]','a[title="Previous"]','button:has-text("<")','i.fa-chevron-left'];
+  const nextSelectors = ['.fc-next-button','button[aria-label="Next"]','a[title="Next"]','button','i.fa-chevron-right'];
+  const prevSelectors = ['.fc-prev-button','button[aria-label="Previous"]','a[title="Previous"]','button','i.fa-chevron-left'];
 
   let attempts = 0;
   for (let i = 0; i < 12; i++) {
@@ -418,13 +426,23 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
     const goNext = diff > 0;
     const selList = goNext ? nextSelectors : prevSelectors;
     let clicked = false;
+
     for (const sel of selList) {
-      const el = await page.$(sel);
-      if (el) {
-        await el.click().catch(() => {});
+      const loc = page.locator(sel);
+      const count = await loc.count().catch(() => 0);
+      if (!count) continue;
+
+      // If a generic button set, prefer ones with "Next"/"Prev" glyphs/text
+      let tryLoc = loc;
+      if (sel === 'button') {
+        tryLoc = loc.filter({ hasText: goNext ? /Next|›|»/i : /Prev|Previous|‹|«/i }).first();
+      }
+
+      if ((await tryLoc.count().catch(() => 0)) > 0) {
+        await tryLoc.click().catch(() => {});
         await page.waitForTimeout(400);
-        clicked = true;
         attempts++;
+        clicked = true;
         break;
       }
     }
@@ -433,22 +451,29 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
   evidence.month_jumps = attempts;
 }
 
+/** UPDATED: use Locator API with anchored regex for exact day number */
 async function clickDay(page: import("playwright-core").Page, dayNum: number, evidence: any) {
-  const dayStr = String(dayNum);
-  const selectors = [
-    `button:has-text("^${dayStr}$")`,
-    `a:has-text("^${dayStr}$")`,
-    `td:has-text("^${dayStr}$")`,
-    `[role="gridcell"]:has-text("^${dayStr}$")`,
-    `div:has-text("^${dayStr}$")`,
+  const dayRe = new RegExp(`^\\s*${dayNum}\\s*$`);
+
+  const candidates = [
+    page.locator("button").filter({ hasText: dayRe }),
+    page.locator("a").filter({ hasText: dayRe }),
+    page.locator('[role="gridcell"]').filter({ hasText: dayRe }),
+    page.locator("td").filter({ hasText: dayRe }),
+    page.locator("div").filter({ hasText: dayRe }),
   ];
-  for (const sel of selectors) {
-    const found = await page.$(sel);
-    if (found) {
-      await found.click().catch(() => {});
-      await page.waitForTimeout(500);
-      evidence.day_clicked_selector = sel;
+
+  for (const loc of candidates) {
+    const count = await loc.count().catch(() => 0);
+    if (!count) continue;
+    const btn = loc.first();
+    try {
+      await btn.click({ timeout: 1500 });
+      await page.waitForTimeout(300);
+      evidence.day_clicked_selector = "locator(hasText=^day$)";
       return true;
+    } catch {
+      // try next candidate
     }
   }
   return false;
