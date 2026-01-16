@@ -1,20 +1,21 @@
 
 // pages/api/integrations/hdidido/runner.ts
 import type { NextApiRequest, NextApiResponse } from "next";
+import firestore from "../../../../lib/firestoreClient";
 
 /**
- * Minimal hard-coded smoke path with robust login (native + MS/Azure),
- * then direct navigation to BookingAdd and a Confirm click.
+ * Robust login (native + MS/Azure) -> go to hard-coded BookingAdd URL ->
+ * Add self (heuristic), tick confirm/terms checkboxes, wait for Confirm, click it.
+ * Persists a run doc in Firestore: golf_booking_runs and subcollection 'screens'.
  *
  * ENV REQUIRED:
- *  - CRON_SECRET           (for auth)
- *  - HDIDIDO_PASSWORD      (password for USER_EMAIL below)
+ *  - CRON_SECRET
+ *  - HDIDIDO_PASSWORD  (for USER_EMAIL below)
  *
- * Optional:
- *  - APP_BASE_URL          (used by other flows; not required here)
+ * Optional (unused here but common across project):
+ *  - APP_BASE_URL
  */
 
-// --- Constants: login first URL and hard-coded BookingAdd target
 const LOGIN_URL = "https://www.howdidido.com/Account/Login";
 const USER_EMAIL = "ben.jones1974@hotmail.co.uk";
 
@@ -28,46 +29,26 @@ const BOOKING_ADD_URL =
   "&crossOverMinutes=0" +
   "&releasedReservation=False";
 
-// ---------- Small utilities ----------
+// ---------- Utilities ----------
 async function acceptCookies(page: import("playwright-core").Page) {
   const sels = [
-    'button:has-text("OK")',
-    'a:has-text("OK")',
-    'button:has-text("Accept")',
-    'button:has-text("Accept All")',
-    'button:has-text("Agree")',
-    '#onetrust-accept-btn-handler',
-    '[id*="accept"]',
-    '[aria-label*="accept"]',
+    'button:has-text("OK")', 'a:has-text("OK")',
+    'button:has-text("Accept")', 'button:has-text("Accept All")', 'button:has-text("Agree")',
+    '#onetrust-accept-btn-handler', '[id*="accept"]', '[aria-label*="accept"]',
   ];
   for (const s of sels) {
     try {
       const el = await page.$(s);
-      if (el) {
-        await el.click({ timeout: 1000 }).catch(() => {});
-        await page.waitForTimeout(200);
-        break;
-      }
+      if (el) { await el.click({ timeout: 1000 }).catch(() => {}); await page.waitForTimeout(200); break; }
     } catch {}
   }
 }
-
 async function dismissUpgradeModal(page: import("playwright-core").Page) {
   const sels = [
-    'button:has-text("Later")',
-    'button:has-text("Not now")',
-    'button:has-text("Continue")',
-    'button:has-text("Close")',
-    'button:has-text("Dismiss")',
-    'a:has-text("Close")',
-    'a:has-text("Dismiss")',
-    'button[aria-label*="close" i]',
-    'button[title*="close" i]',
-    '.modal-header .btn-close',
-    '.modal .btn-close',
-    '.modal [data-bs-dismiss="modal"]',
-    '.modal .close',
-    '.modal-backdrop',
+    'button:has-text("Later")', 'button:has-text("Not now")', 'button:has-text("Continue")',
+    'button:has-text("Close")', 'button:has-text("Dismiss")', 'a:has-text("Close")', 'a:has-text("Dismiss")',
+    'button[aria-label*="close" i]', 'button[title*="close" i]', '.modal-header .btn-close',
+    '.modal .btn-close', '.modal [data-bs-dismiss="modal"]', '.modal .close', '.modal-backdrop',
   ];
   for (const s of sels) {
     try {
@@ -84,8 +65,6 @@ async function dismissUpgradeModal(page: import("playwright-core").Page) {
   try { await page.keyboard.press("Escape"); } catch {}
   await page.waitForTimeout(100);
 }
-
-/** Remove high-z overlays that can block clicks/typing */
 async function nukeOverlays(page: import("playwright-core").Page) {
   try {
     await page.evaluate(() => {
@@ -94,55 +73,39 @@ async function nukeOverlays(page: import("playwright-core").Page) {
       for (const el of all) {
         const s = window.getComputedStyle(el);
         const z = parseInt(s.zIndex || "0", 10);
-        const isDialog = el.getAttribute("role") === "dialog" || (el.className || "").toLowerCase().includes("modal");
-        if ((s.position === "fixed" || s.position === "sticky" || isDialog) && z >= 100) {
+        const dialogish = el.getAttribute("role") === "dialog" || (el.className || "").toLowerCase().includes("modal");
+        if ((s.position === "fixed" || s.position === "sticky" || dialogish) && z >= 100) {
           try { kill(el); } catch {}
         }
       }
-      document.documentElement.style.overflow = "auto";
+      (document.documentElement as HTMLElement).style.overflow = "auto";
       document.body.style.overflow = "auto";
       (document.body as any).style.pointerEvents = "auto";
     });
   } catch {}
   await page.waitForTimeout(100);
 }
-
 function isLoginUrl(url: string) {
   return /\/Account\/Login/i.test(url) || /login\.microsoftonline\.com/i.test(url);
 }
-
 async function isLoggedIn(page: import("playwright-core").Page) {
   const url = page.url();
   if (isLoginUrl(url)) return false;
   const cues = [
-    'text=/Welcome/i',
-    'text=/Handicap/i',
-    'text=/My Account/i',
-    'text=/Sign out/i',
-    'a[href*="/account"]',
-    'a[href*="/logout"]',
-    'a[href*="/dashboard"]',
+    'text=/Welcome/i', 'text=/Handicap/i', 'text=/My Account/i', 'text=/Sign out/i',
+    'a[href*="/account"]', 'a[href*="/logout"]', 'a[href*="/dashboard"]',
   ];
-  for (const c of cues) {
-    if (await page.$(c)) return true;
-  }
+  for (const c of cues) { if (await page.$(c)) return true; }
   return false;
 }
-
-/** Find first matching selector across all frames */
 async function findInFrames(page: import("playwright-core").Page, selectors: string[]) {
   for (const frame of page.frames()) {
     for (const sel of selectors) {
-      try {
-        const h = await frame.$(sel);
-        if (h) return { frame, handle: h, selector: sel };
-      } catch {}
+      try { const h = await frame.$(sel); if (h) return { frame, handle: h, selector: sel }; } catch {}
     }
   }
   return null;
 }
-
-/** Wait up to ms for any of selectors to appear in any frame */
 async function waitForAnyInFrames(
   page: import("playwright-core").Page,
   selectors: string[],
@@ -158,69 +121,158 @@ async function waitForAnyInFrames(
   }
   return null;
 }
+async function snapB64(page: import("playwright-core").Page, quality = 55) {
+  try {
+    const buf = await page.screenshot({ type: "jpeg", quality, fullPage: false });
+    return `data:image/jpeg;base64,${buf.toString("base64")}`;
+  } catch { return undefined; }
+}
 
 // ---------- Login variants ----------
 async function loginNative(page: import("playwright-core").Page, email: string, password: string) {
   const emailSels = ['#Email', 'input[name="Email"]', 'input[type="email"]', 'input[name="email"]', 'input[id*="email"]', 'input[type="text"]'];
   const passSels  = ['#Password', 'input[name="Password"]', 'input[type="password"]', 'input[id*="password"]', 'input[name="password"]'];
   const submitSels = [
-    'button[type="submit"]',
-    'button:has-text("Log in")',
-    'button:has-text("Sign in")',
-    'a:has-text("Log in")',
-    'input[type="submit"]',
+    'button[type="submit"]','button:has-text("Log in")','button:has-text("Sign in")',
+    'a:has-text("Log in")','input[type="submit"]'
   ];
-
   const emailFound = await waitForAnyInFrames(page, emailSels, 12000, 300);
   if (!emailFound) return false;
-
   await emailFound.handle.fill(email);
   const passFound = await waitForAnyInFrames(page, passSels, 6000, 250);
   if (!passFound) return false;
   await passFound.handle.fill(password);
-
   const submitFound = await waitForAnyInFrames(page, submitSels, 4000, 200);
   if (!submitFound) throw new Error("Login submit button not found (native)");
   try { await submitFound.handle.click(); } catch {}
-
   await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
   return await isLoggedIn(page);
 }
-
 async function loginMicrosoft(page: import("playwright-core").Page, email: string, password: string) {
   const emailSel = (await page.$('#i0116')) || (await page.$('input[name="loginfmt"]')) || (await page.$('input[type="email"]'));
   if (!emailSel) return false;
-
   await emailSel.fill(email);
   const nextBtn = (await page.$('#idSIButton9')) || (await page.$('input[type="submit"]')) || (await page.$('button:has-text("Next")'));
   if (!nextBtn) throw new Error("Microsoft login: Next not found");
   await nextBtn.click();
-
   await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
   await dismissUpgradeModal(page);
-
   const passSel = (await page.$('#i0118')) || (await page.$('input[name="passwd"]')) || (await page.$('input[type="password"]'));
   if (!passSel) throw new Error("Microsoft login: password input not found");
   await passSel.fill(password);
-
   const signBtn = (await page.$('#idSIButton9')) || (await page.$('input[type="submit"]')) || (await page.$('button:has-text("Sign in")'));
   if (!signBtn) throw new Error("Microsoft login: Sign in button not found");
   await signBtn.click();
-
   await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
   await dismissUpgradeModal(page);
-
-  const stayNo = await page.$('#idBtn_Back');
-  if (stayNo) { await stayNo.click().catch(() => {}); }
-  else {
-    const stayYes = await page.$('#idSIButton9');
-    if (stayYes) await stayYes.click().catch(() => {});
-  }
-
+  const stayNo = await page.$('#idBtn_Back'); if (stayNo) { await stayNo.click().catch(() => {}); }
+  else { const stayYes = await page.$('#idSIButton9'); if (stayYes) await stayYes.click().catch(() => {}); }
   await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
   return await isLoggedIn(page);
 }
 
+// ---------- BookingAdd helpers ----------
+async function addSelfIfNeeded(page: import("playwright-core").Page) {
+  const guesses = [
+    '#btnAddMe',
+    'button:has-text("Add me")',
+    'button:has-text("Add Myself")',
+    'a:has-text("Add me")',
+    'a:has-text("Add Myself")',
+    'button:has-text("Me")',
+    'a:has-text("Me")',
+  ];
+  for (const sel of guesses) {
+    const el = await page.$(sel);
+    if (el) {
+      try {
+        await el.scrollIntoViewIfNeeded().catch(() => {});
+        await el.click({ timeout: 1500 });
+        await page.waitForTimeout(350);
+        return sel;
+      } catch {}
+    }
+  }
+  // Heuristic: any visible "Add" button in a players table/list
+  const anyAdd = await page.$$('button:has-text("Add"), a:has-text("Add")').catch(() => []);
+  for (const el of anyAdd || []) {
+    try {
+      const box = await el.boundingBox();
+      if (box && box.width > 1 && box.height > 1) {
+        await el.scrollIntoViewIfNeeded().catch(() => {});
+        await el.click({ timeout: 1500 });
+        await page.waitForTimeout(350);
+        return 'first-visible "Add"';
+      }
+    } catch {}
+  }
+  return null;
+}
+async function tickConfirmCheckboxes(page: import("playwright-core").Page) {
+  const sel = [
+    'input[type="checkbox"][name*="term" i]',
+    'input[type="checkbox"][id*="term" i]',
+    'input[type="checkbox"][name*="agree" i]',
+    'input[type="checkbox"][id*="agree" i]',
+    'input[type="checkbox"][name*="confirm" i]',
+    'input[type="checkbox"][id*="confirm" i]',
+  ];
+  const toggled: string[] = [];
+  for (const css of sel) {
+    try {
+      const boxes = await page.$$(css);
+      for (const b of boxes) {
+        const visible = await b.isVisible().catch(() => false);
+        if (!visible) continue;
+        const checked = await b.isChecked?.().catch(() => false);
+        if (!checked) {
+          await b.scrollIntoViewIfNeeded().catch(() => {});
+          await b.click({ timeout: 1000 }).catch(() => {});
+          toggled.push(css);
+          await page.waitForTimeout(150);
+        }
+      }
+    } catch {}
+  }
+  return toggled;
+}
+async function waitForConfirmEnabled(page: import("playwright-core").Page, timeoutMs = 60_000) {
+  const btnSel = '#btn-confirm-and-pay';
+  const txtSel = '#btn-confirm-and-pay-text';
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const btn = await page.$(btnSel);
+      if (btn) {
+        const visible = await btn.isVisible().catch(() => false);
+        if (visible) {
+          const disabledAttr = await page.evaluate((el) => el.hasAttribute('disabled') || (el as HTMLButtonElement).disabled, btn);
+          if (!disabledAttr) {
+            return { found: true, enabled: true, txt: await page.$(txtSel).then(h => h?.textContent() ?? "").catch(() => "") };
+          }
+        }
+      }
+    } catch {}
+    await dismissUpgradeModal(page);
+    await acceptCookies(page);
+    await page.waitForTimeout(500);
+  }
+  const btn = await page.$(btnSel);
+  if (btn) {
+    return { found: true, enabled: false, txt: await page.$(txtSel).then(h => h?.textContent() ?? "").catch(() => "") };
+  }
+  return { found: false, enabled: false, txt: '' };
+}
+async function postConfirmSuccessCue(page: import("playwright-core").Page) {
+  const cues = [
+    'text=/Success/i', 'text=/Confirmed/i', 'text=/Reserved/i', 'text=/Booking reference/i',
+    'text=/Reservation/i', 'text=/Thank you/i', 'text=/completed/i',
+  ];
+  for (const c of cues) { if (await page.$(c)) return c; }
+  return null;
+}
+
+// ---------- Main handler ----------
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Protect with CRON_SECRET
   const hdr = req.headers.authorization || "";
@@ -228,7 +280,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: "Unauthorized" });
   }
 
+  let runRef: FirebaseFirestore.DocumentReference | null = null;
+  const screens: { label: string; url: string; title: string; screenshot_b64?: string }[] = [];
+  let outcome: "success" | "failed" = "failed";
+  let errorMsg: string | undefined;
+  let confirmResult: string | undefined;
+  let successCue: string | null | undefined;
+  let bookingEvidence: any = {};
+  const startedAt = new Date().toISOString();
+
   try {
+    // Create run doc (manual trigger)
+    runRef = await firestore.collection("golf_booking_runs").add({
+      trigger: "run-now",
+      started_at: startedAt,
+      user: USER_EMAIL,
+      booking_url: BOOKING_ADD_URL,
+      status: "in_progress"
+    });
+
     const { default: chromium } = await import("@sparticuz/chromium");
     const playwright = await import("playwright-core");
 
@@ -245,11 +315,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
     const page = await ctx.newPage();
 
-    // --- Ensure password provided
     const password = process.env.HDIDIDO_PASSWORD || "";
     if (!password) throw new Error("HDIDIDO_PASSWORD env var not set");
 
-    // --- 1) Go to the FIRST login URL (normal login flow)
+    // 1) First login URL
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await acceptCookies(page);
     await dismissUpgradeModal(page);
@@ -265,114 +334,108 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    const shotLogin = await snapB64(page);
+    screens.push({ label: "post_login", url: page.url(), title: (await page.title().catch(() => "")) || "", screenshot_b64: shotLogin });
+
     if (!loggedIn) {
-      let screenshot_b64: string | undefined;
-      try {
-        const buf = await page.screenshot({ type: "jpeg", quality: 70 });
-        screenshot_b64 = `data:image/jpeg;base64,${buf.toString("base64")}`;
-      } catch {}
-      await ctx.close();
-      await browser.close();
-      return res.status(200).json({
-        ok: true,
-        outcome: "failed",
-        error: "Login not detected (email/password inputs blocked or variant changed).",
-        evidence: { url: page.url(), screenshot_b64 }
-      });
+      throw new Error("Login not detected (email/password inputs blocked or variant changed).");
     }
 
-    // Snapshot after login
-    let loginShot: string | undefined;
-    try {
-      const buf = await page.screenshot({ type: "jpeg", quality: 70 });
-      loginShot = `data:image/jpeg;base64,${buf.toString("base64")}`;
-    } catch {}
-
-    // --- 2) Navigate to your hard-coded BookingAdd URL
+    // 2) BookingAdd
     await page.goto(BOOKING_ADD_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
     await acceptCookies(page);
     await dismissUpgradeModal(page);
 
-    // Snapshot before confirm (for debugging)
-    let bookingShotBefore: string | undefined;
-    try {
-      const buf = await page.screenshot({ type: "jpeg", quality: 70 });
-      bookingShotBefore = `data:image/jpeg;base64,${buf.toString("base64")}`;
-    } catch {}
+    const shotBeforeAny = await snapB64(page);
+    screens.push({ label: "booking_before_any", url: page.url(), title: (await page.title().catch(() => "")) || "", screenshot_b64: shotBeforeAny });
 
-    // --- 3) Click Confirm
-    // ID from your markup: #btn-confirm-and-pay (text "Confirm" in #btn-confirm-and-pay-text)
-    let confirmResult = "confirm_not_found";
-    try {
-      const confirmSel = '#btn-confirm-and-pay';
-      const confirmTextSel = '#btn-confirm-and-pay-text';
-      // Make sure any overlays are cleared before waiting/clicking
-      await dismissUpgradeModal(page);
-      await nukeOverlays(page);
+    // 3) Prereqs: add self + tick checkboxes
+    const addedSelector = await addSelfIfNeeded(page);
+    if (addedSelector) {
+      bookingEvidence.added_self_via = addedSelector;
+      const shotAfterAdd = await snapB64(page);
+      screens.push({ label: "after_add_self", url: page.url(), title: (await page.title().catch(() => "")) || "", screenshot_b64: shotAfterAdd });
+    }
+    const ticked = await tickConfirmCheckboxes(page);
+    if (ticked.length) {
+      bookingEvidence.ticked_checkboxes = ticked;
+      const shotAfterTick = await snapB64(page);
+      screens.push({ label: "after_tick_checkboxes", url: page.url(), title: (await page.title().catch(() => "")) || "", screenshot_b64: shotAfterTick });
+    }
 
-      // Wait up to 12s for the button to appear
-      const btn = await page.waitForSelector(confirmSel, { timeout: 12000, state: "visible" }).catch(() => null);
+    // 4) Wait for Confirm and click
+    const waitState = await waitForConfirmEnabled(page, 60_000);
+    bookingEvidence.confirm_wait = waitState;
+
+    if (waitState.found && waitState.enabled) {
+      const btn = await page.$('#btn-confirm-and-pay');
       if (btn) {
         await btn.scrollIntoViewIfNeeded().catch(() => {});
-        // Optional: ensure text says Confirm
-        const spanText = await page.$(confirmTextSel).then(h => h?.textContent() ?? "").catch(() => "");
-        // Click it
         await btn.click({ timeout: 2000 }).catch(() => {});
         await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
         await dismissUpgradeModal(page);
-
-        // Heuristics to infer success:
-        // - button disappears or becomes disabled
-        // - text changes from "Confirm"
-        // - presence of common success keywords
-        const stillThere = await page.$(confirmSel);
-        const disabled = await page.$(`${confirmSel}[disabled]`);
-        const textNow = await page.$(confirmTextSel).then(h => h?.textContent() ?? "").catch(() => "");
-        const successCue =
-          (await page.$('text=/Success|Confirmed|Reserved|Booking reference|Reservation/i')) ||
-          (await page.$('text=/Thank you|completed/i'));
-
-        if (!stillThere || disabled || (spanText?.trim() || "").toLowerCase() !== (textNow?.trim() || "").toLowerCase() || successCue) {
-          confirmResult = "confirm_clicked_success";
-        } else {
-          confirmResult = "confirm_clicked_but_unclear";
-        }
+        confirmResult = "confirm_clicked";
       } else {
-        confirmResult = "confirm_not_found";
+        confirmResult = "confirm_found_but_clickable_handle_missing";
       }
-    } catch (e: any) {
-      confirmResult = `confirm_click_error: ${e?.message || "unknown"}`;
+    } else if (waitState.found && !waitState.enabled) {
+      confirmResult = "confirm_found_but_disabled";
+    } else {
+      confirmResult = "confirm_not_found";
     }
 
-    // Snapshot after confirm (for debugging)
-    let bookingShotAfter: string | undefined;
-    try {
-      const buf = await page.screenshot({ type: "jpeg", quality: 70 });
-      bookingShotAfter = `data:image/jpeg;base64,${buf.toString("base64")}`;
-    } catch {}
+    const shotAfterConfirm = await snapB64(page);
+    screens.push({ label: "after_confirm", url: page.url(), title: (await page.title().catch(() => "")) || "", screenshot_b64: shotAfterConfirm });
+
+    successCue = await postConfirmSuccessCue(page);
 
     await ctx.close();
     await browser.close();
 
-    return res.status(200).json({
-      ok: true,
-      outcome: "success",
-      user: USER_EMAIL,
-      step: "login-then-bookingadd-confirm",
-      bookingUrl: BOOKING_ADD_URL,
+    // Persist run result
+    const finishedAt = new Date().toISOString();
+    const evidence = {
       confirm_result: confirmResult,
-      screenshots: {
-        post_login: loginShot,
-        booking_before_confirm: bookingShotBefore,
-        booking_after_confirm: bookingShotAfter
-      }
+      success_cue: successCue,
+      booking_evidence: bookingEvidence
+    };
+
+    await runRef.update({
+      finished_at: finishedAt,
+      outcome: "success",
+      status: "success",
+      evidence,
+      last_url: screens.length ? screens[screens.length - 1].url : null
     });
+
+    // Persist screens as subcollection
+    const screensCol = runRef.collection("screens");
+    for (const s of screens) {
+      await screensCol.add(s);
+    }
+
+    outcome = "success";
+    return res.status(200).json({ ok: true, outcome, run_id: runRef.id });
   } catch (err: any) {
-    return res.status(500).json({
-      ok: false,
-      outcome: "failed",
-      error: err?.message || "Runner error"
-    });
+    errorMsg = err?.message || "Runner error";
+    // Attempt to persist failure
+    try {
+      if (runRef) {
+        const finishedAt = new Date().toISOString();
+        await runRef.update({
+          finished_at: finishedAt,
+          outcome: "failed",
+          status: "failed",
+          error: errorMsg
+        });
+        // If we captured some screens already, store them
+        const screensCol = runRef.collection("screens");
+        for (const s of screens) {
+          await screensCol.add(s);
+        }
+      }
+    } catch {}
+    return res.status(500).json({ ok: false, outcome: "failed", error: errorMsg, run_id: runRef ? runRef.id : null });
   }
 }
