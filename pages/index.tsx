@@ -1,5 +1,5 @@
 
-// pages/index.tsx x2
+// pages/index.tsx
 import Head from "next/head";
 import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
@@ -100,7 +100,10 @@ type UserAccess = {
 type Completion = {
   is_freestyle?: boolean;
   activity_type?: string | null;
+  // legacy field (range fallback)
   duration_minutes?: number | null;
+  // new canonical field (if present in some documents)
+  duration?: number | null;
   calories_burned?: number | null;
   completed_date?: string | { toDate?: () => Date };
 };
@@ -110,6 +113,25 @@ type OnboardingStatus = {
   missing: string[];
   outstanding: { id: string; key: string; title: string; description: string; targetPath: string }[];
   profile?: any;
+};
+
+// Day summary type from /api/completions?summary=day&date=YYYY-MM-DD
+type DaySummaryRes = {
+  date?: string;
+  user_email?: string;
+  planned?: {
+    workout_id: string | null;
+    done: boolean;
+  };
+  freestyle?: {
+    logged: boolean;
+    summary?: {
+      activity_type?: string | null;
+      duration?: number | null;              // minutes (canonical)
+      calories_burned?: number | null;       // kcal (canonical)
+      weight_completed_with?: number | null; // kg (canonical)
+    } | null;
+  };
 };
 
 export default function Home() {
@@ -271,6 +293,7 @@ export default function Home() {
   const workoutHref = workoutLocked ? "#" : workoutHrefBase;
   const habitHref = habitsLocked ? "#" : habitHrefBase;
 
+  // Range listing (legacy / general history)
   const completionsKey = useMemo(() => {
     if (!mounted) return null;
     const params = new URLSearchParams();
@@ -286,7 +309,38 @@ export default function Home() {
     { revalidateOnFocus: false, dedupingInterval: 30_000 }
   );
 
+  // Day summary (canonical freestyle fields)
+  const daySummaryKey = useMemo(() => {
+    if (!mounted) return null;
+    const params = new URLSearchParams();
+    params.set("summary", "day");
+    params.set("date", selectedDateKey);
+    return `/api/completions?${params.toString()}`;
+  }, [mounted, selectedDateKey]);
+
+  const { data: daySummary } = useSWR<DaySummaryRes>(daySummaryKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30_000,
+  });
+
+  // Prefer summary=day for freestyle; fallback to range listing
   const { freestyleLogged, freestyleSummary } = useMemo(() => {
+    // 1) Prefer the new day summary (canonical names)
+    const s = daySummary?.freestyle?.summary;
+    if (daySummary?.freestyle?.logged && s) {
+      return {
+        freestyleLogged: true,
+        freestyleSummary: {
+          activity_type: s.activity_type || "Freestyle",
+          duration: typeof s.duration === "number" ? s.duration : undefined,
+          calories_burned: typeof s.calories_burned === "number" ? s.calories_burned : undefined,
+          weight_completed_with:
+            typeof s.weight_completed_with === "number" ? s.weight_completed_with : undefined,
+        },
+      };
+    }
+
+    // 2) Fallback: old range endpoint results (legacy docs)
     const src =
       dayCompletions?.results ||
       dayCompletions?.items ||
@@ -309,22 +363,26 @@ export default function Home() {
 
     const freestyle = arr.filter((c) => c?.is_freestyle === true && sameDay(c.completed_date));
     if (!freestyle.length) {
-      return { freestyleLogged: false, freestyleSummary: undefined as undefined | { activity?: string; duration?: number; calories?: number } };
+      return { freestyleLogged: false, freestyleSummary: undefined as any };
     }
 
     const totalCalories = freestyle.reduce((sum, c) => sum + (Number(c.calories_burned) || 0), 0);
-    const totalDuration = freestyle.reduce((sum, c) => sum + (Number(c.duration_minutes) || 0), 0);
+    // support either "duration" (canonical) or legacy "duration_minutes"
+    const totalDuration = freestyle.reduce(
+      (sum, c) => sum + (Number((c as any).duration) || Number(c.duration_minutes) || 0),
+      0
+    );
     const lastActivity = freestyle[freestyle.length - 1]?.activity_type || undefined;
 
     return {
       freestyleLogged: true,
       freestyleSummary: {
-        activity: typeof lastActivity === "string" ? lastActivity : undefined,
+        activity_type: typeof lastActivity === "string" ? lastActivity : "Freestyle",
         duration: totalDuration || undefined,
-        calories: totalCalories || undefined,
+        calories_burned: totalCalories || undefined,
       },
     };
-  }, [dayCompletions, selectedDateKey]);
+  }, [daySummary, dayCompletions, selectedDateKey]);
 
   const accentMicro = "#ff8a2a";
   const showLoadingBar = status === "loading" || !mounted;
@@ -505,12 +563,13 @@ export default function Home() {
             checkinSummary={checkinSummaryNormalized as any}
             checkinComplete={Boolean(selectedStatus.checkinComplete)}
             hrefs={{
-              nutrition: `/nutrition?date=${selectedDateKey}`,
+              nutrition: `${nutritionHref}`,
               workout: workoutHref,
               habit: habitHref,
-              checkin: `/checkin?date=${encodeURIComponent(formatYMD(fridayOfWeek(selectedDay)))}`,
+              checkin: `${checkinHref}`,
               freestyle: "/workouts/freestyle",
             }}
+            // Freestyle props (canonical)
             freestyleLogged={freestyleLogged}
             freestyleSummary={freestyleSummary}
           />
