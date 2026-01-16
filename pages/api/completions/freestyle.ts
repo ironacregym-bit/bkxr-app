@@ -7,10 +7,11 @@ import firestore from "../../../lib/firestoreClient";
 
 type Payload = {
   activity_type?: string;
-  duration_minutes?: number;
+  duration?: number;                 // ← minutes (NEW canonical)
   calories_burned?: number;
+  weight_completed_with?: number | null;
   rpe?: number | null;
-  when?: string; // ISO
+  when?: string;                     // ISO
   notes?: string | null;
 };
 
@@ -27,8 +28,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const body = (req.body || {}) as Payload;
 
     const activity_type = (body.activity_type || "Freestyle").toString();
-    const duration_minutes = Number(body.duration_minutes || 0);
+    const duration = Number(body.duration || 0); // minutes
     const calories_burned = Number(body.calories_burned || 0);
+    const weight_completed_with =
+      body.weight_completed_with === null || body.weight_completed_with === undefined
+        ? null
+        : Number(body.weight_completed_with);
     const rpe = body.rpe != null ? Number(body.rpe) : null;
     const whenIso = body.when ? new Date(body.when) : new Date();
     const notes = typeof body.notes === "string" ? body.notes : null;
@@ -37,18 +42,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const doc = {
       user_email: session.user.email,
+
+      // Freestyle marker
       is_freestyle: true,
+
+      // Canonical fields you asked for
       activity_type,
-      duration_minutes: Number.isFinite(duration_minutes) ? duration_minutes : 0,
-      calories_burned: Number.isFinite(calories_burned) ? calories_burned : 0,
+      duration: Number.isFinite(duration) ? Math.max(0, duration) : 0, // minutes
+      calories_burned: Number.isFinite(calories_burned) ? Math.max(0, calories_burned) : 0,
+      weight_completed_with: Number.isFinite(Number(weight_completed_with))
+        ? Number(weight_completed_with)
+        : null,
+
       rpe: Number.isFinite(rpe as number) ? (rpe as number) : null,
       notes: notes || null,
 
-      // Align with your existing fields:
-      completed_date: whenIso, // used by history/graphs
-      started_at: whenIso,     // optional but helpful
+      // Timeline
+      completed_date: whenIso,
+      started_at: whenIso,
+
+      // Housekeeping (match your schema)
       sets_completed: null,
-      weight_completed_with: null,
       workout_id: null,
 
       created_at: now,
