@@ -164,7 +164,29 @@ async function collectEvidence(page: import("playwright-core").Page) {
   return { url, title, htmlSnippet, screenshot_b64, frames };
 }
 
-// ----- Positive native login (exact selectors from screenshot)
+// ----- Positive login detection (includes Welcome/Handicap + URL checks)
+async function isLoggedIn(page: import("playwright-core").Page): Promise<boolean> {
+  const url = page.url();
+  if (/\/Account\/Login/i.test(url)) return false;
+  if (/login\.microsoftonline\.com/i.test(url)) return false;
+
+  const successCues = [
+    'text=/Welcome/i',
+    'text=/Handicap/i',
+    'text=/My Account/i',
+    'text=/Sign out/i',
+    'a[href*="/account"]',
+    'a[href*="/logout"]',
+    'a[href*="/dashboard"]'
+  ];
+  const found = await findInFrames(page, successCues);
+  if (found) return true;
+
+  const loginInputs = await findInFrames(page, ['#Email','input[name="Email"]','input[type="email"]','input[type="password"]']);
+  return !loginInputs;
+}
+
+/** Try the exact native selectors seen on the page screenshot */
 async function tryNativeDirect(page: import("playwright-core").Page, username: string, password: string) {
   const emailCandidates = ['#Email','input[name="Email"]','input[type="email"]','input[name="email"]','input[id*="email"]','input[type="text"]'];
   const passCandidates  = ['#Password','input[name="Password"]','input[type="password"]','input[id*="password"]','input[name="password"]'];
@@ -287,36 +309,213 @@ async function tryMicrosoftLogin(page: import("playwright-core").Page, username:
   return await isLoggedIn(page);
 }
 
-// ----- Positive login detection (now includes Welcome/Handicap + URL checks)
-async function isLoggedIn(page: import("playwright-core").Page): Promise<boolean> {
-  // If we’re still on the login page or on Azure’s domain, fail early
-  const url = page.url();
-  if (/\/Account\/Login/i.test(url)) return false;
-  if (/login\.microsoftonline\.com/i.test(url)) return false;
+/* ======================== BOOKING FLOW ======================== */
 
-  // Look for strong cues across frames
-  const successCues = [
-    'text=/Welcome/i',
-    'text=/Handicap/i',
-    'text=/My Account/i',
-    'text=/Sign out/i',
-    'a[href*="/account"]',
-    'a[href*="/logout"]',
-    'a[href*="/dashboard"]'
-  ];
-  const found = await findInFrames(page, successCues);
-  if (found) return true;
+type BookTask = { type: "book"; date: string; time: string; mode?: "casual" | "competition" | string };
+type AnyTask = BookTask | { type?: string } | undefined;
 
-  // As a weaker heuristic, if the login inputs are gone, assume success
-  const loginInputs = await findInFrames(page, ['#Email','input[name="Email"]','input[type="email"]','input[type="password"]']);
-  return !loginInputs;
+function parseYMD(ymd: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!m) return null;
+  const d = new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00`);
+  return isNaN(d.getTime()) ? null : d;
 }
 
-/**
- * Runner entrypoint.
- * Security: requires Authorization: Bearer <CRON_SECRET>
- * NOTE: Keep Node.js Serverless runtime (do NOT export runtime: 'edge').
- */
+/** Click the Booking entry from home/dashboard (tile or nav) */
+async function gotoBooking(page: import("playwright-core").Page, evidence: any) {
+  // Try obvious tiles/links first
+  const clicks = [
+    'a:has-text("Booking")',
+    'a:has-text("Casual")',
+    'a[href*="/Booking"]',
+    'a[href*="/TeeTimes"]',
+    'a:has-text("Competitions")',
+    'button:has-text("Booking")',
+  ];
+  for (const sel of clicks) {
+    const el = await page.$(sel);
+    if (el) {
+      await el.click().catch(() => {});
+      await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+      evidence.booking_clicked_selector = sel;
+      break;
+    }
+  }
+}
+
+/** Change calendar to target month/year by clicking next (or prev) a few times */
+async function changeMonthTo(page: import("playwright-core").Page, target: Date, evidence: any) {
+  // Heuristic: read any element that looks like a month title, fallback to textContent scan
+  async function readMonthYear(): Promise<{ month: number; year: number } | null> {
+    const candidates = [
+      '.fc-toolbar-title',               // FullCalendar
+      '.calendar .month-title',
+      '[class*="month"] [class*="title"]',
+      'h2:has-text(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i)'
+    ];
+    for (const sel of candidates) {
+      const t = await page.$(sel);
+      if (t) {
+        const txt = (await t.textContent())?.trim() || "";
+        const m = txt.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})/i);
+        if (m) {
+          const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+          const month = months.indexOf(m[1].slice(0,3).toLowerCase());
+          const year = parseInt(m[2],10);
+          if (month >= 0) return { month, year };
+        }
+      }
+    }
+    return null;
+  }
+
+  function monthsDiff(a: {month:number; year:number}, b: {month:number; year:number}) {
+    return (b.year - a.year) * 12 + (b.month - a.month);
+  }
+
+  const tm = target.getMonth();
+  const ty = target.getFullYear();
+
+  const nextSelectors = ['.fc-next-button','button[aria-label="Next"]','a[title="Next"]','button:has-text(">")','i.fa-chevron-right'];
+  const prevSelectors = ['.fc-prev-button','button[aria-label="Previous"]','a[title="Previous"]','button:has-text("<")','i.fa-chevron-left'];
+
+  let attempts = 0;
+  for (let i = 0; i < 12; i++) {
+    const cur = await readMonthYear();
+    if (!cur) break;
+    const diff = monthsDiff(cur, { month: tm, year: ty });
+    if (diff === 0) { evidence.month_jumps = attempts; return; }
+
+    const goNext = diff > 0;
+    const selList = goNext ? nextSelectors : prevSelectors;
+    let clicked = false;
+    for (const sel of selList) {
+      const el = await page.$(sel);
+      if (el) {
+        await el.click().catch(() => {});
+        await page.waitForTimeout(400);
+        clicked = true;
+        attempts++;
+        break;
+      }
+    }
+    if (!clicked) break;
+  }
+  evidence.month_jumps = attempts;
+}
+
+/** Click the day number in the current calendar month */
+async function clickDay(page: import("playwright-core").Page, dayNum: number, evidence: any) {
+  const dayStr = String(dayNum);
+  // Prefer buttons/anchors that exactly match the day number
+  const selectors = [
+    `button:has-text("^${dayStr}$")`,
+    `a:has-text("^${dayStr}$")`,
+    `td:has-text("^${dayStr}$")`,
+    `[role="gridcell"]:has-text("^${dayStr}$")`,
+    `div:has-text("^${dayStr}$")`
+  ];
+  for (const sel of selectors) {
+    const found = await page.$(sel);
+    if (found) {
+      await found.click().catch(() => {});
+      await page.waitForTimeout(500);
+      evidence.day_clicked_selector = sel;
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Find a time slot and click “Book” in that row */
+async function clickTimeAndBook(page: import("playwright-core").Page, time: string, evidence: any) {
+  // Accept "08:32" or "8:32" variants
+  const t = time;
+  const variants = [t, t.replace(/^0/, "")];
+
+  // If "Book" is inside the same row as the time, try a locator chain
+  for (const v of variants) {
+    try {
+      const row = page.locator(`text=${v}`).first();
+      const rowCount = await row.count().catch(() => 0);
+      if (rowCount > 0) {
+        // Try to find a clickable "Book" inside the same block
+        const bookInRow = row.locator('xpath=ancestor::*[self::tr or self::*][1]').locator('text=/^\\s*Book\\s*$/i').first();
+        if (await bookInRow.count().catch(() => 0)) {
+          await bookInRow.click({ timeout: 2000 }).catch(()=>{});
+          evidence.time_clicked = v;
+          evidence.book_clicked = true;
+          return true;
+        }
+        // Generic fallback: nearby button/link with "Book"
+        const nearbyBook = page.locator(`text=${v}`).locator('..').locator('text=/^\\s*Book\\s*$/i').first();
+        if (await nearbyBook.count().catch(() => 0)) {
+          await nearbyBook.click({ timeout: 2000 }).catch(()=>{});
+          evidence.time_clicked = v;
+          evidence.book_clicked = true;
+          return true;
+        }
+      }
+    } catch {}
+  }
+
+  // Broad fallback: click the time, then a generic "Book"
+  for (const v of variants) {
+    const timeEl = await page.$(`text=${v}`);
+    if (timeEl) {
+      await timeEl.click().catch(()=>{});
+      await page.waitForTimeout(300);
+      const bookBtn =
+        (await page.$('button:has-text("Book")')) ||
+        (await page.$('a:has-text("Book")')) ||
+        (await page.$('input[type="button"][value="Book"]'));
+      if (bookBtn) {
+        await bookBtn.click().catch(()=>{});
+        evidence.time_clicked = v;
+        evidence.book_clicked = true;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** High-level booking recipe */
+async function bookTeeTime(
+  page: import("playwright-core").Page,
+  task: BookTask,
+  evidence: any
+) {
+  // From dashboard/home, click "Booking"
+  await gotoBooking(page, evidence);
+  await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+  await acceptCookies(page);
+  await dismissUpgradeModal(page);
+  await smashUpgradeGate(page);
+
+  // Navigate calendar
+  const d = parseYMD(task.date);
+  if (!d) throw new Error(`Invalid date: ${task.date}`);
+  await changeMonthTo(page, d, evidence);
+
+  // Click day
+  const okDay = await clickDay(page, d.getDate(), evidence);
+  if (!okDay) throw new Error(`Could not select day ${task.date}`);
+
+  await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
+  await acceptCookies(page);
+  await dismissUpgradeModal(page);
+
+  // Click time + Book
+  const okBook = await clickTimeAndBook(page, task.time, evidence);
+  if (!okBook) throw new Error(`Could not find time ${task.time} or Book button`);
+
+  // Optional: Wait a second for UI transition
+  await page.waitForTimeout(1000);
+}
+
+/* ======================== MAIN HANDLER ======================== */
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const hdr = req.headers.authorization || "";
   if (hdr !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -343,7 +542,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const docRef = snap.docs[0].ref;
-    const reqData = snap.docs[0].data() as BookingRequest;
+    const reqData = snap.docs[0].data() as BookingRequest & { task?: AnyTask };
 
     await docRef.update({
       status: "in_progress",
@@ -362,7 +561,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let reusedSession = false;
 
     try {
-      // ---- Credentials: per‑job (encrypted) > env fallback
+      // ---- Credentials
       let creds: { username?: string; password?: string } | undefined;
       if (reqData.enc_credentials_b64) { try { creds = decryptJson(reqData.enc_credentials_b64); } catch {} }
       const username = creds?.username || process.env.HDIDIDO_EMAIL || "";
@@ -379,13 +578,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         headless: true
       });
 
-      // Try to reuse prior session (storageState)
+      // Try reuse session
       const storedState = await loadStorageState(username);
       const ctx = await browser.newContext({ storageState: storedState || undefined, viewport: { width: 1280, height: 800 },
         userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36" });
       const page = await ctx.newPage();
 
-      // If we had a stored session, check if we're already logged in
+      // If we had a stored session, check if already logged in
       if (storedState) {
         await page.goto("https://www.howdidido.com/", { waitUntil: "domcontentloaded" });
         await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
@@ -394,24 +593,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       if (!reusedSession) {
-        // Fresh login path
+        // Fresh login
         await page.goto(HOWDIDIDO_LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
         await acceptCookies(page);
         await dismissUpgradeModal(page);
         await smashUpgradeGate(page);
         await nukeOverlays(page);
 
-        // 1) Native direct (exact IDs)
+        // Native (direct) first
         let loggedIn = false;
         try { loggedIn = await tryNativeDirect(page, username, password); } catch {}
 
-        // 2) Broader native (frame-aware)
+        // Broader native
         if (!loggedIn) {
           await dismissUpgradeModal(page); await smashUpgradeGate(page); await nukeOverlays(page);
           try { loggedIn = await tryNativeLogin(page, username, password); } catch {}
         }
 
-        // 3) Microsoft/Azure AD
+        // Microsoft/Azure
         if (!loggedIn) {
           await dismissUpgradeModal(page); await smashUpgradeGate(page); await nukeOverlays(page);
           loggedIn = await tryMicrosoftLogin(page, username, password);
@@ -423,16 +622,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           throw new Error("Could not detect a successful login (modal/IdP variant blocked inputs).");
         }
 
-        // Save session for future runs
+        // Save session
         const state = await ctx.storageState();
         await saveStorageState(username, state);
       }
 
-      // Success evidence & note
-      confirmation_text = reusedSession
-        ? `Session OK (reused) as ${username.replace(/(.{2}).+(@.*)/, "$1***$2")}`
-        : `Login OK as ${username.replace(/(.{2}).+(@.*)/, "$1***$2")}`;
-      evidence = await collectEvidence(page);
+      // ----- Task routing (default: login only)
+      const task = (reqData as any).task as AnyTask;
+      if (task && task.type === "book") {
+        const bookingEvidence: any = {};
+        await page.goto("https://www.howdidido.com/", { waitUntil: "domcontentloaded" });
+        await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+        await acceptCookies(page);
+
+        await bookTeeTime(page, task as BookTask, bookingEvidence);
+
+        evidence.booking_evidence = bookingEvidence;
+        confirmation_text = `Booked attempt for ${task.date} ${task.time} (check booking UI for confirmation)`;
+      } else {
+        confirmation_text = reusedSession
+          ? `Session OK (reused) as ${username.replace(/(.{2}).+(@.*)/, "$1***$2")}`
+          : `Login OK as ${username.replace(/(.{2}).+(@.*)/, "$1***$2")}`;
+      }
+
+      // Common evidence
+      const commonEv = await collectEvidence(page);
+      evidence = { ...evidence, ...commonEv };
 
       await ctx.close();
       await browser.close();
@@ -454,9 +669,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const who = reqData.requester_email;
     if (who) {
       if (outcome === "success") {
-        await notify(who, "HowDidiDo login ✅", confirmation_text || "Logged in successfully.");
+        await notify(who, "HowDidiDo runner ✅", confirmation_text || "OK");
       } else {
-        await notify(who, "HowDidiDo login failed ❌", errorMsg || "Unknown error");
+        await notify(who, "HowDidiDo runner failed ❌", errorMsg || "Unknown error");
       }
     }
 
