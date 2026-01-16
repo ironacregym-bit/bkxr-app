@@ -1,4 +1,5 @@
 
+// pages/admin/hdidido/run-now.tsx
 import Head from "next/head";
 import { useEffect, useMemo, useState } from "react";
 
@@ -7,9 +8,7 @@ let encryptJson: ((obj: unknown) => string) | null = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   encryptJson = require("../../../lib/crypto").encryptJson as (obj: unknown) => string;
-} catch {
-  // Fine if not present; credentials will simply not be attached.
-}
+} catch { /* ok if not present */ }
 
 type Member = { full_name: string; club_id?: string; hdidido_email?: string };
 
@@ -30,7 +29,6 @@ function nextMinuteISO(): string {
 }
 
 export default function HdididoRunNow() {
-  // Simple run-now states
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,13 +44,23 @@ export default function HdididoRunNow() {
   const [notes, setNotes] = useState("Manual test via Run Now page");
   const [runAtIso, setRunAtIso] = useState<string>(() => nextMinuteISO());
 
-  // One-off job-specific credentials (optional)
+  // New: BookingAdd template (preferred path)
+  const [bookingAddUrlTpl, setBookingAddUrlTpl] = useState(
+    "https://howdidido-whs.clubv1.com/HDIDBooking/BookingAdd?dateTime={dateTime}&courseId=12274&startPoint=1&crossOverStartPoint=0&crossOverMinutes=0&releasedReservation=False"
+  );
+
+  // Optional per-job credentials
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
   const taskPreview = useMemo(
-    () => ({ type: "book", date: targetDate, time: targetTime, mode: bookingType }),
-    [targetDate, targetTime, bookingType]
+    () => ({
+      type: "book",
+      date: targetDate,
+      time: targetTime,
+      booking_add_url: bookingAddUrlTpl
+    }),
+    [targetDate, targetTime, bookingAddUrlTpl]
   );
 
   const formErrors = useMemo(() => {
@@ -63,19 +71,19 @@ export default function HdididoRunNow() {
     if (Number.isNaN(Number(timeWindowSecs)) || timeWindowSecs < 0) errs.push("Time window must be a positive number.");
     if (runAtIso && Number.isNaN(Date.parse(runAtIso))) errs.push("Run at (ISO) is invalid.");
     if (!members.length || !members[0].full_name.trim()) errs.push("At least 1 member full name is required.");
+    if (!bookingAddUrlTpl?.includes("{dateTime}")) errs.push("BookingAdd URL must contain {dateTime} placeholder.");
     return errs;
-  }, [targetDate, targetTime, requesterEmail, timeWindowSecs, runAtIso, members]);
+  }, [targetDate, targetTime, requesterEmail, timeWindowSecs, runAtIso, members, bookingAddUrlTpl]);
 
   useEffect(() => {
     if (result) setResult(null);
     if (error) setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetDate, targetTime, bookingType, runAtIso]);
+  }, [targetDate, targetTime, bookingType, runAtIso, bookingAddUrlTpl]);
 
-  async function runNow() {
+  async function runNowOnce() {
     setRunning(true); setError(null); setResult(null);
     try {
-      // Calls a tiny server-side proxy that adds Authorization header
       const r = await fetch("/api/integrations/hdidido/run-now-proxy");
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "Runner failed");
@@ -107,19 +115,18 @@ export default function HdididoRunNow() {
       if (formErrors.length > 0) throw new Error(formErrors.join(" "));
 
       const runAt =
-        runAtIso && !Number.isNaN(Date.parse(runAtIso)) ? new Date(runAtIso).toISOString() : nextMinuteISO();
+        runAtIso && !Number.isNaN(Date.parse(runAtIso))
+          ? new Date(runAtIso).toISOString()
+          : nextMinuteISO();
 
       // Optional per-job encrypted credentials
       let enc_credentials_b64: string | undefined;
       if (username && password && encryptJson) {
-        try {
-          enc_credentials_b64 = encryptJson({ username, password });
-        } catch {
-          enc_credentials_b64 = undefined;
-        }
+        try { enc_credentials_b64 = encryptJson({ username, password }); } catch { enc_credentials_b64 = undefined; }
       }
 
-      const payload = {
+      // Compose the job payload
+      const payload: any = {
         requester_email: requesterEmail,
         booking_type: bookingType,        // "casual" | "competition"
         club_name: clubName || undefined,
@@ -129,8 +136,17 @@ export default function HdididoRunNow() {
         members,
         run_at: runAt,
         notes: notes || undefined,
-        enc_credentials_b64
-        // The server will create task: { type:"book", date, time, mode }
+        enc_credentials_b64,
+        // Send the task explicitly so the runner can use BookingAdd immediately
+        task: {
+          type: "book",
+          date: targetDate,
+          time: targetTime,
+          booking_add_url: bookingAddUrlTpl, // runner replaces {dateTime}
+        },
+
+        // Redundancy (in case your queue API strips 'task', runner also checks top-level):
+        booking_add_url: bookingAddUrlTpl
       };
 
       const r = await fetch("/api/integrations/hdidido/queue", {
@@ -158,7 +174,7 @@ export default function HdididoRunNow() {
         <div className="card p-3 mb-3" style={{ background:"rgba(255,255,255,0.06)", borderRadius:12 }}>
           <p className="mb-2">Kick the runner once (via server proxy), or queue a booking job for a specific date/time.</p>
           <div className="d-flex gap-2">
-            <button className="btn btn-primary" onClick={runNow} disabled={running}>
+            <button className="btn btn-primary" onClick={runNowOnce} disabled={running}>
               {running ? "Running…" : "Run now (once)"}
             </button>
           </div>
@@ -204,10 +220,23 @@ export default function HdididoRunNow() {
             <div className="col-md-3">
               <label className="form-label d-flex justify-content-between">
                 <span>Run at (ISO)</span>
-                <button type="button" className="btn btn-sm btn-outline-light" onClick={setRunAtToNextMinute}>Next minute</button>
+                <button type="button" className="btn btn-sm btn-outline-light" onClick={()=>setRunAtIso(nextMinuteISO())}>Next minute</button>
               </label>
               <input className="form-control" placeholder="2026-01-22T07:58:30Z" value={runAtIso} onChange={(e)=>setRunAtIso(e.target.value)} />
               <div className="form-text">Leave as is to run ~60s from now.</div>
+            </div>
+
+            <div className="col-12">
+              <label className="form-label">BookingAdd URL template</label>
+              <input
+                className="form-control"
+                value={bookingAddUrlTpl}
+                onChange={(e)=>setBookingAddUrlTpl(e.target.value)}
+                placeholder="https://.../BookingAdd?dateTime={dateTime}&courseId=12274&startPoint=1&crossOverStartPoint=0&crossOverMinutes=0&releasedReservation=False"
+              />
+              <div className="form-text">
+                Use <code>{`{dateTime}`}</code> and I’ll insert your selected date + time (encoded).
+              </div>
             </div>
 
             <div className="col-12">
@@ -240,7 +269,8 @@ export default function HdididoRunNow() {
             {/* One-off creds (encrypted if possible) */}
             <div className="col-12 mt-3">
               <div className="form-check mb-2">
-                <input className="form-check-input" type="checkbox" id="showCreds"
+                <input
+                  className="form-check-input" type="checkbox" id="showCreds"
                   onChange={(e)=>{
                     const block = document.getElementById("creds-block");
                     if (block) block.style.display = e.target.checked ? "block" : "none";
@@ -256,7 +286,7 @@ export default function HdididoRunNow() {
                     <input className="form-control" placeholder="HDID password" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} autoComplete="current-password" />
                   </div>
                   <div className="col-md-4">
-                    <div className="form-text">If <code>ENCRYPTION_KEY</code> and <code>lib/crypto.ts</code> exist, credentials will be AES‑GCM encrypted on submit.</div>
+                    <div className="form-text">If <code>ENCRYPTION_KEY</code> and <code>lib/crypto.ts</code> exist, credentials will be encrypted on submit.</div>
                   </div>
                 </div>
               </div>
@@ -265,7 +295,7 @@ export default function HdididoRunNow() {
             {/* Task preview + submit */}
             <div className="col-12 mt-2">
               <div className="small" style={{ opacity: 0.85 }}>
-                <strong>Task preview</strong>: {taskPreview.type} • {taskPreview.date} @ {taskPreview.time} ({taskPreview.mode})
+                <strong>Task preview</strong>: {taskPreview.type} • {taskPreview.date} @ {taskPreview.time}
               </div>
             </div>
 
