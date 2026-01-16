@@ -7,7 +7,8 @@ import { decryptJson } from "../../../../lib/crypto";
 
 const HOWDIDIDO_LOGIN_URL = "https://www.howdidido.com/Account/Login";
 
-// ----- Minimal notifier using your existing /api/notify/emit
+/* ======================== Notifier ======================== */
+
 async function notify(email: string, title: string, body: string) {
   const base = process.env.APP_BASE_URL;
   if (!base) return;
@@ -17,10 +18,13 @@ async function notify(email: string, title: string, body: string) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ to_email: email, title, body, ttl_seconds: 3600 })
     });
-  } catch { /* ignore notify errors */ }
+  } catch {
+    // ignore notify errors
+  }
 }
 
-// ----- Session persistence (storageState) in Firestore
+/* ======================== Session persistence ======================== */
+
 const rootDoc = firestore.collection("integrations").doc("howdidido");
 const sessionsCol = rootDoc.collection("sessions");
 
@@ -28,7 +32,9 @@ async function loadStorageState(email: string): Promise<any | null> {
   try {
     const snap = await sessionsCol.doc(email).get();
     return snap.exists ? (snap.data() as any)?.storageState || null : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 async function saveStorageState(email: string, storageState: any) {
   const now = new Date();
@@ -38,7 +44,8 @@ async function saveStorageState(email: string, storageState: any) {
   );
 }
 
-// ----- Consent (explicitly supports cookie bar “OK”)
+/* ======================== Blockers handling ======================== */
+
 async function acceptCookies(page: import("playwright-core").Page) {
   const selectors = [
     'button:has-text("OK")',
@@ -48,28 +55,37 @@ async function acceptCookies(page: import("playwright-core").Page) {
     'button:has-text("Agree")',
     '#onetrust-accept-btn-handler',
     '[id*="accept"]',
-    '[aria-label*="accept"]'
+    '[aria-label*="accept"]',
   ];
   for (const sel of selectors) {
     try {
       const el = await page.$(sel);
-      if (el) { await el.click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(300); break; }
+      if (el) {
+        await el.click({ timeout: 1500 }).catch(() => {});
+        await page.waitForTimeout(300);
+        break;
+      }
     } catch {}
   }
 }
 
-// ----- Kill/close app-upgrade banners & overlays
 async function smashUpgradeGate(page: import("playwright-core").Page) {
   const buttonTexts = [
     "Use web version","Continue in browser","Continue to site","Continue","Open web",
-    "Skip","Not now","Later","Close","Dismiss","X"
+    "Skip","Not now","Later","Close","Dismiss","X",
   ];
   for (const txt of buttonTexts) {
     try {
-      const btn = (await page.$(`button:has-text("${txt}")`)) || (await page.$(`a:has-text("${txt}")`));
-      if (btn) { await btn.click({ timeout: 1000 }).catch(() => {}); await page.waitForTimeout(300); }
+      const btn =
+        (await page.$(`button:has-text("${txt}")`)) ||
+        (await page.$(`a:has-text("${txt}")`));
+      if (btn) {
+        await btn.click({ timeout: 1000 }).catch(() => {});
+        await page.waitForTimeout(300);
+      }
     } catch {}
   }
+
   try {
     await page.evaluate(() => {
       const kill = (el: Element) => el.parentNode?.removeChild(el);
@@ -81,7 +97,9 @@ async function smashUpgradeGate(page: import("playwright-core").Page) {
         const z = parseInt(s.zIndex || "0", 10);
         const dialogish = el.getAttribute("role") === "dialog" || /modal/i.test(el.className?.toString() || "");
         const fixedish = s.position === "fixed" || s.position === "sticky" || dialogish;
-        if (fixedish && (z >= 100 || looksLikeUpgrade(idc))) { try { kill(el); } catch {} }
+        if (fixedish && (z >= 100 || looksLikeUpgrade(idc))) {
+          try { kill(el); } catch {}
+        }
       }
       document.documentElement.style.overflow = "auto";
       document.body.style.overflow = "auto";
@@ -90,12 +108,13 @@ async function smashUpgradeGate(page: import("playwright-core").Page) {
   } catch {}
   await page.waitForTimeout(200);
 }
+
 async function dismissUpgradeModal(page: import("playwright-core").Page) {
   const selectors = [
     'button:has-text("Later")','button:has-text("Not now")','button:has-text("Continue")',
     'button:has-text("Close")','button:has-text("Dismiss")','a:has-text("Close")','a:has-text("Dismiss")',
     'button[aria-label*="close" i]','button[title*="close" i]','.modal-header .btn-close',
-    '.modal .btn-close','.modal [data-bs-dismiss="modal"]','.modal .close','.modal-backdrop'
+    '.modal .btn-close','.modal [data-bs-dismiss="modal"]','.modal .close','.modal-backdrop',
   ];
   for (const sel of selectors) {
     try {
@@ -112,6 +131,7 @@ async function dismissUpgradeModal(page: import("playwright-core").Page) {
   try { await page.keyboard.press("Escape"); } catch {}
   await page.waitForTimeout(150);
 }
+
 async function nukeOverlays(page: import("playwright-core").Page) {
   try {
     await page.evaluate(() => {
@@ -121,7 +141,9 @@ async function nukeOverlays(page: import("playwright-core").Page) {
         const s = window.getComputedStyle(el);
         const z = parseInt(s.zIndex || "0", 10);
         const dialog = el.getAttribute("role") === "dialog" || (el.className?.toString() || "").toLowerCase().includes("modal");
-        if ((s.position === "fixed" || s.position === "sticky" || dialog) && z >= 100) { try { kill(el); } catch {} }
+        if ((s.position === "fixed" || s.position === "sticky" || dialog) && z >= 100) {
+          try { kill(el); } catch {}
+        }
       }
       document.body.style.overflow = "auto";
     });
@@ -129,14 +151,18 @@ async function nukeOverlays(page: import("playwright-core").Page) {
   await page.waitForTimeout(200);
 }
 
-// ----- Helpers for searching across frames
+/* ======================== Cross-frame helpers & evidence ======================== */
+
 function listFrameUrls(page: import("playwright-core").Page) {
   return page.frames().map(f => ({ name: f.name(), url: f.url() }));
 }
 async function findInFrames(page: import("playwright-core").Page, selectors: string[]) {
   for (const frame of page.frames()) {
     for (const sel of selectors) {
-      try { const handle = await frame.$(sel); if (handle) return { frame, handle, selector: sel }; } catch {}
+      try {
+        const handle = await frame.$(sel);
+        if (handle) return { frame, handle, selector: sel };
+      } catch {}
     }
   }
   return null;
@@ -152,41 +178,25 @@ async function fillInFrames(page: import("playwright-core").Page, selectors: str
   try { await found.handle.fill(value); return true; } catch { return false; }
 }
 
-// ----- Evidence for debugging
 async function collectEvidence(page: import("playwright-core").Page) {
   const url = page.url();
   const title = await page.title().catch(() => "");
   let htmlSnippet: string | undefined;
-  try { const html = await page.content(); htmlSnippet = html.slice(0, 8192); } catch {}
+  try {
+    const html = await page.content();
+    htmlSnippet = html.slice(0, 8192);
+  } catch {}
   let screenshot_b64: string | undefined;
-  try { const buf = await page.screenshot({ type: "jpeg", quality: 60, fullPage: false }); screenshot_b64 = `data:image/jpeg;base64,${buf.toString("base64")}`; } catch {}
+  try {
+    const buf = await page.screenshot({ type: "jpeg", quality: 60, fullPage: false });
+    screenshot_b64 = `data:image/jpeg;base64,${buf.toString("base64")}`;
+  } catch {}
   const frames = listFrameUrls(page);
   return { url, title, htmlSnippet, screenshot_b64, frames };
 }
 
-// ----- Positive login detection (includes Welcome/Handicap + URL checks)
-async function isLoggedIn(page: import("playwright-core").Page): Promise<boolean> {
-  const url = page.url();
-  if (/\/Account\/Login/i.test(url)) return false;
-  if (/login\.microsoftonline\.com/i.test(url)) return false;
+/* ======================== Login flows ======================== */
 
-  const successCues = [
-    'text=/Welcome/i',
-    'text=/Handicap/i',
-    'text=/My Account/i',
-    'text=/Sign out/i',
-    'a[href*="/account"]',
-    'a[href*="/logout"]',
-    'a[href*="/dashboard"]'
-  ];
-  const found = await findInFrames(page, successCues);
-  if (found) return true;
-
-  const loginInputs = await findInFrames(page, ['#Email','input[name="Email"]','input[type="email"]','input[type="password"]']);
-  return !loginInputs;
-}
-
-/** Try the exact native selectors seen on the page screenshot */
 async function tryNativeDirect(page: import("playwright-core").Page, username: string, password: string) {
   const emailCandidates = ['#Email','input[name="Email"]','input[type="email"]','input[name="email"]','input[id*="email"]','input[type="text"]'];
   const passCandidates  = ['#Password','input[name="Password"]','input[type="password"]','input[id*="password"]','input[name="password"]'];
@@ -212,7 +222,6 @@ async function tryNativeDirect(page: import("playwright-core").Page, username: s
   return await isLoggedIn(page);
 }
 
-// ----- Native login (frame‑aware fallback)
 async function tryNativeLogin(page: import("playwright-core").Page, username: string, password: string) {
   await page.waitForTimeout(600);
   await dismissUpgradeModal(page);
@@ -242,7 +251,6 @@ async function tryNativeLogin(page: import("playwright-core").Page, username: st
   return await isLoggedIn(page);
 }
 
-// ----- Azure AD / Microsoft login (main or in iframe)
 async function tryMicrosoftLogin(page: import("playwright-core").Page, username: string, password: string) {
   await page.waitForTimeout(600);
   await dismissUpgradeModal(page);
@@ -254,6 +262,7 @@ async function tryMicrosoftLogin(page: import("playwright-core").Page, username:
     const emailInputMain = (await page.$('#i0116')) || (await page.$('input[name="loginfmt"]')) || (await page.$('input[type="email"]'));
     if (!emailInputMain) return false;
     await emailInputMain.fill(username);
+
     const nextBtnMain = (await page.$('#idSIButton9')) || (await page.$('input[type="submit"]'));
     if (!nextBtnMain) throw new Error("Microsoft login: Next button not found");
     await nextBtnMain.click();
@@ -309,10 +318,35 @@ async function tryMicrosoftLogin(page: import("playwright-core").Page, username:
   return await isLoggedIn(page);
 }
 
-/* ======================== BOOKING FLOW ======================== */
+async function isLoggedIn(page: import("playwright-core").Page): Promise<boolean> {
+  const url = page.url();
+  if (/\/Account\/Login/i.test(url)) return false;
+  if (/login\.microsoftonline\.com/i.test(url)) return false;
+
+  const successCues = [
+    'text=/Welcome/i',
+    'text=/Handicap/i',
+    'text=/My Account/i',
+    'text=/Sign out/i',
+    'a[href*="/account"]',
+    'a[href*="/logout"]',
+    'a[href*="/dashboard"]',
+  ];
+  const found = await findInFrames(page, successCues);
+  if (found) return true;
+
+  const loginInputs = await findInFrames(page, ['#Email','input[name="Email"]','input[type="email"]','input[type="password"]']);
+  return !loginInputs;
+}
+
+/* ======================== Booking flow & task types ======================== */
 
 type BookTask = { type: "book"; date: string; time: string; mode?: "casual" | "competition" | string };
 type AnyTask = BookTask | { type?: string } | undefined;
+
+function isBookTask(x: any): x is BookTask {
+  return !!x && x.type === "book" && typeof x.date === "string" && typeof x.time === "string";
+}
 
 function parseYMD(ymd: string): Date | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
@@ -321,9 +355,7 @@ function parseYMD(ymd: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-/** Click the Booking entry from home/dashboard (tile or nav) */
 async function gotoBooking(page: import("playwright-core").Page, evidence: any) {
-  // Try obvious tiles/links first
   const clicks = [
     'a:has-text("Booking")',
     'a:has-text("Casual")',
@@ -343,15 +375,13 @@ async function gotoBooking(page: import("playwright-core").Page, evidence: any) 
   }
 }
 
-/** Change calendar to target month/year by clicking next (or prev) a few times */
 async function changeMonthTo(page: import("playwright-core").Page, target: Date, evidence: any) {
-  // Heuristic: read any element that looks like a month title, fallback to textContent scan
   async function readMonthYear(): Promise<{ month: number; year: number } | null> {
     const candidates = [
-      '.fc-toolbar-title',               // FullCalendar
+      '.fc-toolbar-title',
       '.calendar .month-title',
       '[class*="month"] [class*="title"]',
-      'h2:has-text(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i)'
+      'h2:has-text(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i)',
     ];
     for (const sel of candidates) {
       const t = await page.$(sel);
@@ -368,7 +398,6 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
     }
     return null;
   }
-
   function monthsDiff(a: {month:number; year:number}, b: {month:number; year:number}) {
     return (b.year - a.year) * 12 + (b.month - a.month);
   }
@@ -404,16 +433,14 @@ async function changeMonthTo(page: import("playwright-core").Page, target: Date,
   evidence.month_jumps = attempts;
 }
 
-/** Click the day number in the current calendar month */
 async function clickDay(page: import("playwright-core").Page, dayNum: number, evidence: any) {
   const dayStr = String(dayNum);
-  // Prefer buttons/anchors that exactly match the day number
   const selectors = [
     `button:has-text("^${dayStr}$")`,
     `a:has-text("^${dayStr}$")`,
     `td:has-text("^${dayStr}$")`,
     `[role="gridcell"]:has-text("^${dayStr}$")`,
-    `div:has-text("^${dayStr}$")`
+    `div:has-text("^${dayStr}$")`,
   ];
   for (const sel of selectors) {
     const found = await page.$(sel);
@@ -427,19 +454,14 @@ async function clickDay(page: import("playwright-core").Page, dayNum: number, ev
   return false;
 }
 
-/** Find a time slot and click “Book” in that row */
 async function clickTimeAndBook(page: import("playwright-core").Page, time: string, evidence: any) {
-  // Accept "08:32" or "8:32" variants
-  const t = time;
-  const variants = [t, t.replace(/^0/, "")];
+  const variants = [time, time.replace(/^0/, "")];
 
-  // If "Book" is inside the same row as the time, try a locator chain
   for (const v of variants) {
     try {
       const row = page.locator(`text=${v}`).first();
       const rowCount = await row.count().catch(() => 0);
       if (rowCount > 0) {
-        // Try to find a clickable "Book" inside the same block
         const bookInRow = row.locator('xpath=ancestor::*[self::tr or self::*][1]').locator('text=/^\\s*Book\\s*$/i').first();
         if (await bookInRow.count().catch(() => 0)) {
           await bookInRow.click({ timeout: 2000 }).catch(()=>{});
@@ -447,7 +469,6 @@ async function clickTimeAndBook(page: import("playwright-core").Page, time: stri
           evidence.book_clicked = true;
           return true;
         }
-        // Generic fallback: nearby button/link with "Book"
         const nearbyBook = page.locator(`text=${v}`).locator('..').locator('text=/^\\s*Book\\s*$/i').first();
         if (await nearbyBook.count().catch(() => 0)) {
           await nearbyBook.click({ timeout: 2000 }).catch(()=>{});
@@ -459,7 +480,6 @@ async function clickTimeAndBook(page: import("playwright-core").Page, time: stri
     } catch {}
   }
 
-  // Broad fallback: click the time, then a generic "Book"
   for (const v of variants) {
     const timeEl = await page.$(`text=${v}`);
     if (timeEl) {
@@ -480,25 +500,22 @@ async function clickTimeAndBook(page: import("playwright-core").Page, time: stri
   return false;
 }
 
-/** High-level booking recipe */
 async function bookTeeTime(
   page: import("playwright-core").Page,
   task: BookTask,
   evidence: any
 ) {
-  // From dashboard/home, click "Booking"
   await gotoBooking(page, evidence);
   await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
   await acceptCookies(page);
   await dismissUpgradeModal(page);
   await smashUpgradeGate(page);
 
-  // Navigate calendar
   const d = parseYMD(task.date);
   if (!d) throw new Error(`Invalid date: ${task.date}`);
+
   await changeMonthTo(page, d, evidence);
 
-  // Click day
   const okDay = await clickDay(page, d.getDate(), evidence);
   if (!okDay) throw new Error(`Could not select day ${task.date}`);
 
@@ -506,15 +523,13 @@ async function bookTeeTime(
   await acceptCookies(page);
   await dismissUpgradeModal(page);
 
-  // Click time + Book
   const okBook = await clickTimeAndBook(page, task.time, evidence);
   if (!okBook) throw new Error(`Could not find time ${task.time} or Book button`);
 
-  // Optional: Wait a second for UI transition
   await page.waitForTimeout(1000);
 }
 
-/* ======================== MAIN HANDLER ======================== */
+/* ======================== Main handler ======================== */
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const hdr = req.headers.authorization || "";
@@ -528,7 +543,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const now = new Date().toISOString();
 
-    // Claim one due job
     const snap = await firestore
       .collection("golf_booking_requests")
       .where("status", "==", "queued")
@@ -561,14 +575,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let reusedSession = false;
 
     try {
-      // ---- Credentials
+      // Credentials
       let creds: { username?: string; password?: string } | undefined;
-      if (reqData.enc_credentials_b64) { try { creds = decryptJson(reqData.enc_credentials_b64); } catch {} }
+      if (reqData.enc_credentials_b64) {
+        try { creds = decryptJson(reqData.enc_credentials_b64); } catch {}
+      }
       const username = creds?.username || process.env.HDIDIDO_EMAIL || "";
       const password = creds?.password || process.env.HDIDIDO_PASSWORD || "";
       if (!username || !password) throw new Error("No HowDidiDo credentials (enc_credentials_b64 or env HDIDIDO_EMAIL/HDIDIDO_PASSWORD)");
 
-      // ---- Start Playwright
+      // Playwright bootstrap
       const { default: chromium } = await import("@sparticuz/chromium");
       const playwright = await import("playwright-core");
 
@@ -578,13 +594,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         headless: true
       });
 
-      // Try reuse session
       const storedState = await loadStorageState(username);
-      const ctx = await browser.newContext({ storageState: storedState || undefined, viewport: { width: 1280, height: 800 },
-        userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36" });
+      const ctx = await browser.newContext({
+        storageState: storedState || undefined,
+        viewport: { width: 1280, height: 800 },
+        userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+      });
       const page = await ctx.newPage();
 
-      // If we had a stored session, check if already logged in
       if (storedState) {
         await page.goto("https://www.howdidido.com/", { waitUntil: "domcontentloaded" });
         await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
@@ -593,7 +610,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       if (!reusedSession) {
-        // Fresh login
         await page.goto(HOWDIDIDO_LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
         await acceptCookies(page);
         await dismissUpgradeModal(page);
@@ -616,26 +632,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           loggedIn = await tryMicrosoftLogin(page, username, password);
         }
 
-        // Final positive check
         if (!loggedIn) {
           evidence = await collectEvidence(page);
           throw new Error("Could not detect a successful login (modal/IdP variant blocked inputs).");
         }
 
-        // Save session
         const state = await ctx.storageState();
         await saveStorageState(username, state);
       }
 
-      // ----- Task routing (default: login only)
+      // ----- Task routing
       const task = (reqData as any).task as AnyTask;
-      if (task && task.type === "book") {
+      if (isBookTask(task)) {
         const bookingEvidence: any = {};
+
         await page.goto("https://www.howdidido.com/", { waitUntil: "domcontentloaded" });
         await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
         await acceptCookies(page);
 
-        await bookTeeTime(page, task as BookTask, bookingEvidence);
+        await bookTeeTime(page, task, bookingEvidence);
 
         evidence.booking_evidence = bookingEvidence;
         confirmation_text = `Booked attempt for ${task.date} ${task.time} (check booking UI for confirmation)`;
@@ -645,7 +660,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           : `Login OK as ${username.replace(/(.{2}).+(@.*)/, "$1***$2")}`;
       }
 
-      // Common evidence
       const commonEv = await collectEvidence(page);
       evidence = { ...evidence, ...commonEv };
 
