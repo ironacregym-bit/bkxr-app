@@ -2,8 +2,8 @@
 // pages/api/integrations/hdidido/queue.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
-import firestore from "../../../lib/firestoreClient";
-import { BookingRequest } from "../../../lib/hdidido/types";
+import firestore from "../../../../lib/firestoreClient";
+import { BookingRequest } from "../../../../lib/hdidido/types";
 
 // IMPORTANT: import your NextAuth options from the built-in auth route.
 // Current file: pages/api/integrations/hdidido/queue.ts
