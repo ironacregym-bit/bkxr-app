@@ -2,13 +2,20 @@
 // pages/api/integrations/hdidido/queue.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
-import firestore from "../../../../lib/firestoreClient";
-import { BookingRequest } from "../../../../lib/hdidido/types";
+import firestore from "../../../lib/firestoreClient";
+import { BookingRequest } from "../../../lib/hdidido/types";
+
+// IMPORTANT: import your NextAuth options from the built-in auth route.
+// Current file: pages/api/integrations/hdidido/queue.ts
+// Target file:  pages/api/auth/[...nextauth].ts
+// Relative path from here is ../../auth/[...nextauth]
+import { authOptions } from "../../auth/[...nextauth]";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const session = await getServerSession(req, res, {} as any);
+  // Use your real NextAuth options so the return type is Session | null
+  const session = await getServerSession(req, res, authOptions);
   if (!session?.user?.email) return res.status(401).json({ error: "Unauthorised" });
 
   try {
