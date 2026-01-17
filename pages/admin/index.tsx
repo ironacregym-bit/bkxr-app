@@ -114,6 +114,8 @@ export default function AdminDashboard() {
     // New Notifications tile
     { title: "Notifications", icon: "fas fa-bell", link: "/admin/notifications", color: "danger" },
     { title: "Manage Users", icon: "fas fa-users", link: "/admin/users", color: "dark" },
+    { title: "Members", icon: "fas fa-address-book", link: "/admin/members", color: "primary" },
+
   ];
 
   return (
