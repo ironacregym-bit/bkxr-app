@@ -17,9 +17,11 @@ export default function HdididoRunNow() {
     setRunnerError(null);
     setRunnerResult(null);
     try {
-      // Server-side proxy must add Authorization: Bearer <CRON_SECRET>
-      const r = await fetch("/api/integrations/hdidido/run-now-proxy");
-      const j = await r.json();
+      // Calls your runner API directly (no -proxy)
+      const r = await fetch("/api/integrations/hdidido/runner", {
+        method: "GET",
+      });
+      const j = await safeJson(r);
       if (!r.ok) throw new Error(j?.error || "Runner failed");
       setRunnerResult(j);
     } catch (e: any) {
@@ -34,9 +36,11 @@ export default function HdididoRunNow() {
     setProbeError(null);
     setProbeResult(null);
     try {
-      // Server-side proxy must add Authorization: Bearer <CRON_SECRET>
-      const r = await fetch("/api/integrations/hdidido/probe-now-proxy");
-      const j = await r.json();
+      // Calls your probe API directly (no -proxy)
+      const r = await fetch("/api/integrations/hdidido/probe", {
+        method: "GET",
+      });
+      const j = await safeJson(r);
       if (!r.ok) throw new Error(j?.error || "Probe failed");
       setProbeResult(j);
     } catch (e: any) {
@@ -46,10 +50,19 @@ export default function HdididoRunNow() {
     }
   }
 
+  // Utility: tolerate non-JSON error bodies gracefully
+  async function safeJson(r: Response) {
+    try {
+      return await r.json();
+    } catch {
+      return { ok: r.ok, status: r.status, text: await r.text().catch(() => "") };
+    }
+  }
+
   return (
     <>
       <Head>
-        <title>Run HowDidiDo | BXKR</title>
+        <title>HowDidiDo Tools | BXKR</title>
       </Head>
       <main className="container py-3" style={{ color: "#fff" }}>
         <h1 className="h4 mb-3">HowDidiDo tools</h1>
@@ -73,13 +86,13 @@ export default function HdididoRunNow() {
           </button>
 
           {runnerError && (
-            <div className="alert alert-danger mt-3">
+            <div className="alert alert-danger mt-3" role="alert">
               <strong>Error:</strong> {runnerError}
             </div>
           )}
 
           {runnerResult && (
-            <div className="alert alert-success mt-3" style={{ wordBreak: "break-word" }}>
+            <div className="alert alert-success mt-3" style={{ wordBreak: "break-word" }} role="status">
               <strong>Result:</strong>{" "}
               {typeof runnerResult === "string"
                 ? runnerResult
@@ -95,7 +108,7 @@ export default function HdididoRunNow() {
         >
           <p className="mb-2">
             <strong>Probe</strong> — diagnostic only: opens the exact TeeSheet date URL with token and
-            returns the resulting URL, HTTP status, title, body sample, and a screenshot.
+            returns the resulting URL, HTTP status, title, body sample, and a screenshot reference.
             <br />
             Target: <strong>Sun 18 Jan 2026</strong> • CourseId <strong>12274</strong>
           </p>
@@ -108,13 +121,13 @@ export default function HdididoRunNow() {
           </button>
 
           {probeError && (
-            <div className="alert alert-danger mt-3">
+            <div className="alert alert-danger mt-3" role="alert">
               <strong>Error:</strong> {probeError}
             </div>
           )}
 
           {probeResult && (
-            <div className="alert alert-success mt-3" style={{ wordBreak: "break-word" }}>
+            <div className="alert alert-success mt-3" style={{ wordBreak: "break-word" }} role="status">
               <strong>Result:</strong>{" "}
               {typeof probeResult === "string"
                 ? probeResult
