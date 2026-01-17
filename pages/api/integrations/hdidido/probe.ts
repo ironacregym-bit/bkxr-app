@@ -13,10 +13,13 @@ const COURSE_ID = 12274;         // Course to test
 function buildProbeUrl(): string {
   const token = process.env.HDIDIDO_TEE_TOKEN;
   if (!token) throw new Error("HDIDIDO_TEE_TOKEN not set");
-  return `https://howdidido-whs.clubv1.com/HDIDBooking/TeeSheet`
-    + `?courseId=${COURSE_ID}`
-    + `&token=${encodeURIComponent(token)}`
-    + `&dt=${encodeURIComponent(PROBE_DATE)}`;
+  // IMPORTANT: use '&' not '&amp;' in code
+  return (
+    `https://howdidido-whs.clubv1.com/HDIDBooking/TeeSheet` +
+    `?courseId=${COURSE_ID}` +
+    `&token=${encodeURIComponent(token)}` +
+    `&dt=${encodeURIComponent(PROBE_DATE)}`
+  );
 }
 
 async function acceptCookies(page: Page) {
@@ -43,21 +46,62 @@ async function boundedShot(page: Page, limit = 900_000) {
   return { base64: null as string | null, quality: null as number | null, note: "screenshot size remained > limit, skipped" };
 }
 
-/** Find the "Book" anchor for a given date/time tile. */
-async function findBookAnchorForTime(page: Page, dateYMD: string, timeHM: string) {
+/** STRICT tee-tile “Book” matching that only returns anchors pointing to BookingAdd */
+async function findBookAnchorForTime(
+  page: Page,
+  dateYMD: string,
+  timeHM: string
+): Promise<null | { anchor: ReturnType<Page["locator"]>; scope: string; reason: string }> {
   const dateTime = `${dateYMD} ${timeHM}`;
-  const exact = page.locator(`div.tee.available[data-teetime="${dateTime}"] .controls a[data-book="1"]`).first();
-  if (await exact.count().catch(()=>0)) return exact;
+  const tileId = `${dateYMD}-${timeHM.replace(":", "-")}`;
 
-  const id = `${dateYMD}-${timeHM.replace(":", "-")}`;
-  const byId = page.locator(`div.tee.available#${id} .controls a[data-book="1"]`).first();
-  if (await byId.count().catch(()=>0)) return byId;
-
-  const row = page.locator('div.tee.available').filter({ has: page.locator(`.time >> text=${timeHM.replace(/^0/,"")}`) }).first();
-  if (await row.count().catch(()=>0)) {
-    const a = row.locator('.controls a[data-book="1"]').first();
-    if (await a.count().catch(()=>0)) return a;
+  // 1) Strict: within the exact tee tile by data-teetime; href must target BookingAdd
+  const strict = page
+    .locator(
+      `div.tee.available[data-teetime="${dateTime}"] .controls a[data-book="1"][href*="HDIDBooking/BookingAdd"]`
+    )
+    .first();
+  if (await strict.count().catch(() => 0)) {
+    return { anchor: strict, scope: `tile[data-teetime="${dateTime}"]`, reason: "strict" };
   }
+
+  // 2) Strict by tile id
+  const strictById = page
+    .locator(
+      `div.tee.available#${tileId} .controls a[data-book="1"][href*="HDIDBooking/BookingAdd"]`
+    )
+    .first();
+  if (await strictById.count().catch(() => 0)) {
+    return { anchor: strictById, scope: `tile#${tileId}`, reason: "strictById" };
+  }
+
+  // 3) Soft within tile by data-teetime; verify href contains BookingAdd before returning
+  const soft = page
+    .locator(`div.tee.available[data-teetime="${dateTime}"] .controls a[data-book="1"]`)
+    .first();
+  if (await soft.count().catch(() => 0)) {
+    const href = await soft.getAttribute("href").catch(() => null);
+    if (href && /HDIDBooking\/BookingAdd/i.test(href)) {
+      return { anchor: soft, scope: `tile[data-teetime="${dateTime}"]`, reason: "soft+href-ok" };
+    } else {
+      // Explicitly return a mismatch so we can log why we refused to click
+      return { anchor: null as any, scope: `tile[data-teetime="${dateTime}"]`, reason: `soft+href-mismatch:${href || "null"}` };
+    }
+  }
+
+  // 4) Soft by id; verify href before returning
+  const softById = page
+    .locator(`div.tee.available#${tileId} .controls a[data-book="1"]`)
+    .first();
+  if (await softById.count().catch(() => 0)) {
+    const href = await softById.getAttribute("href").catch(() => null);
+    if (href && /HDIDBooking\/BookingAdd/i.test(href)) {
+      return { anchor: softById, scope: `tile#${tileId}`, reason: "softById+href-ok" };
+    } else {
+      return { anchor: null as any, scope: `tile#${tileId}`, reason: `softById+href-mismatch:${href || "null"}` };
+    }
+  }
+
   return null;
 }
 
@@ -190,9 +234,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!loggedIn) { loggedIn = await loginMicrosoft(page, email, password); }
 
       await runRef.update({ login_result: loggedIn ? "success" : "failed", login_url_after: page.url() });
-      if (!loggedIn) {
-        // We’ll still try to open the date URL to see if the site allows it (most likely it will redirect)
-      }
+      // Even if login fails, continue to try the date URL to capture evidence (likely a redirect to login)
     }
 
     // 1) Open the date TeeSheet URL (no retries)
@@ -238,53 +280,111 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       body_text_sample: bodyTextSample,
     });
 
-    // 2) Try clicking 06:00 → Book
+    // 2) STRICT: Click the 06:00 tile's "Book" → BookingAdd (never global Booking)
     let afterClickUrl: string | null = null;
     let atBookingAdd: boolean | null = null;
     let bookAnchorHref: string | null = null;
 
-    const anchor = await findBookAnchorForTime(page, PROBE_DATE, "06:00");
-    if (anchor) {
-      bookAnchorHref = await anchor.getAttribute("href").catch(() => null);
+    const found = await findBookAnchorForTime(page, PROBE_DATE, "06:00");
+
+    if (!found || !found.anchor) {
+      // Capture why we didn't click (not found, or href mismatch in soft paths)
+      await runRef.collection("artifacts").add({
+        type: "note",
+        label: "book_anchor",
+        scope: found?.scope || "unknown",
+        message: found?.reason || "no anchor found",
+        created_at: new Date().toISOString(),
+      });
+    } else {
+      // Grab tile HTML (prefer data-teetime; fallback id)
+      const dateTime = `${PROBE_DATE} 06:00`;
+      const tileHtmlByData = await page
+        .locator(`div.tee.available[data-teetime="${dateTime}"]`)
+        .first()
+        .evaluate((el) => (el as HTMLElement).outerHTML)
+        .catch(() => null);
+      const tileHtml =
+        tileHtmlByData ||
+        (await page
+          .locator(`div.tee.available#${PROBE_DATE}-${"06:00".replace(":", "-")}`)
+          .first()
+          .evaluate((el) => (el as HTMLElement).outerHTML)
+          .catch(() => null));
+
+      // Anchor metadata
+      const href = await found.anchor.getAttribute("href").catch(() => null);
+      const text = await found.anchor.textContent().catch(() => null);
+
+      // Log diagnostics
+      await runRef.collection("artifacts").add({
+        type: "html",
+        label: "tile_scope_html",
+        content: (tileHtml || "").slice(0, 20000),
+        created_at: new Date().toISOString(),
+      });
+      await runRef.collection("artifacts").add({
+        type: "note",
+        label: "book_anchor_meta",
+        scope: found.scope,
+        reason: found.reason,
+        href,
+        text: (text || "").trim() || null,
+        created_at: new Date().toISOString(),
+      });
+
+      // Safety: assert we only click BookingAdd href
+      if (!href || !/HDIDBooking\/BookingAdd/i.test(href)) {
+        throw new Error(`Refusing to click non-BookingAdd href: ${href || "null"}`);
+      }
+
+      // Record requested URL BEFORE the click
+      bookAnchorHref = href;
+      await runRef.update({ bookingadd_requested_url: bookAnchorHref });
+
+      // Click → expect URL to match BookingAdd
       try {
-        await anchor.scrollIntoViewIfNeeded().catch(()=>{});
+        await found.anchor.scrollIntoViewIfNeeded().catch(() => {});
         await Promise.race([
-          page.waitForURL(/\/HDIDBooking\/BookingAdd/i, { timeout: 12_000 }),
-          anchor.click({ timeout: 2_000 }).then(() =>
-            page.waitForURL(/\/HDIDBooking\/BookingAdd/i, { timeout: 12_000 }).catch(()=>{})
+          page.waitForURL(/\/HDIDBooking\/BookingAdd/i, { timeout: 15000 }),
+          found.anchor.click({ timeout: 2500 }).then(() =>
+            page
+              .waitForURL(/\/HDIDBooking\/BookingAdd/i, { timeout: 15000 })
+              .catch(() => {})
           ),
-        ]).catch(()=>{});
+        ]).catch(() => {});
       } catch {}
 
       await page.waitForTimeout(800);
       afterClickUrl = page.url();
       atBookingAdd = /\/HDIDBooking\/BookingAdd/i.test(afterClickUrl);
-    } else {
+
+      // Persist resulting URL after the click
+      await runRef.update({ bookingadd_resulting_url: afterClickUrl });
+
+      // AFTER click evidence
+      const afterShot = await boundedShot(page);
       await runRef.collection("artifacts").add({
-        type: "note",
-        label: "book_anchor",
-        message: "Book link not found for 06:00",
+        type: "screenshot",
+        label: "viewport_after_click",
+        base64: afterShot.base64 || undefined,
+        quality: afterShot.quality || undefined,
+        note: afterShot.base64 ? undefined : afterShot.note || "screenshot skipped",
         created_at: new Date().toISOString(),
       });
-    }
+      const htmlAfter = await page.content().catch(() => "");
+      await runRef.collection("artifacts").add({
+        type: "html",
+        label: "after_click_dom",
+        content: (htmlAfter || "").slice(0, 200_000),
+        created_at: new Date().toISOString(),
+      });
 
-    // AFTER click
-    const afterShot = await boundedShot(page);
-    await runRef.collection("artifacts").add({
-      type: "screenshot",
-      label: "viewport_after_click",
-      base64: afterShot.base64 || undefined,
-      quality: afterShot.quality || undefined,
-      note: afterShot.base64 ? undefined : afterShot.note || "screenshot skipped",
-      created_at: new Date().toISOString(),
-    });
-    const htmlAfter = await page.content().catch(() => "");
-    await runRef.collection("artifacts").add({
-      type: "html",
-      label: "after_click_dom",
-      content: (htmlAfter || "").slice(0, 200_000),
-      created_at: new Date().toISOString(),
-    });
+      if (!atBookingAdd) {
+        // If we strictly clicked a BookingAdd href but didn’t land there, surface this clearly
+        throw new Error(`After clicking correct tile anchor, did not land on BookingAdd. Now at: ${afterClickUrl}`);
+      }
+    }
 
     await browser.close();
 
