@@ -4,29 +4,40 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../../lib/firestoreClient";
 
 /**
- * Flow (correct URL & order):
- *  1) Login at https://www.howdidido.com/Account/Login (native + Microsoft/Azure variants)
- *  2) Go to TeeSheet DATE URL (with courseId=12274, token, dt=YYYY-MM-DD)  ← your required URL
- *     If redirected/denied/error → seed once on TeeSheet ROOT (same course, no dt) → retry DATE URL
- *  3) On the date page, click the 06:00 tile's "Book" anchor
- *  4) BookingAdd: add self (heuristic), tick terms/confirm boxes, wait up to 60s for Confirm, click
- *  5) Persist run → golf_booking_runs (top-level) + /screens + /html
+ * Flow (strict):
+ *  1) Login at https://www.howdidido.com/Account/Login (native + Microsoft/Azure) with Ben's creds.
+ *  2) GOTO the exact TeeSheet DATE URL:
+ *       https://howdidido-whs.clubv1.com/HDIDBooking/TeeSheet?courseId=12274&token=...&dt=2026-01-18
+ *     If redirected to login or an error/denied page appears → FAIL immediately (no root TeeSheet, no fallback).
+ *  3) On the date page, click the 06:00 tile's "Book" anchor → BookingAdd.
+ *  4) BookingAdd: add self (heuristic), tick terms/confirm, wait up to 60s for Confirm, click.
+ *  5) Persist run in Firestore: golf_booking_runs + subcollections 'screens' and 'html'.
  *
  * ENV REQUIRED:
  *  - CRON_SECRET
- *  - HDIDIDO_TEE_TOKEN=OI540B8E14I714I969   (current token)
+ *  - HDIDIDO_EMAIL=ben.jones1974@hotmail.co.uk
+ *  - HDIDIDO_PASSWORD=<password>
+ *  - HDIDIDO_TEE_TOKEN=OI540B8E14I714I969
  * Optional:
- *  - HDIDIDO_TEE_COURSE_ID=12274            (defaults to 12274 if not set)
+ *  - HDIDIDO_TEE_COURSE_ID=12274 (defaults to 12274 if not set)
  */
 
 const LOGIN_URL = "https://www.howdidido.com/Account/Login";
-
-// Hard-coded target for this run (adjust weekly if needed)
 const BOOKING_DATE = "2026-01-18"; // YYYY-MM-DD
 const BOOKING_TIME = "06:00";      // HH:mm (24h)
 
 // -------------------- Env & URL builders --------------------
 
+function getEmail(): string {
+  const e = process.env.HDIDIDO_EMAIL;
+  if (!e) throw new Error("HDIDIDO_EMAIL env var not set");
+  return e;
+}
+function getPassword(): string {
+  const p = process.env.HDIDIDO_PASSWORD;
+  if (!p) throw new Error("HDIDIDO_PASSWORD env var not set");
+  return p;
+}
 function getToken(): string {
   const t = process.env.HDIDIDO_TEE_TOKEN;
   if (!t) throw new Error("HDIDIDO_TEE_TOKEN env var not set");
@@ -39,17 +50,11 @@ function getCourseId(): number {
   return n;
 }
 
-/** EXACT date URL (this is the page we must open after login) */
+/** EXACT date URL (this is the only post-login URL we will open) */
 function buildTeeSheetDateUrl(dateYMD: string) {
   const token = getToken();
   const courseId = getCourseId();
   return `https://howdidido-whs.clubv1.com/HDIDBooking/TeeSheet?courseId=${courseId}&token=${encodeURIComponent(token)}&dt=${encodeURIComponent(dateYMD)}`;
-}
-/** Root list for same course (used only for one-off seeding, then we retry DATE URL) */
-function buildTeeSheetRootUrl() {
-  const token = getToken();
-  const courseId = getCourseId();
-  return `https://howdidido-whs.clubv1.com/HDIDBooking/TeeSheet?courseId=${courseId}&token=${encodeURIComponent(token)}`;
 }
 
 // -------------------- Page utilities --------------------
@@ -109,7 +114,7 @@ async function findInFrames(page: import("playwright-core").Page, selectors: str
   }
   return null;
 }
-async function waitForAnyInFrames(page: import("playwright-core").Page, selectors: string[], ms = 10000, step = 250) {
+async function waitForAnyInFrames(page: import("playwright-core").Page, selectors: string[], ms = 12000, step = 250) {
   const start = Date.now();
   while (Date.now() - start < ms) {
     const found = await findInFrames(page, selectors);
@@ -163,95 +168,60 @@ async function saveHtml(runRef: FirebaseFirestore.DocumentReference, label: stri
   });
 }
 
-// -------------------- Login variants --------------------
+// -------------------- Login variants (with Ben's env creds) --------------------
 
-async function loginNative(page: import("playwright-core").Page) {
+async function loginNative(page: import("playwright-core").Page, email: string, password: string) {
   const emailSels = ['#Email','input[name="Email"]','input[type="email"]','input[name="email"]','input[id*="email"]','input[type="text"]'];
   const passSels  = ['#Password','input[name="Password"]','input[type="password"]','input[id*="password"]','input[name="password"]'];
   const submitSels= ['button[type="submit"]','button:has-text("Log in")','button:has-text("Sign in")','a:has-text("Log in")','input[type="submit"]'];
 
   const emailFound = await waitForAnyInFrames(page, emailSels, 15000, 300); if (!emailFound) return false;
-  // We fill whatever the site presents; many clubs federate, so you may see MS login instead
-  await emailFound.handle.focus().catch(()=>{});
+  await emailFound.handle.fill(email);
 
-  // If the site is true native (email+password form)
-  const passFound = await waitForAnyInFrames(page, passSels, 4000, 250);
-  if (passFound) {
-    // NOTE: For native login you must add the actual creds here if needed
-    // This runner focuses the controls to allow the IdP button path to show instead
-    const submitFound= await waitForAnyInFrames(page, submitSels, 4000, 200);
-    if (submitFound) { try { await submitFound.handle.click(); } catch {} }
-    await page.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
-    return await isLoggedIn(page);
-  }
-  return false;
+  const passFound  = await waitForAnyInFrames(page, passSels, 8000, 250); if (!passFound) return false;
+  await passFound.handle.fill(password);
+
+  const submitFound= await waitForAnyInFrames(page, submitSels, 6000, 200); if (!submitFound) throw new Error("Login submit button not found (native)");
+  try { await submitFound.handle.click(); } catch {}
+
+  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+  return await isLoggedIn(page);
 }
-
-async function loginMicrosoft(page: import("playwright-core").Page) {
-  // Microsoft login DOM (best effort; works when club uses MS IdP)
+async function loginMicrosoft(page: import("playwright-core").Page, email: string, password: string) {
+  // Email page
   const emailSel = (await page.$('#i0116')) || (await page.$('input[name="loginfmt"]')) || (await page.$('input[type="email"]'));
   if (!emailSel) return false;
-
-  // This runner does not embed a password—most clubs SSO from here (or device SSO).
-  // If your flow requires password, we can add env HDIDIDO_EMAIL/HDIDIDO_PASSWORD and fill them.
-  await emailSel.focus();
+  await emailSel.fill(email);
 
   const nextBtn = (await page.$('#idSIButton9')) || (await page.$('input[type="submit"]')) || (await page.$('button:has-text("Next")'));
-  if (nextBtn) { await nextBtn.click().catch(()=>{}); }
+  if (!nextBtn) throw new Error("Microsoft login: Next not found");
+  await nextBtn.click();
 
   await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
   await dismissOverlays(page);
 
-  // If password field appears, we bail (no password provided in this variant)
+  // Password page
+  const passSel = (await page.$('#i0118')) || (await page.$('input[name="passwd"]')) || (await page.$('input[type="password"]'));
+  if (!passSel) throw new Error("Microsoft login: password input not found");
+  await passSel.fill(password);
+
+  const signBtn = (await page.$('#idSIButton9')) || (await page.$('input[type="submit"]')) || (await page.$('button:has-text("Sign in")'));
+  if (!signBtn) throw new Error("Microsoft login: Sign in button not found");
+  await signBtn.click();
+
+  await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
+  await dismissOverlays(page);
+
+  const stayNo = await page.$('#idBtn_Back'); if (stayNo) { await stayNo.click().catch(() => {}); }
+  else { const stayYes = await page.$('#idSIButton9'); if (stayYes) await stayYes.click().catch(() => {}); }
+
+  await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
   return await isLoggedIn(page);
 }
 
 // -------------------- TeeSheet & Booking helpers --------------------
 
-/** Open the DATE TeeSheet URL; if redirected/denied/error, seed on ROOT once then retry DATE. */
-async function openDateTeeSheetWithRetry(page: import("playwright-core").Page, runRef: FirebaseFirestore.DocumentReference, dateYMD: string) {
-  const dtUrl = buildTeeSheetDateUrl(dateYMD);
-  await page.goto(dtUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-  await page.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
-  await acceptCookies(page); await dismissOverlays(page);
-  await runRef.update({ evidence: { tee_url_used: dtUrl } });
-  await saveScreen(runRef, "teesheet_dt_first", page);
-  await saveHtml(runRef, "teesheet_dt_dom", page);
-
-  const bouncedToLogin = /howdidido\.com\/Account\/Login/i.test(page.url());
-  const denied = await pageLooksPermissionDenied(page);
-  const err = await looksErrorPage(page);
-
-  if (bouncedToLogin || denied || err) {
-    // Seed on root once (same course) and re-attempt the DATE URL
-    const root = buildTeeSheetRootUrl();
-    await page.goto(root, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
-    await acceptCookies(page);
-    await saveScreen(runRef, "teesheet_root_seed", page);
-
-    await page.waitForTimeout(700);
-    await page.goto(dtUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
-    await acceptCookies(page); await dismissOverlays(page);
-    await saveScreen(runRef, "teesheet_dt_retry", page);
-
-    if (/howdidido\.com\/Account\/Login/i.test(page.url()) || await pageLooksPermissionDenied(page) || await looksErrorPage(page)) {
-      throw new Error("TeeSheet DATE URL still redirected/denied/error after seed");
-    }
-  }
-
-  // verify tiles exist for the date
-  const hasDayTiles =
-    (await page.locator(`div.tee.available[data-teetime^="${dateYMD}"]`).count().catch(() => 0)) > 0 ||
-    (await page.locator(`div.tee[data-teetime^="${dateYMD}"]`).count().catch(() => 0)) > 0;
-  if (!hasDayTiles) {
-    await saveScreen(runRef, "teesheet_dt_no_day_tiles", page);
-    throw new Error(`No tiles for ${dateYMD} visible on TeeSheet date page.`);
-  }
-}
-
-/** Your DOM: find the "Book" anchor for a given date/time tile */
+/** Your DOM: find the "Book" anchor for the target tile */
 async function findBookAnchorForTime(page: import("playwright-core").Page, dateYMD: string, timeHM: string) {
   const dateTime = `${dateYMD} ${timeHM}`;
   // Precise by data-teetime + anchor
@@ -285,8 +255,6 @@ async function findBookAnchorForTime(page: import("playwright-core").Page, dateY
   }
   return null;
 }
-
-// -------------------- BookingAdd helpers --------------------
 
 async function addSelfIfNeeded(page: import("playwright-core").Page) {
   const guesses = ['#btnAddMe','button:has-text("Add me")','button:has-text("Add Myself")','a:has-text("Add me")','a:has-text("Add Myself")','button:has-text("Me")','a:has-text("Me")'];
@@ -369,6 +337,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     runRef = await firestore.collection("golf_booking_runs").add({
       trigger: "run-now",
       started_at: new Date().toISOString(),
+      user: getEmail(),
       target: { date: BOOKING_DATE, time: BOOKING_TIME, courseId: getCourseId() },
       status: "in_progress"
     });
@@ -387,25 +356,54 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
     const page = await ctx.newPage();
 
+    const email = getEmail();
+    const password = getPassword();
+
     // ---------------- 1) LOGIN ----------------
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await acceptCookies(page); await dismissOverlays(page); await nukeOverlays(page);
 
     let loggedIn = false;
-    // Try native first, then MS
-    try { loggedIn = await loginNative(page); } catch {}
-    if (!loggedIn) { loggedIn = await loginMicrosoft(page); }
+    try { loggedIn = await loginNative(page, email, password); } catch {}
+    if (!loggedIn) { loggedIn = await loginMicrosoft(page, email, password); }
 
     lastUrl = page.url();
     await saveScreen(runRef, "post_login", page);
-    if (!loggedIn) {
-      // Even if login cues not seen, proceed to dt once (some clubs auto-redirect after first protected hit)
-      // If you want to hard-fail here, uncomment the next line:
-      // throw new Error("Login not detected");
+    if (!loggedIn) throw new Error("Login not detected");
+
+    // ---------------- 2) TeeSheet DATE URL (ONLY) ----------------
+    const dtUrl = buildTeeSheetDateUrl(BOOKING_DATE); // << EXACT URL
+    await runRef.update({ evidence: { tee_url_used: dtUrl } }); // record the URL we will open
+
+    await page.goto(dtUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
+    await acceptCookies(page); await dismissOverlays(page);
+
+    await saveScreen(runRef, "teesheet_dt_attempt", page);
+    await saveHtml(runRef, "teesheet_dt_dom", page);
+
+    // STRICT failure conditions (no other navigation!)
+    if (/howdidido\.com\/Account\/Login/i.test(page.url())) {
+      await saveScreen(runRef, "teesheet_dt_redirected_to_login", page);
+      throw new Error("Redirected to HowDidiDo login from TeeSheet DATE URL");
+    }
+    if (await pageLooksPermissionDenied(page)) {
+      await saveScreen(runRef, "teesheet_dt_permission_denied", page);
+      throw new Error("Permission Denied on TeeSheet DATE URL");
+    }
+    if (await looksErrorPage(page)) {
+      await saveScreen(runRef, "teesheet_dt_error_page", page);
+      throw new Error("Error page on TeeSheet DATE URL");
     }
 
-    // ---------------- 2) DATE TeeSheet (with dt) ----------------
-    await openDateTeeSheetWithRetry(page, runRef, BOOKING_DATE);
+    // Verify tiles exist for the date
+    const hasDayTiles =
+      (await page.locator(`div.tee.available[data-teetime^="${BOOKING_DATE}"]`).count().catch(() => 0)) > 0 ||
+      (await page.locator(`div.tee[data-teetime^="${BOOKING_DATE}"]`).count().catch(() => 0)) > 0;
+    if (!hasDayTiles) {
+      await saveScreen(runRef, "teesheet_dt_no_day_tiles", page);
+      throw new Error(`No tiles for ${BOOKING_DATE} visible on TeeSheet date page.`);
+    }
 
     // ---------------- 3) Click 06:00 "Book" ----------------
     const found = await findBookAnchorForTime(page, BOOKING_DATE, BOOKING_TIME);
@@ -437,7 +435,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       throw new Error("Did not reach BookingAdd after clicking Book");
     }
 
-    // ---------------- 4) Pre-reqs & Confirm ----------------
+    // ---------------- 4) BookingAdd: pre-reqs & Confirm ----------------
     const ev: any = {};
 
     const added = await addSelfIfNeeded(page);
@@ -477,7 +475,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       outcome: "success",
       last_url: lastUrl,
       evidence: {
-        step: "login->teesheet_dt->book->bookingadd->confirm",
+        step: "login->teesheet_dt_only->book->bookingadd->confirm",
         tee_url_used: buildTeeSheetDateUrl(BOOKING_DATE),
         confirm_result: confirmResult,
         success_cue: cue,
