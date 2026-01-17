@@ -3,10 +3,11 @@
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import BottomNav from "../../../components/BottomNav";
+import type { GetServerSideProps } from "next";
 
 const ACCENT = "#FF8A2A";
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
@@ -46,7 +47,6 @@ export default function AdminMemberDetail() {
 
   const profileKey =
     mounted && isAllowed && email ? `/api/admin/members/get?email=${encodeURIComponent(email)}` : null;
-
   const { data: profileData } = useSWR<ProfileResp>(profileKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
@@ -179,9 +179,7 @@ export default function AdminMemberDetail() {
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <div className="d-flex align-items-center justify-content-between mb-3">
-          <Link href="/admin/members" className="btn btn-outline-secondary">
-            ← Back
-          </Link>
+          <Link href="/admin/members" className="btn btn-outline-secondary">← Back</Link>
           <h2 className="mb-0">Member</h2>
           <div style={{ width: 80 }} />
         </div>
@@ -281,3 +279,8 @@ function formatPreview(v: any): string {
   if (typeof v === "object") return "{…}";
   return String(v);
 }
+
+// Force SSR to avoid static export trying to pre-render a dynamic route
+export const getServerSideProps: GetServerSideProps = async () => {
+  return { props: {} };
+};
