@@ -6,39 +6,113 @@ import { authOptions } from "../../auth/[...nextauth]";
 import firestore from "../../../../lib/firestoreClient";
 import { hasRole } from "../../../../lib/rbac";
 
-function normalise(obj: any): any {
-  if (!obj || typeof obj !== "object") return obj;
-  const out: any = Array.isArray(obj) ? [] : {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v && typeof (v as any).toDate === "function") out[k] = (v as any).toDate().toISOString();
-    else if (v && typeof v === "object") out[k] = normalise(v);
-    else out[k] = v;
-  }
-  return out;
-}
-
+/**
+ * Aggregates daily nutrition totals for a user by traversing:
+ * nutrition_logs/{email}/{date}/{code}/*.docs
+ *
+ * Returns items sorted by date desc with:
+ * {
+ *   id: <date>,
+ *   data: {
+ *     date: string,
+ *     total_protein: number,
+ *     total_grams: number,
+ *     items_count: number,
+ *     per_meal: Record<string, { protein: number; grams: number; items: number }>
+ *   }
+ * }
+ *
+ * Pagination: ?limit=50&cursor=<YYYY-MM-DD>
+ * - Dates are sorted DESC; cursor is the LAST returned date; next page starts AFTER it.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
   if (!session || !hasRole(session, ["admin", "gym"])) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   const email = typeof req.query.email === "string" ? req.query.email : "";
   if (!email) return res.status(400).json({ error: "Missing email" });
 
   const limit = Math.min(Number(req.query.limit || 50), 100);
-  const cursor = typeof req.query.cursor === "string" ? req.query.cursor : null;
+  const cursorDate = typeof req.query.cursor === "string" ? req.query.cursor : null;
 
   try {
-    let q = firestore.collection("nutrition_logs").where("user_email", "==", email).orderBy("__name__").limit(limit);
-    if (cursor) q = q.startAfter(cursor);
-    const snap = await q.get();
+    // Root for this user's nutrition tree
+    const userRoot = firestore.collection("nutrition_logs").doc(email);
 
-    const items = snap.docs.map((d) => ({ id: d.id, data: normalise(d.data() || {}) }));
-    const nextCursor = snap.docs.length === limit ? snap.docs[snap.docs.length - 1].id : null;
+    // List first-level subcollections (dates). Node Admin SDK supports listCollections().
+    const dateCollections = await userRoot.listCollections();
+    // Names are expected to be YYYY-MM-DD; sort DESC
+    const dateNames = dateCollections
+      .map((c) => c.id)
+      .filter((id) => /^\d{4}-\d{2}-\d{2}$/.test(id))
+      .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+
+    // Apply cursor (exclusive)
+    let startIndex = 0;
+    if (cursorDate) {
+      const idx = dateNames.findIndex((d) => d === cursorDate);
+      startIndex = idx >= 0 ? idx + 1 : 0;
+    }
+
+    const pageDates = dateNames.slice(startIndex, startIndex + limit);
+
+    const items: { id: string; data: any }[] = [];
+
+    for (const dateId of pageDates) {
+      const dateColRef = userRoot.collection(dateId);
+      // list unique code subcollections under the date
+      const codeCollections = await dateColRef.listCollections();
+
+      let totalProtein = 0;
+      let totalGrams = 0;
+      let itemsCount = 0;
+
+      const perMeal: Record<string, { protein: number; grams: number; items: number }> = {};
+
+      for (const codeCol of codeCollections) {
+        const snap = await codeCol.get();
+        for (const doc of snap.docs) {
+          const data = doc.data() || {};
+          // Defensive reads
+          const protein = typeof data.protein === "number" ? data.protein : Number(data.protein) || 0;
+          const grams = typeof data.grams === "number" ? data.grams : Number(data.grams) || 0;
+          const meal = typeof data.meal === "string" ? data.meal : "Other";
+
+          totalProtein += protein;
+          totalGrams += grams;
+          itemsCount += 1;
+
+          if (!perMeal[meal]) perMeal[meal] = { protein: 0, grams: 0, items: 0 };
+          perMeal[meal].protein += protein;
+          perMeal[meal].grams += grams;
+          perMeal[meal].items += 1;
+        }
+      }
+
+      items.push({
+        id: dateId,
+        data: {
+          date: dateId,
+          total_protein: Number(totalProtein.toFixed(2)),
+          total_grams: Number(totalGrams.toFixed(0)),
+          items_count: itemsCount,
+          per_meal: perMeal,
+        },
+      });
+    }
+
+    const nextCursor =
+      pageDates.length === limit ? pageDates[pageDates.length - 1] : null;
 
     return res.status(200).json({ items, nextCursor });
-  } catch {
+  } catch (err) {
     return res.status(500).json({ error: "Server error" });
   }
 }
