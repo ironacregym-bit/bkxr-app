@@ -17,6 +17,13 @@ export default function Register() {
     }
   }, [status, router]);
 
+  // Hydration-safe mount flag
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // Show success banner when coming from PAR-Q
+  const showParqBanner = mounted && router.query.parq === "ok";
+
   // Email magic link state
   const [email, setEmail] = useState("");
   const [busyEmail, setBusyEmail] = useState(false);
@@ -76,6 +83,13 @@ export default function Register() {
           </div>
           <Link href="/" className="btn-bxkr-outline">Back</Link>
         </div>
+
+        {/* PAR-Q success banner (optional) */}
+        {showParqBanner && (
+          <div className="pill-success mb-3" aria-live="polite">
+            <i className="fa fa-check" aria-hidden="true" /> PAR‑Q received — create your account to link it.
+          </div>
+        )}
 
         {/* Minimal hero/heading */}
         <section className="mb-3">
