@@ -128,7 +128,7 @@ async function waitForAnyInFrames(
 
 async function snapAsDataUrl(pageOrElement: import("playwright-core").Page | import("playwright-core").ElementHandle, quality = 55) {
   try {
-    // @ts-ignore
+    // @ts-ignore - union supports screenshot on both Page and ElementHandle
     const buf = await pageOrElement.screenshot({ type: "jpeg", quality, fullPage: false });
     return `data:image/jpeg;base64,${buf.toString("base64")}`;
   } catch { return undefined; }
@@ -253,15 +253,13 @@ async function tickConfirmCheckboxes(page: import("playwright-core").Page) {
     try {
       const boxes = await page.$$(css);
       for (const b of boxes) {
-        const visible = await b.isVisible().catch(() => false);
+        // isChecked is locator-only; use click if visible and trust UI state
+        const visible = await b.isVisible?.().catch(() => false) || false;
         if (!visible) continue;
-        const checked = await (b as any).isChecked?.().catch(() => false);
-        if (!checked) {
-          await b.scrollIntoViewIfNeeded().catch(() => {});
-          await b.click({ timeout: 1000 }).catch(() => {});
-          toggled.push(css);
-          await page.waitForTimeout(150);
-        }
+        await b.scrollIntoViewIfNeeded?.().catch(() => {});
+        await b.click({ timeout: 1000 }).catch(() => {});
+        toggled.push(css);
+        await page.waitForTimeout(150);
       }
     } catch {}
   }
@@ -276,11 +274,15 @@ async function waitForConfirmEnabled(page: import("playwright-core").Page, timeo
     try {
       const btn = await page.$(btnSel);
       if (btn) {
-        const visible = await btn.isVisible().catch(() => false);
+        const box = await btn.boundingBox();
+        const visible = !!box && box.width > 1 && box.height > 1;
         if (visible) {
-          const disabledAttr = await page.evaluate((el) => el.hasAttribute('disabled') || (el as HTMLButtonElement).disabled, btn);
+          const disabledAttr = await btn.evaluate((node) =>
+            (node as HTMLButtonElement).disabled || (node as Element).hasAttribute('disabled')
+          );
           if (!disabledAttr) {
-            return { found: true, enabled: true, txt: await page.$(txtSel).then(h => h?.textContent() ?? "").catch(() => "") };
+            const txt = await page.$(txtSel).then(h => h?.textContent() ?? "").catch(() => "");
+            return { found: true, enabled: true, txt };
           }
         }
       }
@@ -291,7 +293,8 @@ async function waitForConfirmEnabled(page: import("playwright-core").Page, timeo
   }
   const btn = await page.$(btnSel);
   if (btn) {
-    return { found: true, enabled: false, txt: await page.$(txtSel).then(h => h?.textContent() ?? "").catch(() => "") };
+    const txt = await page.$(txtSel).then(h => h?.textContent() ?? "").catch(() => "");
+    return { found: true, enabled: false, txt };
   }
   return { found: false, enabled: false, txt: '' };
 }
@@ -305,15 +308,21 @@ async function postConfirmSuccessCue(page: import("playwright-core").Page) {
   return null;
 }
 
-/** Find confirm button across frames; return handle + state */
+/** Find confirm button across frames; return handle + state (TS-safe) */
 async function findConfirmAcrossFrames(page: import("playwright-core").Page) {
   const found = await findInFrames(page, ['#btn-confirm-and-pay']);
   if (!found) return null;
   const el = found.handle as import("playwright-core").ElementHandle;
-  let visible = false; let disabled = false;
-  try { visible = await (el as any).isVisible(); } catch {}
+  let visible = false;
   try {
-    disabled = await found.frame.evaluate((node) => (node as HTMLButtonElement).disabled || node.hasAttribute('disabled'), el);
+    const box = await el.boundingBox();
+    visible = !!box && box.width > 1 && box.height > 1;
+  } catch {}
+  let disabled = false;
+  try {
+    disabled = await el.evaluate((node) =>
+      (node as HTMLButtonElement).disabled || (node as Element).hasAttribute('disabled')
+    );
   } catch {}
   return { el, visible, disabled, frame: found.frame };
 }
@@ -333,6 +342,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let confirmResult: string | undefined;
   let successCue: string | null | undefined;
   let bookingEvidence: any = {};
+  let lastUrl: string | null = null;
   const startedAt = new Date().toISOString();
 
   try {
@@ -380,15 +390,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // Screenshot & store
-    try {
-      await saveScreenDoc(runRef, {
-        label: "post_login",
-        url: page.url(),
-        title: await page.title().catch(() => "") || "",
-        screenshot_b64: await snapAsDataUrl(page, 55)
-      });
-    } catch {}
+    lastUrl = page.url();
+    await saveScreenDoc(runRef, {
+      label: "post_login",
+      url: lastUrl,
+      title: await page.title().catch(() => "") || "",
+      screenshot_b64: await snapAsDataUrl(page, 55)
+    });
 
     if (!loggedIn) throw new Error("Login not detected (email/password inputs blocked or variant changed).");
 
@@ -398,30 +406,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await acceptCookies(page);
     await dismissUpgradeModal(page);
 
-    try {
-      await saveScreenDoc(runRef, {
-        label: "booking_before_any",
-        url: page.url(),
-        title: await page.title().catch(() => "") || "",
-        screenshot_b64: await snapAsDataUrl(page, 55)
-      });
-      // HTML dump (pre-confirm)
-      const html = await page.content().catch(() => "");
-      await saveHtmlDoc(runRef, {
-        label: "pre_confirm_dom",
-        url: page.url(),
-        title: await page.title().catch(() => "") || "",
-        htmlSnippet: (html || "").slice(0, 8192)
-      });
-    } catch {}
+    lastUrl = page.url();
+    await saveScreenDoc(runRef, {
+      label: "booking_before_any",
+      url: lastUrl,
+      title: await page.title().catch(() => "") || "",
+      screenshot_b64: await snapAsDataUrl(page, 55)
+    });
+    const htmlPre = await page.content().catch(() => "");
+    await saveHtmlDoc(runRef, {
+      label: "pre_confirm_dom",
+      url: lastUrl,
+      title: await page.title().catch(() => "") || "",
+      htmlSnippet: (htmlPre || "").slice(0, 8192)
+    });
 
-    // 3) Pre-reqs: add self & tick terms/confirm checkboxes
+    // 3) Prereqs: add self & tick terms/confirm checkboxes
     const addedSelector = await addSelfIfNeeded(page);
     if (addedSelector) {
       bookingEvidence.added_self_via = addedSelector;
+      lastUrl = page.url();
       await saveScreenDoc(runRef, {
         label: "after_add_self",
-        url: page.url(),
+        url: lastUrl,
         title: await page.title().catch(() => "") || "",
         screenshot_b64: await snapAsDataUrl(page, 55)
       });
@@ -429,9 +436,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ticked = await tickConfirmCheckboxes(page);
     if (ticked.length) {
       bookingEvidence.ticked_checkboxes = ticked;
+      lastUrl = page.url();
       await saveScreenDoc(runRef, {
         label: "after_tick_checkboxes",
-        url: page.url(),
+        url: lastUrl,
         title: await page.title().catch(() => "") || "",
         screenshot_b64: await snapAsDataUrl(page, 55)
       });
@@ -443,9 +451,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       bookingEvidence.confirm_button_initial = { visible: confirmFound.visible, disabled: confirmFound.disabled };
       try {
         const elementShot = await snapAsDataUrl(confirmFound.el, 70);
+        lastUrl = page.url();
         await saveScreenDoc(runRef, {
           label: "confirm_button_region",
-          url: page.url(),
+          url: lastUrl,
           title: await page.title().catch(() => "") || "",
           selector: "#btn-confirm-and-pay",
           screenshot_b64: elementShot
@@ -470,11 +479,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           confirmResult = `confirm_click_error: ${e?.message || "unknown"}`;
         }
       } else {
-        // fallback to main page selector
-        const btn = await page.$('#btn-confirm-and-pay');
-        if (btn) {
-          await btn.scrollIntoViewIfNeeded().catch(() => {});
-          await btn.click({ timeout: 2500 }).catch(() => {});
+        const fallbackBtn = await page.$('#btn-confirm-and-pay');
+        if (fallbackBtn) {
+          await fallbackBtn.scrollIntoViewIfNeeded().catch(() => {});
+          await fallbackBtn.click({ timeout: 2500 }).catch(() => {});
           await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
           await dismissUpgradeModal(page);
           confirmResult = "confirm_clicked";
@@ -488,10 +496,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       confirmResult = "confirm_not_found";
     }
 
-    // Post-confirm: store page & confirm region again if possible
+    lastUrl = page.url();
     await saveScreenDoc(runRef, {
       label: "after_confirm",
-      url: page.url(),
+      url: lastUrl,
       title: await page.title().catch(() => "") || "",
       screenshot_b64: await snapAsDataUrl(page, 55)
     });
@@ -499,7 +507,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const htmlAfter = await page.content().catch(() => "");
     await saveHtmlDoc(runRef, {
       label: "post_confirm_dom",
-      url: page.url(),
+      url: lastUrl,
       title: await page.title().catch(() => "") || "",
       htmlSnippet: (htmlAfter || "").slice(0, 8192)
     });
@@ -511,7 +519,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const elementShotAfter = await snapAsDataUrl(confirmAfter.el, 70);
         await saveScreenDoc(runRef, {
           label: "confirm_button_region_after",
-          url: page.url(),
+          url: lastUrl,
           title: await page.title().catch(() => "") || "",
           selector: "#btn-confirm-and-pay",
           screenshot_b64: elementShotAfter
@@ -537,7 +545,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       outcome: "success",
       status: "success",
       evidence,
-      last_url: page.url ? page.url() : null
+      last_url: lastUrl
     });
 
     outcome = "success";
@@ -550,7 +558,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           finished_at: new Date().toISOString(),
           outcome: "failed",
           status: "failed",
-          error: errorMsg
+          error: errorMsg,
+          last_url: lastUrl
         });
       }
     } catch {}
