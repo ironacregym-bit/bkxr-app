@@ -46,36 +46,66 @@ export default function AdminMemberDetail() {
 
   const profileKey =
     mounted && isAllowed && email ? `/api/admin/members/get?email=${encodeURIComponent(email)}` : null;
+
   const { data: profileData } = useSWR<ProfileResp>(profileKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
 
   const feeds = {
-    checkins: mounted && isAllowed && email
-      ? `/api/admin/members/checkins?email=${encodeURIComponent(email)}${cursors.checkins ? `&cursor=${encodeURIComponent(cursors.checkins!)}` : ""}`
-      : null,
-    habits: mounted && isAllowed && email
-      ? `/api/admin/members/habits?email=${encodeURIComponent(email)}${cursors.habits ? `&cursor=${encodeURIComponent(cursors.habits!)}` : ""}`
-      : null,
-    nutrition: mounted && isAllowed && email
-      ? `/api/admin/members/nutrition?email=${encodeURIComponent(email)}${cursors.nutrition ? `&cursor=${encodeURIComponent(cursors.nutrition!)}` : ""}`
-      : null,
-    workouts: mounted && isAllowed && email
-      ? `/api/admin/members/workouts?email=${encodeURIComponent(email)}${cursors.workouts ? `&cursor=${encodeURIComponent(cursors.workouts!)}` : ""}`
-      : null,
+    checkins:
+      mounted && isAllowed && email
+        ? `/api/admin/members/checkins?email=${encodeURIComponent(email)}${
+            cursors.checkins ? `&cursor=${encodeURIComponent(cursors.checkins)}` : ""
+          }`
+        : null,
+    habits:
+      mounted && isAllowed && email
+        ? `/api/admin/members/habits?email=${encodeURIComponent(email)}${
+            cursors.habits ? `&cursor=${encodeURIComponent(cursors.habits)}` : ""
+          }`
+        : null,
+    nutrition:
+      mounted && isAllowed && email
+        ? `/api/admin/members/nutrition?email=${encodeURIComponent(email)}${
+            cursors.nutrition ? `&cursor=${encodeURIComponent(cursors.nutrition)}` : ""
+          }`
+        : null,
+    workouts:
+      mounted && isAllowed && email
+        ? `/api/admin/members/workouts?email=${encodeURIComponent(email)}${
+            cursors.workouts ? `&cursor=${encodeURIComponent(cursors.workouts)}` : ""
+          }`
+        : null,
   };
 
-  const { data: checkinsData, isValidating: loadingCheckins } = useSWR<FeedResp>(feeds.checkins, fetcher, { revalidateOnFocus: false });
-  const { data: habitsData, isValidating: loadingHabits } = useSWR<FeedResp>(feeds.habits, fetcher, { revalidateOnFocus: false });
-  const { data: nutritionData, isValidating: loadingNutrition } = useSWR<FeedResp>(feeds.nutrition, fetcher, { revalidateOnFocus: false });
-  const { data: workoutsData, isValidating: loadingWorkouts } = useSWR<FeedResp>(feeds.workouts, fetcher, { revalidateOnFocus: false });
+  const { data: checkinsData, isValidating: loadingCheckins } = useSWR<FeedResp>(
+    feeds.checkins,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+  const { data: habitsData, isValidating: loadingHabits } = useSWR<FeedResp>(
+    feeds.habits,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+  const { data: nutritionData, isValidating: loadingNutrition } = useSWR<FeedResp>(
+    feeds.nutrition,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+  const { data: workoutsData, isValidating: loadingWorkouts } = useSWR<FeedResp>(
+    feeds.workouts,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
 
   const profile = profileData?.user || {};
-  const titleName = profile?.display_name || profile?.name || profile?.profile?.name || email;
+  const titleName = profile?.display_name || profile?.name || profile?.profile?.name || email || "Member";
 
   const renderList = (items?: { id: string; data: any }[]) => {
-    if (!items || items.length === 0) return <div className="text-center text-muted py-3">No entries.</div>;
+    if (!items || items.length === 0)
+      return <div className="text-center text-muted py-3">No entries.</div>;
     return (
       <div className="d-grid gap-2">
         {items.map((it) => {
@@ -85,9 +115,11 @@ export default function AdminMemberDetail() {
             d.weight ? `Wt ${d.weight}` : null,
             d.calories ? `Cal ${d.calories}` : null,
             d.energy_levels ? `Energy ${d.energy_levels}` : null,
-          ].filter(Boolean).join(" · ");
+          ]
+            .filter(Boolean)
+            .join(" · ");
 
-        return (
+          return (
             <div
               key={it.id}
               className="p-3"
@@ -127,10 +159,13 @@ export default function AdminMemberDetail() {
   };
 
   const loadingForTab =
-    tab === "checkins" ? loadingCheckins :
-    tab === "habits" ? loadingHabits :
-    tab === "nutrition" ? loadingNutrition :
-    loadingWorkouts;
+    tab === "checkins"
+      ? loadingCheckins
+      : tab === "habits"
+      ? loadingHabits
+      : tab === "nutrition"
+      ? loadingNutrition
+      : loadingWorkouts;
 
   const onLoadMore = () => {
     setCursors((c) => ({ ...c, [tab]: nextCursor[tab] || null }));
@@ -144,7 +179,9 @@ export default function AdminMemberDetail() {
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <div className="d-flex align-items-center justify-content-between mb-3">
-          <Link href="/admin/members" className="btn btn-outline-secondary">← Back</Link>
+          <Link href="/admin/members" className="btn btn-outline-secondary">
+            ← Back
+          </Link>
           <h2 className="mb-0">Member</h2>
           <div style={{ width: 80 }} />
         </div>
@@ -161,9 +198,15 @@ export default function AdminMemberDetail() {
             {/* Profile header */}
             <section
               className="p-3 mb-3"
-              style={{ background: "rgba(255,255,255,0.06)", borderRadius: 16, border: "1px solid rgba(255,255,255,0.08)" }}
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                borderRadius: 16,
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
             >
-              <div className="fw-bold" style={{ fontSize: "1.25rem" }}>{titleName}</div>
+              <div className="fw-bold" style={{ fontSize: "1.25rem" }}>
+                {titleName}
+              </div>
               <div className="small text-muted">{email}</div>
               <div className="small mt-2">
                 Membership: <span style={{ color: ACCENT }}>{profile?.membership_status || "—"}</span> · Sub:{" "}
@@ -186,7 +229,13 @@ export default function AdminMemberDetail() {
                     border: "1px solid rgba(255,255,255,0.12)",
                   }}
                 >
-                  {t === "checkins" ? "Check-ins" : t === "habits" ? "Daily Habits" : t === "nutrition" ? "Nutrition" : "Workouts"}
+                  {t === "checkins"
+                    ? "Check-ins"
+                    : t === "habits"
+                    ? "Daily Habits"
+                    : t === "nutrition"
+                    ? "Nutrition"
+                    : "Workouts"}
                 </button>
               ))}
             </div>
