@@ -1,4 +1,5 @@
 
+// /pages/parq.tsx
 import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -18,7 +19,7 @@ type ParqAnswers = {
 
 export default function ParqPage() {
   const ACCENT = "#FF8A2A";
-  const { status } = useSession();
+  const { status, data } = useSession();
   const router = useRouter();
 
   // Hydration-safe mount flag
@@ -55,6 +56,18 @@ export default function ParqPage() {
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
+  // Auto-populate email when authenticated (hydration-safe, non-destructive)
+  useEffect(() => {
+    if (!mounted) return;
+    if (status === "authenticated") {
+      const sessionEmail = (data?.user as any)?.email || "";
+      if (sessionEmail && !email) {
+        setEmail(sessionEmail);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, status, data?.user]);
+
   // Canvas helpers (touch + mouse)
   useEffect(() => {
     if (!mounted) return;
@@ -63,7 +76,6 @@ export default function ParqPage() {
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    // Prepare canvas background transparent
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.strokeStyle = "#fff";
@@ -186,7 +198,6 @@ export default function ParqPage() {
         throw new Error(txt || `Submit failed with ${res.status}`);
       }
 
-      // If logged out, suggest creating account
       const showRegisterCta = status !== "authenticated";
       const nextRegister = "/register?parq=ok";
       const successUrl = showRegisterCta
@@ -200,6 +211,9 @@ export default function ParqPage() {
       setBusy(false);
     }
   };
+
+  const isAuthed = mounted && status === "authenticated";
+  const sessionEmail = isAuthed ? (data?.user as any)?.email || "" : "";
 
   return (
     <>
@@ -303,7 +317,7 @@ export default function ParqPage() {
               </label>
             </div>
 
-            {/* Name + optional email */}
+            {/* Name + email */}
             <div className="row g-2">
               <div className="col-12">
                 <label className="form-label">Full name (signature)</label>
@@ -316,15 +330,22 @@ export default function ParqPage() {
                   required
                 />
               </div>
+
               <div className="col-12">
-                <label className="form-label">Email (optional)</label>
+                <label className="form-label">
+                  Email {isAuthed ? <span className="text-dim">(linked)</span> : <span className="text-dim">(optional)</span>}
+                </label>
                 <input
                   type="email"
                   className="form-control"
-                  placeholder="you@example.com"
+                  placeholder={isAuthed ? "" : "you@example.com"}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  disabled={isAuthed}
                 />
+                {isAuthed && sessionEmail && (
+                  <div className="small text-dim mt-1">Linked to <span style={{ color: ACCENT }}>{sessionEmail}</span></div>
+                )}
               </div>
             </div>
 
