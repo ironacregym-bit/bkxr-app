@@ -1,8 +1,9 @@
 
+// /pages/api/parq/submit.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/pages/api/auth/[...nextauth]";
-import { getFirestore } from "@/lib/firestoreClient";
+import { authOptions } from "../auth/[...nextauth]";
+import firestore from "../../../lib/firestoreClient";
 import crypto from "crypto";
 
 type Answer = "yes" | "no";
@@ -17,80 +18,105 @@ type ParqAnswers = {
 };
 
 type Body = {
-  answers: ParqAnswers;
-  photos_consent: boolean;
-  consent_confirmed: boolean;
-  signed_name: string;
+  answers?: ParqAnswers;
+  photos_consent?: boolean;
+  consent_confirmed?: boolean;
+  signed_name?: string;
   signature_b64?: string;
   provided_email?: string;
   session_id?: string;
 };
 
+const COLLECTION = "parq_responses";
+
+// Basic server-side validation for image data URLs to avoid oversized docs
+function isValidImageDataUrl(s: unknown): s is string {
+  if (typeof s !== "string") return false;
+  return (
+    s.startsWith("data:image/jpeg") ||
+    s.startsWith("data:image/png") ||
+    s.startsWith("data:image/webp")
+  );
+}
+// Firestore doc hard limit ~1MiB; keep signature conservative
+const MAX_SIG_LEN = 900_000; // ~900 KB (client already compresses)
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
-    res.status(405).send("Method Not Allowed");
-    return;
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
     const session = await getServerSession(req, res, authOptions);
-    const body = req.body as Body;
+    const body = (req.body || {}) as Body;
 
-    // Basic validation (keep minimal)
-    if (!body || !body.answers || !body.signed_name || typeof body.consent_confirmed !== "boolean") {
-      res.status(400).send("Invalid payload");
-      return;
+    // ---- Validate required fields
+    if (!body.answers) {
+      return res.status(400).json({ error: "Missing answers" });
     }
-
-    // Ensure all answers are present and valid
     const keys: (keyof ParqAnswers)[] = ["q1", "q2", "q3", "q4", "q5", "q6", "q7"];
     for (const k of keys) {
       const v = (body.answers as any)[k];
       if (v !== "yes" && v !== "no") {
-        res.status(400).send("All PAR‑Q questions must be answered");
-        return;
+        return res.status(400).json({ error: "All PAR‑Q questions must be answered" });
       }
     }
 
-    const signedName = String(body.signed_name || "").trim();
+    if (body.consent_confirmed !== true) {
+      return res.status(400).json({ error: "Consent confirmation is required" });
+    }
+
+    const signedName = (body.signed_name || "").trim();
     if (!signedName) {
-      res.status(400).send("Signed name required");
-      return;
+      return res.status(400).json({ error: "Signed name required" });
     }
 
-    const nowIso = new Date().toISOString();
-    const client = getFirestore();
+    // Optional email sanity
+    const providedEmail = (body.provided_email || "").trim();
+    if (providedEmail) {
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(providedEmail);
+      if (!emailOk) {
+        return res.status(400).json({ error: "Invalid email format" });
+      }
+    }
 
-    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "";
+    // Signature size guard
+    let signature_b64: string | undefined = undefined;
+    if (body.signature_b64 && isValidImageDataUrl(body.signature_b64)) {
+      signature_b64 = body.signature_b64.length <= MAX_SIG_LEN ? body.signature_b64 : undefined;
+    }
+
+    // Minimal context
+    const ip =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+      req.socket.remoteAddress ||
+      "";
     const ua = (req.headers["user-agent"] as string) || "";
-    const ipHash = ip ? crypto.createHash("sha256").update(ip).digest("hex") : undefined;
+    const ipHash = ip ? crypto.createHash("sha256").update(ip).digest("hex") : null;
 
-    // Optionally trim large signatures (simple guardrail ~1.25MB)
-    let signature_b64 = body.signature_b64;
-    if (signature_b64 && signature_b64.length > 1_250_000) {
-      // Too large; store none to avoid exceeding Firestore limits
-      signature_b64 = undefined;
-    }
+    const now = new Date();
 
+    // Build doc
     const doc = {
       answers: body.answers,
       photos_consent: !!body.photos_consent,
-      consent_confirmed: !!body.consent_confirmed,
+      consent_confirmed: true,
       signed_name: signedName,
-      signature_b64,
-      user_email: session?.user?.email || null,
-      provided_email: body.provided_email || null,
+      signature_b64: signature_b64 || null,
+      user_email: (session?.user as any)?.email || null,
+      provided_email: providedEmail || null,
       session_id: body.session_id || null,
-      created_at: nowIso,
+      created_at: now,
       user_agent: ua || null,
-      created_by_ip_hash: ipHash || null,
+      created_by_ip_hash: ipHash,
     };
 
-    await client.collection("parq_responses").add(doc);
+    await firestore.collection(COLLECTION).add(doc);
 
-    res.status(200).json({ ok: true });
-  } catch {
+    return res.status(200).json({ ok: true });
+  } catch (err) {
     // Avoid leaking details
-    res.status(500).send("Server error");
+    return res.status(500).json({ error: "Server error" });
   }
 }
