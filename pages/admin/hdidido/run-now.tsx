@@ -12,15 +12,20 @@ export default function HdididoRunNow() {
   const [probeResult, setProbeResult] = useState<any>(null);
   const [probeError, setProbeError] = useState<string | null>(null);
 
+  async function safeJson(r: Response) {
+    try {
+      return await r.json();
+    } catch {
+      return { ok: r.ok, status: r.status, text: await r.text().catch(() => "") };
+    }
+  }
+
   async function runRunner() {
     setRunningRunner(true);
     setRunnerError(null);
     setRunnerResult(null);
     try {
-      // Calls your runner API directly (no -proxy)
-      const r = await fetch("/api/integrations/hdidido/runner", {
-        method: "GET",
-      });
+      const r = await fetch("/api/integrations/hdidido/run-now-proxy", { method: "GET" });
       const j = await safeJson(r);
       if (!r.ok) throw new Error(j?.error || "Runner failed");
       setRunnerResult(j);
@@ -36,10 +41,7 @@ export default function HdididoRunNow() {
     setProbeError(null);
     setProbeResult(null);
     try {
-      // Calls your probe API directly (no -proxy)
-      const r = await fetch("/api/integrations/hdidido/probe", {
-        method: "GET",
-      });
+      const r = await fetch("/api/integrations/hdidido/probe-now-proxy", { method: "GET" });
       const j = await safeJson(r);
       if (!r.ok) throw new Error(j?.error || "Probe failed");
       setProbeResult(j);
@@ -47,15 +49,6 @@ export default function HdididoRunNow() {
       setProbeError(e?.message || "Unknown error");
     } finally {
       setRunningProbe(false);
-    }
-  }
-
-  // Utility: tolerate non-JSON error bodies gracefully
-  async function safeJson(r: Response) {
-    try {
-      return await r.json();
-    } catch {
-      return { ok: r.ok, status: r.status, text: await r.text().catch(() => "") };
     }
   }
 
@@ -108,7 +101,7 @@ export default function HdididoRunNow() {
         >
           <p className="mb-2">
             <strong>Probe</strong> — diagnostic only: opens the exact TeeSheet date URL with token and
-            returns the resulting URL, HTTP status, title, body sample, and a screenshot reference.
+            returns the resulting URL, HTTP status, page title, body sample, and a screenshot reference.
             <br />
             Target: <strong>Sun 18 Jan 2026</strong> • CourseId <strong>12274</strong>
           </p>
