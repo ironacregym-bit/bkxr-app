@@ -7,28 +7,24 @@ import type { Page, Frame } from "playwright-core";
 /**
  * Plan A (Token discovery via official Booking entry)
  * 1) Login @ https://www.howdidido.com/Account/Login (native + Microsoft/Azure).
- * 2) Click **Booking** on howdidido.com. Capture popup if it opens; otherwise use same tab.
- * 3) On that page, discover a fresh `token` from any link containing ...HDIDBooking/...&token=...
- *    - Prefer links that also contain courseId=12274; else accept any token link.
- * 4) Build and goto **date TeeSheet URL** with the discovered token:
+ * 2) Click **Booking** on howdidido.com. Capture popup if it opens; else use same tab.
+ * 3) Discover a fresh token from links containing ...HDIDBooking...&token=...
+ *    - Prefer links also containing courseId=12274; else accept any token link.
+ * 4) Build and goto the **date TeeSheet URL** with the discovered token:
  *    https://howdidido-whs.clubv1.com/HDIDBooking/TeeSheet?courseId=12274&token={token}&dt=2026-01-18
  *    (No root seeding; if redirect/denied/error => fail immediately.)
- * 5) Find the **06:00** tile and click **Book** (anchor). If we don’t land at BookingAdd, repair once:
- *    - Prefer anchor href absolute; else construct BookingAdd URL from date/time/course.
- * 6) On BookingAdd: add self (heuristic), tick terms, wait up to 60s for **Confirm** enabled → click.
- * 7) Persist run into Firestore:
- *    - Top doc: requested/resulting URLs, discovered token, status/outcome.
- *    - Subcollections: /screens (base64 screenshots), /html (small DOM slices).
+ * 5) Find the **06:00** tile and click **Book** (anchor). If not at BookingAdd, repair once.
+ * 6) On BookingAdd: add self (heuristic), tick terms, wait ≤60s for **Confirm**, click.
+ * 7) Persist run to Firestore: top doc + /screens + /html, with requested/resulting URLs.
  */
 
 const LOGIN_URL = "https://www.howdidido.com/Account/Login";
 
-// Target slot for this run
+// Target for this run
 const BOOKING_DATE = "2026-01-18"; // YYYY-MM-DD
 const BOOKING_TIME = "06:00";      // HH:mm (24h)
 
 // -------------------- Env & URL helpers --------------------
-
 function getEmail(): string {
   const e = process.env.HDIDIDO_EMAIL;
   if (!e) throw new Error("HDIDIDO_EMAIL env var not set");
@@ -45,22 +41,19 @@ function getCourseId(): number {
   if (!Number.isFinite(n) || n <= 0) throw new Error(`HDIDIDO_TEE_COURSE_ID invalid: ${raw}`);
   return n;
 }
-/** Build the date TeeSheet URL (we inject the discovered token) */
 function buildDateTeeUrlWithToken(dateYMD: string, token: string) {
   const courseId = getCourseId();
   return `https://howdidido-whs.clubv1.com/HDIDBooking/TeeSheet?courseId=${courseId}` +
          `&token=${encodeURIComponent(token)}&dt=${encodeURIComponent(dateYMD)}`;
 }
-/** Construct a BookingAdd URL if we must repair navigation */
 function toBookingAddUrl(dateYMD: string, timeHM: string) {
   const courseId = getCourseId();
-  const dt = encodeURIComponent(`${dateYMD}T${timeHM}`); // encodes ':'
+  const dt = encodeURIComponent(`${dateYMD}T${timeHM}`);
   return `https://howdidido-whs.clubv1.com/HDIDBooking/BookingAdd?dateTime=${dt}` +
          `&courseId=${courseId}&startPoint=1&crossOverStartPoint=0&crossOverMinutes=0&releasedReservation=False`;
 }
 
 // -------------------- Page utilities --------------------
-
 async function acceptCookies(page: Page) {
   const sels = [
     'button:has-text("OK")','a:has-text("OK")',
@@ -171,21 +164,16 @@ async function saveHtml(runRef: FirebaseFirestore.DocumentReference, label: stri
 }
 
 // -------------------- Login (Ben's env creds) --------------------
-
 async function loginNative(page: Page, email: string, password: string) {
   const emailSels = ['#Email','input[name="Email"]','input[type="email"]','input[name="email"]','input[id*="email"]','input[type="text"]'];
   const passSels  = ['#Password','input[name="Password"]','input[type="password"]','input[id*="password"]','input[name="password"]'];
   const submitSels= ['button[type="submit"]','button:has-text("Log in")','button:has-text("Sign in")','a:has-text("Log in")','input[type="submit"]'];
-
   const emailFound = await waitForAnyInFrames(page, emailSels, 15000, 300); if (!emailFound) return false;
   await emailFound.handle.fill(email);
-
   const passFound  = await waitForAnyInFrames(page, passSels, 8000, 250); if (!passFound) return false;
   await passFound.handle.fill(password);
-
   const submitFound= await waitForAnyInFrames(page, submitSels, 6000, 200); if (!submitFound) throw new Error("Login submit button not found (native)");
   try { await submitFound.handle.click(); } catch {}
-
   await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
   return await isLoggedIn(page);
 }
@@ -193,48 +181,31 @@ async function loginMicrosoft(page: Page, email: string, password: string) {
   const emailSel = (await page.$('#i0116')) || (await page.$('input[name="loginfmt"]')) || (await page.$('input[type="email"]'));
   if (!emailSel) return false;
   await emailSel.fill(email);
-
   const nextBtn = (await page.$('#idSIButton9')) || (await page.$('input[type="submit"]')) || (await page.$('button:has-text("Next")'));
   if (!nextBtn) throw new Error("Microsoft login: Next not found");
   await nextBtn.click();
-
   await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
   await dismissOverlays(page);
-
   const passSel = (await page.$('#i0118')) || (await page.$('input[name="passwd"]')) || (await page.$('input[type="password"]'));
   if (!passSel) throw new Error("Microsoft login: password input not found");
   await passSel.fill(password);
-
   const signBtn = (await page.$('#idSIButton9')) || (await page.$('input[type="submit"]')) || (await page.$('button:has-text("Sign in")'));
   if (!signBtn) throw new Error("Microsoft login: Sign in button not found");
   await signBtn.click();
-
   await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
   await dismissOverlays(page);
-
   const stayNo = await page.$('#idBtn_Back'); if (stayNo) { await stayNo.click().catch(() => {}); }
   else { const stayYes = await page.$('#idSIButton9'); if (stayYes) await stayYes.click().catch(() => {}); }
-
   await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
   return await isLoggedIn(page);
 }
 
 // -------------------- Booking discovery (Plan A) --------------------
-
-/**
- * Click the "Booking" entry on howdidido.com.
- * - If it opens a popup, return that Page as clubPage.
- * - Otherwise, return the current page (which may have links with fresh tokens).
- */
+/** Click the "Booking" entry; return the page that holds token links (popup or same tab). */
 async function openBookingEntry(page: Page, runRef: FirebaseFirestore.DocumentReference): Promise<Page> {
-  let popupPage: Page | null = null;
+  // Prepare a popup listener but don't force race—await it explicitly later.
+  const popupPromise: Promise<Page | null> = page.waitForEvent("popup", { timeout: 5000 }).catch(() => null);
 
-  const popupPromise = page
-    .waitForEvent("popup", { timeout: 5000 })
-    .then((p) => { popupPage = p; return p; })
-    .catch(() => null);
-
-  // Try clicking likely "Booking" triggers
   const clickers = [
     'a:has-text("Booking")',
     'a[href*="/Booking"]',
@@ -253,24 +224,17 @@ async function openBookingEntry(page: Page, runRef: FirebaseFirestore.DocumentRe
       } catch {}
     }
   }
-  // If nothing was clickable, hard-nav to Booking
   if (!clicked) {
-    try {
-      await page.goto("https://www.howdidido.com/Booking", { waitUntil: "domcontentloaded", timeout: 30000 });
-    } catch {}
+    try { await page.goto("https://www.howdidido.com/Booking", { waitUntil: "domcontentloaded", timeout: 30000 }); } catch {}
   }
 
-  // Either a popup appears or the main page loads its own Booking view
-  await Promise.race([
-    popupPromise.then(() => {}),
-    page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {}),
-  ]).catch(() => {});
-
+  // Give the page a moment to either open a popup or finish its own navigation
+  const popupPage: Page | null = await popupPromise;
+  await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
   await acceptCookies(page); await dismissOverlays(page);
   await saveScreen(runRef, "booking_entry_main", page);
 
   if (popupPage) {
-    // Strongly typed here, TS-safe
     await popupPage.waitForLoadState("domcontentloaded").catch(() => {});
     await acceptCookies(popupPage); await dismissOverlays(popupPage);
     await saveScreen(runRef, "booking_entry_popup", popupPage);
@@ -279,13 +243,9 @@ async function openBookingEntry(page: Page, runRef: FirebaseFirestore.DocumentRe
   return page;
 }
 
-/**
- * Discover a fresh token by scraping links containing `token=` on the given page.
- * Prefer links that also include the desired `courseId=...` when available.
- */
+/** Discover a fresh token from links with `token=`; prefer those with desired courseId. */
 async function discoverTokenOnPage(anyPage: Page) {
   const targetCourseId = String(getCourseId());
-
   const frames: Frame[] = [anyPage.mainFrame(), ...anyPage.frames()];
   const hrefs: string[] = [];
   for (const fr of frames) {
@@ -298,14 +258,11 @@ async function discoverTokenOnPage(anyPage: Page) {
       hrefs.push(...chunk);
     } catch {}
   }
-
   const preferred = hrefs.find((h) => /token=/.test(h) && new RegExp(`courseId=${targetCourseId}\\b`).test(h));
   const fallback  = hrefs.find((h) => /token=/.test(h));
   const chosen = preferred || fallback || null;
-
   if (!chosen) return { token: null as string | null, href: null as string | null };
 
-  // Extract token parameter
   let token: string | null = null;
   try {
     const abs = new URL(chosen, "https://howdidido-whs.clubv1.com");
@@ -314,38 +271,23 @@ async function discoverTokenOnPage(anyPage: Page) {
     const m = /[?&]token=([^&]+)/.exec(chosen);
     token = m ? decodeURIComponent(m[1]) : null;
   }
-
   return { token, href: chosen };
 }
 
 // -------------------- TeeSheet & Booking helpers --------------------
-
-/** Find the "Book" anchor for the target tile (your DOM) */
 async function findBookAnchorForTime(page: Page, dateYMD: string, timeHM: string) {
   const dateTime = `${dateYMD} ${timeHM}`;
   const a1 = page.locator(`div.tee.available[data-teetime="${dateTime}"] .controls a[data-book="1"]`).first();
-  if (await a1.count().catch(() => 0)) {
-    const href = await a1.getAttribute("href").catch(() => null);
-    return { anchor: a1, href };
-  }
+  if (await a1.count().catch(() => 0)) return { anchor: a1, href: await a1.getAttribute("href").catch(() => null) };
   const a2 = page.locator(`a[data-book="1"][data-teetime-selected="${dateTime}"]`).first();
-  if (await a2.count().catch(() => 0)) {
-    const href = await a2.getAttribute("href").catch(() => null);
-    return { anchor: a2, href };
-  }
+  if (await a2.count().catch(() => 0)) return { anchor: a2, href: await a2.getAttribute("href").catch(() => null) };
   const id = `${dateYMD}-${timeHM.replace(":", "-")}`;
   const a3 = page.locator(`div.tee.available#${id} .controls a[data-book="1"]`).first();
-  if (await a3.count().catch(() => 0)) {
-    const href = await a3.getAttribute("href").catch(() => null);
-    return { anchor: a3, href };
-  }
+  if (await a3.count().catch(() => 0)) return { anchor: a3, href: await a3.getAttribute("href").catch(() => null) };
   const visible = page.locator('div.tee.available').filter({ has: page.locator(`.time >> text=${timeHM.replace(/^0/,"")}`) }).first();
   if (await visible.count().catch(() => 0)) {
     const aa = visible.locator('.controls a[data-book="1"]').first();
-    if (await aa.count().catch(() => 0)) {
-      const href = await aa.getAttribute("href").catch(() => null);
-      return { anchor: aa, href };
-    }
+    if (await aa.count().catch(() => 0)) return { anchor: aa, href: await aa.getAttribute("href").catch(() => null) };
   }
   return null;
 }
@@ -416,7 +358,6 @@ async function successCue(page: Page) {
 }
 
 // -------------------- Main API handler --------------------
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if ((req.headers.authorization || "") !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -452,80 +393,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const email = getEmail();
     const password = getPassword();
 
-    // ---------------- 1) LOGIN ----------------
+    // 1) LOGIN
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await acceptCookies(page); await dismissOverlays(page); await nukeOverlays(page);
-
     let loggedIn = false;
     try { loggedIn = await loginNative(page, email, password); } catch {}
     if (!loggedIn) { loggedIn = await loginMicrosoft(page, email, password); }
-
     lastUrl = page.url();
     await saveScreen(runRef, "post_login", page);
     if (!loggedIn) throw new Error("Login not detected");
 
-    // ---------------- 2) BOOKING ENTRY → discover token ----------------
+    // 2) BOOKING ENTRY → discover token
     const clubPage: Page = await openBookingEntry(page, runRef);
     const discoveryUrl = clubPage.url();
     const { token: discoveredToken, href: discoveryHref } = await discoverTokenOnPage(clubPage);
-
     await runRef.update({
       discovery_url: discoveryUrl,
       discovery_href: discoveryHref || null,
       discovered_token: discoveredToken || null
     });
-
     if (!discoveredToken) {
       await saveHtml(runRef, "booking_entry_dom_no_token", clubPage);
       throw new Error("Could not discover a fresh token from Booking entry");
     }
 
-    // ---------------- 3) TeeSheet DATE URL (ONLY) with discovered token ----------------
+    // 3) TeeSheet DATE URL (ONLY) with discovered token
     const dtUrl = buildDateTeeUrlWithToken(BOOKING_DATE, discoveredToken);
     await runRef.update({ tee_requested_url: dtUrl });
-
     await clubPage.goto(dtUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await clubPage.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
     await acceptCookies(clubPage); await dismissOverlays(clubPage);
-
     const teeResult = clubPage.url();
     await runRef.update({ tee_resulting_url: teeResult });
-
     await saveScreen(runRef, "teesheet_dt_with_discovered_token", clubPage);
     await saveHtml(runRef, "teesheet_dt_dom", clubPage);
-
-    if (/howdidido\.com\/Account\/Login/i.test(teeResult)) {
-      await saveScreen(runRef, "teesheet_dt_redirected_to_login", clubPage);
-      throw new Error("Redirected to HowDidiDo login from TeeSheet DATE URL (even with discovered token)");
-    }
-    if (await pageLooksPermissionDenied(clubPage)) {
-      await saveScreen(runRef, "teesheet_dt_permission_denied", clubPage);
-      throw new Error("Permission Denied on TeeSheet DATE URL (even with discovered token)");
-    }
-    if (await looksErrorPage(clubPage)) {
-      await saveScreen(runRef, "teesheet_dt_error_page", clubPage);
-      throw new Error("Error page on TeeSheet DATE URL");
-    }
-
-    // Verify day tiles exist
+    if (/howdidido\.com\/Account\/Login/i.test(teeResult)) { await saveScreen(runRef, "teesheet_dt_redirected_to_login", clubPage); throw new Error("Redirected to HowDidiDo login from TeeSheet DATE URL (even with discovered token)"); }
+    if (await pageLooksPermissionDenied(clubPage)) { await saveScreen(runRef, "teesheet_dt_permission_denied", clubPage); throw new Error("Permission Denied on TeeSheet DATE URL (even with discovered token)"); }
+    if (await looksErrorPage(clubPage)) { await saveScreen(runRef, "teesheet_dt_error_page", clubPage); throw new Error("Error page on TeeSheet DATE URL"); }
     const hasDayTiles =
       (await clubPage.locator(`div.tee.available[data-teetime^="${BOOKING_DATE}"]`).count().catch(() => 0)) > 0 ||
       (await clubPage.locator(`div.tee[data-teetime^="${BOOKING_DATE}"]`).count().catch(() => 0)) > 0;
-    if (!hasDayTiles) {
-      await saveScreen(runRef, "teesheet_dt_no_day_tiles", clubPage);
-      throw new Error(`No tiles for ${BOOKING_DATE} visible on TeeSheet date page.`);
-    }
+    if (!hasDayTiles) { await saveScreen(runRef, "teesheet_dt_no_day_tiles", clubPage); throw new Error(`No tiles for ${BOOKING_DATE} visible on TeeSheet date page.`); }
 
-    // ---------------- 4) Click 06:00 "Book" (record requested & resulting URLs) ----------------
+    // 4) Click 06:00 "Book" (record requested & resulting URLs)
     const found = await findBookAnchorForTime(clubPage, BOOKING_DATE, BOOKING_TIME);
-    if (!found) {
-      await saveScreen(runRef, "book_link_not_found", clubPage);
-      throw new Error(`Could not find "Book" link for ${BOOKING_DATE} ${BOOKING_TIME}`);
-    }
-
+    if (!found) { await saveScreen(runRef, "book_link_not_found", clubPage); throw new Error(`Could not find "Book" link for ${BOOKING_DATE} ${BOOKING_TIME}`); }
     const bookHref = (await found.anchor.getAttribute("href").catch(() => found.href || null)) || "(anchor click only)";
     await runRef.update({ bookingadd_requested_url: bookHref });
-
     try {
       await found.anchor.scrollIntoViewIfNeeded().catch(() => {});
       await Promise.race([
@@ -534,17 +448,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           clubPage.waitForURL(/\/HDIDBooking\/BookingAdd/i, { timeout: 15000 }).catch(() => {})
         ),
       ]);
-    } catch { /* proceed to repair */ }
-
+    } catch {}
     await clubPage.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
     await acceptCookies(clubPage); await dismissOverlays(clubPage);
-
     const afterBook = clubPage.url();
     await runRef.update({ bookingadd_resulting_url: afterBook });
-
     let atBookingAdd = /\/HDIDBooking\/BookingAdd/i.test(afterBook);
-
-    // If site sent us elsewhere (/Booking etc.), repair once
     if (!atBookingAdd) {
       let repairUrl: string | null = null;
       if (bookHref && bookHref !== "(anchor click only)") {
@@ -552,42 +461,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } else {
         repairUrl = toBookingAddUrl(BOOKING_DATE, BOOKING_TIME);
       }
-
       await runRef.update({
         bookingadd_repair_attempt: repairUrl,
         bookingadd_repair_reason: "resulting_url_was_not_bookingadd"
       });
-
       await clubPage.goto(repairUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
       await clubPage.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
       await acceptCookies(clubPage); await dismissOverlays(clubPage);
-
       const repaired = clubPage.url();
       await runRef.update({ bookingadd_repaired_resulting_url: repaired });
       await saveScreen(runRef, "bookingadd_repaired", clubPage);
       await saveHtml(runRef, "bookingadd_repaired_dom", clubPage);
-
-      if (!/\/HDIDBooking\/BookingAdd/i.test(repaired)) {
-        throw new Error(`Repair did not land on BookingAdd (now at: ${repaired})`);
-      }
+      if (!/\/HDIDBooking\/BookingAdd/i.test(repaired)) { throw new Error(`Repair did not land on BookingAdd (now at: ${repaired})`); }
       atBookingAdd = true;
     }
-
     await saveScreen(runRef, "bookingadd_from_teesheet", clubPage);
     await saveHtml(runRef, "bookingadd_dom", clubPage);
 
-    // ---------------- 5) BookingAdd: pre-reqs & Confirm ----------------
+    // 5) BookingAdd: pre-reqs & Confirm
     const ev: any = {};
-
     const added = await addSelfIfNeeded(clubPage);
     if (added) { ev.added_self_via = added; await saveScreen(runRef, "after_add_self", clubPage); }
-
     const ticked = await tickConfirmCheckboxes(clubPage);
     if (ticked.length) { ev.ticked_checkboxes = ticked; await saveScreen(runRef, "after_tick_checkboxes", clubPage); }
-
     const waitState = await waitForConfirmEnabled(clubPage, 60_000);
     ev.confirm_wait = waitState;
-
     let confirmResult = "confirm_not_found";
     if (waitState.found && waitState.enabled) {
       const btn = await clubPage.$('#btn-confirm-and-pay');
@@ -603,7 +501,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } else if (waitState.found) {
       confirmResult = "confirm_found_but_disabled";
     }
-
     await saveScreen(runRef, "after_confirm", clubPage);
     await saveHtml(runRef, "post_confirm_dom", clubPage);
     const cue = await successCue(clubPage);
