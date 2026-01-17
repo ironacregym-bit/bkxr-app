@@ -3,7 +3,7 @@
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import BottomNav from "../../../components/BottomNav";
@@ -103,9 +103,58 @@ export default function AdminMemberDetail() {
   const profile = profileData?.user || {};
   const titleName = profile?.display_name || profile?.name || profile?.profile?.name || email || "Member";
 
-  const renderList = (items?: { id: string; data: any }[]) => {
-    if (!items || items.length === 0)
+  // === Rich renderer for CHECK-INS (with expandable photos) ===
+  const renderCheckins = (items?: { id: string; data: any }[]) => {
+    if (!items || items.length === 0) {
       return <div className="text-center text-muted py-3">No entries.</div>;
+    }
+
+    return (
+      <div className="d-grid gap-3">
+        {items.map((it) => {
+          const d = it.data || {};
+
+          const week = d.week_friday_ymd;
+          const updated = d.updated_at;
+          const weight = d.weight;
+          const stress = d.stress_levels;
+          const goalsAchieved =
+            typeof d.weekly_goals_achieved === "boolean"
+              ? d.weekly_goals_achieved
+                ? "Yes"
+                : "No"
+              : "—";
+
+          const notes = d.notes || "";
+          const nextGoals = d.next_week_goals || "";
+
+          const photos = {
+            front: d.progress_photo_front,
+            side: d.progress_photos_side,
+            back: d.progress_photos_back,
+          };
+
+          return (
+            <CheckinCard
+              key={it.id}
+              week={week}
+              updated={updated}
+              weight={weight}
+              stress={stress}
+              goalsAchieved={goalsAchieved}
+              notes={notes}
+              nextGoals={nextGoals}
+              photos={photos}
+            />
+          );
+        })}
+      </div>
+    );
+  };
+
+  // === Generic compact renderer (habits / nutrition / workouts) ===
+  const renderListGeneric = (items?: { id: string; data: any }[]) => {
+    if (!items || items.length === 0) return <div className="text-center text-muted py-3">No entries.</div>;
     return (
       <div className="d-grid gap-2">
         {items.map((it) => {
@@ -133,7 +182,6 @@ export default function AdminMemberDetail() {
                 {d.title || d.name || d.activity_type || d.type || it.id}
               </div>
               {smallMeta && <div className="small text-muted">{smallMeta}</div>}
-              {/* Render a compact preview of key fields */}
               <div className="small mt-2">
                 {Object.entries(d)
                   .slice(0, 6)
@@ -240,10 +288,10 @@ export default function AdminMemberDetail() {
 
             {/* Feed */}
             <section className="mb-3">
-              {tab === "checkins" && renderList(checkinsData?.items)}
-              {tab === "habits" && renderList(habitsData?.items)}
-              {tab === "nutrition" && renderList(nutritionData?.items)}
-              {tab === "workouts" && renderList(workoutsData?.items)}
+              {tab === "checkins" && renderCheckins(checkinsData?.items)}
+              {tab === "habits" && renderListGeneric(habitsData?.items)}
+              {tab === "nutrition" && renderListGeneric(nutritionData?.items)}
+              {tab === "workouts" && renderListGeneric(workoutsData?.items)}
             </section>
 
             {/* Load more */}
@@ -280,7 +328,124 @@ function formatPreview(v: any): string {
   return String(v);
 }
 
-// Force SSR to avoid static export trying to pre-render a dynamic route
+// === Components for rich Check-ins ===
+function CheckinCard({
+  week,
+  updated,
+  weight,
+  stress,
+  goalsAchieved,
+  notes,
+  nextGoals,
+  photos,
+}: {
+  week?: string;
+  updated?: string;
+  weight?: number;
+  stress?: string;
+  goalsAchieved?: string;
+  notes?: string;
+  nextGoals?: string;
+  photos: {
+    front?: string;
+    side?: string;
+    back?: string;
+  };
+}) {
+  const [showPhotos, setShowPhotos] = useState(false);
+  const hasPhotos = Object.values(photos).some(Boolean);
+
+  return (
+    <div
+      className="p-3"
+      style={{
+        background: "rgba(255,255,255,0.06)",
+        borderRadius: 16,
+        border: "1px solid rgba(255,255,255,0.08)",
+      }}
+    >
+      {/* Header */}
+      <div className="fw-semibold mb-1" style={{ color: "#fff" }}>
+        Week ending <span style={{ color: ACCENT }}>{week || "—"}</span>
+      </div>
+      <div className="small text-muted mb-2">
+        Updated {updated ? new Date(updated).toLocaleString() : "—"}
+      </div>
+
+      {/* Metrics */}
+      <div className="row g-2 mb-2">
+        <div className="col-6 col-md-3">
+          <div className="small text-muted">Weight</div>
+          <div className="fw-semibold">{weight ?? "—"}</div>
+        </div>
+        <div className="col-6 col-md-3">
+          <div className="small text-muted">Stress</div>
+          <div className="fw-semibold">{stress ?? "—"}</div>
+        </div>
+        <div className="col-6 col-md-3">
+          <div className="small text-muted">Goals Achieved</div>
+          <div className="fw-semibold">{goalsAchieved ?? "—"}</div>
+        </div>
+      </div>
+
+      {/* Notes */}
+      {notes && (
+        <div className="mb-2">
+          <div className="small text-muted">Notes</div>
+          <div style={{ whiteSpace: "pre-wrap" }}>{notes}</div>
+        </div>
+      )}
+
+      {/* Next week goals */}
+      {nextGoals && (
+        <div className="mb-2">
+          <div className="small text-muted">Next week goals</div>
+          <div style={{ whiteSpace: "pre-wrap" }}>{nextGoals}</div>
+        </div>
+      )}
+
+      {/* Photos */}
+      {hasPhotos && (
+        <>
+          <button
+            className="btn btn-sm btn-outline-secondary mt-2"
+            onClick={() => setShowPhotos((v) => !v)}
+          >
+            {showPhotos ? "Hide photos" : "Show progress photos"}
+          </button>
+
+          {showPhotos && (
+            <div className="row g-2 mt-2">
+              {photos.front && <PhotoThumb label="Front" src={photos.front} />}
+              {photos.side && <PhotoThumb label="Side" src={photos.side} />}
+              {photos.back && <PhotoThumb label="Back" src={photos.back} />}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function PhotoThumb({ label, src }: { label: string; src: string }) {
+  return (
+    <div className="col-12 col-md-4">
+      <div className="small text-muted mb-1">{label}</div>
+      <img
+        src={src}
+        alt={`${label} progress`}
+        loading="lazy"
+        style={{
+          width: "100%",
+          borderRadius: 12,
+          border: "1px solid rgba(255,255,255,0.15)",
+        }}
+      />
+    </div>
+  );
+}
+
+// Force SSR (prevents static export attempting to pre-render a dynamic route)
 export const getServerSideProps: GetServerSideProps = async () => {
   return { props: {} };
 };
