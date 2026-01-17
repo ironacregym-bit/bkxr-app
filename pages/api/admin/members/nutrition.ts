@@ -8,7 +8,7 @@ import { hasRole } from "../../../../lib/rbac";
 
 /**
  * Aggregates daily nutrition totals for a user by traversing:
- * nutrition_logs/{email}/{date}/{code}/*.docs
+ * nutrition_logs/{email}/{date}/*.docs  (each doc is a code item)
  *
  * Returns items sorted by date desc with:
  * {
@@ -43,16 +43,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const cursorDate = typeof req.query.cursor === "string" ? req.query.cursor : null;
 
   try {
-    // Root for this user's nutrition tree
+    // Root for this user's nutrition tree (DocumentReference)
     const userRoot = firestore.collection("nutrition_logs").doc(email);
 
-    // List first-level subcollections (dates). Node Admin SDK supports listCollections().
+    // List first-level subcollections (these are the date collections)
     const dateCollections = await userRoot.listCollections();
-    // Names are expected to be YYYY-MM-DD; sort DESC
     const dateNames = dateCollections
       .map((c) => c.id)
       .filter((id) => /^\d{4}-\d{2}-\d{2}$/.test(id))
-      .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+      .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0)); // DESC
 
     // Apply cursor (exclusive)
     let startIndex = 0;
@@ -66,9 +65,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const items: { id: string; data: any }[] = [];
 
     for (const dateId of pageDates) {
+      // NOTE: {dateId} is a collection under the user doc
       const dateColRef = userRoot.collection(dateId);
-      // list unique code subcollections under the date
-      const codeCollections = await dateColRef.listCollections();
+
+      // Each document inside this collection is a "code" item with fields like:
+      // name, protein (number), grams (number), meal (string), etc.
+      const snap = await dateColRef.get();
 
       let totalProtein = 0;
       let totalGrams = 0;
@@ -76,24 +78,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const perMeal: Record<string, { protein: number; grams: number; items: number }> = {};
 
-      for (const codeCol of codeCollections) {
-        const snap = await codeCol.get();
-        for (const doc of snap.docs) {
-          const data = doc.data() || {};
-          // Defensive reads
-          const protein = typeof data.protein === "number" ? data.protein : Number(data.protein) || 0;
-          const grams = typeof data.grams === "number" ? data.grams : Number(data.grams) || 0;
-          const meal = typeof data.meal === "string" ? data.meal : "Other";
+      for (const doc of snap.docs) {
+        const data = doc.data() || {};
+        const protein =
+          typeof data.protein === "number" ? data.protein : Number(data.protein) || 0;
+        const grams =
+          typeof data.grams === "number" ? data.grams : Number(data.grams) || 0;
+        const meal = typeof data.meal === "string" ? data.meal : "Other";
 
-          totalProtein += protein;
-          totalGrams += grams;
-          itemsCount += 1;
+        totalProtein += protein;
+        totalGrams += grams;
+        itemsCount += 1;
 
-          if (!perMeal[meal]) perMeal[meal] = { protein: 0, grams: 0, items: 0 };
-          perMeal[meal].protein += protein;
-          perMeal[meal].grams += grams;
-          perMeal[meal].items += 1;
-        }
+        if (!perMeal[meal]) perMeal[meal] = { protein: 0, grams: 0, items: 0 };
+        perMeal[meal].protein += protein;
+        perMeal[meal].grams += grams;
+        perMeal[meal].items += 1;
       }
 
       items.push({
