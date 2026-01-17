@@ -2,33 +2,28 @@
 // pages/api/integrations/hdidido/runner.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../../lib/firestoreClient";
+import type { Page, Frame } from "playwright-core";
 
 /**
  * Plan A (Token discovery via official Booking entry)
- * 1) Login @ https://www.howdidido.com/Account/Login (native + Microsoft/Azure AAD).
- * 2) Click the **Booking** entry on howdidido.com. Capture popup if it opens.
- * 3) **Discover a fresh token** by scraping any link containing ...HDIDBooking/...&token=....
- *    - Prefer links already carrying courseId=12274; else accept any token link.
- * 4) Build the **date URL** with the discovered token:
- *    https://howdidido-whs.clubv1.com/HDIDBooking/TeeSheet?courseId=12274&token={discoveredToken}&dt=2026-01-18
- *    Go there (no root teesheet, no calendar). If redirect/denied/error => fail immediately.
- * 5) Find the **06:00** tile → click its **Book** anchor to land on BookingAdd.
- *    If not at BookingAdd, repair once using anchor href (absolute) or a constructed BookingAdd URL.
- * 6) On BookingAdd: add self (heuristic), tick terms/confirm boxes, wait (≤60s) for **Confirm** enabled → click.
- * 7) Persist full run to Firestore:
- *    - golf_booking_runs/{runId} with requested/resulting URLs & discovered token
- *    - subcollections: /screens (step screenshots as base64), /html (small DOM slices)
- *
- * Env (Vercel → Settings → Environment Variables):
- *  - CRON_SECRET
- *  - HDIDIDO_EMAIL=ben.jones1974@hotmail.co.uk
- *  - HDIDIDO_PASSWORD=<password>
- *  - HDIDIDO_TEE_COURSE_ID=12274        (optional; defaults 12274)
+ * 1) Login @ https://www.howdidido.com/Account/Login (native + Microsoft/Azure).
+ * 2) Click **Booking** on howdidido.com. Capture popup if it opens; otherwise use same tab.
+ * 3) On that page, discover a fresh `token` from any link containing ...HDIDBooking/...&token=...
+ *    - Prefer links that also contain courseId=12274; else accept any token link.
+ * 4) Build and goto **date TeeSheet URL** with the discovered token:
+ *    https://howdidido-whs.clubv1.com/HDIDBooking/TeeSheet?courseId=12274&token={token}&dt=2026-01-18
+ *    (No root seeding; if redirect/denied/error => fail immediately.)
+ * 5) Find the **06:00** tile and click **Book** (anchor). If we don’t land at BookingAdd, repair once:
+ *    - Prefer anchor href absolute; else construct BookingAdd URL from date/time/course.
+ * 6) On BookingAdd: add self (heuristic), tick terms, wait up to 60s for **Confirm** enabled → click.
+ * 7) Persist run into Firestore:
+ *    - Top doc: requested/resulting URLs, discovered token, status/outcome.
+ *    - Subcollections: /screens (base64 screenshots), /html (small DOM slices).
  */
 
 const LOGIN_URL = "https://www.howdidido.com/Account/Login";
 
-// Target slot for this run (update weekly if needed)
+// Target slot for this run
 const BOOKING_DATE = "2026-01-18"; // YYYY-MM-DD
 const BOOKING_TIME = "06:00";      // HH:mm (24h)
 
@@ -50,7 +45,7 @@ function getCourseId(): number {
   if (!Number.isFinite(n) || n <= 0) throw new Error(`HDIDIDO_TEE_COURSE_ID invalid: ${raw}`);
   return n;
 }
-/** Build the date TeeSheet URL (we will inject the **discovered** token) */
+/** Build the date TeeSheet URL (we inject the discovered token) */
 function buildDateTeeUrlWithToken(dateYMD: string, token: string) {
   const courseId = getCourseId();
   return `https://howdidido-whs.clubv1.com/HDIDBooking/TeeSheet?courseId=${courseId}` +
@@ -59,14 +54,14 @@ function buildDateTeeUrlWithToken(dateYMD: string, token: string) {
 /** Construct a BookingAdd URL if we must repair navigation */
 function toBookingAddUrl(dateYMD: string, timeHM: string) {
   const courseId = getCourseId();
-  const dt = encodeURIComponent(`${dateYMD}T${timeHM}`);
+  const dt = encodeURIComponent(`${dateYMD}T${timeHM}`); // encodes ':'
   return `https://howdidido-whs.clubv1.com/HDIDBooking/BookingAdd?dateTime=${dt}` +
          `&courseId=${courseId}&startPoint=1&crossOverStartPoint=0&crossOverMinutes=0&releasedReservation=False`;
 }
 
 // -------------------- Page utilities --------------------
 
-async function acceptCookies(page: import("playwright-core").Page) {
+async function acceptCookies(page: Page) {
   const sels = [
     'button:has-text("OK")','a:has-text("OK")',
     'button:has-text("Accept")','button:has-text("Accept All")','button:has-text("Agree")',
@@ -76,7 +71,7 @@ async function acceptCookies(page: import("playwright-core").Page) {
     try { const el = await page.$(s); if (el) { await el.click({ timeout: 1000 }).catch(() => {}); await page.waitForTimeout(200); break; } } catch {}
   }
 }
-async function dismissOverlays(page: import("playwright-core").Page) {
+async function dismissOverlays(page: Page) {
   const sels = [
     'button:has-text("Later")','button:has-text("Not now")','button:has-text("Continue")',
     'button:has-text("Close")','button:has-text("Dismiss")','a:has-text("Close")','a:has-text("Dismiss")',
@@ -87,7 +82,7 @@ async function dismissOverlays(page: import("playwright-core").Page) {
   }
   try { await page.keyboard.press("Escape"); } catch {}
 }
-async function nukeOverlays(page: import("playwright-core").Page) {
+async function nukeOverlays(page: Page) {
   try {
     await page.evaluate(() => {
       const kill = (el: Element) => el.parentNode?.removeChild(el);
@@ -106,7 +101,7 @@ async function nukeOverlays(page: import("playwright-core").Page) {
   await page.waitForTimeout(100);
 }
 function isLoginUrl(url: string) { return /\/Account\/Login/i.test(url) || /login\.microsoftonline\.com/i.test(url); }
-async function isLoggedIn(page: import("playwright-core").Page) {
+async function isLoggedIn(page: Page) {
   const url = page.url(); if (isLoginUrl(url)) return false;
   const cues = [
     'text=/Welcome/i','text=/Handicap/i','text=/My Account/i','text=/Sign out/i',
@@ -115,13 +110,13 @@ async function isLoggedIn(page: import("playwright-core").Page) {
   for (const c of cues) { if (await page.$(c)) return true; }
   return false;
 }
-async function findInFrames(page: import("playwright-core").Page, selectors: string[]) {
+async function findInFrames(page: Page, selectors: string[]) {
   for (const frame of page.frames()) for (const sel of selectors) {
     try { const h = await frame.$(sel); if (h) return { frame, handle: h, selector: sel }; } catch {}
   }
   return null;
 }
-async function waitForAnyInFrames(page: import("playwright-core").Page, selectors: string[], ms = 12000, step = 250) {
+async function waitForAnyInFrames(page: Page, selectors: string[], ms = 12000, step = 250) {
   const start = Date.now();
   while (Date.now() - start < ms) {
     const found = await findInFrames(page, selectors);
@@ -131,7 +126,7 @@ async function waitForAnyInFrames(page: import("playwright-core").Page, selector
   }
   return null;
 }
-async function pageLooksPermissionDenied(page: import("playwright-core").Page) {
+async function pageLooksPermissionDenied(page: Page) {
   try {
     const title = (await page.title().catch(() => "")) || "";
     if (/permission\s*denied/i.test(title)) return true;
@@ -139,7 +134,7 @@ async function pageLooksPermissionDenied(page: import("playwright-core").Page) {
     return /permission\s*denied/i.test(txt);
   } catch { return false; }
 }
-async function looksErrorPage(page: import("playwright-core").Page) {
+async function looksErrorPage(page: Page) {
   try {
     const title = (await page.title().catch(() => "")) || "";
     if (/^error$/i.test(title)) return true;
@@ -147,17 +142,14 @@ async function looksErrorPage(page: import("playwright-core").Page) {
     return /something unexpected went wrong|please try again in a moment/i.test(txt);
   } catch { return false; }
 }
-async function snapAsDataUrl(
-  pageOrEl: import("playwright-core").Page | import("playwright-core").ElementHandle,
-  quality = 55
-) {
+async function snapAsDataUrl(pageOrEl: Page | import("playwright-core").ElementHandle, quality = 55) {
   try {
     // @ts-ignore Page & ElementHandle both support screenshot
-    const buf = await pageOrEl.screenshot({ type: "jpeg", quality, fullPage: false });
+    const buf = await (pageOrEl as any).screenshot({ type: "jpeg", quality, fullPage: false });
     return `data:image/jpeg;base64,${buf.toString("base64")}`;
   } catch { return undefined; }
 }
-async function saveScreen(runRef: FirebaseFirestore.DocumentReference, label: string, page: import("playwright-core").Page, selector?: string) {
+async function saveScreen(runRef: FirebaseFirestore.DocumentReference, label: string, page: Page, selector?: string) {
   await runRef.collection("screens").add({
     label,
     url: page.url(),
@@ -167,7 +159,7 @@ async function saveScreen(runRef: FirebaseFirestore.DocumentReference, label: st
     timestamp: new Date().toISOString()
   });
 }
-async function saveHtml(runRef: FirebaseFirestore.DocumentReference, label: string, page: import("playwright-core").Page) {
+async function saveHtml(runRef: FirebaseFirestore.DocumentReference, label: string, page: Page) {
   const html = await page.content().catch(() => "");
   await runRef.collection("html").add({
     label,
@@ -180,7 +172,7 @@ async function saveHtml(runRef: FirebaseFirestore.DocumentReference, label: stri
 
 // -------------------- Login (Ben's env creds) --------------------
 
-async function loginNative(page: import("playwright-core").Page, email: string, password: string) {
+async function loginNative(page: Page, email: string, password: string) {
   const emailSels = ['#Email','input[name="Email"]','input[type="email"]','input[name="email"]','input[id*="email"]','input[type="text"]'];
   const passSels  = ['#Password','input[name="Password"]','input[type="password"]','input[id*="password"]','input[name="password"]'];
   const submitSels= ['button[type="submit"]','button:has-text("Log in")','button:has-text("Sign in")','a:has-text("Log in")','input[type="submit"]'];
@@ -197,7 +189,7 @@ async function loginNative(page: import("playwright-core").Page, email: string, 
   await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
   return await isLoggedIn(page);
 }
-async function loginMicrosoft(page: import("playwright-core").Page, email: string, password: string) {
+async function loginMicrosoft(page: Page, email: string, password: string) {
   const emailSel = (await page.$('#i0116')) || (await page.$('input[name="loginfmt"]')) || (await page.$('input[type="email"]'));
   if (!emailSel) return false;
   await emailSel.fill(email);
@@ -234,17 +226,20 @@ async function loginMicrosoft(page: import("playwright-core").Page, email: strin
  * - If it opens a popup, return that Page as clubPage.
  * - Otherwise, return the current page (which may have links with fresh tokens).
  */
-async function openBookingEntry(page: import("playwright-core").Page, runRef: FirebaseFirestore.DocumentReference) {
-  let popup: import("playwright-core").Page | null = null;
+async function openBookingEntry(page: Page, runRef: FirebaseFirestore.DocumentReference): Promise<Page> {
+  let popupPage: Page | null = null;
 
-  const catchPopup = page.waitForEvent("popup", { timeout: 5000 }).then(p => (popup = p)).catch(() => null);
+  const popupPromise = page
+    .waitForEvent("popup", { timeout: 5000 })
+    .then((p) => { popupPage = p; return p; })
+    .catch(() => null);
 
-  // Try clicking candidates that say "Booking"
+  // Try clicking likely "Booking" triggers
   const clickers = [
     'a:has-text("Booking")',
     'a[href*="/Booking"]',
     'nav a:has-text("Book")',
-    'a:has-text("Book")'
+    'a:has-text("Book")',
   ];
   let clicked = false;
   for (const sel of clickers) {
@@ -258,52 +253,54 @@ async function openBookingEntry(page: import("playwright-core").Page, runRef: Fi
       } catch {}
     }
   }
-  // If nothing was clickable, hard-nav to /Booking (common entry)
+  // If nothing was clickable, hard-nav to Booking
   if (!clicked) {
     try {
       await page.goto("https://www.howdidido.com/Booking", { waitUntil: "domcontentloaded", timeout: 30000 });
     } catch {}
   }
 
+  // Either a popup appears or the main page loads its own Booking view
   await Promise.race([
-    catchPopup,
-    page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {})
+    popupPromise.then(() => {}),
+    page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {}),
   ]).catch(() => {});
+
   await acceptCookies(page); await dismissOverlays(page);
-
-  // Record both contexts if available
   await saveScreen(runRef, "booking_entry_main", page);
-  if (popup) {
-    await popup.waitForLoadState("domcontentloaded").catch(() => {});
-    await acceptCookies(popup); await dismissOverlays(popup);
-    await saveScreen(runRef, "booking_entry_popup", popup);
-  }
 
-  return popup || page;
+  if (popupPage) {
+    // Strongly typed here, TS-safe
+    await popupPage.waitForLoadState("domcontentloaded").catch(() => {});
+    await acceptCookies(popupPage); await dismissOverlays(popupPage);
+    await saveScreen(runRef, "booking_entry_popup", popupPage);
+    return popupPage;
+  }
+  return page;
 }
 
 /**
  * Discover a fresh token by scraping links containing `token=` on the given page.
  * Prefer links that also include the desired `courseId=...` when available.
  */
-async function discoverTokenOnPage(anyPage: import("playwright-core").Page) {
+async function discoverTokenOnPage(anyPage: Page) {
   const targetCourseId = String(getCourseId());
 
-  // Collect candidate hrefs in this page and all its iframes
-  const pages: import("playwright-core").Frame[] = [anyPage.mainFrame(), ...anyPage.frames()];
+  const frames: Frame[] = [anyPage.mainFrame(), ...anyPage.frames()];
   const hrefs: string[] = [];
-  for (const fr of pages) {
+  for (const fr of frames) {
     try {
-      const chunk = await fr.$$eval('a[href*="HDIDBooking"][href*="token="]', els =>
-        (els as HTMLAnchorElement[]).map(a => (a.getAttribute("href") || a.href || "")).filter(Boolean)
+      const chunk = await fr.$$eval('a[href*="HDIDBooking"][href*="token="]', (els) =>
+        (els as HTMLAnchorElement[])
+          .map((a) => a.getAttribute("href") || a.href || "")
+          .filter(Boolean)
       );
       hrefs.push(...chunk);
     } catch {}
   }
 
-  // Score: prefer those with the exact courseId; else any with token
-  const preferred = hrefs.find(h => /token=/.test(h) && new RegExp(`courseId=${targetCourseId}\\b`).test(h));
-  const fallback  = hrefs.find(h => /token=/.test(h));
+  const preferred = hrefs.find((h) => /token=/.test(h) && new RegExp(`courseId=${targetCourseId}\\b`).test(h));
+  const fallback  = hrefs.find((h) => /token=/.test(h));
   const chosen = preferred || fallback || null;
 
   if (!chosen) return { token: null as string | null, href: null as string | null };
@@ -314,17 +311,17 @@ async function discoverTokenOnPage(anyPage: import("playwright-core").Page) {
     const abs = new URL(chosen, "https://howdidido-whs.clubv1.com");
     token = abs.searchParams.get("token");
   } catch {
-    // Basic parse if relative URL
     const m = /[?&]token=([^&]+)/.exec(chosen);
     token = m ? decodeURIComponent(m[1]) : null;
   }
+
   return { token, href: chosen };
 }
 
 // -------------------- TeeSheet & Booking helpers --------------------
 
-/** Your DOM: find the "Book" anchor for the target tile */
-async function findBookAnchorForTime(page: import("playwright-core").Page, dateYMD: string, timeHM: string) {
+/** Find the "Book" anchor for the target tile (your DOM) */
+async function findBookAnchorForTime(page: Page, dateYMD: string, timeHM: string) {
   const dateTime = `${dateYMD} ${timeHM}`;
   const a1 = page.locator(`div.tee.available[data-teetime="${dateTime}"] .controls a[data-book="1"]`).first();
   if (await a1.count().catch(() => 0)) {
@@ -352,7 +349,7 @@ async function findBookAnchorForTime(page: import("playwright-core").Page, dateY
   }
   return null;
 }
-async function addSelfIfNeeded(page: import("playwright-core").Page) {
+async function addSelfIfNeeded(page: Page) {
   const guesses = ['#btnAddMe','button:has-text("Add me")','button:has-text("Add Myself")','a:has-text("Add me")','a:has-text("Add Myself")','button:has-text("Me")','a:has-text("Me")'];
   for (const sel of guesses) {
     const el = await page.$(sel);
@@ -364,7 +361,7 @@ async function addSelfIfNeeded(page: import("playwright-core").Page) {
   }
   return null;
 }
-async function tickConfirmCheckboxes(page: import("playwright-core").Page) {
+async function tickConfirmCheckboxes(page: Page) {
   const sels = [
     'input[type="checkbox"][name*="term" i]','input[type="checkbox"][id*="term" i]',
     'input[type="checkbox"][name*="agree" i]','input[type="checkbox"][id*="agree" i]',
@@ -384,7 +381,7 @@ async function tickConfirmCheckboxes(page: import("playwright-core").Page) {
   }
   return toggled;
 }
-async function waitForConfirmEnabled(page: import("playwright-core").Page, timeoutMs=60000) {
+async function waitForConfirmEnabled(page: Page, timeoutMs=60000) {
   const start = Date.now();
   const btnSel = '#btn-confirm-and-pay', txtSel='#btn-confirm-and-pay-text';
   while (Date.now()-start < timeoutMs) {
@@ -412,7 +409,7 @@ async function waitForConfirmEnabled(page: import("playwright-core").Page, timeo
   }
   return { found:false, enabled:false, txt:"" };
 }
-async function successCue(page: import("playwright-core").Page) {
+async function successCue(page: Page) {
   const cues = ['text=/Success/i','text=/Confirmed/i','text=/Reserved/i','text=/Booking reference/i','text=/Reservation/i','text=/Thank you/i','text=/completed/i'];
   for (const c of cues) { if (await page.$(c)) return c; }
   return null;
@@ -450,7 +447,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       viewport: { width: 1280, height: 800 },
       userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
     });
-    const page = await ctx.newPage();
+    const page: Page = await ctx.newPage();
 
     const email = getEmail();
     const password = getPassword();
@@ -468,7 +465,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!loggedIn) throw new Error("Login not detected");
 
     // ---------------- 2) BOOKING ENTRY → discover token ----------------
-    const clubPage = await openBookingEntry(page, runRef);
+    const clubPage: Page = await openBookingEntry(page, runRef);
     const discoveryUrl = clubPage.url();
     const { token: discoveredToken, href: discoveryHref } = await discoverTokenOnPage(clubPage);
 
@@ -579,7 +576,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await saveScreen(runRef, "bookingadd_from_teesheet", clubPage);
     await saveHtml(runRef, "bookingadd_dom", clubPage);
 
-    // ---------------- 5) BookingAdd: add self, tick terms, wait & Confirm ----------------
+    // ---------------- 5) BookingAdd: pre-reqs & Confirm ----------------
     const ev: any = {};
 
     const added = await addSelfIfNeeded(clubPage);
