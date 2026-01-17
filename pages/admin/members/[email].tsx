@@ -103,7 +103,7 @@ export default function AdminMemberDetail() {
   const profile = profileData?.user || {};
   const titleName = profile?.display_name || profile?.name || profile?.profile?.name || email || "Member";
 
-  // === Rich renderer for CHECK-INS (with expandable photos) ===
+  // === Check-ins renderer (rich with photos) ===
   const renderCheckins = (items?: { id: string; data: any }[]) => {
     if (!items || items.length === 0) {
       return <div className="text-center text-muted py-3">No entries.</div>;
@@ -113,7 +113,6 @@ export default function AdminMemberDetail() {
       <div className="d-grid gap-3">
         {items.map((it) => {
           const d = it.data || {};
-
           const week = d.week_friday_ymd;
           const updated = d.updated_at;
           const weight = d.weight;
@@ -124,10 +123,8 @@ export default function AdminMemberDetail() {
                 ? "Yes"
                 : "No"
               : "—";
-
           const notes = d.notes || "";
           const nextGoals = d.next_week_goals || "";
-
           const photos = {
             front: d.progress_photo_front,
             side: d.progress_photos_side,
@@ -152,7 +149,76 @@ export default function AdminMemberDetail() {
     );
   };
 
-  // === Generic compact renderer (habits / nutrition / workouts) ===
+  // === Nutrition totals renderer (per day) ===
+  const renderNutrition = (items?: { id: string; data: any }[]) => {
+    if (!items || items.length === 0) {
+      return <div className="text-center text-muted py-3">No entries.</div>;
+    }
+
+    return (
+      <div className="d-grid gap-2">
+        {items.map((it) => {
+          const d = it.data || {};
+          const date = d.date || it.id;
+          const totalProtein = d.total_protein ?? 0;
+          const totalGrams = d.total_grams ?? 0;
+          const itemsCount = d.items_count ?? 0;
+          const perMeal = d.per_meal || {};
+
+          return (
+            <div
+              key={it.id}
+              className="p-3"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                borderRadius: 16,
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <div className="d-flex align-items-center justify-content-between">
+                <div className="fw-semibold" style={{ color: "#fff" }}>
+                  {date}
+                </div>
+                <div className="small text-muted">{itemsCount} items</div>
+              </div>
+
+              <div className="row g-2 mt-2">
+                <div className="col-6 col-md-3">
+                  <div className="small text-muted">Protein (g)</div>
+                  <div className="fw-semibold">{totalProtein}</div>
+                </div>
+                <div className="col-6 col-md-3">
+                  <div className="small text-muted">Total grams</div>
+                  <div className="fw-semibold">{totalGrams}</div>
+                </div>
+              </div>
+
+              {perMeal && (
+                <div className="mt-2">
+                  <div className="small text-muted mb-1">Per meal</div>
+                  <div className="small">
+                    {Object.keys(perMeal).length === 0 && <span className="text-muted">—</span>}
+                    {Object.entries(perMeal).map(([meal, m]: any) => (
+                      <div key={meal} className="text-muted">
+                        <span style={{ color: "#8aa", marginRight: 6 }}>{meal}:</span>
+                        <span>Protein {m?.protein ?? 0}g</span>
+                        <span style={{ margin: "0 8px" }}>·</span>
+                        <span>Grams {m?.grams ?? 0}</span>
+                        <span style={{ margin: "0 8px" }}>·</span>
+                        <span>{m?.items ?? 0} items</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // === Generic compact renderer (habits/workouts) ===
   const renderListGeneric = (items?: { id: string; data: any }[]) => {
     if (!items || items.length === 0) return <div className="text-center text-muted py-3">No entries.</div>;
     return (
@@ -290,7 +356,7 @@ export default function AdminMemberDetail() {
             <section className="mb-3">
               {tab === "checkins" && renderCheckins(checkinsData?.items)}
               {tab === "habits" && renderListGeneric(habitsData?.items)}
-              {tab === "nutrition" && renderListGeneric(nutritionData?.items)}
+              {tab === "nutrition" && renderNutrition(nutritionData?.items)}
               {tab === "workouts" && renderListGeneric(workoutsData?.items)}
             </section>
 
@@ -328,7 +394,7 @@ function formatPreview(v: any): string {
   return String(v);
 }
 
-// === Components for rich Check-ins ===
+// === Check-ins card (unchanged from previous enhancement) ===
 function CheckinCard({
   week,
   updated,
@@ -364,7 +430,6 @@ function CheckinCard({
         border: "1px solid rgba(255,255,255,0.08)",
       }}
     >
-      {/* Header */}
       <div className="fw-semibold mb-1" style={{ color: "#fff" }}>
         Week ending <span style={{ color: ACCENT }}>{week || "—"}</span>
       </div>
@@ -372,7 +437,6 @@ function CheckinCard({
         Updated {updated ? new Date(updated).toLocaleString() : "—"}
       </div>
 
-      {/* Metrics */}
       <div className="row g-2 mb-2">
         <div className="col-6 col-md-3">
           <div className="small text-muted">Weight</div>
@@ -388,15 +452,12 @@ function CheckinCard({
         </div>
       </div>
 
-      {/* Notes */}
       {notes && (
         <div className="mb-2">
           <div className="small text-muted">Notes</div>
           <div style={{ whiteSpace: "pre-wrap" }}>{notes}</div>
         </div>
       )}
-
-      {/* Next week goals */}
       {nextGoals && (
         <div className="mb-2">
           <div className="small text-muted">Next week goals</div>
@@ -404,7 +465,6 @@ function CheckinCard({
         </div>
       )}
 
-      {/* Photos */}
       {hasPhotos && (
         <>
           <button
