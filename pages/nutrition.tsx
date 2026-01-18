@@ -116,8 +116,9 @@ export default function NutritionPage() {
     saveFavourites(next);
   };
 
-  // Scanner gate
+  // Scanner gate & modal
   const [scannerOpen, setScannerOpen] = useState<boolean>(false);
+  const [scannerKey, setScannerKey] = useState(0); // force remount for reliability
 
   // Logs
   const { data: logsData } = useSWR<LogsResponse>(
@@ -353,7 +354,7 @@ export default function NutritionPage() {
                 {favourites.map((fav) => (
                   <button
                     key={fav.id ?? fav.code ?? fav.name}
-                    className="bxkr-chip me-1"
+                    className="bxkr-pill me-1"
                     onClick={() => {
                       setSelectedFood(fav);
                       setUsingServing("per100");
@@ -370,26 +371,28 @@ export default function NutritionPage() {
           return (
             <div key={meal} className="mb-3">
               <button
-                className="btn btn-bxkr-outline w-100 mb-2 text-start"
-                style={{ borderRadius: "12px" }}
+                className="bxkr-card w-100 mb-2 text-start d-flex justify-content-between align-items-center"
+                style={{ borderRadius: 12, padding: "12px 14px" }}
                 onClick={() => setOpenMeal(isOpen ? null : meal)}
               >
-                {meal} ({mealEntries.length}) —{" "}
-                <span style={{ color: COLORS.calories }}>{round2(mealTotals.calories)} kcal</span> |{" "}
-                <span style={{ color: COLORS.protein }}>{round2(mealTotals.protein)}p</span> |{" "}
-                <span style={{ color: COLORS.carbs }}>{round2(mealTotals.carbs)}c</span> |{" "}
-                <span style={{ color: COLORS.fat }}>{round2(mealTotals.fat)}f</span>
+                <div className="fw-semibold">{meal} ({mealEntries.length})</div>
+                <div className="small">
+                  <span style={{ color: COLORS.calories }}>{round2(mealTotals.calories)} kcal</span>{" "}|{" "}
+                  <span style={{ color: COLORS.protein }}>{round2(mealTotals.protein)}p</span>{" "}|{" "}
+                  <span style={{ color: COLORS.carbs }}>{round2(mealTotals.carbs)}c</span>{" "}|{" "}
+                  <span style={{ color: COLORS.fat }}>{round2(mealTotals.fat)}f</span>
+                </div>
               </button>
 
               {isOpen && (
-                <div className="px-2">
+                <div className="px-1">
                   {/* Favourites strip */}
                   {favouriteStrip}
 
                   {/* Search */}
                   <div className="d-flex gap-2 mb-2">
                     <input
-                      className="form-control"
+                      className="form-control bxkr-input"
                       placeholder={`Search foods for ${meal}…`}
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
@@ -397,9 +400,15 @@ export default function NutritionPage() {
                   </div>
 
                   {/* Scanner gate */}
-                  <BarcodeScannerGate isPremium={Boolean(isPremium)} onScanRequested={() => setScannerOpen(true)} />
+                  <BarcodeScannerGate
+                    isPremium={Boolean(isPremium)}
+                    onScanRequested={() => {
+                      setScannerKey((k) => k + 1); // force remount for reliability
+                      setScannerOpen(true);
+                    }}
+                  />
 
-                  {loadingSearch && <div>Searching…</div>}
+                  {loadingSearch && <div className="text-dim">Searching…</div>}
 
                   {/* Editor fallback */}
                   {selectedFood && results.length === 0 && (
@@ -417,6 +426,7 @@ export default function NutritionPage() {
                     />
                   )}
 
+                  {/* Results */}
                   {results.length > 0 &&
                     results.slice(0, 5).map((f) => (
                       <div key={f.id ?? f.code ?? f.name} className="mb-1">
@@ -435,8 +445,8 @@ export default function NutritionPage() {
                           />
                         ) : (
                           <div
-                            className="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                            style={{ background: "rgba(255,255,255,0.05)", color: "#fff" }}
+                            className="bxkr-card d-flex justify-content-between align-items-center"
+                            style={{ padding: "10px 12px", borderRadius: 12, cursor: "pointer" }}
                             onClick={() => {
                               setSelectedFood(f);
                               setUsingServing("per100");
@@ -444,12 +454,14 @@ export default function NutritionPage() {
                               setGrams(g ?? 100);
                             }}
                           >
-                            <span>
-                              {f.name} ({f.brand}) — {round2(f.calories)} kcal/100g
+                            <span className="small">
+                              <span className="fw-semibold">{f.name}</span>
+                              {f.brand ? <span className="text-dim"> ({f.brand})</span> : null} —{" "}
+                              {round2(f.calories)} kcal/100g
                             </span>
                             <button
                               type="button"
-                              className="btn btn-link p-0 ms-2"
+                              className="bxkr-pill"
                               onClick={(ev) => {
                                 ev.stopPropagation();
                                 toggleFavourite(f);
@@ -464,8 +476,7 @@ export default function NutritionPage() {
                     ))}
 
                   <button
-                    className="btn btn-bxkr-outline w-100 mb-2"
-                    style={{ borderRadius: "12px" }}
+                    className="bxkr-pill mb-2"
                     onClick={() => {
                       setSelectedFood({
                         id: `manual-${Date.now()}`,
@@ -482,14 +493,19 @@ export default function NutritionPage() {
                       setGrams(100);
                     }}
                   >
-                    Add manual food
+                    + Add manual food
                   </button>
 
+                  {/* Meal entries */}
                   {mealEntries.map((e) => (
-                    <div key={e.id} className="bxkr-card p-3 mb-2 d-flex justify-content-between align-items-center">
+                    <div
+                      key={e.id}
+                      className="bxkr-card p-3 mb-2 d-flex justify-content-between align-items-center"
+                      style={{ borderRadius: 12 }}
+                    >
                       <div>
                         <div className="fw-bold d-flex align-items-center">
-                          {e.food.name} ({e.food.brand})
+                          {e.food.name} {e.food.brand ? <span className="text-dim">({e.food.brand})</span> : null}
                           <button
                             type="button"
                             className="btn btn-link p-0 ms-2"
@@ -507,7 +523,7 @@ export default function NutritionPage() {
                           <span style={{ color: COLORS.fat }}>{round2(e.fat)}f</span>
                         </div>
                       </div>
-                      <button className="btn btn-link text-danger" onClick={() => removeEntry(e.id)}>
+                      <button className="bxkr-pill" onClick={() => removeEntry(e.id)}>
                         Remove
                       </button>
                     </div>
@@ -521,6 +537,7 @@ export default function NutritionPage() {
 
       {/* Scanner Modal */}
       <BarcodeScannerClient
+        key={scannerKey}
         isOpen={scannerOpen && Boolean(isPremium)}
         onClose={() => setScannerOpen(false)}
         onFoundFood={(food) => {
