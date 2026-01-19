@@ -2,7 +2,7 @@
 // /pages/api/checkins/weekly.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
-import { getServerSession } from "next-auth/next"; // ✅ consistent import
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import { hasRole } from "../../../lib/rbac";
 
@@ -16,7 +16,8 @@ function formatYMD(d: Date): string {
   return n.toISOString().slice(0, 10);
 }
 function startOfAlignedWeek(d: Date): Date {
-  const day = d.getDay(); // 0=Sun..6=Sat
+  // Monday-start week: 0=Sun..6=Sat
+  const day = d.getDay();
   const diffToMon = (day + 6) % 7;
   const s = new Date(d);
   s.setDate(d.getDate() - diffToMon);
@@ -48,8 +49,32 @@ function isValidImageDataUrl(s: unknown): s is string {
 // Firestore doc hard limit ~1MiB; keep photos conservative per field
 const MAX_DATAURL_LEN = 900_000; // ~900 KB per photo (client compresses already)
 
+// Where to call back into your app (server) for emits
+const BASE =
+  process.env.NEXTAUTH_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+
+// Safe emitter to your rules engine
+async function emitCongrats(email: string, checkinIso: string) {
+  if (!BASE) return;
+  try {
+    await fetch(`${BASE}/api/notify/emit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "friday_checkin_congrats",
+        email,
+        context: { checkin_at: checkinIso },
+        force: false,
+      }),
+    });
+  } catch {
+    // non-fatal
+  }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const session = await getServerSession(req, res, authOptions); // ✅
+  const session = await getServerSession(req, res, authOptions);
   if (!session) return res.status(401).json({ error: "Not signed in" });
   if (!hasRole(session, ["user", "gym", "admin"])) {
     return res.status(403).json({ error: "Forbidden" });
@@ -63,7 +88,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const weekQ = String(req.query.week || formatYMD(new Date()));
   if (!isYMD(weekQ)) return res.status(400).json({ error: "Invalid week format. Use YYYY-MM-DD." });
 
-  // ✅ Use local midnight to avoid DST/locale surprises
+  // Use local midnight to avoid DST/locale surprises
   const weekDate = new Date(`${weekQ}T00:00:00`);
   if (isNaN(weekDate.getTime())) return res.status(400).json({ error: "Invalid week date" });
 
@@ -149,6 +174,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
+      // 1) Upsert the weekly check-in
       await firestore.runTransaction(async (tx) => {
         const snap = await tx.get(docRef);
         const base = snap.exists ? (snap.data() || {}) : {};
@@ -157,7 +183,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ...base,
           id: docId,
           user_email: userEmail,
-          week_friday_date: friday, // Firestore Timestamp via client SDK
+          week_friday_date: friday, // Firestore will store as Timestamp
           week_friday_ymd: fridayYMD,
           updated_at: new Date(),
           ...(averge_hours_of_sleep !== undefined && { averge_hours_of_sleep }),
@@ -173,11 +199,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // Photos (set, keep, or explicitly clear)
         if (progress_photo_front !== undefined) next.progress_photo_front = progress_photo_front;
-        if (progress_photo_side !== undefined)  next.progress_photo_side  = progress_photo_side;
-        if (progress_photo_back !== undefined)  next.progress_photo_back  = progress_photo_back;
+        if (progress_photo_side !== undefined) next.progress_photo_side = progress_photo_side;
+        if (progress_photo_back !== undefined) next.progress_photo_back = progress_photo_back;
         if (clear_front) delete next.progress_photo_front;
-        if (clear_side)  delete next.progress_photo_side;
-        if (clear_back)  delete next.progress_photo_back;
+        if (clear_side) delete next.progress_photo_side;
+        if (clear_back) delete next.progress_photo_back;
 
         if (!snap.exists) {
           next.created_at = new Date();
@@ -187,8 +213,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         tx.set(docRef, next, { merge: true });
       });
 
+      // 2) Also stamp the user profile for weekly logic (Friday reminder filters)
+      const nowIso = new Date().toISOString();
+      await firestore.collection("users").doc(userEmail).set(
+        {
+          last_checkin_at: nowIso,
+          last_checkin_week_friday_ymd: fridayYMD,
+        },
+        { merge: true }
+      );
+
+      // 3) Emit congrats via your rules engine (in-app + push via Admin rule)
+      await emitCongrats(userEmail, nowIso);
+
       const saved = (await docRef.get()).data() || null;
-      return res.status(200).json({ ok: true, entry: saved, entries: saved ? [saved] : [], fridayYMD, id: docId });
+      return res
+        .status(200)
+        .json({ ok: true, entry: saved, entries: saved ? [saved] : [], fridayYMD, id: docId });
     } catch (err: any) {
       console.error("POST check-in error:", err?.message || err);
       return res.status(500).json({ error: "Failed to upsert check-in" });
