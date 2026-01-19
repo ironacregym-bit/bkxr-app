@@ -1,4 +1,5 @@
 
+// pages/api/notify/rules/save.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
@@ -17,13 +18,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const key = String(b.key || "").trim();
     if (!key) return res.status(400).json({ error: "Missing key" });
 
-    const doc = {
+    const payload: any = {
       key,
       enabled: !!b.enabled,
       event: String(b.event || "onboarding_incomplete"),
       priority: Number(b.priority || 0),
-      channels: Array.isArray(b.channels) ? b.channels : ["in_app"],
+      channels: Array.isArray(b.channels) && b.channels.length ? b.channels : ["in_app"],
       throttle_seconds: Number(b.throttle_seconds || 0),
+      expires_in_hours: Number(b.expires_in_hours || 0),         // 👈 NEW
       condition: b.condition || {},
       title_template: String(b.title_template || ""),
       body_template: String(b.body_template || ""),
@@ -32,9 +34,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       updated_at: Timestamp.now(),
       updated_by: session.user.email,
     };
+
     const ref = firestore.collection("notification_rules").doc(key);
     const snap = await ref.get();
-    const payload = { ...doc, ...(snap.exists ? {} : { created_at: Timestamp.now() }) };
+    if (!snap.exists) payload.created_at = Timestamp.now();
+
     await ref.set(payload, { merge: true });
     return res.status(200).json({ ok: true });
   } catch (e: any) {
