@@ -23,7 +23,7 @@ const transporter = HAVE_EMAIL
 
 /**
  * Sends an email via the same SMTP credentials used by NextAuth EmailProvider.
- * - If SMTP isn't configured, we log to console (safe no-op for dev)
+ * - If SMTP isn't configured, we log to console (safe no-op for dev).
  */
 export async function sendMail(opts: {
   to: string;
