@@ -1,34 +1,33 @@
 
-export function renderTemplateStrings(
-  tpl: { title_template?: string; body_template?: string; url_template?: string; data_template?: any },
-  ctx: any
-) {
-  const render = (s?: string) =>
-    (s || "").replace(/{{\s*([^}\s]+)\s*}}/g, (_m, path) => {
-      const v = getPath(ctx, String(path));
-      return v == null ? "" : String(v);
-    });
+// lib/notifications/render.ts
+type RenderArgs = {
+  title_template?: string;
+  body_template?: string;
+  url_template?: string;
+  data_template?: Record<string, any> | null;
+};
 
-  const renderData = (obj: any): any => {
-    if (obj == null) return obj;
-    if (typeof obj === "string") return render(obj);
-    if (Array.isArray(obj)) return obj.map((x) => renderData(x));
-    if (typeof obj === "object") {
-      const out: any = {};
-      for (const k of Object.keys(obj)) out[k] = renderData(obj[k]);
-      return out;
-    }
-    return obj;
-  };
-
-  return {
-    title: render(tpl.title_template),
-    body: render(tpl.body_template),
-    url: render(tpl.url_template),
-    data: renderData(tpl.data_template),
-  };
+function getByPath(obj: any, path: string) {
+  return path.split(".").reduce((acc, k) => (acc && acc[k] != null ? acc[k] : ""), obj);
 }
 
-function getPath(obj: any, path: string) {
-  return path.split(".").reduce((acc: any, key: string) => (acc && acc[key] != null ? acc[key] : undefined), obj);
+export function renderTemplateStrings(tpl: RenderArgs, context: Record<string, any>) {
+  const ctx = mergeContext(context, tpl.data_template);
+  const title = renderOne(tpl.title_template || "", ctx);
+  const body = renderOne(tpl.body_template || "", ctx);
+  const url = (tpl.url_template ? renderOne(tpl.url_template, ctx) : "") || undefined;
+  return { title, body, url, data: ctx };
+}
+
+function renderOne(s: string, ctx: Record<string, any>) {
+  return (s || "").replace(/{{\s*([^}]+)\s*}}/g, (_, p) => {
+    const v = getByPath(ctx, p.trim());
+    return v == null ? "" : String(v);
+  });
+}
+
+function mergeContext(context?: any, data_template?: any) {
+  const base = typeof context === "object" && context ? { ...context } : {};
+  if (data_template && typeof data_template === "object") return { ...base, ...data_template };
+  return base;
 }
