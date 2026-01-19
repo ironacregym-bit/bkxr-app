@@ -1,29 +1,24 @@
 
 name: BXKR Monday Notifications
+
 on:
   schedule:
-    - cron: "0 8 * * 1"   # every Monday 08:00 UTC
-  workflow_dispatch:
-    inputs:
-      mode:
-        description: "Target status (trial_ended|past_due|paused|active|trialing|all)"
-        required: false
-        default: "all"
+    - cron: "0 8 * * 1"   # Every Monday 08:00 UTC
+  workflow_dispatch: {}
 
 jobs:
-  weekly-nudge:
+  monday-kickoff:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Call weekly notifications endpoint
+      - name: Call monday kickoff
         env:
-          CRON_URL: ${{ secrets.CRON_URL_WEEKLY }}  # e.g. https://<prod>/api/admin/notifications/weekly
+          CRON_URL: ${{ secrets.CRON_URL_MONDAY }}   # https://<prod>/api/admin/notifications/monday-kickoff
           CRON_KEY: ${{ secrets.CRON_KEY }}
-          MODE: ${{ github.event.inputs.mode }}
         run: |
-          echo "Calling $CRON_URL?mode=${MODE:-all} ..."
+          echo "Calling $CRON_URL ..."
           http_code=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
-            -X POST "$CRON_URL?mode=${MODE:-all}" \
+            -X POST "$CRON_URL" \
             -H "x-cron-key: $CRON_KEY" \
             -H "Content-Type: application/json" \
             --data '{}')
