@@ -1,0 +1,31 @@
+
+name: BXKR Daily Cron
+
+on:
+  schedule:
+    # Runs every day at 03:10 UTC (adjust to your preference)
+    - cron: "10 3 * * *"
+  workflow_dispatch: {}  # allows manual run from Actions tab
+
+jobs:
+  call-enforce:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call subscriptions enforce endpoint
+        env:
+          CRON_URL: ${{ secrets.CRON_URL }}
+          CRON_KEY: ${{ secrets.CRON_KEY }}
+        run: |
+          echo "Calling $CRON_URL ..."
+          # Prefer POST; you can use GET if you want
+          http_code=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
+            -X POST "$CRON_URL" \
+            -H "x-cron-key: $CRON_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+          echo "HTTP $http_code"
+          cat /tmp/resp.json || true
+          # Fail the job if not 2xx
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            exit 1
+          fi
