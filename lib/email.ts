@@ -1,7 +1,5 @@
 
-// lib/email.ts
-import nodemailer from "nodemailer";
-
+// lib/email.ts (dynamic import; no top-level import)
 const HAVE_EMAIL =
   !!process.env.EMAIL_SERVER_HOST &&
   !!process.env.EMAIL_SERVER_PORT &&
@@ -9,21 +7,9 @@ const HAVE_EMAIL =
   !!process.env.EMAIL_SERVER_PASSWORD &&
   !!process.env.EMAIL_FROM;
 
-const transporter = HAVE_EMAIL
-  ? nodemailer.createTransport({
-      host: process.env.EMAIL_SERVER_HOST,
-      port: Number(process.env.EMAIL_SERVER_PORT ?? 465),
-      secure: String(process.env.EMAIL_SERVER_PORT ?? "465") === "465",
-      auth: {
-        user: process.env.EMAIL_SERVER_USER,
-        pass: process.env.EMAIL_SERVER_PASSWORD,
-      },
-    })
-  : null;
-
 /**
- * Sends an email via the same SMTP credentials used by NextAuth EmailProvider.
- * - If SMTP isn't configured, we log to console (safe no-op for dev).
+ * Sends an email via SMTP (same creds as NextAuth EmailProvider).
+ * If SMTP isn't configured, logs to console (dev no-op).
  */
 export async function sendMail(opts: {
   to: string;
@@ -31,10 +17,25 @@ export async function sendMail(opts: {
   html: string;
   text?: string;
 }) {
-  if (!transporter) {
+  if (!HAVE_EMAIL) {
     console.log("[email:dev]", { to: opts.to, subject: opts.subject });
     return;
   }
+
+  // Avoids needing @types and sidesteps builder quirks.
+  const nodemailer: any =
+    (await import("nodemailer")).default ?? (await import("nodemailer"));
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_SERVER_HOST,
+    port: Number(process.env.EMAIL_SERVER_PORT ?? 465),
+    secure: String(process.env.EMAIL_SERVER_PORT ?? "465") === "465",
+    auth: {
+      user: process.env.EMAIL_SERVER_USER,
+      pass: process.env.EMAIL_SERVER_PASSWORD,
+    },
+  });
+
   await transporter.sendMail({
     from: process.env.EMAIL_FROM,
     to: opts.to,
