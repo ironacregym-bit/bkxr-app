@@ -1,8 +1,7 @@
 
 // lib/email.ts
+import nodemailer from "nodemailer";
 
-// We lazy-load nodemailer so TypeScript doesn't need @types/nodemailer
-// and so builds don't fail when SMTP isn't configured.
 const HAVE_EMAIL =
   !!process.env.EMAIL_SERVER_HOST &&
   !!process.env.EMAIL_SERVER_PORT &&
@@ -10,10 +9,21 @@ const HAVE_EMAIL =
   !!process.env.EMAIL_SERVER_PASSWORD &&
   !!process.env.EMAIL_FROM;
 
+const transporter = HAVE_EMAIL
+  ? nodemailer.createTransport({
+      host: process.env.EMAIL_SERVER_HOST,
+      port: Number(process.env.EMAIL_SERVER_PORT ?? 465),
+      secure: String(process.env.EMAIL_SERVER_PORT ?? "465") === "465",
+      auth: {
+        user: process.env.EMAIL_SERVER_USER,
+        pass: process.env.EMAIL_SERVER_PASSWORD,
+      },
+    })
+  : null;
+
 /**
  * Sends an email via the same SMTP credentials used by NextAuth EmailProvider.
- * - If SMTP isn't configured, we log to console (safe no-op for dev).
- * - Nodemailer is imported dynamically to avoid type dependency during build.
+ * - If SMTP isn't configured, we log to console (safe no-op for dev)
  */
 export async function sendMail(opts: {
   to: string;
@@ -21,26 +31,10 @@ export async function sendMail(opts: {
   html: string;
   text?: string;
 }) {
-  if (!HAVE_EMAIL) {
-    // Safe no-op in environments without SMTP; keeps flows working in dev
+  if (!transporter) {
     console.log("[email:dev]", { to: opts.to, subject: opts.subject });
     return;
   }
-
-  // Dynamic import to avoid TS type dependency and reduce cold start
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const nodemailer: any = (await import("nodemailer")).default ?? (await import("nodemailer"));
-
-  const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_SERVER_HOST,
-    port: Number(process.env.EMAIL_SERVER_PORT ?? 465),
-    secure: String(process.env.EMAIL_SERVER_PORT ?? "465") === "465",
-    auth: {
-      user: process.env.EMAIL_SERVER_USER,
-      pass: process.env.EMAIL_SERVER_PASSWORD,
-    },
-  });
-
   await transporter.sendMail({
     from: process.env.EMAIL_FROM,
     to: opts.to,
