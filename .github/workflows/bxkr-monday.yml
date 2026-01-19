@@ -1,0 +1,34 @@
+
+name: BXKR Monday Notifications
+on:
+  schedule:
+    - cron: "0 8 * * 1"   # every Monday 08:00 UTC
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Target status (trial_ended|past_due|paused|active|trialing|all)"
+        required: false
+        default: "all"
+
+jobs:
+  weekly-nudge:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Call weekly notifications endpoint
+        env:
+          CRON_URL: ${{ secrets.CRON_URL_WEEKLY }}  # e.g. https://<prod>/api/admin/notifications/weekly
+          CRON_KEY: ${{ secrets.CRON_KEY }}
+          MODE: ${{ github.event.inputs.mode }}
+        run: |
+          echo "Calling $CRON_URL?mode=${MODE:-all} ..."
+          http_code=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
+            -X POST "$CRON_URL?mode=${MODE:-all}" \
+            -H "x-cron-key: $CRON_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+          echo "HTTP $http_code"
+          cat /tmp/resp.json || true
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            exit 1
+          fi
