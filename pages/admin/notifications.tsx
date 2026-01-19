@@ -53,6 +53,7 @@ export default function AdminNotifications() {
     priority: 100,
     channels: ["in_app"], // ["in_app","push"]
     throttle_seconds: 0,
+    expires_in_hours: 24,
     condition: pretty({ onboarding_complete: false }),
     title_template: "Finish setting up BXKR",
     body_template: "Two minutes to go — unlock tailored workouts now.",
