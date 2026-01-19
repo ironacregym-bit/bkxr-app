@@ -8,6 +8,7 @@ on:
 jobs:
   nudge:
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Call daily habits/nutrition nudge
         env:
