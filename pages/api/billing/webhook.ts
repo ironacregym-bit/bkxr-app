@@ -7,9 +7,7 @@ import firestore from "../../../lib/firestoreClient";
 
 // Disable Next.js body parser to access the raw body for Stripe signature verification
 export const config = {
-  api: {
-    bodyParser: false,
-  },
+  api: { bodyParser: false },
 };
 
 function buffer(readable: any) {
@@ -19,6 +17,24 @@ function buffer(readable: any) {
     readable.on("end", () => resolve(Buffer.concat(chunks)));
     readable.on("error", reject);
   });
+}
+
+async function getCustomerEmail(customerId: string): Promise<string | undefined> {
+  try {
+    const c = await stripe.customers.retrieve(customerId);
+    return (c as any)?.email as string | undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function trialEndIsoFrom(sub: Stripe.Subscription): string | null {
+  return sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
+}
+
+function isPremiumFromStatus(status: string): boolean {
+  // Only "active" is fully unlocked; "trialing" is unlocked until trial_end (UI checks date)
+  return status === "active" || status === "trialing";
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -39,25 +55,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     switch (event.type) {
+      /**
+       * Keep your app's subscription fields mirrored to Stripe on create/update.
+       * - status: trialing | active | past_due | canceled | incomplete | paused | ...
+       * - trial_end: mirror for UI banner (days left)
+       * - is_premium: true for active/trialing (client confirms trial not expired)
+       */
       case "customer.subscription.created":
       case "customer.subscription.updated": {
-        const subscription = event.data.object as Stripe.Subscription;
-        const customerId = subscription.customer as string;
-        // Fetch customer to get the email
-        const customer = await stripe.customers.retrieve(customerId);
-        const email = (customer as any)?.email as string | undefined;
+        const sub = event.data.object as Stripe.Subscription;
+        const customerId = sub.customer as string;
+        const email = await getCustomerEmail(customerId);
         if (!email) break;
 
-        const trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null;
-        const status = subscription.status; // trialing | active | past_due | canceled | incomplete | paused (via end_behavior)
+        const status = sub.status as string;
+        const trialEndIso = trialEndIsoFrom(sub);
 
         await firestore.collection("users").doc(email).set(
           {
             stripe_customer_id: customerId,
-            stripe_subscription_id: subscription.id,
+            stripe_subscription_id: sub.id,
             subscription_status: status,
-            trial_end: trialEnd,
-            is_premium: status === "trialing" || status === "active",
+            trial_end: trialEndIso,
+            is_premium: isPremiumFromStatus(status),
             last_billing_event_at: new Date().toISOString(),
             billing_plan: "online_monthly",
           },
@@ -66,28 +86,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
-      case "customer.subscription.trial_will_end": {
-        const subs = event.data.object as Stripe.Subscription;
-        const customerId = subs.customer as string;
-        const customer = await stripe.customers.retrieve(customerId);
-        const email = (customer as any)?.email as string | undefined;
-        if (!email) break;
-
-        // You might trigger email/push here (“Your trial ends on …”)
-        await firestore.collection("users").doc(email).set(
-          {
-            last_billing_event_at: new Date().toISOString(),
-          },
-          { merge: true }
-        );
-        break;
-      }
-
+      /**
+       * Payment success → unlock immediately (active)
+       */
       case "invoice.payment_succeeded": {
         const invoice = event.data.object as Stripe.Invoice;
         const customerId = invoice.customer as string;
-        const customer = await stripe.customers.retrieve(customerId);
-        const email = (customer as any)?.email as string | undefined;
+        const email = await getCustomerEmail(customerId);
         const subscriptionId = (invoice.subscription as string) || undefined;
         if (!email) break;
 
@@ -104,11 +109,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
+      /**
+       * Payment failed → lock
+       */
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
         const customerId = invoice.customer as string;
-        const customer = await stripe.customers.retrieve(customerId);
-        const email = (customer as any)?.email as string | undefined;
+        const email = await getCustomerEmail(customerId);
         const subscriptionId = (invoice.subscription as string) || undefined;
         if (!email) break;
 
@@ -125,11 +132,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
+      /**
+       * Subscription canceled/deleted → lock
+       */
       case "customer.subscription.deleted": {
-        const subs = event.data.object as Stripe.Subscription;
-        const customerId = subs.customer as string;
-        const customer = await stripe.customers.retrieve(customerId);
-        const email = (customer as any)?.email as string | undefined;
+        const sub = event.data.object as Stripe.Subscription;
+        const customerId = sub.customer as string;
+        const email = await getCustomerEmail(customerId);
         if (!email) break;
 
         await firestore.collection("users").doc(email).set(
@@ -143,9 +152,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
-      default: {
-        // Ignore other event types
+      /**
+       * Optional: handle checkout.session.completed as a safety net (some flows)
+       * We do not change status here; status will flow from invoice/subscription events.
+       */
+      case "checkout.session.completed": {
+        // no-op; rely on invoice/sub events for accurate status
+        break;
       }
+
+      default:
+        // Ignore other event types
+        break;
     }
 
     return res.status(200).json({ received: true });
