@@ -1,0 +1,29 @@
+
+# .github/workflows/bxkr-prune.yml
+name: BXKR Prune Expired Notifications
+on:
+  schedule:
+    - cron: "30 3 * * *"  # daily 03:30 UTC
+  workflow_dispatch: {}
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Call prune endpoint
+        env:
+          CRON_URL: ${{ secrets.CRON_URL_PRUNE }}   # https://<prod>/api/admin/notifications/prune-expired
+          CRON_KEY: ${{ secrets.CRON_KEY }}
+        run: |
+          echo "Calling $CRON_URL ..."
+          http_code=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
+            -X POST "$CRON_URL" \
+            -H "x-cron-key: $CRON_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+          echo "HTTP $http_code"
+          cat /tmp/resp.json || true
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            exit 1
+          fi
