@@ -37,6 +37,16 @@ function isPremiumFromStatus(status: string): boolean {
   return status === "active" || status === "trialing";
 }
 
+async function emitUpgradeCta(email: string) {
+  const BASE = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+  if (!BASE) return;
+  await fetch(`${BASE}/api/notify/emit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event: "upgrade_cta", email, context: { reason: "subscription_status" }, force: false }),
+  }).catch(() => null);
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
 
@@ -55,12 +65,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     switch (event.type) {
-      /**
-       * Keep your app's subscription fields mirrored to Stripe on create/update.
-       * - status: trialing | active | past_due | canceled | incomplete | paused | ...
-       * - trial_end: mirror for UI banner (days left)
-       * - is_premium: true for active/trialing (client confirms trial not expired)
-       */
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
@@ -83,12 +87,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           },
           { merge: true }
         );
+
+        // If not active/trialing, encourage upgrade in-app
+        if (!isPremiumFromStatus(status)) {
+          await emitUpgradeCta(email);
+        }
         break;
       }
 
-      /**
-       * Payment success → unlock immediately (active)
-       */
       case "invoice.payment_succeeded": {
         const invoice = event.data.object as Stripe.Invoice;
         const customerId = invoice.customer as string;
@@ -109,9 +115,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
-      /**
-       * Payment failed → lock
-       */
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
         const customerId = invoice.customer as string;
@@ -129,12 +132,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           },
           { merge: true }
         );
+
+        await emitUpgradeCta(email);
         break;
       }
 
-      /**
-       * Subscription canceled/deleted → lock
-       */
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
         const customerId = sub.customer as string;
@@ -149,20 +151,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           },
           { merge: true }
         );
+
+        await emitUpgradeCta(email);
         break;
       }
 
-      /**
-       * Optional: handle checkout.session.completed as a safety net (some flows)
-       * We do not change status here; status will flow from invoice/subscription events.
-       */
       case "checkout.session.completed": {
         // no-op; rely on invoice/sub events for accurate status
         break;
       }
 
       default:
-        // Ignore other event types
         break;
     }
 
