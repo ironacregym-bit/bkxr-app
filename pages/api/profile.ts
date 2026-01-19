@@ -75,6 +75,14 @@ interface ProfileResponse {
   // 🔐 premium access flags
   subscription_status: string | null;
   membership_status: string | null;
+
+  // NEW (read-only): trial/subscription fields for UI
+  trial_start: string;
+  trial_end: string;
+  grace_until: string;
+  is_premium: boolean;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
 }
 
 function toIsoStringOrEmpty(value: any): string {
@@ -148,6 +156,14 @@ function buildProfileResponse(email: string, data: Record<string, any> = {}): Pr
     // 🔐 premium access flags (pass-through; string or null)
     subscription_status: typeof data.subscription_status === "string" ? data.subscription_status : null,
     membership_status: typeof data.membership_status === "string" ? data.membership_status : null,
+
+    // NEW (read-only) — exposed for UI
+    trial_start: toIsoStringOrEmpty(data.trial_start),
+    trial_end: toIsoStringOrEmpty(data.trial_end),
+    grace_until: toIsoStringOrEmpty(data.grace_until),
+    is_premium: Boolean(data.is_premium),
+    stripe_customer_id: typeof data.stripe_customer_id === "string" ? data.stripe_customer_id : null,
+    stripe_subscription_id: typeof data.stripe_subscription_id === "string" ? data.stripe_subscription_id : null,
   };
 }
 
@@ -206,6 +222,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             equipment: null, preferences: null, gym_id: null,
             location: "", role: null, created_at: "", last_login_at: "",
             subscription_status: null, membership_status: null,
+            trial_start: "", trial_end: "", grace_until: "",
+            is_premium: false, stripe_customer_id: null, stripe_subscription_id: null,
           })
         );
       }
