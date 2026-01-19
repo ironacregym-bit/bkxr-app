@@ -123,8 +123,13 @@ export const authOptions: NextAuthOptions = {
         const ref = firestore.collection("users").doc(user.email);
         const snap = await ref.get();
         const nowIso = new Date().toISOString();
-
+        
+        // inside events.createUser
         if (!snap.exists) {
+          const now = new Date();
+          const trialDays = 14;
+          const trialEnd = new Date(now.getTime() + trialDays * 86400000).toISOString();
+        
           await ref.set(
             {
               email: user.email,
@@ -133,10 +138,31 @@ export const authOptions: NextAuthOptions = {
               created_at: nowIso,
               last_login_at: nowIso,
               role: "user",
+              // 🔐 trial init (only if missing)
+              trial_start: now.toISOString(),
+              trial_end: trialEnd,
+              subscription_status: "trialing",
+              is_premium: true, // in-app unlock during trial
             },
             { merge: true }
           );
         } else {
+          // If doc exists but has no trial, set it (one-time safety)
+          const data = snap.data() || {};
+          if (!data.trial_end && !data.subscription_status) {
+            const now = new Date();
+            const trialDays = 14;
+            const trialEnd = new Date(now.getTime() + trialDays * 86400000).toISOString();
+            await ref.set(
+              {
+                trial_start: now.toISOString(),
+                trial_end: trialEnd,
+                subscription_status: "trialing",
+                is_premium: true,
+              },
+              { merge: true }
+            );
+          }
           await ref.set({ last_login_at: nowIso }, { merge: true });
         }
       } catch (e) {
