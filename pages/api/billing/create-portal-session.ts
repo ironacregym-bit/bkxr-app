@@ -1,7 +1,7 @@
 
 // pages/api/billing/create-portal-session.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import { stripe } from "../../../lib/stripe";
 import firestore from "../../../lib/firestoreClient";
@@ -19,9 +19,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const stripeCustomerId = (snap.data()?.stripe_customer_id as string) || undefined;
     if (!stripeCustomerId) return res.status(400).json({ error: "No Stripe customer id on file" });
 
+    const origin = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+    if (!origin) return res.status(500).json({ error: "Missing NEXTAUTH_URL/VERCEL_URL for portal return" });
+
     const portal = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
-      return_url: `${process.env.NEXTAUTH_URL}/billing`,
+      return_url: `${origin}/billing`,
     });
 
     return res.status(200).json({ url: portal.url });
