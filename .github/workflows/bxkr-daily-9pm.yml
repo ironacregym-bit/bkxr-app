@@ -1,0 +1,19 @@
+
+# .github/workflows/bxkr-daily-9pm.yml
+name: BXKR Daily 9pm Nudge
+on:
+  schedule:
+    - cron: "0 21 * * *"   # 21:00 UTC daily (adjust for your local zone if needed)
+  workflow_dispatch: {}
+jobs:
+  nudge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call daily habits/nutrition nudge
+        env:
+          CRON_URL: ${{ secrets.CRON_URL_DAILY_NUDGE }}
+          CRON_KEY: ${{ secrets.CRON_KEY }}
+        run: |
+          http_code=$(curl -s -o /tmp/resp.json -w "%{http_code}" -X POST "$CRON_URL" -H "x-cron-key: $CRON_KEY" -H "Content-Type: application/json" --data '{}')
+          echo "HTTP $http_code"; cat /tmp/resp.json || true
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then exit 1; fi
