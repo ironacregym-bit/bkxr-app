@@ -1,5 +1,6 @@
 
-// lib/email.ts (dynamic import; no top-level import)
+// lib/email.ts
+
 const HAVE_EMAIL =
   !!process.env.EMAIL_SERVER_HOST &&
   !!process.env.EMAIL_SERVER_PORT &&
@@ -22,9 +23,9 @@ export async function sendMail(opts: {
     return;
   }
 
-  // Avoids needing @types and sidesteps builder quirks.
-  const nodemailer: any =
-    (await import("nodemailer")).default ?? (await import("nodemailer"));
+  // Use require at runtime to avoid any TypeScript type resolution entirely
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const nodemailer = require("nodemailer") as any;
 
   const transporter = nodemailer.createTransport({
     host: process.env.EMAIL_SERVER_HOST,
