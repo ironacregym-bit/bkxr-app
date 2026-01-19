@@ -2,7 +2,7 @@
 name: BXKR Friday Check-in Reminder
 on:
   schedule:
-    - cron: "0 12 * * 5"  # Every Friday at 12:00 UTC (adjust to taste)
+    - cron: "0 7 * * 5"  # Every Friday at 12:00 UTC (adjust to taste)
   workflow_dispatch: {}
 jobs:
   friday-reminder:
