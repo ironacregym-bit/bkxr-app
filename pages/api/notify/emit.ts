@@ -7,6 +7,7 @@ import firestore from "../../../lib/firestoreClient";
 import { renderTemplateStrings } from "../../../lib/notifications/render";
 import { writeUserNotification } from "../../../lib/notifications/store";
 import { sendPushIfOptedIn } from "../../../lib/notifications/push";
+import { sendEmailIfOptedIn } from "../../../lib/notifications/email";
 
 // Completion check used by rules
 function onboardingComplete(user: any): boolean {
@@ -15,8 +16,13 @@ function onboardingComplete(user: any): boolean {
   return h > 0 && w > 0 && !!user?.DOB && !!user?.sex && !!user?.goal_primary && !!user?.workout_type && !!user?.fighting_style;
 }
 
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]!));
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).end("Method Not Allowed");
+
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user?.email) return res.status(401).json({ error: "Unauthorized" });
 
@@ -31,45 +37,66 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const user = userSnap.exists ? userSnap.data() : {};
 
     // Load enabled rules for this event
-    const q = await firestore.collection("notification_rules")
+    const q = await firestore
+      .collection("notification_rules")
       .where("event", "==", event)
       .where("enabled", "==", true)
       .get();
-    const rules = q.docs.map((d) => d.data()).sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0));
+
+    const rules = q.docs
+      .map((d) => d.data())
+      .sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0));
 
     let emitted = 0;
 
     for (const r of rules) {
       const cond = r.condition || {};
-      if (cond.hasOwnProperty("onboarding_complete")) {
+      if (Object.prototype.hasOwnProperty.call(cond, "onboarding_complete")) {
         if (Boolean(cond.onboarding_complete) !== onboardingComplete(user)) continue;
       }
 
       // Render inline templates embedded in the rule doc
-      const { title, body, url, data } = renderTemplateStrings({
-        title_template: r.title_template,
-        body_template: r.body_template,
-        url_template: r.url_template,
-        data_template: r.data_template,
-           }, { ...context, user });
+      const { title, body, url, data } = renderTemplateStrings(
+        {
+          title_template: r.title_template,
+          body_template: r.body_template,
+          url_template: r.url_template,
+          data_template: r.data_template,
+        },
+        { ...context, user }
+      );
 
       if (!title || !body) continue; // guard against bad rule docs
 
+      const channels = Array.isArray(r.channels) && r.channels.length ? r.channels : ["in_app"];
       const created = await writeUserNotification(userEmail, {
-        title, message: body, href: url,
-        channels: Array.isArray(r.channels) ? r.channels : ["in_app"],
+        title,
+        message: body,
+        href: url,
+        channels,                              // 👈 propagate the rule channels
         source_key: r.key,
         source_event: event,
         throttle_seconds: Number(r.throttle_seconds || 0),
+        expires_in_hours: Number(r.expires_in_hours || 0),   // 👈 expiry for banner
         force,
         meta: data,
       });
 
-      if (created) {
-        emitted++;
-        if (created?.delivered_channels?.includes("push")) {
-          await sendPushIfOptedIn(userEmail, { title, body, url });
-        }
+      if (!created) continue; // throttled or not created
+      emitted++;
+
+      // Fan out by channels
+      if (channels.includes("push")) {
+        await sendPushIfOptedIn(userEmail, { title, body, url });
+      }
+      if (channels.includes("email")) {
+        const subject = title;
+        const html = `<div style="font-family:system-ui,Segoe UI,Arial,sans-serif">
+            <h2>${escapeHtml(subject)}</h2>
+            <p>${escapeHtml(body)}</p>
+            ${url ? `<p>${url}Open BXKR</a></p>` : ""}
+          </div>`;
+        await sendEmailIfOptedIn(userEmail, { subject, bodyHtml: html, bodyText: `${subject}\n\n${body}\n${url ?? ""}`.trim() });
       }
     }
 
