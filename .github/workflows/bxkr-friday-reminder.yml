@@ -1,0 +1,10 @@
+
+# .github/workflows/bxkr-friday-reminder.yml
+name: BXKR Friday Check-in Reminder
+on:
+  schedule:
+    - cron: "0 07 * * 5"  # Friday 12:00 UTC
+  workflow_dispatch: {}
+jobs:
+  remind:
+   
