@@ -1,10 +1,33 @@
 
-# .github/workflows/bxkr-friday-reminder.yml
 name: BXKR Friday Check-in Reminder
 on:
   schedule:
-    - cron: "0 07 * * 5"  # Friday 12:00 UTC
+    - cron: "0 12 * * 5"  # Every Friday at 12:00 UTC (adjust to taste)
   workflow_dispatch: {}
 jobs:
-  remind:
-   
+  friday-reminder:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Call Friday check-in reminder endpoint
+        env:
+          CRON_URL: ${{ secrets.CRON_URL_FRIDAY_REMINDER }}  # e.g. https://<prod>/api/admin/notifications/friday-checkin-reminder
+          CRON_KEY: ${{ secrets.CRON_KEY }}
+        run: |
+          echo "Calling $CRON_URL ..."
+          set -o pipefail
+          http_code=$(curl -sS -D /tmp/headers.txt -o /tmp/resp.json -w "%{http_code}" \
+            -X POST "$CRON_URL" \
+            -H "x-cron-key: $CRON_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+          echo "HTTP $http_code"
+          echo "--- headers ---"
+          cat /tmp/headers.txt || true
+          echo "--- body ---"
+          cat /tmp/resp.json || true
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "❌ Friday check-in reminder failed"
+            exit 1
+          fi
+          echo "✅ Friday check-in reminder succeeded"
