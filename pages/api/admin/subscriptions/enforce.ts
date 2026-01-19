@@ -60,17 +60,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // End trial if expired and not active
     const isActive = status === "active";
     const inTrial = status === "trialing" && trialEnd && now < trialEnd;
+
     if (!isActive && !inTrial && trialEnd && now >= trialEnd && status !== "trial_ended") {
       const graceUntil = GRACE_HOURS > 0 ? new Date(now.getTime() + GRACE_HOURS * 3600000).toISOString() : null;
+
       await doc.ref.set(
         {
           subscription_status: "trial_ended",
-        is_premium: false,
+          is_premium: false,
           grace_until: graceUntil,
           last_billing_event_at: now.toISOString(),
         },
         { merge: true }
       );
+
       await notifyTrialEnded(email);
       ended++;
     }
