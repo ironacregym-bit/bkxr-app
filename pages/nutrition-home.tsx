@@ -15,7 +15,6 @@ type ShoppingItem = { id: string; name: string; qty?: number | null; unit?: stri
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const ACCENT = "#FF8A2A";
 
-// ---- UI bits ----------------------------------------------------------------
 function MacroBar({
   label,
   val,
@@ -27,22 +26,30 @@ function MacroBar({
   target?: number | null;
   unit?: string;
 }) {
-  const safeTarget = target && target > 0 ? target : null;
+  const safeTarget = target && target > 0 ? Number(target) : null;
   const pct = safeTarget ? Math.min(100, Math.round((val / safeTarget) * 100)) : 0;
+
   return (
     <div className="mb-2">
-      <div className="d-flex justify-content-between">
+      <div className="d-flex justify-content-between align-items-center mb-1">
         <span className="text-dim">{label}</span>
-        <span>
+        <span className="fw-semibold">
           {Math.round(val)}
           {unit}
           {safeTarget ? ` / ${Math.round(safeTarget)}${unit}` : ""}
         </span>
       </div>
+      {/* Progress bar — glassy capacity track with neon accent fill */}
       {safeTarget ? (
-        <div className="capacity">
-          <div className="bar">
-            <span style={{ width: `${pct}%` }} />
+        <div className="capacity" aria-label={`${label} progress`}>
+          <div className="bar" style={{ background: "rgba(255,255,255,0.06)" }}>
+            <span
+              style={{
+                width: `${pct}%`,
+                background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                boxShadow: `0 0 10px ${ACCENT}55`,
+              }}
+            />
           </div>
         </div>
       ) : null}
@@ -50,7 +57,6 @@ function MacroBar({
   );
 }
 
-// ---- Page -------------------------------------------------------------------
 export default function NutritionHome() {
   const { status, data: session } = useSession();
   const authed = status === "authenticated";
@@ -59,7 +65,7 @@ export default function NutritionHome() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // Today’s nutrition log (source of truth for totals) — uses /api/nutrition/logs
+  // Today’s nutrition log (source of truth for totals) — correct endpoint
   const { data: entriesResp } = useSWR<{ entries: any[] }>(
     authed && email ? `/api/nutrition/logs` : null,
     fetcher,
@@ -81,7 +87,7 @@ export default function NutritionHome() {
     );
   }, [entriesResp]);
 
-  // Optional macro targets (today; server can infer if date omitted)
+  // Macro targets (caloric + P/C/F) — page only reads, no logic changes
   const { data: planGet } = useSWR<{ targets: Totals | null }>(
     authed ? `/api/mealplan/get` : null,
     fetcher,
@@ -89,7 +95,7 @@ export default function NutritionHome() {
   );
   const targets = planGet?.targets || null;
 
-  // Read-only shopping list preview
+  // Read-only shopping list preview (first few items)
   const { data: listData } = useSWR<{ items: ShoppingItem[] }>(
     authed ? `/api/shopping/list` : null,
     fetcher,
@@ -97,7 +103,7 @@ export default function NutritionHome() {
   );
   const shopping = useMemo(() => (listData?.items || []).slice(0, 6), [listData]);
 
-  // ---- Shopping generate (no date; server uses today) -----------------------
+  // Build shopping list (server should default to "today")
   async function generateShoppingFromPlan() {
     setBusy(true);
     setMsg(null);
@@ -105,7 +111,7 @@ export default function NutritionHome() {
       const r = await fetch("/api/shopping/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}), // no date; server defaults to today
+        body: JSON.stringify({}), // no date passed
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "Failed to generate list");
@@ -133,7 +139,7 @@ export default function NutritionHome() {
           minHeight: "100vh",
         }}
       >
-        {/* Header: aligned with Train page */}
+        {/* Header */}
         <div className="mb-3">
           <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: 8 }}>
             <div>
@@ -142,25 +148,32 @@ export default function NutritionHome() {
               </h1>
               <small style={{ opacity: 0.75 }}>Fuel the work</small>
             </div>
+
             {/* Back button (top-right) */}
-            <Link href="/" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
-              <i className="fas fa-arrow-left" /> <span className="ms-1">Back</span>
+            <Link
+              href="/"
+              className="btn btn-bxkr-outline btn-sm"
+              style={{ borderRadius: 24, display: "inline-flex", alignItems: "center", gap: 6 }}
+              aria-label="Back to home"
+            >
+              <i className="fas fa-arrow-left" /> <span>Back</span>
             </Link>
           </div>
+
           {msg && <div className="alert alert-info mt-2 mb-0">{msg}</div>}
         </div>
 
         {/* Tiles: left = Today macros; right = Shopping preview/CTAs */}
         <section className="row gx-3">
-          {/* Today macros (from logged entries) - Entire tile clickable to log page */}
+          {/* Today macros (from logged entries) — Full tile clickable to log page */}
           <div className="col-12 col-md-6 mb-3">
             <div className="futuristic-card p-0" style={{ height: "100%", overflow: "hidden" }}>
-              {/* Wrap the body with a link for full-tile click (no nested links inside) */}
+              {/* Linked body (no nested links inside this block) */}
               <Link
                 href="/nutrition"
-                className="d-block p-3"
-                style={{ textDecoration: "none", color: "inherit" }}
-                aria-label="Open today’s nutrition logging"
+                className="d-block p-3 text-decoration-none"
+                style={{ color: "inherit" }}
+                aria-label="Open Log Nutrition"
               >
                 <h6 className="mb-2" style={{ fontWeight: 700 }}>
                   Today
@@ -174,9 +187,20 @@ export default function NutritionHome() {
                 </div>
               </Link>
 
-              {/* CTA row placed outside the linked block to avoid nested links */}
+              {/* CTA row placed outside the linked block */}
               <div className="px-3 pb-3">
-                <Link href="/nutrition" className="btn btn-bxkr btn-sm" style={{ borderRadius: 24 }}>
+                <Link
+                  href="/nutrition"
+                  className="btn btn-sm"
+                  style={{
+                    borderRadius: 24,
+                    color: "#fff",
+                    background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                    boxShadow: `0 0 14px ${ACCENT}66`,
+                    border: "none",
+                    paddingInline: 14,
+                  }}
+                >
                   Log Nutrition
                 </Link>
               </div>
@@ -192,7 +216,6 @@ export default function NutritionHome() {
                 </h6>
               </div>
 
-              {/* Buttons row */}
               <div className="d-flex flex-wrap mb-2" style={{ gap: 8 }}>
                 <button
                   className="btn btn-sm"
@@ -214,7 +237,7 @@ export default function NutritionHome() {
                 </Link>
               </div>
 
-              {/* Read-only preview of some items */}
+              {/* Read-only preview */}
               {!shopping.length ? (
                 <div className="text-dim">No shopping items yet. Build a list from your meal plan.</div>
               ) : (
