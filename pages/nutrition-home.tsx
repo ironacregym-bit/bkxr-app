@@ -59,9 +59,9 @@ export default function NutritionHome() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // Today’s nutrition log (source of truth for totals)
+  // Today’s nutrition log (source of truth for totals) — uses /api/nutrition/list
   const { data: entriesResp } = useSWR<{ entries: any[] }>(
-    authed && email ? `/api/nutrition` : null,
+    authed && email ? `/api/nutrition/list` : null,
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
   );
@@ -81,7 +81,7 @@ export default function NutritionHome() {
     );
   }, [entriesResp]);
 
-  // Optional macro targets (unchanged behaviour)
+  // Optional macro targets (unchanged behaviour; server can infer today if date omitted)
   const { data: planGet } = useSWR<{ targets: Totals | null }>(
     authed ? `/api/mealplan/get` : null,
     fetcher,
@@ -146,11 +146,11 @@ export default function NutritionHome() {
             {/* Back button (top-right) */}
             <Link
               href="/"
-              className="btn btn-bxkr-outline"
+              className="btn btn-sm btn-bxkr-outline"
+              style={{ borderRadius: 24, display: "inline-flex", alignItems: "center", gap: 6 }}
               aria-label="Back to home"
-              style={{ borderRadius: 24 }}
             >
-              <i className="fas fa-arrow-left" /> <span className="ms-1">Back</span>
+              <i className="fas fa-arrow-left" /> <span>Back</span>
             </Link>
           </div>
           {msg && <div className="alert alert-info mt-2 mb-0">{msg}</div>}
@@ -161,12 +161,12 @@ export default function NutritionHome() {
           {/* Today macros (from logged entries) - Entire tile clickable to log page */}
           <div className="col-12 col-md-6 mb-3">
             <div className="futuristic-card p-0" style={{ height: "100%", overflow: "hidden" }}>
-              {/* Wrap the body with a link for full-tile click (keep button accessible) */}
+              {/* Wrap the body with a link for full-tile click (keep button accessible below) */}
               <Link
                 href="/nutrition"
-                aria-label="Log today’s food"
-                className="d-block p-3 text-decoration-none"
-                style={{ color: "inherit" }}
+                className="d-block p-3"
+                style={{ color: "inherit", textDecoration: "none" }}
+                aria-label="Go to log today’s nutrition"
               >
                 <h6 className="mb-2" style={{ fontWeight: 700 }}>
                   Today
@@ -180,7 +180,7 @@ export default function NutritionHome() {
                 </div>
               </Link>
 
-              {/* Inline CTA row (kept inside card, separate from the linked area) */}
+              {/* Inline CTA row (separate from the linked area to avoid nested links) */}
               <div className="px-3 pb-3">
                 <Link
                   href="/nutrition"
@@ -226,7 +226,11 @@ export default function NutritionHome() {
                 >
                   Build Shopping List
                 </button>
-                <Link href="/recipes" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
+                <Link
+                  href="/recipes"
+                  className="btn btn-bxkr-outline btn-sm"
+                  style={{ borderRadius: 24 }}
+                >
                   Recipes
                 </Link>
               </div>
