@@ -97,7 +97,7 @@ export default function NutritionHome() {
 
   // Read-only shopping list preview (first few items)
   const { data: listData } = useSWR<{ items: ShoppingItem[] }>(
-    authed ? `/api/shopping/list` : null,
+    authed ? `/api/shopping/lists` : null,
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
   );
