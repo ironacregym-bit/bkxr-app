@@ -174,7 +174,7 @@ export default function AdminRecipes() {
       <Head><title>Recipes • Admin</title></Head>
       <main className="container" style={{ paddingBottom: 90 }}>
         {/* Header / Back */}
-        <section className="bxkr-card p-3 mb-3">
+        <section className="futuristic-card p-3 mb-3">
           <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: 8 }}>
             <div className="d-flex align-items-center gap-2">
               <Link href="/admin" className="btn-bxkr-outline">
@@ -194,7 +194,7 @@ export default function AdminRecipes() {
         </section>
 
         {/* Add single */}
-        <section className="bxkr-card p-3 mb-3">
+        <section className="futuristic-card p-3 mb-3">
           <h6 className="mb-2">Add / Edit Recipe</h6>
           <div className="row g-2">
             <div className="col-12 col-md-6">
@@ -280,7 +280,7 @@ export default function AdminRecipes() {
         </section>
 
         {/* Bulk JSON */}
-        <section className="bxkr-card p-3 mb-3">
+        <section className="futuristic-card p-3 mb-3">
           <h6 className="mb-2">Bulk import (JSON array)</h6>
           <textarea
             className="form-control"
@@ -300,7 +300,7 @@ export default function AdminRecipes() {
         </section>
 
         {/* Minimal list */}
-        <section className="bxkr-card p-3">
+        <section className="futuristic-card p-3">
           <h6 className="mb-2">Existing recipes ({recipes.length})</h6>
           {recipes.length === 0 ? (
             <div className="text-dim">No recipes yet.</div>
