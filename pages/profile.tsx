@@ -27,8 +27,8 @@ type Profile = {
   email: string;
   last_login_at: string;
 
-  // Optional billing mirrors if your /api/profile returns them
-  subscription_status?: string;    // active|trialing|past_due|paused|canceled|trial_ended|none
+  // Optional billing mirrors if /api/profile returns them
+  subscription_status?: string; // active|trialing|past_due|paused|canceled|trial_ended|none
   is_premium?: boolean;
   trial_end?: string | null;
 };
@@ -44,9 +44,7 @@ function toNumberOrNull(val: string): number | null {
 
 function toYMDOrEmpty(isoLike?: string) {
   if (!isoLike) return "";
-  // If already YYYY-MM-DD, return as-is
   if (/^\d{4}-\d{2}-\d{2}$/.test(isoLike)) return isoLike;
-  // Try to parse
   const d = new Date(isoLike);
   if (isNaN(d.getTime())) return "";
   const y = d.getFullYear();
@@ -59,43 +57,7 @@ function daysLeft(iso?: string | null) {
   if (!iso) return null;
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return null;
-  const d = Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
-  return d;
-}
-
-function StatusPill({ status, trialEnd }: { status?: string; trialEnd?: string | null }) {
-  const s = (status || "none").toLowerCase();
-  const rem = daysLeft(trialEnd || undefined);
-
-  const palette: Record<string, { bg: string; fg: string; label: string }> = {
-    active: { bg: "rgba(46, 204, 113, 0.2)", fg: "#2ecc71", label: "Active" },
-    trialing: { bg: "rgba(241, 196, 15, 0.2)", fg: "#f1c40f", label: rem != null ? `Trialing • ${rem > 0 ? `${rem} day${rem === 1 ? "" : "s"} left` : "ends today"}` : "Trialing" },
-    past_due: { bg: "rgba(231, 76, 60, 0.2)", fg: "#e74c3c", label: "Past due" },
-    paused: { bg: "rgba(52, 152, 219, 0.2)", fg: "#3498db", label: "Paused" },
-    canceled: { bg: "rgba(149, 165, 166, 0.2)", fg: "#95a5a6", label: "Canceled" },
-    trial_ended: { bg: "rgba(149, 165, 166, 0.2)", fg: "#95a5a6", label: "Trial ended" },
-    none: { bg: "rgba(149, 165, 166, 0.2)", fg: "#95a5a6", label: "Free tier" },
-  };
-
-  const { bg, fg, label } = palette[s] || palette.none;
-
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "6px 12px",
-        borderRadius: 20,
-        background: bg,
-        color: fg,
-        fontWeight: 600,
-        fontSize: 12,
-        letterSpacing: 0.3,
-        textTransform: "uppercase",
-      }}
-    >
-      {label}
-    </span>
-  );
+  return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
 export default function ProfilePage() {
@@ -103,7 +65,7 @@ export default function ProfilePage() {
   const { data: session, status } = useSession();
   const email = session?.user?.email ?? "";
 
-  // Load profile (keep your existing shape)
+  // Load profile (same API shape; only fetch when email exists)
   const { data, error, isLoading, mutate } = useSWR<Profile>(
     email ? `/api/profile?email=${encodeURIComponent(email)}` : null,
     fetcher
@@ -129,7 +91,7 @@ export default function ProfilePage() {
       sex: data.sex ?? "",
       weight_kg: data.weight_kg ?? null,
       location: data.location ?? "",
-      // soft mirror billing if present
+      // mirrored billing fields if present
       subscription_status: data.subscription_status,
       is_premium: data.is_premium,
       trial_end: data.trial_end ?? null,
@@ -166,8 +128,29 @@ export default function ProfilePage() {
     }
   }, [formData.weight_kg, formData.height_cm, formData.DOB, formData.sex, formData.activity_factor]);
 
-  const subStatus = useMemo(() => (formData.subscription_status || "none").toLowerCase(), [formData.subscription_status]);
+  const subStatus = useMemo(
+    () => (formData.subscription_status || "none").toLowerCase(),
+    [formData.subscription_status]
+  );
+  const rem = daysLeft(formData.trial_end ?? undefined);
   const onBilling = () => router.push("/billing");
+
+  // Derived display name/image (falls back to session)
+  const displayName = formData.name || session?.user?.name || "Your Name";
+  const displayImage =
+    (formData.image && formData.image !== "" ? formData.image : undefined) ||
+    session?.user?.image ||
+    "/default-avatar.png";
+
+  // Build status pill text
+  const statusLabel =
+    subStatus === "active"
+      ? "Active"
+      : subStatus === "trialing"
+      ? rem != null
+        ? `Trialing • ${rem > 0 ? `${rem} day${rem === 1 ? "" : "s"} left` : "ends today"}`
+        : "Trialing"
+      : subStatus.replace("_", " ") || "Free tier";
 
   async function handleUpdate() {
     if (!email) {
@@ -222,100 +205,46 @@ export default function ProfilePage() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      <main
-        className="container"
-        style={{
-          minHeight: "80vh",
-          paddingBottom: 90,
-          background: "linear-gradient(135deg, #0b0f14 0%, #1b0f08 45%, #0b0f14 100%)",
-          color: "#fff",
-          borderRadius: 12,
-          paddingTop: 16,
-        }}
-      >
-        {/* Hero */}
-        <section
-          className="mb-3"
-          style={{
-            background: "radial-gradient(1200px 300px at 10% -10%, rgba(255,138,42,0.15), transparent), rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 16,
-            padding: 16,
-            boxShadow: "0 10px 40px rgba(0,0,0,0.45)",
-          }}
-        >
-          <div className="d-flex align-items-center gap-3">
-            <img
-              src={
-                (formData.image && formData.image !== "" ? formData.image : undefined) ||
-                session?.user?.image ||
-                "/default-avatar.png"
-              }
-              alt="Profile"
-              className="rounded-circle border"
-              style={{ width: 72, height: 72, objectFit: "cover", borderColor: "rgba(255,255,255,0.25)" }}
-            />
-            <div className="flex-grow-1">
-              <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <main className="container" style={{ paddingBottom: 90, minHeight: "80vh" }}>
+        {/* HERO */}
+        <section className="bxkr-card bxkr-hero mb-3">
+          <div className="identity">
+            <img src={displayImage} alt="Profile" />
+            <div style={{ flex: 1 }}>
+              <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: 8 }}>
                 <div>
-                  <h4 style={{ margin: 0, fontWeight: 700 }}>{formData.name || session?.user?.name || "Your Name"}</h4>
-                  <div style={{ opacity: 0.7, fontSize: 13 }}>{email || "Not signed in"}</div>
+                  <h4 style={{ margin: 0, fontWeight: 700 }}>{displayName}</h4>
+                  <div className="text-dim" style={{ fontSize: 13 }}>{email || "Not signed in"}</div>
                 </div>
                 <div>
-                  <StatusPill status={formData.subscription_status} trialEnd={formData.trial_end ?? null} />
+                  <span className={`bxkr-status-pill bxkr-status-${subStatus}`}>{statusLabel}</span>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="d-flex gap-2 mt-3 flex-wrap">
-            <button
-              className="bxkr-btn"
-              onClick={onBilling}
-              style={{
-                borderRadius: 24,
-                background: "linear-gradient(90deg, #ff7f32, #ff9f58)",
-                color: "#0b0f14",
-                fontWeight: 700,
-                border: "none",
-                boxShadow: "0 0 20px rgba(255,127,50,0.45)",
-              }}
-            >
+          <div className="actions">
+            <button className="btn-bxkr" onClick={onBilling} disabled={status !== "authenticated"}>
               Go to Billing
             </button>
             {subStatus !== "active" && (
-              <button
-                className="btn-bxkr-outline"
-                onClick={() => router.push("/paywall")}
-                style={{ borderRadius: 24 }}
-              >
+              <button className="btn-bxkr-outline" onClick={() => router.push("/paywall")}>
                 Upgrade to Premium
               </button>
             )}
           </div>
         </section>
 
-        {/* Content */}
-        <section
-          className="p-3"
-          style={{
-            background: "rgba(255,255,255,0.05)",
-            borderRadius: 16,
-            backdropFilter: "blur(8px)",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-            border: "1px solid rgba(255,255,255,0.08)",
-          }}
-        >
-          {/* Loading / errors */}
-          {status === "loading" && (
-            <div className="alert alert-secondary text-center">Loading session…</div>
-          )}
+        {/* CONTENT CARD */}
+        <section className="bxkr-card p-3">
+          {/* States */}
+          {status === "loading" && <div className="alert alert-secondary text-center">Loading session…</div>}
           {status === "unauthenticated" && (
             <div className="alert alert-warning text-center">
               Please sign in with Google to view and update your profile.
             </div>
           )}
-          {isLoading && <div className="alert alert-secondary text-center">Loading profile…</div>}
+          {isLoading && <div className="text-dim">Loading profile…</div>}
           {error && <div className="alert alert-danger text-center">Failed to load profile.</div>}
 
           {data && (
@@ -323,8 +252,8 @@ export default function ProfilePage() {
               {/* Personal */}
               <div className="mb-3">
                 <div className="d-flex align-items-center justify-content-between mb-2">
-                  <h6 style={{ margin: 0, opacity: 0.9 }}>Personal</h6>
-                  <span style={{ opacity: 0.6, fontSize: 12 }}>These help personalise your programme</span>
+                  <h6 className="m-0">Personal</h6>
+                  <span className="text-dim" style={{ fontSize: 12 }}>These help personalise your programme</span>
                 </div>
                 <div className="row g-2">
                   <div className="col-12">
@@ -333,13 +262,7 @@ export default function ProfilePage() {
                   </div>
                   <div className="col-12 col-md-6">
                     <label className="form-label">DOB</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      name="DOB"
-                      value={toYMDOrEmpty(formData.DOB)}
-                      onChange={handleTextChange}
-                    />
+                    <input type="date" className="form-control" name="DOB" value={toYMDOrEmpty(formData.DOB)} onChange={handleTextChange} />
                   </div>
                   <div className="col-12 col-md-6">
                     <label className="form-label">Sex</label>
@@ -356,13 +279,13 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <hr style={{ borderColor: "rgba(255,255,255,0.12)" }} />
+              <hr />
 
               {/* Metrics */}
               <div className="mb-3">
                 <div className="d-flex align-items-center justify-content-between mb-2">
-                  <h6 style={{ margin: 0, opacity: 0.9 }}>Metrics</h6>
-                  <span style={{ opacity: 0.6, fontSize: 12 }}>Used to calculate target calories</span>
+                  <h6 className="m-0">Metrics</h6>
+                  <span className="text-dim" style={{ fontSize: 12 }}>Used to calculate target calories</span>
                 </div>
                 <div className="row g-2">
                   <div className="col-12 col-md-6">
@@ -388,13 +311,13 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <hr style={{ borderColor: "rgba(255,255,255,0.12)" }} />
+              <hr />
 
-              {/* System fields (read-only) */}
+              {/* System (read-only) */}
               <div className="mb-3">
                 <div className="d-flex align-items-center justify-content-between mb-2">
-                  <h6 style={{ margin: 0, opacity: 0.9 }}>System</h6>
-                  <span style={{ opacity: 0.6, fontSize: 12 }}>Read‑only</span>
+                  <h6 className="m-0">System</h6>
+                  <span className="text-dim" style={{ fontSize: 12 }}>Read‑only</span>
                 </div>
                 <div className="row g-2">
                   <div className="col-12 col-md-6">
@@ -416,15 +339,7 @@ export default function ProfilePage() {
               <div className="d-flex gap-2">
                 <button
                   type="button"
-                  className="btn"
-                  style={{
-                    backgroundColor: "#ff7f32",
-                    borderRadius: 24,
-                    fontWeight: 700,
-                    color: "#0b0f14",
-                    border: "none",
-                    boxShadow: "0 0 12px rgba(255,127,50,0.6)",
-                  }}
+                  className="btn-bxkr"
                   onClick={handleUpdate}
                   disabled={saving || status !== "authenticated"}
                 >
@@ -432,8 +347,7 @@ export default function ProfilePage() {
                 </button>
                 <button
                   type="button"
-                  className="btn btn-outline-light"
-                  style={{ borderRadius: 24 }}
+                  className="btn-bxkr-outline"
                   onClick={() => mutate()}
                   disabled={saving}
                 >
