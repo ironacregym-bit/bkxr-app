@@ -68,7 +68,7 @@ export default function AdminRecipes() {
         <main className="container py-4">
           <h3>Access denied</h3>
           <p>You need admin or gym role to manage recipes.</p>
-          <Link href="/admin" className="btn-bxkr-outline mt-2" aria-label="Back to Admin">
+          <Link href="/admin" className="btn-bxkr-outline">
             <i className="fas fa-arrow-left me-1" /> Back to Admin
           </Link>
         </main>
@@ -102,7 +102,9 @@ export default function AdminRecipes() {
       const clean: Recipe = {
         ...r,
         image: r.image?.trim() ? r.image : null,
-        ingredients: r.ingredients.filter(i => i.name.trim()).map(i => ({ name: i.name.trim(), qty: Number(i.qty) || 0, unit: i.unit.trim() || "g" })),
+        ingredients: r.ingredients
+          .filter(i => i.name.trim())
+          .map(i => ({ name: i.name.trim(), qty: Number(i.qty) || 0, unit: i.unit.trim() || "g" })),
         instructions: r.instructions.map(s => s.trim()).filter(Boolean),
         per_serving: {
           calories: Number(r.per_serving?.calories || 0),
@@ -113,7 +115,9 @@ export default function AdminRecipes() {
       };
 
       const res = await fetch("/api/recipes/upsert", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipe: clean }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipe: clean }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || "Failed to save");
@@ -152,7 +156,9 @@ export default function AdminRecipes() {
     if (!confirm("Delete this recipe?")) return;
     setBusy(true); setMsg(null);
     try {
-      const res = await fetch("/api/recipes/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      const res = await fetch("/api/recipes/delete", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id })
+      });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || "Delete failed");
       setMsg("Deleted ✅"); mutate();
@@ -171,7 +177,7 @@ export default function AdminRecipes() {
         <section className="bxkr-card p-3 mb-3">
           <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: 8 }}>
             <div className="d-flex align-items-center gap-2">
-              <Link href="/admin" className="btn-bxkr-outline" aria-label="Back to Admin">
+              <Link href="/admin" className="btn-bxkr-outline">
                 <i className="fas fa-arrow-left me-1" /> Back
               </Link>
               <h4 className="m-0">Recipes</h4>
@@ -276,12 +282,20 @@ export default function AdminRecipes() {
         {/* Bulk JSON */}
         <section className="bxkr-card p-3 mb-3">
           <h6 className="mb-2">Bulk import (JSON array)</h6>
-          <textarea className="form-control" rows={10} value={bulk} onChange={e => setBulk(e.target.value)} placeholder='[ { "title": "Greek Yogurt & Berries", "meal_type":"breakfast", ... }, ... ]' />
+          <textarea
+            className="form-control"
+            rows={10}
+            value={bulk}
+            onChange={e => setBulk(e.target.value)}
+            placeholder='[ { "title": "Greek Yogurt & Berries", "meal_type":"breakfast", ... }, ... ]'
+          />
           <div className="mt-2 d-flex gap-2">
-            <button className="btn-bxkr" onClick={importBulk} disabled={busy}>{busy ? "Importing…" : "Import JSON"}</button>
+            <button className="btn-bxkr" onClick={importBulk} disabled={busy}>
+              {busy ? "Importing…" : "Import JSON"}
+            </button>
           </div>
           <div className="text-dim mt-2" style={{ fontSize: 13 }}>
-            Max 6 ingredients per recipe. Macros should be per serving. Paste the seed JSON from our earlier message to load 40 items quickly.
+            Max 6 ingredients per recipe. Macros should be per serving. Paste the seed JSON we provided to load items quickly.
           </div>
         </section>
 
@@ -305,7 +319,9 @@ export default function AdminRecipes() {
                       <td>{Math.round(x.per_serving?.protein_g || 0)}</td>
                       <td>{Math.round(x.per_serving?.carbs_g || 0)}</td>
                       <td>{Math.round(x.per_serving?.fat_g || 0)}</td>
-                      <td><button className="btn-bxkr-outline" onClick={() => x.id && del(x.id)}>Delete</button></td>
+                      <td>
+                        <button className="btn-bxkr-outline" onClick={() => x.id && del(x.id)}>Delete</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -313,4 +329,9 @@ export default function AdminRecipes() {
             </div>
           )}
         </section>
-    
+      </main>
+
+      <BottomNav />
+    </>
+  );
+}
