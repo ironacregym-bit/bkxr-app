@@ -13,26 +13,7 @@ type Totals = { calories: number; protein_g: number; carbs_g: number; fat_g: num
 type ShoppingItem = { id: string; name: string; qty?: number | null; unit?: string | null; done?: boolean };
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
-
-// ---- Brand ------------------------------------------------------------------
 const ACCENT = "#FF8A2A";
-
-// ---- Small date helpers -----------------------------------------------------
-function todayYMD() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-}
-function addDays(ymd: string, delta: number) {
-  const d = new Date(`${ymd}T00:00:00`);
-  d.setDate(d.getDate() + delta);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-}
 
 // ---- UI bits ----------------------------------------------------------------
 function MacroBar({
@@ -75,13 +56,12 @@ export default function NutritionHome() {
   const authed = status === "authenticated";
   const email = session?.user?.email ?? "";
 
-  const [date, setDate] = useState<string>(todayYMD());
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // Log entries for the selected day (source of truth for totals)
+  // Today’s nutrition log (source of truth for totals)
   const { data: entriesResp } = useSWR<{ entries: any[] }>(
-    authed && email ? `/api/nutrition?date=${encodeURIComponent(date)}` : null,
+    authed && email ? `/api/nutrition` : null,
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
   );
@@ -103,106 +83,34 @@ export default function NutritionHome() {
 
   // Optional macro targets (unchanged behaviour)
   const { data: planGet } = useSWR<{ targets: Totals | null }>(
-    authed ? `/api/mealplan/get?date=${encodeURIComponent(date)}` : null,
+    authed ? `/api/mealplan/get` : null,
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
   );
   const targets = planGet?.targets || null;
 
-  // Shopping list preview
-  const {
-    data: listData,
-    mutate: listMutate,
-  } = useSWR<{ items: ShoppingItem[] }>(authed ? `/api/shopping/list` : null, fetcher, {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-    dedupingInterval: 30_000,
-  });
-  const shopping = useMemo(() => (listData?.items || []).slice(0, 10), [listData]);
+  // Read-only shopping list preview
+  const { data: listData } = useSWR<{ items: ShoppingItem[] }>(
+    authed ? `/api/shopping/list` : null,
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
+  );
+  const shopping = useMemo(() => (listData?.items || []).slice(0, 6), [listData]);
 
-  // Add item form state
-  const [newItem, setNewItem] = useState("");
-  const [newQty, setNewQty] = useState("");
-  const [newUnit, setNewUnit] = useState("");
-
-  // ---- Shopping actions -----------------------------------------------------
-  async function addShoppingItem() {
-    if (!newItem.trim()) return;
-    setBusy(true);
-    setMsg(null);
-    try {
-      const r = await fetch("/api/shopping/list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newItem.trim(),
-          qty: newQty ? Number(newQty) : null,
-          unit: newUnit || null,
-        }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j?.error || "Failed to add");
-      setNewItem("");
-      setNewQty("");
-      setNewUnit("");
-      listMutate();
-    } catch (e: any) {
-      setMsg(e?.message || "Failed to add item");
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function toggleShoppingDone(id: string, done: boolean) {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const r = await fetch("/api/shopping/list", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, done: !done }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j?.error || "Failed to update item");
-      listMutate();
-    } catch (e: any) {
-      setMsg(e?.message || "Failed to update item");
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function deleteShopping(id: string) {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const r = await fetch("/api/shopping/list", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j?.error || "Failed to delete item");
-      listMutate();
-    } catch (e: any) {
-      setMsg(e?.message || "Failed to delete item");
-    } finally {
-      setBusy(false);
-    }
-  }
+  // ---- Shopping generate (no date; server uses today) -----------------------
   async function generateShoppingFromPlan() {
-    // Adds items, does not remove existing
-    if (!confirm("Generate a shopping list from today’s meal plan? This adds items (it won’t remove existing).")) return;
     setBusy(true);
     setMsg(null);
     try {
       const r = await fetch("/api/shopping/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date }),
+        // No date in body; server should default to today
+        body: JSON.stringify({}),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "Failed to generate list");
       setMsg(`Shopping list updated • ${j?.added ?? 0} items added`);
-      listMutate();
     } catch (e: any) {
       setMsg(e?.message || "Failed to generate list");
     } finally {
@@ -226,7 +134,7 @@ export default function NutritionHome() {
           minHeight: "100vh",
         }}
       >
-        {/* Header: match Train page style */}
+        {/* Header: aligned with Train page */}
         <div className="mb-3">
           <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: 8 }}>
             <div>
@@ -235,41 +143,78 @@ export default function NutritionHome() {
               </h1>
               <small style={{ opacity: 0.75 }}>Fuel the work</small>
             </div>
+            {/* Back button (top-right) */}
+            <Link
+              href="/"
+              className="btn btn-bxkr-outline"
+              aria-label="Back to home"
+              style={{ borderRadius: 24 }}
+            >
+              <i className="fas fa-arrow-left" /> <span className="ms-1">Back</span>
+            </Link>
+          </div>
+          {msg && <div className="alert alert-info mt-2 mb-0">{msg}</div>}
+        </div>
 
-            {/* Date switcher + CTAs */}
-            <div className="d-flex align-items-center flex-wrap" style={{ gap: 8 }}>
-              <div className="d-flex align-items-center" style={{ gap: 8 }}>
-                <button
-                  className="btn-bxkr-outline"
-                  aria-label="Previous day"
-                  onClick={() => setDate(addDays(date, -1))}
-                >
-                  <i className="fas fa-chevron-left" />
-                </button>
-                <input
-                  className="form-control"
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  style={{ minWidth: 160 }}
-                />
-                <button
-                  className="btn-bxkr-outline"
-                  aria-label="Next day"
-                  onClick={() => setDate(addDays(date, +1))}
-                >
-                  <i className="fas fa-chevron-right" />
-                </button>
-              </div>
+        {/* Tiles: left = Today macros; right = Shopping preview/CTAs */}
+        <section className="row gx-3">
+          {/* Today macros (from logged entries) - Entire tile clickable to log page */}
+          <div className="col-12 col-md-6 mb-3">
+            <div className="futuristic-card p-0" style={{ height: "100%", overflow: "hidden" }}>
+              {/* Wrap the body with a link for full-tile click (keep button accessible) */}
+              <Link
+                href="/nutrition"
+                aria-label="Log today’s food"
+                className="d-block p-3 text-decoration-none"
+                style={{ color: "inherit" }}
+              >
+                <h6 className="mb-2" style={{ fontWeight: 700 }}>
+                  Today
+                </h6>
+                <MacroBar label="Calories" val={totals.calories} target={targets?.calories ?? null} />
+                <MacroBar label="Protein" val={totals.protein_g} target={targets?.protein_g ?? null} unit="g" />
+                <MacroBar label="Carbs" val={totals.carbs_g} target={targets?.carbs_g ?? null} unit="g" />
+                <MacroBar label="Fat" val={totals.fat_g} target={targets?.fat_g ?? null} unit="g" />
+                <div className="text-dim" style={{ fontSize: 12 }}>
+                  Totals are from what you’ve logged today. Targets come from your profile (P/C/F split).
+                </div>
+              </Link>
 
-              <div className="d-flex" style={{ gap: 8 }}>
-                <Link className="btn btn-bxkr btn-sm" href="/nutrition" style={{ borderRadius: 24 }}>
+              {/* Inline CTA row (kept inside card, separate from the linked area) */}
+              <div className="px-3 pb-3">
+                <Link
+                  href="/nutrition"
+                  className="btn btn-sm"
+                  style={{
+                    borderRadius: 24,
+                    color: "#fff",
+                    background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                    boxShadow: `0 0 14px ${ACCENT}66`,
+                    border: "none",
+                    paddingInline: 14,
+                  }}
+                >
                   Log Nutrition
                 </Link>
-                <Link className="btn btn-bxkr btn-sm" href="/recipes" style={{ borderRadius: 24 }}>
-                  Recipes
-                </Link>
-                <button className="btn btn-sm" onClick={generateShoppingFromPlan} disabled={busy}
+              </div>
+            </div>
+          </div>
+
+          {/* Shopping preview + CTAs (read-only) */}
+          <div className="col-12 col-md-6 mb-3">
+            <div className="futuristic-card p-3" style={{ height: "100%" }}>
+              <div className="d-flex align-items-center justify-content-between mb-2" style={{ gap: 8 }}>
+                <h6 className="m-0" style={{ fontWeight: 700 }}>
+                  Shopping
+                </h6>
+              </div>
+
+              {/* Buttons row */}
+              <div className="d-flex flex-wrap mb-2" style={{ gap: 8 }}>
+                <button
+                  className="btn btn-sm"
+                  onClick={generateShoppingFromPlan}
+                  disabled={busy}
                   style={{
                     borderRadius: 24,
                     color: "#fff",
@@ -281,102 +226,46 @@ export default function NutritionHome() {
                 >
                   Build Shopping List
                 </button>
-              </div>
-            </div>
-          </div>
-          {msg && <div className="alert alert-info mt-2 mb-0">{msg}</div>}
-        </div>
-
-        {/* Tiles: left = Today macros; right = Shopping list */}
-        <section className="row gx-3">
-          {/* Today macros (from logged entries) */}
-          <div className="col-12 col-md-6 mb-3">
-            <div className="futuristic-card p-3" style={{ height: "100%" }}>
-              <h6 className="mb-2" style={{ fontWeight: 700 }}>
-                Today
-              </h6>
-              <MacroBar label="Calories" val={totals.calories} target={targets?.calories ?? null} />
-              <MacroBar label="Protein" val={totals.protein_g} target={targets?.protein_g ?? null} unit="g" />
-              <MacroBar label="Carbs" val={totals.carbs_g} target={targets?.carbs_g ?? null} unit="g" />
-              <MacroBar label="Fat" val={totals.fat_g} target={targets?.fat_g ?? null} unit="g" />
-              <div className="text-dim" style={{ fontSize: 12 }}>
-                These totals are from what you’ve logged today. Targets come from your profile (P/C/F split).
-              </div>
-            </div>
-          </div>
-
-          {/* Shopping list */}
-          <div className="col-12 col-md-6 mb-3">
-            <div className="futuristic-card p-3" style={{ height: "100%" }}>
-              <div className="d-flex align-items-center justify-content-between mb-2" style={{ gap: 8 }}>
-                <h6 className="m-0" style={{ fontWeight: 700 }}>
-                  Shopping List
-                </h6>
+                <Link href="/recipes" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
+                  Recipes
+                </Link>
               </div>
 
-              {/* Add row */}
-              <div className="d-flex flex-wrap" style={{ gap: 8, width: "100%" }}>
-                <input
-                  className="form-control"
-                  placeholder="Item…"
-                  value={newItem}
-                  onChange={(e) => setNewItem(e.target.value)}
-                  style={{ minWidth: 160, flex: 1 }}
-                />
-                <input
-                  className="form-control"
-                  placeholder="Qty"
-                  value={newQty}
-                  onChange={(e) => setNewQty(e.target.value)}
-                  style={{ maxWidth: 90 }}
-                />
-                <input
-                  className="form-control"
-                  placeholder="Unit"
-                  value={newUnit}
-                  onChange={(e) => setNewUnit(e.target.value)}
-                  style={{ maxWidth: 100 }}
-                />
-                <button className="btn-bxkr" onClick={addShoppingItem} disabled={busy || !newItem.trim()}>
-                  Add
-                </button>
-              </div>
-
-              {/* Items */}
-              <div className="mt-2">
-                {!shopping.length ? (
-                  <div className="text-dim">No items yet. Build a list from your meal plan or add items above.</div>
-                ) : (
-                  <ul className="list-unstyled m-0">
-                    {shopping.map((si) => (
-                      <li
-                        key={si.id}
-                        className="d-flex align-items-center justify-content-between"
-                        style={{ padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}
-                      >
-                        <div className="d-flex align-items-center" style={{ gap: 10 }}>
-                          <input
-                            type="checkbox"
-                            className="form-check-input habit-check"
-                            checked={!!si.done}
-                            onChange={() => toggleShoppingDone(si.id, !!si.done)}
-                            aria-label={`Mark ${si.name} ${si.done ? "not done" : "done"}`}
-                          />
-                          <div>
-                            <div className="fw-semibold">{si.name}</div>
-                            <div className="text-dim" style={{ fontSize: 12 }}>
-                              {(si.qty ?? "-")} {si.unit ?? ""}
-                            </div>
+              {/* Read-only preview of some items */}
+              {!shopping.length ? (
+                <div className="text-dim">No shopping items yet. Build a list from your meal plan.</div>
+              ) : (
+                <ul className="list-unstyled m-0">
+                  {shopping.map((si) => (
+                    <li
+                      key={si.id}
+                      className="d-flex align-items-center justify-content-between"
+                      style={{ padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+                    >
+                      <div className="d-flex align-items-center" style={{ gap: 10 }}>
+                        <div>
+                          <div className="fw-semibold">{si.name}</div>
+                          <div className="text-dim" style={{ fontSize: 12 }}>
+                            {(si.qty ?? "-")} {si.unit ?? ""}
                           </div>
                         </div>
-                        <button className="btn-bxkr-outline" onClick={() => deleteShopping(si.id)}>
-                          Delete
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+                      </div>
+                      <span
+                        className="badge"
+                        style={{
+                          background: si.done ? "rgba(50,255,127,0.15)" : "rgba(255,255,255,0.06)",
+                          color: si.done ? "#32ff7f" : "#cfd7df",
+                          borderRadius: 16,
+                          padding: "4px 10px",
+                          fontSize: 12,
+                        }}
+                      >
+                        {si.done ? "Done" : "Open"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </section>
