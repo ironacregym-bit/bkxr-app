@@ -4,65 +4,79 @@
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
+import { useMemo } from "react";
 
 export default function BottomNav() {
   const { data: session } = useSession();
   const role = (session?.user as any)?.role;
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
 
-  // Base nav items (Schedule -> Progress with fa-chart-line)
-  const navItems = [
-    { href: "/", icon: "fa-home", label: "Home" },
-    { href: "/workout", icon: "fa-dumbbell", label: "Train" },
-    { href: "/nutrition", icon: "fa-utensils", label: "Nutrition" },
-    { href: "/progress", icon: "fa-chart-line", label: "Progress" }, // <-- updated
-    { href: "/more", icon: "fa-ellipsis-h", label: "More" },
-  ];
+  // Target routes (send Nutrition to the new home)
+  const navItems = useMemo(
+    () => [
+      { href: "/", icon: "fa-home", label: "Home" },
+      { href: "/workout", icon: "fa-dumbbell", label: "Train" },
+      // ✅ point to the new Nutrition Home
+      { href: "/nutrition-home", icon: "fa-utensils", label: "Nutrition" },
+      { href: "/progress", icon: "fa-chart-line", label: "Progress" },
+      { href: "/more", icon: "fa-ellipsis-h", label: "More" },
+    ],
+    []
+  );
 
-  // Move Admin inside More for admin/gym roles
+  // Keep Admin inside /more for admin/gym roles
   const moreHref = role === "admin" || role === "gym" ? "/more?admin=true" : "/more";
 
   return (
     <nav
+      className="bottom-nav"
       style={{
         position: "fixed",
         bottom: 20,
         left: "50%",
         transform: "translateX(-50%)",
         backdropFilter: "blur(12px)",
-        borderRadius: "30px",
+        WebkitBackdropFilter: "blur(12px)",
+        borderRadius: 30,
         padding: "12px 24px",
         display: "flex",
         justifyContent: "space-around",
         alignItems: "center",
         width: "90%",
-        maxWidth: "420px",
+        maxWidth: 420,
         zIndex: 1000,
+        background: "rgba(10,14,20,0.65)",
+        border: "1px solid rgba(255,255,255,0.12)",
       }}
+      role="navigation"
+      aria-label="Bottom navigation"
     >
       {navItems.map((item) => {
         const targetHref = item.href === "/more" ? moreHref : item.href;
+
+        // ✅ Active logic (supports /nutrition-home and legacy /nutrition)
+        const isNutrition = item.href === "/nutrition-home";
         const isActive =
           pathname === targetHref ||
-          // Mark /more as active for any nested path under /more
+          // Mark /more active for nested routes
           (item.href === "/more" && pathname.startsWith("/more")) ||
-          // Mark /progress as active for nested routes under progress if you add them later
-          (item.href === "/progress" && pathname.startsWith("/progress"));
+          // Mark /progress active for future nested routes
+          (item.href === "/progress" && pathname.startsWith("/progress")) ||
+          // Nutrition active on both new and legacy paths
+          (isNutrition && (pathname.startsWith("/nutrition-home") || pathname.startsWith("/nutrition")));
 
         return (
           <Link
             key={item.href}
             href={targetHref}
+            className="bxkr-bottomnav-link"
+            aria-current={isActive ? "page" : undefined}
             style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
               textDecoration: "none",
-              color: "#fff",
-              transition: "color 0.3s ease",
             }}
           >
             <div
+              className="nav-icon"
               style={{
                 width: 54,
                 height: 54,
@@ -72,20 +86,21 @@ export default function BottomNav() {
                 justifyContent: "center",
                 alignItems: "center",
                 transition: "all 0.3s ease",
-                boxShadow: isActive ? "0 0 12px #ff7f32" : "none", // Active gets neon orange glow
+                boxShadow: isActive ? "0 0 12px #ff7f32" : "none",
               }}
             >
               <i
                 className={`fas ${item.icon}`}
                 style={{
-                  fontSize: "22px",
-                  color: isActive ? "#ff7f32" : "#fff", // Active icon orange, others white
+                  fontSize: 22,
+                  color: isActive ? "#ff7f32" : "#fff",
                 }}
+                aria-hidden="true"
               />
             </div>
             <div
               style={{
-                fontSize: "12px",
+                fontSize: 12,
                 marginTop: 6,
                 opacity: isActive ? 1 : 0.8,
                 fontWeight: isActive ? 600 : 400,
