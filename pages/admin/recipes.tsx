@@ -3,9 +3,11 @@
 "use client";
 
 import Head from "next/head";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import useSWR from "swr";
 import { useMemo, useState } from "react";
+import BottomNav from "../../components/BottomNav";
 
 type Recipe = {
   id?: string;
@@ -62,10 +64,16 @@ export default function AdminRecipes() {
   }
   if (!authed) {
     return (
-      <main className="container py-4">
-        <h3>Access denied</h3>
-        <p>You need admin or gym role to manage recipes.</p>
-      </main>
+      <>
+        <main className="container py-4">
+          <h3>Access denied</h3>
+          <p>You need admin or gym role to manage recipes.</p>
+          <Link href="/admin" className="btn-bxkr-outline mt-2" aria-label="Back to Admin">
+            <i className="fas fa-arrow-left me-1" /> Back to Admin
+          </Link>
+        </main>
+        <BottomNav />
+      </>
     );
   }
 
@@ -85,12 +93,12 @@ export default function AdminRecipes() {
   async function saveOne() {
     setBusy(true); setMsg(null);
     try {
-      // Validate
       if (!r.title.trim()) throw new Error("Title required");
       if (!["breakfast","lunch","dinner","snack"].includes(r.meal_type)) throw new Error("Meal type invalid");
       if (!Number.isFinite(r.servings) || r.servings <= 0) throw new Error("Servings must be > 0");
       if (!Array.isArray(r.ingredients) || r.ingredients.length === 0) throw new Error("At least 1 ingredient");
       if (r.ingredients.length > 6) throw new Error("Max 6 ingredients");
+
       const clean: Recipe = {
         ...r,
         image: r.image?.trim() ? r.image : null,
@@ -101,7 +109,7 @@ export default function AdminRecipes() {
           protein_g: Number(r.per_serving?.protein_g || 0),
           carbs_g: Number(r.per_serving?.carbs_g || 0),
           fat_g: Number(r.per_serving?.fat_g || 0),
-        }
+        },
       };
 
       const res = await fetch("/api/recipes/upsert", {
@@ -113,7 +121,9 @@ export default function AdminRecipes() {
       mutate();
     } catch (e: any) {
       setMsg(e?.message || "Failed");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function importBulk() {
@@ -133,7 +143,9 @@ export default function AdminRecipes() {
       mutate();
     } catch (e: any) {
       setMsg(e?.message || "Failed");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function del(id: string) {
@@ -146,17 +158,24 @@ export default function AdminRecipes() {
       setMsg("Deleted ✅"); mutate();
     } catch (e: any) {
       setMsg(e?.message || "Failed");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <>
       <Head><title>Recipes • Admin</title></Head>
-      <main className="container" style={{ paddingBottom: 90, color: "#fff" }}>
-
+      <main className="container" style={{ paddingBottom: 90 }}>
+        {/* Header / Back */}
         <section className="bxkr-card p-3 mb-3">
           <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: 8 }}>
-            <h4 className="m-0">Recipes</h4>
+            <div className="d-flex align-items-center gap-2">
+              <Link href="/admin" className="btn-bxkr-outline" aria-label="Back to Admin">
+                <i className="fas fa-arrow-left me-1" /> Back
+              </Link>
+              <h4 className="m-0">Recipes</h4>
+            </div>
             <div className="d-flex gap-2">
               <button className="btn-bxkr-outline" aria-pressed={filter==="all"} onClick={() => setFilter("all")}>All</button>
               <button className="btn-bxkr-outline" aria-pressed={filter==="breakfast"} onClick={() => setFilter("breakfast")}>Breakfast</button>
@@ -262,7 +281,7 @@ export default function AdminRecipes() {
             <button className="btn-bxkr" onClick={importBulk} disabled={busy}>{busy ? "Importing…" : "Import JSON"}</button>
           </div>
           <div className="text-dim mt-2" style={{ fontSize: 13 }}>
-            Tip: Max 6 ingredients per recipe. Macros should be per serving. You can paste the seed JSON provided below.
+            Max 6 ingredients per recipe. Macros should be per serving. Paste the seed JSON from our earlier message to load 40 items quickly.
           </div>
         </section>
 
@@ -294,7 +313,4 @@ export default function AdminRecipes() {
             </div>
           )}
         </section>
-      </main>
-    </>
-  );
-}
+    
