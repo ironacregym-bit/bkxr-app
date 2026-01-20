@@ -154,7 +154,7 @@ export default function Billing() {
 
       <main className="container" style={{ paddingBottom: 90, minHeight: "80vh" }}>
         {/* HERO CARD */}
-        <section className="bxkr-card bxkr-hero mb-3">
+        <section className="futuristic-card bxkr-hero mb-3">
           <div className="identity">
             <img src={displayImage} alt="Account" />
             <div style={{ flex: 1 }}>
@@ -196,7 +196,7 @@ export default function Billing() {
         </section>
 
         {/* INVOICES CARD */}
-        <section className="bxkr-card p-3">
+        <section className="futuristic-card p-3">
           <h5 className="mb-2">Payments & Receipts</h5>
           {!authed ? (
             <div className="text-dim">Sign in to view receipts.</div>
