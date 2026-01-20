@@ -5,6 +5,8 @@
 import Head from "next/head";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import BottomNav from "../../components/BottomNav";
 
 type Profile = {
   email: string;
@@ -12,6 +14,9 @@ type Profile = {
   is_premium?: boolean;
   trial_end?: string | null;
   stripe_customer_id?: string | null;
+  // optional (if your /api/profile adds them later)
+  name?: string | null;
+  image?: string | null;
 };
 
 type Invoice = {
@@ -54,15 +59,61 @@ function formatDateFromUnix(ts?: number | null) {
   return d.toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" });
 }
 
+function StatusPill({ status, trialEnd }: { status?: string; trialEnd?: string | null }) {
+  const s = (status || "none").toLowerCase();
+  const rem = daysLeft(trialEnd || undefined);
+
+  const palette: Record<string, { bg: string; fg: string; label: string }> = {
+    active: { bg: "rgba(46,204,113,0.2)", fg: "#2ecc71", label: "Active" },
+    trialing: { bg: "rgba(241,196,15,0.2)", fg: "#f1c40f", label: rem != null ? `Trialing • ${rem > 0 ? `${rem} day${rem === 1 ? "" : "s"} left` : "ends today"}` : "Trialing" },
+    past_due: { bg: "rgba(231,76,60,0.2)", fg: "#e74c3c", label: "Past due" },
+    paused: { bg: "rgba(52,152,219,0.2)", fg: "#3498db", label: "Paused" },
+    canceled: { bg: "rgba(149,165,166,0.2)", fg: "#95a5a6", label: "Canceled" },
+    trial_ended: { bg: "rgba(149,165,166,0.2)", fg: "#95a5a6", label: "Trial ended" },
+    none: { bg: "rgba(149,165,166,0.2)", fg: "#95a5a6", label: "Free tier" },
+  };
+
+  const { bg, fg, label } = palette[s] || palette.none;
+
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "6px 12px",
+        borderRadius: 20,
+        background: bg,
+        color: fg,
+        fontWeight: 700,
+        fontSize: 12,
+        letterSpacing: 0.3,
+        textTransform: "uppercase",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 export default function Billing() {
-  const { status: authStatus } = useSession();
+  const router = useRouter();
+  const search = useSearchParams();
+  const { status: authStatus, data: session } = useSession();
   const authed = authStatus === "authenticated";
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
+
+  // Read success/canceled flags from query (e.g., after returning from Checkout)
+  useEffect(() => {
+    const ok = search?.get("success");
+    const canceled = search?.get("canceled");
+    if (ok === "1") setNotice("✅ Payment successful. Your subscription is active or will start shortly.");
+    if (canceled === "1") setNotice("Payment cancelled. No changes were made.");
+  }, [search]);
 
   // Load profile (subscription status)
   useEffect(() => {
@@ -91,8 +142,7 @@ export default function Billing() {
         const j = await r.json();
         if (!r.ok) throw new Error(j?.error || "Failed to load invoices");
         if (mounted) setInvoices(Array.isArray(j?.invoices) ? j.invoices : []);
-      } catch (e: any) {
-        // Non-fatal: just show invoices section with message
+      } catch {
         if (mounted) setInvoices([]);
       }
     })();
@@ -104,6 +154,14 @@ export default function Billing() {
   const isTrial = statusText === "trialing";
   const isLocked = !isActive && !isTrial;
   const rem = daysLeft(profile?.trial_end);
+
+  const displayName = useMemo(() => {
+    return profile?.name || session?.user?.name || profile?.email || "Your Account";
+  }, [profile?.name, profile?.email, session?.user?.name]);
+
+  const displayImage = useMemo(() => {
+    return profile?.image || session?.user?.image || "/default-avatar.png";
+  }, [profile?.image, session?.user?.image]);
 
   async function startTrial() {
     setBusy(true);
@@ -139,104 +197,200 @@ export default function Billing() {
 
   return (
     <>
-      <Head><title>Billing • BXKR</title></Head>
-      <main className="container py-4" style={{ paddingBottom: 80, color: "#fff" }}>
-        <h2 className="mb-3">Billing</h2>
-        <p className="text-dim">Manage your subscription and view receipts securely via Stripe.</p>
-
-        {!authed ? (
-          <div className="alert alert-info">Please sign in to view billing.</div>
-        ) : (
-          <>
-            <section className="futuristic-card p-3 mb-3">
-              {!profile ? (
-                <div className="text-muted">Loading your subscription…</div>
-              ) : (
-                <>
-                  <div className="mb-2">
-                    <strong>Status:</strong>{" "}
-                    {isActive ? "Active (Premium)" : isTrial ? "Trialing" : statusText.replace("_", " ")}
-                    {isTrial && typeof rem === "number" && (
-                      <span className="text-muted"> • {rem > 0 ? `ends in ${rem} day${rem === 1 ? "" : "s"}` : "ends today"}</span>
-                    )}
+      <Head><title>BXKR • Billing</title></Head>
+      <main
+        className="container"
+        style={{
+          paddingTop: 12,
+          paddingBottom: 90,
+          color: "#fff",
+          minHeight: "80vh",
+          background: "linear-gradient(135deg, #0b0f14 0%, #1b0f08 45%, #0b0f14 100%)",
+          borderRadius: 12,
+        }}
+      >
+        {/* Hero header */}
+        <section
+          className="mb-3"
+          style={{
+            background: "radial-gradient(1200px 300px at 10% -10%, rgba(255,138,42,0.15), transparent), rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 16,
+            padding: 16,
+            boxShadow: "0 10px 40px rgba(0,0,0,0.45)",
+          }}
+        >
+          <div className="d-flex align-items-center gap-3">
+            <img
+              src={displayImage}
+              alt="Account"
+              className="rounded-circle border"
+              style={{ width: 72, height: 72, objectFit: "cover", borderColor: "rgba(255,255,255,0.25)" }}
+            />
+            <div className="flex-grow-1">
+              <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div>
+                  <h4 style={{ margin: 0, fontWeight: 700 }}>{displayName}</h4>
+                  <div style={{ opacity: 0.7, fontSize: 13 }}>
+                    {profile?.email || session?.user?.email || ""}
                   </div>
-
-                  <div className="d-flex gap-2 flex-wrap">
-                    {isActive && (
-                      <button className="bxkr-btn" onClick={openPortal} disabled={busy}>
-                        Manage Billing (Stripe Portal)
-                      </button>
-                    )}
-
-                    {isTrial && (
-                      <button className="bxkr-btn" onClick={openPortal} disabled={busy}>
-                        Manage Billing (Stripe Portal)
-                      </button>
-                    )}
-
-                    {isLocked && (
-                      <>
-                        <button className="btn-bxkr-outline" onClick={startTrial} disabled={busy}>
-                          Start 14‑day Trial
-                        </button>
-                        <button className="bxkr-btn" onClick={openPortal} disabled={busy}>
-                          Manage Billing (Stripe Portal)
-                        </button>
-                      </>
-                    )}
-                  </div>
-
-                  {error && <div className="alert alert-danger mt-3">{error}</div>}
-                </>
-              )}
-            </section>
-
-            <section className="futuristic-card p-3">
-              <h5 className="mb-2">Payments & Receipts</h5>
-              {invoices === null ? (
-                <div className="text-muted">Loading invoices…</div>
-              ) : invoices.length === 0 ? (
-                <div className="text-muted">No invoices found yet.</div>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table table-sm table-dark align-middle">
-                    <thead>
-                      <tr>
-                        <th style={{ whiteSpace: "nowrap" }}>Date</th>
-                        <th>Invoice #</th>
-                        <th>Amount</th>
-                        <th>Status</th>
-                        <th>Receipt</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {invoices.map((inv) => (
-                        <tr key={inv.id}>
-                          <td>{formatDateFromUnix(inv.created)}</td>
-                          <td>{inv.number || inv.id.slice(0, 8)}</td>
-                          <td>{formatMoney(inv.amount_paid, inv.currency)}</td>
-                          <td className="text-capitalize">{inv.status || "-"}</td>
-                          <td>
-                            {inv.receipt_url ? (
-                              <a href={inv.receipt_url} target="_blank" rel="noreferrer">View receipt</a>
-                            ) : inv.hosted_invoice_url ? (
-                              <a href={inv.hosted_invoice_url} target="_blank" rel="noreferrer">View invoice</a>
-                            ) : inv.invoice_pdf ? (
-                              <a href={inv.invoice_pdf} target="_blank" rel="noreferrer">Invoice PDF</a>
-                            ) : (
-                              <span className="text-muted">-</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                 </div>
-              )}
-            </section>
-          </>
-        )}
+                <div>
+                  <StatusPill status={profile?.subscription_status} trialEnd={profile?.trial_end ?? null} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="d-flex gap-2 mt-3 flex-wrap">
+            {isActive && (
+              <button
+                className="bxkr-btn"
+                onClick={openPortal}
+                disabled={busy || !authed}
+                style={{
+                  borderRadius: 24,
+                  background: "linear-gradient(90deg, #ff7f32, #ff9f58)",
+                  color: "#0b0f14",
+                  fontWeight: 700,
+                  border: "none",
+                  boxShadow: "0 0 20px rgba(255,127,50,0.45)",
+                }}
+              >
+                Manage Billing
+              </button>
+            )}
+            {isTrial && (
+              <button
+                className="bxkr-btn"
+                onClick={openPortal}
+                disabled={busy || !authed}
+                style={{
+                  borderRadius: 24,
+                  background: "linear-gradient(90deg, #ff7f32, #ff9f58)",
+                  color: "#0b0f14",
+                  fontWeight: 700,
+                  border: "none",
+                  boxShadow: "0 0 20px rgba(255,127,50,0.45)",
+                }}
+              >
+                Manage Billing
+              </button>
+            )}
+            {isLocked && (
+              <>
+                <button
+                  className="btn-bxkr-outline"
+                  onClick={startTrial}
+                  disabled={busy || !authed}
+                  style={{ borderRadius: 24 }}
+                >
+                  Start 14‑day Trial
+                </button>
+                <button
+                  className="bxkr-btn"
+                  onClick={() => router.push("/paywall")}
+                  disabled={busy || !authed}
+                  style={{
+                    borderRadius: 24,
+                    background: "transparent",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    color: "#fff",
+                    fontWeight: 700,
+                  }}
+                >
+                  Upgrade to Premium
+                </button>
+                <button
+                  className="bxkr-btn"
+                  onClick={openPortal}
+                  disabled={busy || !authed}
+                  style={{
+                    borderRadius: 24,
+                    background: "linear-gradient(90deg, #ff7f32, #ff9f58)",
+                    color: "#0b0f14",
+                    fontWeight: 700,
+                    border: "none",
+                    boxShadow: "0 0 20px rgba(255,127,50,0.45)",
+                  }}
+                >
+                  Manage Billing
+                </button>
+              </>
+            )}
+          </div>
+
+          {notice && (
+            <div className="alert alert-info mt-3" role="status">
+              {notice}
+            </div>
+          )}
+          {error && (
+            <div className="alert alert-danger mt-3" role="alert">
+              {error}
+            </div>
+          )}
+        </section>
+
+        {/* Invoices & receipts */}
+        <section
+          className="p-3"
+          style={{
+            background: "rgba(255,255,255,0.05)",
+            borderRadius: 16,
+            backdropFilter: "blur(8px)",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <h5 className="mb-2">Payments & Receipts</h5>
+
+          {!authed ? (
+            <div className="alert alert-info">Please sign in to view receipts.</div>
+          ) : invoices === null ? (
+            <div className="text-muted">Loading invoices…</div>
+          ) : invoices.length === 0 ? (
+            <div className="text-muted">No invoices found yet.</div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-sm table-dark align-middle">
+                <thead>
+                  <tr>
+                    <th style={{ whiteSpace: "nowrap" }}>Date</th>
+                    <th>Invoice #</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Receipt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map((inv) => (
+                    <tr key={inv.id}>
+                      <td>{formatDateFromUnix(inv.created)}</td>
+                      <td>{inv.number || inv.id.slice(0, 8)}</td>
+                      <td>{formatMoney(inv.amount_paid, inv.currency)}</td>
+                      <td className="text-capitalize">{inv.status || "-"}</td>
+                      <td>
+                        {inv.receipt_url ? (
+                          <a href={inv.receipt_url} target="_blank" rel="noreferrer">View receipt</a>
+                        ) : inv.hosted_invoice_url ? (
+                          <a href={inv.hosted_invoice_url} target="_blank" rel="noreferrer">View invoice</a>
+                        ) : inv.invoice_pdf ? (
+                          <a href={inv.invoice_pdf} target="_blank" rel="noreferrer">Invoice PDF</a>
+                        ) : (
+                          <span className="text-muted">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </main>
+
+      <BottomNav />
     </>
   );
 }
