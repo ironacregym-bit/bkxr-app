@@ -1,0 +1,45 @@
+
+// pages/api/recipes/bulk.ts
+import type { NextApiRequest, NextApiResponse } from "next";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../auth/[...nextauth]";
+import firestore from "../../../lib/firestoreClient";
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== "POST") { res.setHeader("Allow","POST"); return res.status(405).json({ error: "Method not allowed" }); }
+  const session = await getServerSession(req, res, authOptions);
+  const role = (session?.user as any)?.role || "user";
+  if (!session?.user?.email || (role !== "admin" && role !== "gym")) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const { recipes } = req.body || {};
+    if (!Array.isArray(recipes)) return res.status(400).json({ error: "recipes must be an array" });
+
+    const batch = firestore.batch();
+    let inserted = 0;
+
+    recipes.forEach((r: any) => {
+      if (!r?.title || !r?.meal_type) return;
+      if (Array.isArray(r.ingredients) && r.ingredients.length > 6) return;
+      const doc = firestore.collection("recipes").doc();
+      batch.set(doc, {
+        title: String(r.title),
+        meal_type: String(r.meal_type).toLowerCase(),
+        image: r.image || null,
+        servings: Number(r.servings || 1),
+        per_serving: r.per_serving || {},
+        ingredients: r.ingredients || [],
+        instructions: r.instructions || [],
+        created_at: new Date().toISOString(),
+        created_by: session.user.email,
+      }, { merge: true });
+      inserted++;
+    });
+
+    await batch.commit();
+    return res.status(200).json({ ok: true, inserted });
+  } catch (e: any) {
+    console.error("[recipes/bulk]", e?.message || e);
+    return res.status(500).json({ error: "Bulk import failed" });
+  }
+}
