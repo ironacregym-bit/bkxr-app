@@ -49,7 +49,7 @@ export default function NutritionHome() {
   const {
     data: listData,
     mutate: mutateShopping,
-  } = useSWR<{ items: ShoppingItem[] }>(authed ? `/api/shopping/list` : null, fetcher, {
+  } = useSWR<{ items: ShoppingItem[] }>(authed ? `/api/shopping/lists` : null, fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     dedupingInterval: 30_000,
@@ -87,7 +87,7 @@ export default function NutritionHome() {
           },
         ],
       };
-      const r = await fetch("/api/shopping/list", {
+      const r = await fetch("/api/shopping/lists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -118,7 +118,7 @@ export default function NutritionHome() {
         recipe_id: rid,
         people: ppl,
       };
-      const r = await fetch("/api/shopping/list", {
+      const r = await fetch("/api/shopping/lists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
