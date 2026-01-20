@@ -1,5 +1,7 @@
 
 // pages/admin/index.tsx (AdminDashboard)
+"use client";
+
 import Head from "next/head";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -81,7 +83,6 @@ export default function AdminDashboard() {
         throw new Error(err?.error || "Failed to register subscription");
       }
 
-      // Remember the key to avoid re-subscribing if unchanged
       localStorage.setItem("bxkr_vapid_pub", vapidPub);
       setMsg("Notifications re‑enabled ✅");
     } catch (e: any) {
@@ -111,11 +112,12 @@ export default function AdminDashboard() {
     { title: "Create Session", icon: "fas fa-calendar-plus", link: "/admin/sessions/create", color: "info" },
     { title: "Manage Bookings", icon: "fas fa-list", link: "/admin/bookings", color: "secondary" },
     { title: "Generate WhatsApp Link", icon: "fab fa-whatsapp", link: "/admin/share", color: "success" },
-    // New Notifications tile
     { title: "Notifications", icon: "fas fa-bell", link: "/admin/notifications", color: "danger" },
     { title: "Manage Users", icon: "fas fa-users", link: "/admin/users", color: "dark" },
     { title: "Members", icon: "fas fa-address-book", link: "/admin/members", color: "primary" },
 
+    // ✅ New: Recipes Admin tile
+    { title: "Recipes", icon: "fas fa-utensils", link: "/admin/recipes", color: "danger" },
   ];
 
   return (
@@ -139,9 +141,8 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <div className="d-flex gap-2">
-              {/* Open Notifications Admin page */}
-              <Link href="/admin/notifications">
+            <div className="d-flex gap-2 align-items-center">
+              <Link href="/admin/notifications" className="btn-bxkr-outline" aria-label="Open Notifications Admin">
                 Open Notifications Admin
               </Link>
 
