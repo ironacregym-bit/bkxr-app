@@ -207,7 +207,7 @@ export default function ProfilePage() {
 
       <main className="container" style={{ paddingBottom: 90, minHeight: "80vh" }}>
         {/* HERO */}
-        <section className="bxkr-card bxkr-hero mb-3">
+        <section className="futuristic-card bxkr-hero mb-3">
           <div className="identity">
             <img src={displayImage} alt="Profile" />
             <div style={{ flex: 1 }}>
@@ -236,7 +236,7 @@ export default function ProfilePage() {
         </section>
 
         {/* CONTENT CARD */}
-        <section className="bxkr-card p-3">
+        <section className="futuristic-card p-3">
           {/* States */}
           {status === "loading" && <div className="alert alert-secondary text-center">Loading session…</div>}
           {status === "unauthenticated" && (
