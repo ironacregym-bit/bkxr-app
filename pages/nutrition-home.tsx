@@ -15,48 +15,6 @@ type ShoppingItem = { id: string; name: string; qty?: number | null; unit?: stri
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const ACCENT = "#FF8A2A";
 
-function MacroBar({
-  label,
-  val,
-  target,
-  unit = "",
-}: {
-  label: string;
-  val: number;
-  target?: number | null;
-  unit?: string;
-}) {
-  const safeTarget = target && target > 0 ? Number(target) : null;
-  const pct = safeTarget ? Math.min(100, Math.round((val / safeTarget) * 100)) : 0;
-
-  return (
-    <div className="mb-2">
-      <div className="d-flex justify-content-between align-items-center mb-1">
-        <span className="text-dim">{label}</span>
-        <span className="fw-semibold">
-          {Math.round(val)}
-          {unit}
-          {safeTarget ? ` / ${Math.round(safeTarget)}${unit}` : ""}
-        </span>
-      </div>
-      {/* Progress bar — glassy capacity track with neon accent fill */}
-      {safeTarget ? (
-        <div className="capacity" aria-label={`${label} progress`}>
-          <div className="bar" style={{ background: "rgba(255,255,255,0.06)" }}>
-            <span
-              style={{
-                width: `${pct}%`,
-                background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
-                boxShadow: `0 0 10px ${ACCENT}55`,
-              }}
-            />
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export default function NutritionHome() {
   const { status, data: session } = useSession();
   const authed = status === "authenticated";
@@ -65,14 +23,14 @@ export default function NutritionHome() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // Today’s nutrition log (source of truth for totals) — correct endpoint
+  // Today’s nutrition logs (source of truth for snapshot)
   const { data: entriesResp } = useSWR<{ entries: any[] }>(
     authed && email ? `/api/nutrition/logs` : null,
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
   );
 
-  // Compute totals from the log entries
+  // Snapshot totals from logs
   const totals: Totals = useMemo(() => {
     const entries = Array.isArray(entriesResp?.entries) ? entriesResp!.entries : [];
     return entries.reduce(
@@ -87,37 +45,92 @@ export default function NutritionHome() {
     );
   }, [entriesResp]);
 
-  // Macro targets (caloric + P/C/F) — page only reads, no logic changes
-  const { data: planGet } = useSWR<{ targets: Totals | null }>(
-    authed ? `/api/mealplan/get` : null,
-    fetcher,
-    { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
-  );
-  const targets = planGet?.targets || null;
-
-  // Read-only shopping list preview (first few items)
-  const { data: listData } = useSWR<{ items: ShoppingItem[] }>(
-    authed ? `/api/shopping/lists` : null,
-    fetcher,
-    { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
-  );
+  // Shopping list (current single list per user)
+  const {
+    data: listData,
+    mutate: mutateShopping,
+  } = useSWR<{ items: ShoppingItem[] }>(authed ? `/api/shopping/list` : null, fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    dedupingInterval: 30_000,
+  });
   const shopping = useMemo(() => (listData?.items || []).slice(0, 6), [listData]);
 
-  // Build shopping list (server should default to "today")
-  async function generateShoppingFromPlan() {
+  // --- Add Food form state ---
+  const [foodName, setFoodName] = useState("");
+  const [foodQty, setFoodQty] = useState("");
+  const [foodUnit, setFoodUnit] = useState("");
+
+  // --- Add Recipe form state ---
+  const [recipeId, setRecipeId] = useState("");
+  const [people, setPeople] = useState("1");
+
+  function numberOrNull(s: string): number | null {
+    if (!s.trim()) return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  async function addFoodToList() {
+    const name = foodName.trim();
+    if (!name) return;
     setBusy(true);
     setMsg(null);
     try {
-      const r = await fetch("/api/shopping/generate", {
+      const payload = {
+        action: "addFoods",
+        foods: [
+          {
+            name,
+            qty: numberOrNull(foodQty),
+            unit: foodUnit.trim() || null,
+          },
+        ],
+      };
+      const r = await fetch("/api/shopping/list", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}), // no date passed
+        body: JSON.stringify(payload),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j?.error || "Failed to generate list");
-      setMsg(`Shopping list updated • ${j?.added ?? 0} items added`);
+      if (!r.ok) throw new Error(j?.error || "Failed to add food");
+      setFoodName("");
+      setFoodQty("");
+      setFoodUnit("");
+      await mutateShopping();
+      setMsg("Food added to your shopping list");
     } catch (e: any) {
-      setMsg(e?.message || "Failed to generate list");
+      setMsg(e?.message || "Failed to add food");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addRecipeToList() {
+    const rid = recipeId.trim();
+    if (!rid) return;
+    const ppl = Math.max(1, Number(people) || 1);
+    setBusy(true);
+    setMsg(null);
+    try {
+      const payload = {
+        action: "addRecipe",
+        recipe_id: rid,
+        people: ppl,
+      };
+      const r = await fetch("/api/shopping/list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || "Failed to add recipe");
+      setRecipeId("");
+      setPeople("1");
+      await mutateShopping();
+      setMsg("Recipe ingredients added to your shopping list");
+    } catch (e: any) {
+      setMsg(e?.message || "Failed to add recipe");
     } finally {
       setBusy(false);
     }
@@ -163,12 +176,11 @@ export default function NutritionHome() {
           {msg && <div className="alert alert-info mt-2 mb-0">{msg}</div>}
         </div>
 
-        {/* Tiles: left = Today macros; right = Shopping preview/CTAs */}
+        {/* Tiles: left = Today snapshot; right = Shopping add/preview */}
         <section className="row gx-3">
-          {/* Today macros (from logged entries) — Full tile clickable to log page */}
+          {/* Today snapshot — one line + CTA, whole tile clickable */}
           <div className="col-12 col-md-6 mb-3">
             <div className="futuristic-card p-0" style={{ height: "100%", overflow: "hidden" }}>
-              {/* Linked body (no nested links inside this block) */}
               <Link
                 href="/nutrition"
                 className="d-block p-3 text-decoration-none"
@@ -178,12 +190,19 @@ export default function NutritionHome() {
                 <h6 className="mb-2" style={{ fontWeight: 700 }}>
                   Today
                 </h6>
-                <MacroBar label="Calories" val={totals.calories} target={targets?.calories ?? null} />
-                <MacroBar label="Protein" val={totals.protein_g} target={targets?.protein_g ?? null} unit="g" />
-                <MacroBar label="Carbs" val={totals.carbs_g} target={targets?.carbs_g ?? null} unit="g" />
-                <MacroBar label="Fat" val={totals.fat_g} target={targets?.fat_g ?? null} unit="g" />
-                <div className="text-dim" style={{ fontSize: 12 }}>
-                  Totals are from what you’ve logged today. Targets come from your profile (P/C/F split).
+                <div className="d-flex align-items-center" style={{ gap: 10, fontWeight: 600 }}>
+                  <span>
+                    Cal {Math.round(totals.calories)}
+                  </span>
+                  <span className="text-dim">•</span>
+                  <span>P {Math.round(totals.protein_g)}g</span>
+                  <span className="text-dim">•</span>
+                  <span>C {Math.round(totals.carbs_g)}g</span>
+                  <span className="text-dim">•</span>
+                  <span>F {Math.round(totals.fat_g)}g</span>
+                </div>
+                <div className="text-dim mt-1" style={{ fontSize: 12 }}>
+                  Snapshot of what you’ve logged today.
                 </div>
               </Link>
 
@@ -207,7 +226,7 @@ export default function NutritionHome() {
             </div>
           </div>
 
-          {/* Shopping preview + CTAs (read-only) */}
+          {/* Shopping: add foods/recipes + preview current list */}
           <div className="col-12 col-md-6 mb-3">
             <div className="futuristic-card p-3" style={{ height: "100%" }}>
               <div className="d-flex align-items-center justify-content-between mb-2" style={{ gap: 8 }}>
@@ -216,11 +235,33 @@ export default function NutritionHome() {
                 </h6>
               </div>
 
-              <div className="d-flex flex-wrap mb-2" style={{ gap: 8 }}>
+              {/* Add Food (single) */}
+              <div className="d-flex flex-wrap align-items-end mb-2" style={{ gap: 8 }}>
+                <input
+                  className="form-control"
+                  placeholder="Food (e.g., Chicken breast)"
+                  value={foodName}
+                  onChange={(e) => setFoodName(e.target.value)}
+                  style={{ minWidth: 160, flex: 1 }}
+                />
+                <input
+                  className="form-control"
+                  placeholder="Qty"
+                  value={foodQty}
+                  onChange={(e) => setFoodQty(e.target.value)}
+                  style={{ width: 90 }}
+                />
+                <input
+                  className="form-control"
+                  placeholder="Unit (e.g., g, tub)"
+                  value={foodUnit}
+                  onChange={(e) => setFoodUnit(e.target.value)}
+                  style={{ width: 110 }}
+                />
                 <button
                   className="btn btn-sm"
-                  onClick={generateShoppingFromPlan}
-                  disabled={busy}
+                  onClick={addFoodToList}
+                  disabled={busy || !foodName.trim()}
                   style={{
                     borderRadius: 24,
                     color: "#fff",
@@ -230,16 +271,44 @@ export default function NutritionHome() {
                     paddingInline: 14,
                   }}
                 >
-                  Build Shopping List
+                  Add Food
+                </button>
+              </div>
+
+              {/* Add Recipe (scaled by people) */}
+              <div className="d-flex flex-wrap align-items-end mb-3" style={{ gap: 8 }}>
+                <input
+                  className="form-control"
+                  placeholder="Recipe ID"
+                  value={recipeId}
+                  onChange={(e) => setRecipeId(e.target.value)}
+                  style={{ minWidth: 160, flex: 1 }}
+                />
+                <input
+                  className="form-control"
+                  type="number"
+                  min={1}
+                  placeholder="People"
+                  value={people}
+                  onChange={(e) => setPeople(e.target.value)}
+                  style={{ width: 110 }}
+                />
+                <button
+                  className="btn btn-bxkr-outline btn-sm"
+                  onClick={addRecipeToList}
+                  disabled={busy || !recipeId.trim()}
+                  style={{ borderRadius: 24 }}
+                >
+                  Add Recipe
                 </button>
                 <Link href="/recipes" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
-                  Recipes
+                  Browse Recipes
                 </Link>
               </div>
 
-              {/* Read-only preview */}
+              {/* Current list preview */}
               {!shopping.length ? (
-                <div className="text-dim">No shopping items yet. Build a list from your meal plan.</div>
+                <div className="text-dim">No items yet. Add foods or recipe ingredients above.</div>
               ) : (
                 <ul className="list-unstyled m-0">
                   {shopping.map((si) => (
