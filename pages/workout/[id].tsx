@@ -11,30 +11,22 @@ import { useSession } from "next-auth/react";
 import BottomNav from "../../components/BottomNav";
 import RoundTimer from "../../components/RoundTimer";
 
-// New components you asked for
 import WorkoutViewToggle from "../../components/workouts/WorkoutViewToggle";
 import ListViewer from "../../components/workouts/ListViewer";
 import FollowAlongViewer from "../../components/workouts/FollowAlongViewer";
+import useExerciseMediaMap from "../../hooks/useExerciseMediaMap";
 
-/* ---------------- Types kept compatible with your DTOs ---------------- */
 type KBStyle = "EMOM" | "AMRAP" | "LADDER";
-
-type BoxingAction = {
-  kind: "punch" | "defence";
-  code: string;
-  count?: number;
-  tempo?: string;
-  notes?: string;
-};
+type BoxingAction = { kind: "punch" | "defence"; code: string; count?: number; tempo?: string; notes?: string };
 
 type ExerciseItemOut = {
   item_id: string;
   type: "Boxing" | "Kettlebell";
   style?: KBStyle | "Combo";
   order: number;
-  duration_s?: number; // boxing
+  duration_s?: number;
   combo?: { name?: string; actions: BoxingAction[]; notes?: string };
-  exercise_id?: string; // kb
+  exercise_id?: string;
   reps?: string;
   time_s?: number;
   weight_kg?: number;
@@ -48,8 +40,7 @@ type RoundOut = {
   order: number;
   category: "Boxing" | "Kettlebell";
   style?: KBStyle;
-  duration_s?: number; // boxing = 180 default
-  is_benchmark_component?: boolean;
+  duration_s?: number;
   items: ExerciseItemOut[];
 };
 
@@ -61,12 +52,12 @@ type WorkoutDTO = {
   focus?: string;
   is_benchmark?: boolean;
   benchmark_name?: string;
-  exercises?: any[]; // legacy
+  exercises?: any[];
   rounds?: RoundOut[];
 };
 
-/* ---------------- Fetch helpers ---------------- */
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
+const ACCENT = "#FF8A2A";
 
 function formatDateKeyLocal(d: Date): string {
   const y = d.getFullYear();
@@ -80,14 +71,14 @@ export default function WorkoutPage() {
   const { id } = router.query;
   const { data: session } = useSession();
 
-  // Weekly workouts (unchanged entrypoint)
+  // Weekly workouts
   const { data, error, isLoading } = useSWR<{ weekStart: string; workouts: WorkoutDTO[] }>(
     "/api/workouts",
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 60_000 }
   );
 
-  // Boxing technique library (optional)
+  // Technique videos (optional)
   const { data: techData } = useSWR<{ videos: Array<{ code: string; name?: string; video_url?: string }> }>(
     "/api/boxing/tech",
     fetcher,
@@ -100,7 +91,7 @@ export default function WorkoutPage() {
     return map;
   }, [techData]);
 
-  // Global exercise names (for KB display)
+  // Exercise names
   const { data: exData } = useSWR<{ exercises: Array<{ id: string; exercise_name: string }> }>(
     "/api/exercises?limit=500",
     fetcher,
@@ -114,32 +105,31 @@ export default function WorkoutPage() {
     }, {} as Record<string, string>);
   }, [exData]);
 
-  // Select current workout by id
+  // Pick current workout
   const workout: WorkoutDTO | undefined = useMemo(() => {
     const ws = Array.isArray(data?.workouts) ? data!.workouts : [];
     return ws.find((w) => String(w.id) === String(id));
   }, [data, id]);
 
-  // Derived: boxing/kb rounds, durations
-  const { hasRounds, boxingRounds, kbRounds, totalDurationSec, boxingDurationSec } = useMemo(() => {
+  // Sorted rounds + durations
+  const { hasRounds, boxingRounds, kbRounds, totalDurationSec, boxingDurationSec, sortedRounds } = useMemo(() => {
     const rounds = workout?.rounds || [];
     const sorted = rounds.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     const boxing = sorted.filter((r) => r.category === "Boxing");
     const kb = sorted.filter((r) => r.category === "Kettlebell");
-
     const boxingDur = boxing.reduce((sum, r) => sum + (r.duration_s ?? 180), 0);
-    const kbDur = kb.length * 180; // 3:00 each in UI
-
+    const kbDur = kb.length * 180;
     const legacyDur =
       (workout?.exercises || []).reduce((sum, ex: any) => sum + (ex.durationSec || 0), 0) || 1800;
+    const has = sorted.length > 0;
 
-    const has = (workout?.rounds || []).length > 0;
     return {
       hasRounds: has,
       boxingRounds: boxing,
       kbRounds: kb,
       totalDurationSec: has ? boxingDur + kbDur : legacyDur,
       boxingDurationSec: has ? boxingDur : 900,
+      sortedRounds: sorted,
     };
   }, [workout]);
 
@@ -149,7 +139,7 @@ export default function WorkoutPage() {
     : workout?.focus || "";
   const videoUrl = workout?.video_url || undefined;
 
-  // Completion status
+  // Completion state
   const { data: completionData, mutate } = useSWR(
     session?.user?.email && id
       ? `/api/completions?email=${encodeURIComponent(session.user.email)}&workout_id=${encodeURIComponent(
@@ -161,7 +151,10 @@ export default function WorkoutPage() {
   );
   const isCompleted = completionData?.completed === true;
 
-  /* ---------------- View toggle (persist per workout id) ---------------- */
+  // Media map for KB exercises in this workout
+  const { videoByExerciseId } = useExerciseMediaMap(sortedRounds as any);
+
+  /* ---------- View toggle (persist per workout) ---------- */
   type ViewMode = "list" | "follow";
   const storageKey = useMemo(
     () => (id ? `bxkr_workout_view_${id}` : "bxkr_workout_view"),
@@ -183,7 +176,7 @@ export default function WorkoutPage() {
     } catch {}
   };
 
-  /* ---------------- Completion modal state ---------------- */
+  /* ---------- Completion modal state ---------- */
   const [showComplete, setShowComplete] = useState(false);
   const [rpe, setRpe] = useState<number>(7);
   const [durationMins, setDurationMins] = useState<number>(() =>
@@ -209,7 +202,6 @@ export default function WorkoutPage() {
     const minutes =
       Number(durationMins) > 0 ? Number(durationMins) : Math.round((totalDurationSec || 1800) / 60);
 
-    // Simple calories estimate (same as your current logic)
     const assumedWeightKg = 70;
     const avgMET = 8;
     const calories = Math.round(avgMET * assumedWeightKg * (minutes / 60) * 1.05);
@@ -225,8 +217,8 @@ export default function WorkoutPage() {
         weight_completed_with: kbWeightUsed === "" ? null : Number(kbWeightUsed),
         rpe: Number(rpe),
         notes: notes?.trim() || null,
-        duration: minutes, // legacy
-        dateKey,           // harmless on server if unused
+        duration: minutes,
+        dateKey,
       };
 
       const res = await fetch("/api/completions/create", {
@@ -252,7 +244,7 @@ export default function WorkoutPage() {
     }
   }
 
-  /* ---------------- Error/loading ---------------- */
+  /* ---------- Error/loading ---------- */
   if (error) {
     return (
       <main className="container py-3" style={{ paddingBottom: 70, color: "#fff", borderRadius: 12, minHeight: "100vh" }}>
@@ -271,7 +263,7 @@ export default function WorkoutPage() {
     );
   }
 
-  /* ----------------------------- Render ----------------------------- */
+  /* ---------- Render ---------- */
   return (
     <>
       <Head>
@@ -279,15 +271,7 @@ export default function WorkoutPage() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
 
-      <main
-        className="container py-3"
-        style={{
-          paddingBottom: 80,
-          color: "#fff",
-          borderRadius: 12,
-          minHeight: "100vh",
-        }}
-      >
+      <main className="container py-3" style={{ paddingBottom: 80, color: "#fff", borderRadius: 12, minHeight: "100vh" }}>
         {/* Header */}
         <div className="d-flex align-items-center justify-content-between mb-3" style={{ gap: 12 }}>
           <div style={{ minWidth: 0 }}>
@@ -349,27 +333,25 @@ export default function WorkoutPage() {
           </section>
         )}
 
-        {/* Optional: top video only in List view (Follow-along has its own pane) */}
-        {view === "list" && workout.video_url && workout.video_url.startsWith("http") && (
+        {/* Optional workout-level video in List view */}
+        {view === "list" && videoUrl && videoUrl.startsWith("http") && (
           <section className="futuristic-card p-2 mb-3" style={{ overflow: "hidden" }}>
             <div className="ratio ratio-16x9" style={{ borderRadius: 12 }}>
-              {workout.video_url.includes("youtube") ||
-              workout.video_url.includes("youtu.be") ||
-              workout.video_url.includes("vimeo") ? (
+              {videoUrl.includes("youtube") || videoUrl.includes("youtu.be") || videoUrl.includes("vimeo") ? (
                 <iframe
-                  src={workout.video_url}
+                  src={videoUrl}
                   title="Workout video"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
               ) : (
-                <video controls src={workout.video_url} style={{ width: "100%" }} />
+                <video controls src={videoUrl} style={{ width: "100%" }} />
               )}
             </div>
           </section>
         )}
 
-        {/* Round Timer (List view only) */}
+        {/* Timer in List view only */}
         {view === "list" && (
           <section className="futuristic-card p-3 mb-3">
             <div className="d-flex align-items-center justify-content-between mb-2" style={{ gap: 8 }}>
@@ -383,24 +365,25 @@ export default function WorkoutPage() {
           </section>
         )}
 
-        {/* Main content */}
+        {/* Main View */}
         {hasRounds ? (
           view === "follow" ? (
             <FollowAlongViewer
-              rounds={(workout.rounds || []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))}
+              rounds={sortedRounds as any}
               exerciseNameById={exerciseNameById}
+              videoByExerciseId={videoByExerciseId}
               techVideoByCode={techVideoByCode}
               boxRoundsCount={5}
             />
           ) : (
             <ListViewer
-              boxingRounds={boxingRounds}
-              kbRounds={kbRounds}
+              boxingRounds={boxingRounds as any}
+              kbRounds={kbRounds as any}
               exerciseNameById={exerciseNameById}
+              techVideoByCode={techVideoByCode}
             />
           )
         ) : (
-          // Legacy fallback: simple list of exercises if rounds not present
           <section className="futuristic-card p-3 mb-3">
             <div
               className="fw-bold mb-2"
@@ -449,13 +432,21 @@ export default function WorkoutPage() {
           </section>
         )}
 
-        {/* Actions / Complete */}
+        {/* Actions */}
         <section className="mt-3">
           <button
-            className="btn btn-primary w-100"
             onClick={handleCompleteClick}
             disabled={isCompleted}
-            style={{ borderRadius: 12 }}
+            style={{
+              width: "100%",
+              borderRadius: 12,
+              color: "#fff",
+              background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+              boxShadow: `0 0 16px ${ACCENT}66`,
+              border: "none",
+              padding: "10px 14px",
+              fontWeight: 700,
+            }}
           >
             {isCompleted ? "✓ Completed" : "Mark Complete"}
           </button>
@@ -543,7 +534,7 @@ export default function WorkoutPage() {
                   <button className="btn btn-bxkr-outline btn-sm" onClick={() => setShowComplete(false)} style={{ borderRadius: 24 }}>
                     Cancel
                   </button>
-                  <button className="btn btn-primary btn-sm" onClick={submitCompletion} style={{ borderRadius: 24 }}>
+                  <button className="btn btn-sm" onClick={submitCompletion} style={{ borderRadius: 24, color: "#fff", background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, boxShadow: `0 0 14px ${ACCENT}66`, border: "none", paddingInline: 14 }}>
                     Save
                   </button>
                 </div>
