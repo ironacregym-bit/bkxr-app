@@ -2,7 +2,7 @@
 // components/workouts/FollowAlongViewer.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import ExerciseMedia from "./ExerciseMedia";
 import TimerControls from "./TimerControls";
 import RoundMediaRail from "./RoundMediaRail";
@@ -37,14 +37,16 @@ type RoundOut = {
   order: number;
   category: "Boxing" | "Kettlebell";
   style?: KBStyle;
-  duration_s?: number; // boxing = 180
+  duration_s?: number; // boxing default 180
   items: ExerciseItemOut[];
 };
+
+const ACCENT = "#FF8A2A";
 
 export default function FollowAlongViewer({
   rounds,
   exerciseNameById,
-  videoByExerciseId, // NEW: pass a Firestore-derived mapping { exercise_id: video_url }
+  videoByExerciseId, // optional: map exercise_id -> video_url (from /api/exercises/media)
   techVideoByCode,
   boxRoundsCount = 5,
 }: {
@@ -64,7 +66,7 @@ export default function FollowAlongViewer({
       ordered.map((r) => ({
         id: r.round_id,
         name: r.name,
-        duration: r.category === "Boxing" ? r.duration_s ?? 180 : 180,
+        duration: r.category === "Boxing" ? r.duration_s ?? 180 : 180, // 3:00 for KB display
         category: r.category,
         style: r.style,
         items: r.items || [],
@@ -87,9 +89,9 @@ export default function FollowAlongViewer({
     prev,
     totalRounds,
   } = useFollowAlongMachine(timeline, {
-    thresholds: [120, 60], // beeps at 2:00 & 1:00
+    thresholds: [120, 60], // beep at 2:00 and 1:00
     onRoundChange: (i) => {
-      // Voice cue at the transition from Boxing → Kettlebell
+      // Announce when switching from Boxing to Kettlebell
       if (
         typeof window !== "undefined" &&
         "speechSynthesis" in window &&
@@ -106,16 +108,20 @@ export default function FollowAlongViewer({
   const leftChip = `Round ${index + 1}/${totalRounds} • ${sideLabel}`;
   const rightChips = [current?.category || "", current?.style || ""].filter(Boolean);
 
-  // Minute-of-round index for 3:00 rounds (0,1,2)
+  // Minute-of-round index for 3:00 (0..2)
   const minuteIndex = useMemo(() => {
     const elapsed = (duration || 180) - remaining;
     return Math.min(2, Math.max(0, Math.floor(elapsed / 60)));
   }, [duration, remaining]);
 
-  // --- Boxing view: 1 combo per minute ---
+  /* ---------------- Boxing: 1 combo per minute ---------------- */
   function BoxingPane() {
     const combos = (current?.items || []).filter((it: any) => !!it.combo);
     const activeCombo = combos.length ? combos[minuteIndex % combos.length].combo : null;
+    const nextCombo =
+      combos.length && minuteIndex < combos.length - 1
+        ? combos[minuteIndex + 1].combo
+        : null;
 
     const activeTitle = activeCombo?.name || current?.name || "Boxing";
     const codesLine =
@@ -123,9 +129,17 @@ export default function FollowAlongViewer({
         ? activeCombo.actions.map((a: BoxingAction) => a.code).join(" • ")
         : "Cycle the 3 combos";
 
+    // Next-up label: next combo inside the round, else next round when on last minute
+    const nextUpLabel =
+      nextCombo?.name
+        ? `Next: ${nextCombo.name}`
+        : nextRound
+        ? `Next round: ${nextRound.name}`
+        : "";
+
     return (
       <div>
-        {/* Minute dots */}
+        {/* Minute dots (which combo is active) */}
         <div className="d-flex align-items-center mb-2" style={{ gap: 6 }}>
           {[0, 1, 2].map((m) => (
             <span
@@ -135,22 +149,22 @@ export default function FollowAlongViewer({
                 width: 10,
                 height: 10,
                 borderRadius: "50%",
-                background: m === minuteIndex ? "#FF8A2A" : "rgba(255,255,255,0.22)",
-                boxShadow: m === minuteIndex ? "0 0 8px #FF8A2A88" : "none",
+                background: m === minuteIndex ? ACCENT : "rgba(255,255,255,0.22)",
+                boxShadow: m === minuteIndex ? `0 0 8px ${ACCENT}88` : "none",
               }}
             />
           ))}
         </div>
 
+        {/* Big media (fallback card unless you wire per-combo videos) */}
         <ExerciseMedia
           title={activeTitle}
           subtitle={codesLine}
-          // If you later store per-combo video URLs, pass them here
           videoUrl={undefined}
           aspect="16x9"
         />
 
-        {/* Technique chips for the active combo */}
+        {/* Technique chips for the current combo */}
         {activeCombo?.actions?.length ? (
           <div className="mt-2">
             <TechniqueChips actions={activeCombo.actions} techVideoByCode={techVideoByCode} />
@@ -162,13 +176,42 @@ export default function FollowAlongViewer({
             {activeCombo.notes}
           </div>
         ) : null}
+
+        {/* Next up (combo-in-round first; next round only when appropriate) */}
+        {nextUpLabel ? (
+          <div className="mt-3 d-flex align-items-center justify-content-between">
+            <div className="text-dim" style={{ fontSize: 12 }}>
+              Next up
+            </div>
+            <div className="fw-semibold">{nextUpLabel}</div>
+          </div>
+        ) : null}
       </div>
     );
   }
 
-  // --- Kettlebell view: show each exercise's video via a rail ---
+  /* ---------------- Kettlebell: full exercise list via rail ---------------- */
   function KettlebellPane() {
     const items = current?.items || [];
+
+    // Subtitle now lists ALL exercises for this round (not just two)
+    const subtitleAll =
+      items
+        .map((it: any) => {
+          const nm =
+            (it.exercise_id && (exerciseNameById[it.exercise_id] || it.exercise_id)) ||
+            it.exercise_id ||
+            "";
+          const meta = [
+            it.reps ? `${it.reps} reps` : "",
+            typeof it.time_s === "number" ? `${it.time_s}s` : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          return [nm, meta].filter(Boolean).join(" — ");
+        })
+        .filter(Boolean)
+        .join("  •  ") || "Work for 3:00";
 
     return (
       <div>
@@ -178,12 +221,14 @@ export default function FollowAlongViewer({
             <span
               className="badge bg-transparent"
               style={{ border: "1px solid rgba(255,255,255,0.18)", color: "#cfd7df" }}
+              title={current.style}
             >
               {current.style}
             </span>
           ) : null}
         </div>
 
+        {/* Big media rail (shows ALL exercises in the round; tap to switch) */}
         <RoundMediaRail
           items={items}
           exerciseNameById={exerciseNameById}
@@ -191,27 +236,12 @@ export default function FollowAlongViewer({
           aspect="16x9"
         />
 
-        {/* Optional UX guidance under the rail */}
+        {/* Full round summary under the rail */}
         <div className="mt-2 text-dim" style={{ fontSize: 12 }}>
-          {current?.style === "EMOM"
-            ? "EMOM: perform the same prescribed work each minute; rest the remainder."
-            : current?.style === "LADDER"
-            ? "LADDER: alternate movements while increasing reps smoothly."
-            : "AMRAP: cycle movements steadily for the full 3 minutes."}
+          {subtitleAll}
         </div>
       </div>
     );
-  }
-
-  // Title/subtitle for the big header pane (used only when we don’t delegate to sub‑panes)
-  function headerTitle(): string {
-    if (!current) return "Round";
-    if (current.category === "Boxing") return current.name;
-    const first = current.items?.[0];
-    if (first?.exercise_id) {
-      return exerciseNameById[first.exercise_id] || first.exercise_id || current.name;
-    }
-    return current.name;
   }
 
   return (
@@ -233,8 +263,9 @@ export default function FollowAlongViewer({
       {/* Content */}
       {current?.category === "Boxing" ? <BoxingPane /> : <KettlebellPane />}
 
-      {/* Next up */}
-      {nextRound ? (
+      {/* If BoxingPane already shows next combo, we only show next round when applicable in BoxingPane.
+          For KB, we always show next round here. */}
+      {current?.category === "Kettlebell" && nextRound ? (
         <div className="mt-3 d-flex align-items-center justify-content-between">
           <div className="text-dim" style={{ fontSize: 12 }}>
             Next up
