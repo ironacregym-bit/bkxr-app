@@ -80,7 +80,7 @@ export default function RecipesPage() {
               const fav = favIds.has(r.id);
               return (
                 <div key={r.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
-                  <div className="bxkr-card p-2" style={{ borderRadius: 12 }}>
+                  <div className="futuristic-card p-2" style={{ borderRadius: 12 }}>
                     <Link href={`/recipes/${r.id}`} className="text-decoration-none" style={{ color: "inherit", display: "block" }}>
                       {r.image ? (
                         <img src={r.image} alt={r.title} style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 12 }} />
