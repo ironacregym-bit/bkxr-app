@@ -28,7 +28,8 @@ export default function ShoppingListDetailPage() {
   // Lists meta (to read list name)
   const { data: listsResp, mutate: mutateListMeta } = useSWR<{ lists: ListMeta[] }>(
     authed ? "/api/shopping/lists" : null,
-    fetcher
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
   );
   const listMeta = useMemo(
     () => (listsResp?.lists || []).find((x) => x.id === listId) || null,
@@ -38,25 +39,31 @@ export default function ShoppingListDetailPage() {
   // Items tied to this list
   const { data: itemsResp, mutate: mutateItems } = useSWR<{ items: Item[] }>(
     authed && listId ? `/api/shopping/list?list_id=${encodeURIComponent(listId)}` : null,
-    fetcher
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
   );
   const items = itemsResp?.items || [];
 
   // Meals attached to this list
   const { data: mealsResp, mutate: mutateMeals } = useSWR<{ recipes: ListRecipesRow[] }>(
     authed && listId ? `/api/shopping/list-recipes?list_id=${encodeURIComponent(listId)}` : null,
-    fetcher
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
   );
   const meals = mealsResp?.recipes || [];
 
-  // ----- Meta form (name only) -----
+  // ----- Inline title edit -----
+  const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState<string>(listMeta?.name || "");
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Sync name when meta loads/changes
+  // keep name in sync when meta changes
   useMemo(() => {
-    if (listMeta) setName(listMeta.name);
+    if (listMeta) {
+      setName(listMeta.name);
+      setEditingName(false);
+    }
   }, [listMeta?.id]);
 
   async function saveMeta() {
@@ -72,6 +79,7 @@ export default function ShoppingListDetailPage() {
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "Failed to update list");
       await mutateListMeta();
+      setEditingName(false);
       setMsg("List updated");
     } catch (e: any) {
       setMsg(e?.message || "Failed to update");
@@ -80,7 +88,7 @@ export default function ShoppingListDetailPage() {
     }
   }
 
-  // ----- Add Food form -----
+  // ----- Add Food form (separate tile) -----
   const [foodName, setFoodName] = useState("");
   const [foodQty, setFoodQty] = useState("");
   const [foodUnit, setFoodUnit] = useState("");
@@ -113,23 +121,25 @@ export default function ShoppingListDetailPage() {
       setFoodQty("");
       setFoodUnit("");
       await mutateItems();
-      setMsg("Added");
+      setMsg("Food added");
     } catch (e: any) {
-      setMsg(e?.message || "Failed");
+      setMsg(e?.message || "Failed to add food");
     } finally {
       setBusy(false);
     }
   }
 
-  // ----- Add Recipe via searchable picker -----
+  // ----- Add Recipe via simple, filtered UI -----
+  const [recipeMealType, setRecipeMealType] = useState<"breakfast" | "lunch" | "dinner" | "snack">("breakfast");
   const [recipeSearch, setRecipeSearch] = useState("");
   const { data: recipesResp } = useSWR<{ recipes: RecipeOption[] }>(
-    authed ? `/api/recipes/list?q=${encodeURIComponent(recipeSearch)}&limit=50` : null,
+    authed
+      ? `/api/recipes/list?meal_type=${recipeMealType}&q=${encodeURIComponent(recipeSearch)}&limit=50`
+      : null,
     fetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 30_000 }
   );
   const recipeOptions = useMemo(() => recipesResp?.recipes || [], [recipesResp]);
-
   const [selectedRecipeId, setSelectedRecipeId] = useState("");
   const [recipePeople, setRecipePeople] = useState("1");
 
@@ -144,12 +154,7 @@ export default function ShoppingListDetailPage() {
       const r = await fetch("/api/shopping/list", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "addRecipe",
-          list_id: listId,
-          recipe_id: rid,
-          people: ppl,
-        }),
+        body: JSON.stringify({ action: "addRecipe", list_id: listId, recipe_id: rid, people: ppl }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "Failed to add recipe");
@@ -158,7 +163,7 @@ export default function ShoppingListDetailPage() {
       await Promise.all([mutateItems(), mutateMeals()]);
       setMsg("Recipe ingredients added");
     } catch (e: any) {
-      setMsg(e?.message || "Failed");
+      setMsg(e?.message || "Failed to add recipe");
     } finally {
       setBusy(false);
     }
@@ -170,45 +175,145 @@ export default function ShoppingListDetailPage() {
         <title>Shopping List • BXKR</title>
       </Head>
       <main className="container py-3" style={{ paddingBottom: 80, minHeight: "100vh" }}>
+        {/* Header: back to Nutrition Home */}
         <div className="d-flex align-items-center justify-content-between mb-3">
-          <h1 className="h5 m-0">{listMeta?.name || "Shopping List"}</h1>
-          <Link href="/shopping" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
+          {/* Inline editable title */}
+          <div className="d-flex align-items-center" style={{ gap: 8 }}>
+            {!editingName ? (
+              <>
+                <h1 className="h5 m-0" style={{ fontWeight: 700 }}>{listMeta?.name || "Shopping List"}</h1>
+                <button
+                  className="btn btn-bxkr-outline btn-sm"
+                  style={{ borderRadius: 24 }}
+                  aria-label="Edit list name"
+                  onClick={() => setEditingName(true)}
+                >
+                  <i className="fas fa-pen" />
+                </button>
+              </>
+            ) : (
+              <>
+                <input
+                  className="form-control"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  aria-label="List name"
+                  style={{ minWidth: 220 }}
+                />
+                <button
+                  className="btn btn-sm"
+                  onClick={saveMeta}
+                  disabled={busy}
+                  aria-label="Save list name"
+                  style={{
+                    borderRadius: 24,
+                    color: "#fff",
+                    background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                    boxShadow: `0 0 14px ${ACCENT}66`,
+                    border: "none",
+                    paddingInline: 14,
+                  }}
+                >
+                  <i className="fas fa-check" />
+                </button>
+              </>
+            )}
+          </div>
+
+          <Link href="/nutrition-home" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
             <i className="fas fa-arrow-left" /> Back
           </Link>
         </div>
 
         {msg && <div className="alert alert-info">{msg}</div>}
 
-        {/* Meta (name only) */}
+        {/* Tile: Add Recipe to List (filtered + searchable) */}
         <div className="futuristic-card p-3 mb-3">
-          <div className="row g-2">
-            <div className="col-12 col-md-8 d-flex" style={{ gap: 8 }}>
-              <input
-                className="form-control"
-                placeholder="List name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+          <h6 className="mb-2" style={{ fontWeight: 700 }}>Add Recipe</h6>
+
+          {/* Meal type filter */}
+          <div className="d-flex flex-wrap mb-2" style={{ gap: 8 }}>
+            {(["breakfast", "lunch", "dinner", "snack"] as const).map((mt) => (
               <button
-                className="btn btn-bxkr-outline"
-                style={{ borderRadius: 24 }}
-                onClick={saveMeta}
-                disabled={busy}
+                key={mt}
+                className="btn-bxkr-outline btn-sm text-capitalize"
+                aria-pressed={recipeMealType === mt}
+                onClick={() => setRecipeMealType(mt)}
+                style={{
+                  borderRadius: 24,
+                  ...(recipeMealType === mt
+                    ? {
+                        color: "#fff",
+                        background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                        boxShadow: `0 0 14px ${ACCENT}66`,
+                        border: "none",
+                      }
+                    : {}),
+                }}
               >
-                Save
+                {mt}
               </button>
-            </div>
+            ))}
+          </div>
+
+          {/* Search + dropdown + people + add */}
+          <div className="d-flex flex-wrap align-items-end" style={{ gap: 8 }}>
+            <input
+              className="form-control"
+              placeholder="Search recipe…"
+              value={recipeSearch}
+              onChange={(e) => setRecipeSearch(e.target.value)}
+              style={{ minWidth: 220, flex: 1 }}
+            />
+            <select
+              className="form-select"
+              value={selectedRecipeId}
+              onChange={(e) => setSelectedRecipeId(e.target.value)}
+              style={{ minWidth: 240 }}
+              aria-label="Select recipe"
+            >
+              <option value="">Select a recipe…</option>
+              {recipeOptions.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.title}
+                </option>
+              ))}
+            </select>
+            <input
+              className="form-control"
+              type="number"
+              min={1}
+              placeholder="People"
+              value={recipePeople}
+              onChange={(e) => setRecipePeople(e.target.value)}
+              style={{ width: 110 }}
+              aria-label="People"
+            />
+            <button
+              className="btn btn-sm"
+              onClick={addRecipe}
+              disabled={busy || !selectedRecipeId}
+              style={{
+                borderRadius: 24,
+                color: "#fff",
+                background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                boxShadow: `0 0 14px ${ACCENT}66`,
+                border: "none",
+                paddingInline: 14,
+              }}
+            >
+              Add Recipe
+            </button>
+            <Link href="/recipes" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
+              Browse Recipes
+            </Link>
           </div>
         </div>
 
-        {/* Adders */}
+        {/* Tile: Quick Add Food (separate) */}
         <div className="futuristic-card p-3 mb-3">
-          <h6 className="mb-2" style={{ fontWeight: 700 }}>
-            Add to List
-          </h6>
-
-          {/* Add Food */}
-          <div className="d-flex flex-wrap align-items-end mb-3" style={{ gap: 8 }}>
+          <h6 className="mb-2" style={{ fontWeight: 700 }}>Quick Add Food</h6>
+          <div className="d-flex flex-wrap align-items-end" style={{ gap: 8 }}>
             <input
               className="form-control"
               placeholder="Food name"
@@ -246,58 +351,11 @@ export default function ShoppingListDetailPage() {
               Add Food
             </button>
           </div>
-
-          {/* Add Recipe (search + dropdown) */}
-          <div className="d-flex flex-wrap align-items-end" style={{ gap: 8 }}>
-            <input
-              className="form-control"
-              placeholder="Search recipe…"
-              value={recipeSearch}
-              onChange={(e) => setRecipeSearch(e.target.value)}
-              style={{ minWidth: 200, flex: 1 }}
-            />
-            <select
-              className="form-select"
-              value={selectedRecipeId}
-              onChange={(e) => setSelectedRecipeId(e.target.value)}
-              style={{ minWidth: 220 }}
-              aria-label="Select recipe"
-            >
-              <option value="">Select a recipe…</option>
-              {recipeOptions.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.title}
-                </option>
-              ))}
-            </select>
-            <input
-              className="form-control"
-              type="number"
-              min={1}
-              placeholder="People"
-              value={recipePeople}
-              onChange={(e) => setRecipePeople(e.target.value)}
-              style={{ width: 120 }}
-            />
-            <button
-              className="btn btn-bxkr-outline btn-sm"
-              onClick={addRecipe}
-              disabled={busy || !selectedRecipeId}
-              style={{ borderRadius: 24 }}
-            >
-              Add Recipe
-            </button>
-            <Link href="/recipes" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
-              Browse Recipes
-            </Link>
-          </div>
         </div>
 
         {/* Items */}
         <div className="futuristic-card p-3 mb-3">
-          <h6 className="mb-2" style={{ fontWeight: 700 }}>
-            Items
-          </h6>
+          <h6 className="mb-2" style={{ fontWeight: 700 }}>Items</h6>
           {!items.length ? (
             <div className="text-dim">No items yet.</div>
           ) : (
@@ -320,11 +378,9 @@ export default function ShoppingListDetailPage() {
           )}
         </div>
 
-        {/* Meals attached */}
+        {/* Meals attached — no people count as requested */}
         <div className="futuristic-card p-3">
-          <h6 className="mb-2" style={{ fontWeight: 700 }}>
-            Meals on this List
-          </h6>
+          <h6 className="mb-2" style={{ fontWeight: 700 }}>Meals on this List</h6>
           {!meals.length ? (
             <div className="text-dim">No meals attached yet.</div>
           ) : (
@@ -337,8 +393,6 @@ export default function ShoppingListDetailPage() {
                 >
                   <div>
                     <div className="fw-semibold">{m.title || m.recipe_id}</div>
-                    {/* Keeping people here is useful for context; tell me if you want this hidden too */}
-                    <div className="text-dim" style={{ fontSize: 12 }}>{m.people || 1} people</div>
                   </div>
                   <Link
                     href={`/recipes/${m.recipe_id}`}
