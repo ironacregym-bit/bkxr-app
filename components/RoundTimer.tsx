@@ -1,3 +1,6 @@
+
+"use client";
+
 import React, { useEffect, useRef, useState } from "react";
 
 type Mode = "work" | "rest";
@@ -6,7 +9,7 @@ export default function RoundTimer({
   rounds = 10,
   boxRounds = 5,
   work = 180, // 3 minutes
-  rest = 60   // 1 minute
+  rest = 60,  // 1 minute
 }: {
   rounds?: number;
   boxRounds?: number;
@@ -17,6 +20,17 @@ export default function RoundTimer({
   const [mode, setMode] = useState<Mode>("work");
   const [remaining, setRemaining] = useState<number>(work);
   const [running, setRunning] = useState<boolean>(false);
+
+  // --- Refs to avoid stale closures inside setInterval ---
+  const roundRef = useRef<number>(round);
+  const modeRef = useRef<Mode>(mode);
+  const remainingRef = useRef<number>(remaining);
+  const runningRef = useRef<boolean>(running);
+
+  useEffect(() => { roundRef.current = round; }, [round]);
+  useEffect(() => { modeRef.current = mode; }, [mode]);
+  useEffect(() => { remainingRef.current = remaining; }, [remaining]);
+  useEffect(() => { runningRef.current = running; }, [running]);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const beep = useRef<HTMLAudioElement | null>(null);
@@ -34,16 +48,21 @@ export default function RoundTimer({
   const playBeep = () => {
     if (beep.current) {
       beep.current.currentTime = 0;
-      beep.current.play().catch(() => {});
+      void beep.current.play().catch(() => {});
     }
   };
 
   const playTripleBell = () => {
     if (tripleBell.current) {
       tripleBell.current.currentTime = 0;
-      tripleBell.current.play().catch(() => {});
+      void tripleBell.current.play().catch(() => {});
     }
   };
+
+  // Helper: did we cross a threshold between prev -> next? (handles timer skips)
+  function crossed(prev: number, next: number, mark: number) {
+    return prev > mark && next <= mark;
+  }
 
   useEffect(() => {
     if (!running) {
@@ -52,35 +71,47 @@ export default function RoundTimer({
     }
 
     intervalRef.current = setInterval(() => {
-      setRemaining(prev => {
+      setRemaining((prev) => {
         const next = prev - 1;
 
-        // Alerts during WORK phase
-        if (mode === "work" && (next === 120 || next === 60)) {
-          playBeep();
+        // WORK-phase mid beeps: trigger exactly once when crossing 2:00 and 1:00
+        if (modeRef.current === "work") {
+          if (crossed(prev, next, 120) || crossed(prev, next, 60)) {
+            playBeep();
+          }
         }
 
+        // Handle transitions
         if (next < 0) {
-          if (mode === "work") {
-            playTripleBell(); // End of work phase
+          if (modeRef.current === "work") {
+            // End of WORK -> enter REST
+            playTripleBell();
             setMode("rest");
             return rest;
           } else {
-            const nextRound = round + 1;
+            // End of REST -> next round or finish
+            const nextRound = roundRef.current + 1;
             if (nextRound > rounds) {
-              playTripleBell(); // Final completion
+              playTripleBell(); // workout complete
               setRunning(false);
               return 0;
             }
             setRound(nextRound);
             setMode("work");
-            playBeep(); // Start next work
-            if (nextRound === boxRounds + 1 && typeof window !== "undefined" && "speechSynthesis" in window) {
-              window.speechSynthesis.speak(new SpeechSynthesisUtterance("Switch to kettlebell"));
+            playBeep(); // beep at start of next work
+            if (
+              nextRound === boxRounds + 1 &&
+              typeof window !== "undefined" &&
+              "speechSynthesis" in window
+            ) {
+              window.speechSynthesis.speak(
+                new SpeechSynthesisUtterance("Switch to kettlebell")
+              );
             }
             return work;
           }
         }
+
         return next;
       });
     }, 1000);
@@ -88,7 +119,10 @@ export default function RoundTimer({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [running, mode, round, work, rest, rounds, boxRounds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, work, rest, rounds, boxRounds]);
+  // ^ We rely on refs for mode/round/remaining to avoid stale closures and
+  //   keep the dependencies stable for the ticking effect.
 
   const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
   const ss = String(Math.max(remaining % 60, 0)).padStart(2, "0");
@@ -99,7 +133,8 @@ export default function RoundTimer({
 
   const handleStart = () => {
     setRunning(true);
-    playBeep(); // Beep at start
+    // Initial user gesture unlocks audio on iOS/Safari
+    playBeep();
   };
   const handlePause = () => setRunning(false);
   const handleReset = () => {
@@ -126,27 +161,32 @@ export default function RoundTimer({
       )}
 
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={handleStart} disabled={running} style={btnStyle("primary")}>Start</button>
-        <button onClick={handlePause} disabled={!running} style={btnStyle("secondary")}>Pause</button>
-        <button onClick={handleReset} style={btnStyle("outline")}>Reset</button>
+        <button onClick={handleStart} disabled={running} style={btnStyle("primary")}>
+          Start
+        </button>
+        <button onClick={handlePause} disabled={!running} style={btnStyle("secondary")}>
+          Pause
+        </button>
+        <button onClick={handleReset} style={btnStyle("outline")}>
+          Reset
+        </button>
       </div>
 
       <div style={{ marginTop: 8, color: "#6f8399", fontSize: 12 }}>
-        Beeps at start, 2:00 & 1:00 marks. Triple bell at round end.
+        Beeps at start, and when crossing 2:00 & 1:00 in each WORK phase. Triple bell at round end.
       </div>
     </div>
   );
 }
 
 function btnStyle(variant: "primary" | "secondary" | "outline") {
-  const base = {
+  const base: React.CSSProperties = {
     cursor: "pointer",
     padding: "8px 14px",
     borderRadius: 8,
     border: "1px solid transparent",
     fontWeight: 600,
-  } as React.CSSProperties;
-
+  };
   switch (variant) {
     case "primary":
       return { ...base, background: "#0d6efd", color: "#fff" };
@@ -156,3 +196,4 @@ function btnStyle(variant: "primary" | "secondary" | "outline") {
       return { ...base, background: "transparent", color: "#9fb3c8", border: "1px solid #243049" };
   }
 }
+``
