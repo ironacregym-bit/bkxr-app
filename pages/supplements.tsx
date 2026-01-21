@@ -29,17 +29,17 @@ export default function SupplementsPage() {
           {/* optional future filter/search controls can go here */}
         </div>
 
-        <div className="bxkr-card p-3 mb-3">
+        <div className="futuristic-card p-3 mb-3">
           <p className="mb-0 text-dim">
             Hand‑picked supplements I recommend. Tap a card to open the product page in a new tab.
           </p>
         </div>
 
-        {isLoading && <div className="bxkr-card p-3 mb-3">Loading supplements…</div>}
-        {error && <div className="bxkr-card p-3 mb-3 text-danger">Failed to load supplements.</div>}
+        {isLoading && <div className="futuristic-card p-3 mb-3">Loading supplements…</div>}
+        {error && <div className="futuristic-card p-3 mb-3 text-danger">Failed to load supplements.</div>}
 
         {items.length === 0 && !isLoading && !error && (
-          <div className="bxkr-card p-3 mb-3 text-dim">No supplements found.</div>
+          <div className="futuristic-card p-3 mb-3 text-dim">No supplements found.</div>
         )}
 
         {/* List */}
@@ -53,7 +53,7 @@ export default function SupplementsPage() {
                 rel="noopener noreferrer"
                 aria-label={`Open ${s.name} product page`}
               >
-                <div className="bxkr-card p-3 d-flex align-items-center justify-content-between">
+                <div className="futuristic-card p-3 d-flex align-items-center justify-content-between">
                   <div className="d-flex align-items-center gap-3">
                     {/* Image (optional) */}
                     {s.image_url ? (
