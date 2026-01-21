@@ -486,7 +486,7 @@ export default function NutritionPage() {
                   </button>
 
                   {mealEntries.map((e) => (
-                    <div key={e.id} className="bxkr-card p-3 mb-2 d-flex justify-content-between align-items-center">
+                    <div key={e.id} className="futuristic-card p-3 mb-2 d-flex justify-content-between align-items-center">
                       <div>
                         <div className="fw-bold d-flex align-items-center">
                           {e.food.name} ({e.food.brand})
