@@ -9,7 +9,13 @@ import useSWR from "swr";
 import { useMemo, useState } from "react";
 import BottomNav from "../../components/BottomNav";
 
-type Recipe = { id: string; title: string; meal_type: "breakfast"|"lunch"|"dinner"|"snack"; image?: string|null; per_serving?: { calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number } };
+type Recipe = {
+  id: string;
+  title: string;
+  meal_type: "breakfast"|"lunch"|"dinner"|"snack";
+  image?: string|null;
+  per_serving?: { calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number };
+};
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 export default function RecipesPage() {
@@ -19,10 +25,30 @@ export default function RecipesPage() {
   const [mealType, setMealType] = useState<Recipe["meal_type"]>("breakfast");
   const [q, setQ] = useState("");
 
-  const { data } = useSWR<{ recipes: Recipe[] }>(
+  const { data: listResp } = useSWR<{ recipes: Recipe[] }>(
     authed ? `/api/recipes/list?meal_type=${mealType}&q=${encodeURIComponent(q)}` : null, fetcher
   );
-  const recipes = useMemo(() => data?.recipes || [], [data]);
+  const recipes = useMemo(() => listResp?.recipes || [], [listResp]);
+
+  const { data: favResp, mutate: mutateFavs } = useSWR<{ favourites: string[] }>(
+    authed ? `/api/recipes/favourites?limit=100` : null, fetcher
+  );
+  const favIds = useMemo(() => new Set(favResp?.favourites || []), [favResp]);
+
+  async function toggleFav(id: string, makeFav: boolean) {
+    try {
+      if (makeFav) {
+        await fetch("/api/recipes/favourites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ recipe_id: id }),
+        });
+      } else {
+        await fetch(`/api/recipes/favourites?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      }
+      await mutateFavs();
+    } catch {}
+  }
 
   return (
     <>
@@ -50,28 +76,41 @@ export default function RecipesPage() {
 
         <section className="mb-3">
           <div className="row g-2">
-            {recipes.map((r) => (
-              <div key={r.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
-                <Link href={`/recipes/${r.id}`} className="bxkr-card p-2 text-decoration-none" style={{ display: "block", color: "inherit", borderRadius: 12 }}>
-                  {r.image ? (
-                    <img src={r.image} alt={r.title} style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 12 }} />
-                  ) : (
-                    <div className="text-dim" style={{ height: 140, display:"flex", alignItems:"center", justifyContent:"center", border:"1px solid var(--bxkr-card-border)", borderRadius: 12 }}>
-                      No image
-                    </div>
-                  )}
-                  <div className="mt-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <div className="fw-semibold">{r.title}</div>
-                      <span className="bxkr-chip text-capitalize">{r.meal_type}</span>
-                    </div>
-                    <div className="text-dim" style={{ fontSize: 13 }}>
-                      {Math.round(r.per_serving?.calories || 0)} kcal • P{Math.round(r.per_serving?.protein_g || 0)} • C{Math.round(r.per_serving?.carbs_g || 0)} • F{Math.round(r.per_serving?.fat_g || 0)}
+            {recipes.map((r) => {
+              const fav = favIds.has(r.id);
+              return (
+                <div key={r.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
+                  <div className="bxkr-card p-2" style={{ borderRadius: 12 }}>
+                    <Link href={`/recipes/${r.id}`} className="text-decoration-none" style={{ color: "inherit", display: "block" }}>
+                      {r.image ? (
+                        <img src={r.image} alt={r.title} style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 12 }} />
+                      ) : (
+                        <div className="text-dim" style={{ height: 140, display:"flex", alignItems:"center", justifyContent:"center", border:"1px solid var(--bxkr-card-border)", borderRadius: 12 }}>
+                          No image
+                        </div>
+                      )}
+                    </Link>
+
+                    <div className="mt-2 d-flex align-items-start justify-content-between">
+                      <div className="me-2">
+                        <div className="fw-semibold" style={{ lineHeight: 1.2 }}>{r.title}</div>
+                        <div className="text-dim" style={{ fontSize: 12 }}>
+                          {Math.round(r.per_serving?.calories || 0)} kcal • P{Math.round(r.per_serving?.protein_g || 0)} • C{Math.round(r.per_serving?.carbs_g || 0)} • F{Math.round(r.per_serving?.fat_g || 0)}
+                        </div>
+                      </div>
+                      <button
+                        aria-label={fav ? "Remove from favourites" : "Add to favourites"}
+                        className="btn btn-sm btn-bxkr-outline"
+                        style={{ borderRadius: 999, width: 36, height: 36, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                        onClick={() => toggleFav(r.id, !fav)}
+                      >
+                        <i className={`fas ${fav ? "fa-heart" : "fa-heart"}`} style={{ color: fav ? "#ff4d6d" : "#cfd7df" }} />
+                      </button>
                     </div>
                   </div>
-                </Link>
-              </div>
-            ))}
+                </div>
+              );
+            })}
             {!recipes.length && <div className="text-dim">No recipes found.</div>}
           </div>
         </section>
