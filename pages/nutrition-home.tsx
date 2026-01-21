@@ -266,7 +266,7 @@ export default function NutritionHome() {
                     <div key={r.id} className="col-6 col-sm-4 col-md-3">
                       <Link
                         href={`/recipes/${r.id}`}
-                        className="bxkr-card p-2 text-decoration-none"
+                        className="futuristic-card p-2 text-decoration-none"
                         style={{ display: "block", color: "inherit", borderRadius: 12 }}
                       >
                         {r.image ? (
