@@ -1,99 +1,253 @@
 
-// pages/api/shopping/lists.ts
+// pages/api/shopping/list.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import firestore from "../../../lib/firestoreClient";
 
-type ListMeta = {
-  id: string;
-  name: string;
-  people: number;
-  created_at: string;
-  updated_at: string;
-};
+type Item = { id?: string; name: string; qty?: number | null; unit?: string | null; done?: boolean; added_at?: string; updated_at?: string; };
+type RecipeIngredient = { name?: string; ingredient?: string; title?: string; qty?: number; quantity?: number; amount?: number; grams?: number; unit?: string; uom?: string; };
+type RecipeDoc = { title?: string; servings?: number; ingredients?: RecipeIngredient[]; items?: RecipeIngredient[] };
 
 const isoNow = () => new Date().toISOString();
 const toNumber = (x: any, d = 0) => (Number.isFinite(Number(x)) ? Number(x) : d);
+const normaliseName = (s: string) => String(s || "").trim().toLowerCase();
+const keyFor = (name: string, unit?: string | null) => `${normaliseName(name)}__${(unit || "").trim().toLowerCase()}`;
+
+function readIngredientRow(row: RecipeIngredient): { name: string; qty: number | null; unit: string | null } | null {
+  const name = (row.name || row.ingredient || row.title || "").toString().trim();
+  if (!name) return null;
+  const qtyRaw = row.qty ?? row.quantity ?? row.amount ?? row.grams;
+  const qty = qtyRaw != null ? toNumber(qtyRaw, 0) : null;
+  const unit = (row.unit || row.uom || (row.grams != null ? "g" : null)) ?? null;
+  return { name, qty, unit };
+}
+
+async function expandRecipeIngredients(recipeId: string, people: number): Promise<{ ok: true; items: Item[]; title: string } | { ok: false; error: string }> {
+  const doc = await firestore.collection("recipes").doc(recipeId).get();
+  if (!doc.exists) return { ok: false, error: "Recipe not found" };
+  const data = (doc.data() || {}) as RecipeDoc;
+
+  const title = String(data.title || "Recipe");
+  const baseServings = toNumber((data.servings as any) ?? 1, 1);
+  const list = Array.isArray(data.ingredients) ? data.ingredients : Array.isArray(data.items) ? data.items : [];
+  if (!Array.isArray(list) || list.length === 0) return { ok: false, error: "Recipe has no ingredients" };
+
+  const factor = Math.max(0, people) / (baseServings > 0 ? baseServings : 1);
+  const scaled: Item[] = [];
+  for (const row of list) {
+    const parsed = readIngredientRow(row);
+    if (!parsed) continue;
+    const scaledQty = parsed.qty != null ? parsed.qty * (factor || 1) : null;
+    scaled.push({ name: parsed.name, qty: scaledQty != null ? Number(scaledQty.toFixed(2)) : null, unit: parsed.unit ?? null });
+  }
+
+  // Merge dups within expansion
+  const merged: Record<string, Item> = {};
+  for (const it of scaled) {
+    const k = keyFor(it.name, it.unit);
+    if (!merged[k]) merged[k] = { ...it };
+    else {
+      const prev = merged[k].qty != null ? merged[k].qty : null;
+      const next = it.qty != null ? it.qty : null;
+      merged[k].qty =
+        prev != null && next != null ? Number((prev + next).toFixed(2)) : next != null ? next : prev != null ? prev : null;
+    }
+  }
+  return { ok: true, items: Object.values(merged), title };
+}
+
+async function upsertItemsMerge(
+  itemsCollRef: FirebaseFirestore.CollectionReference<FirebaseFirestore.DocumentData>,
+  incoming: Item[],
+  listId?: string
+): Promise<{ added: number; updated: number }> {
+  if (!incoming.length) return { added: 0, updated: 0 };
+
+  const existingSnap = await itemsCollRef.get();
+  const existingByKey = new Map<string, { id: string; name: string; unit: string | null; qty: number | null; list_id?: string }>();
+  existingSnap.forEach((d) => {
+    const data = d.data() as any;
+    existingByKey.set(keyFor(data.name || "", data.unit ?? null), { id: d.id, name: data.name, unit: data.unit ?? null, qty: data.qty ?? null, list_id: data.list_id });
+  });
+
+  let added = 0;
+  let updated = 0;
+  const batch = firestore.batch();
+  const now = isoNow();
+
+  for (const it of incoming) {
+    const name = String(it.name || "").trim();
+    if (!name) continue;
+    const unit = (it.unit ?? null) as string | null;
+    const qty = it.qty != null ? toNumber(it.qty, 0) : null;
+
+    // treat (name,unit) across same list as the key; if existingByKey has a match from a different list, we should not merge across lists
+    const found = Array.from(existingByKey.values()).find((x) => x.name === name && x.unit === unit && (!listId || x.list_id === listId));
+
+    if (found) {
+      const prevQty = found.qty != null ? toNumber(found.qty, 0) : null;
+      const nextQty = prevQty != null && qty != null ? prevQty + qty : qty != null ? qty : prevQty != null ? prevQty : null;
+      const ref = itemsCollRef.doc(found.id);
+      batch.update(ref, { name, unit: unit ?? null, qty: nextQty ?? null, updated_at: now });
+      updated++;
+    } else {
+      const ref = itemsCollRef.doc();
+      batch.set(ref, { name, unit: unit ?? null, qty: qty ?? null, done: false, list_id: listId || null, added_at: now, updated_at: now });
+      added++;
+    }
+  }
+
+  if (added + updated > 0) await batch.commit();
+  return { added, updated };
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
   const email = session?.user?.email;
   if (!email) return res.status(401).json({ error: "Unauthorized" });
 
+  const coll = firestore.collection("shopping_lists").doc(email).collection("items");
   const listsCol = firestore.collection("shopping_lists").doc(email).collection("lists");
-  const itemsCol = firestore.collection("shopping_lists").doc(email).collection("items");
 
   try {
     if (req.method === "GET") {
-      const snap = await listsCol.orderBy("created_at", "desc").get();
-      const lists: ListMeta[] = snap.docs.map((d) => {
-        const x = d.data() as any;
-        return {
-          id: d.id,
-          name: String(x.name || "My List"),
-          people: toNumber(x.people, 1),
-          created_at: x.created_at || isoNow(),
-          updated_at: x.updated_at || isoNow(),
-        };
-      });
-      return res.status(200).json({ lists });
+      const listId = (req.query.list_id as string) || "";
+      if (listId) {
+        const snap = await coll.where("list_id", "==", listId).orderBy("added_at", "desc").limit(500).get();
+        const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+        return res.status(200).json({ items });
+      }
+      // Back‑compat: no filter, return recent items
+      const snap = await coll.orderBy("added_at", "desc").limit(200).get();
+      const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      return res.status(200).json({ items });
     }
 
     if (req.method === "POST") {
-      const { name, people } = (req.body || {}) as { name?: string; people?: number };
-      const n = String(name || "").trim() || "My List";
-      const p = toNumber(people, 1);
-      const now = isoNow();
-      const ref = await listsCol.add({ name: n, people: p, created_at: now, updated_at: now });
-      return res.status(201).json({
-        list: { id: ref.id, name: n, people: p, created_at: now, updated_at: now },
-      });
+      const body = (req.body || {}) as any;
+      const action: string = typeof body.action === "string" ? body.action.trim() : "";
+      const listId = typeof body.list_id === "string" && body.list_id.trim() ? body.list_id.trim() : "";
+
+      if (action === "addFoods") {
+        const foods = Array.isArray(body.foods) ? (body.foods as any[]) : [];
+        if (!foods.length) return res.status(400).json({ error: "foods required" });
+        const incoming: Item[] = foods
+          .map((f) => ({ name: String(f.name || "").trim(), qty: f.qty != null ? toNumber(f.qty, 0) : null, unit: f.unit != null ? String(f.unit) : null }))
+          .filter((x) => x.name);
+
+        const { added, updated } = await upsertItemsMerge(coll, incoming, listId || undefined);
+        const snap = listId
+          ? await coll.where("list_id", "==", listId).orderBy("added_at", "desc").limit(500).get()
+          : await coll.orderBy("added_at", "desc").limit(200).get();
+        const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+        return res.status(200).json({ ok: true, added, updated, items });
+      }
+
+      if (action === "addRecipe") {
+        const recipeId = String(body.recipe_id || "").trim();
+        if (!recipeId) return res.status(400).json({ error: "recipe_id required" });
+        const people = toNumber(body.people, 1);
+
+        const ex = await expandRecipeIngredients(recipeId, people);
+        if (!ex.ok) return res.status(400).json({ error: ex.error });
+
+        // Record the meal under the target list, if provided
+        if (listId) {
+          const listDoc = await listsCol.doc(listId).get();
+          if (listDoc.exists) {
+            await listsCol
+              .doc(listId)
+              .collection("recipes")
+              .add({ recipe_id: recipeId, title: ex.title, people, added_at: isoNow() });
+            await listsCol.doc(listId).set({ updated_at: isoNow() }, { merge: true });
+          }
+        }
+
+        const { added, updated } = await upsertItemsMerge(coll, ex.items, listId || undefined);
+        const snap = listId
+          ? await coll.where("list_id", "==", listId).orderBy("added_at", "desc").limit(500).get()
+          : await coll.orderBy("added_at", "desc").limit(200).get();
+        const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+        return res.status(200).json({ ok: true, added, updated, items });
+      }
+
+      if (action === "addRecipes") {
+        const itemsArr = Array.isArray(body.items) ? (body.items as any[]) : [];
+        if (!itemsArr.length) return res.status(400).json({ error: "items array required" });
+
+        const aggregated: Item[] = [];
+        for (const row of itemsArr) {
+          const rid = String(row?.recipe_id || "").trim();
+          if (!rid) continue;
+          const ppl = toNumber(row?.people, 1);
+          const ex = await expandRecipeIngredients(rid, ppl);
+          if (ex.ok) {
+            aggregated.push(...ex.items);
+            if (listId) {
+              await listsCol
+                .doc(listId)
+                .collection("recipes")
+                .add({ recipe_id: rid, title: ex.title, people: ppl, added_at: isoNow() });
+            }
+          }
+        }
+        if (!aggregated.length) return res.status(400).json({ error: "No valid recipe expansions" });
+
+        if (listId) await listsCol.doc(listId).set({ updated_at: isoNow() }, { merge: true });
+
+        const { added, updated } = await upsertItemsMerge(coll, aggregated, listId || undefined);
+        const snap = listId
+          ? await coll.where("list_id", "==", listId).orderBy("added_at", "desc").limit(500).get()
+          : await coll.orderBy("added_at", "desc").limit(200).get();
+        const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+        return res.status(200).json({ ok: true, added, updated, items });
+      }
+
+      // Back‑compat: add a single item (optionally to a list)
+      const { name, qty, unit } = body as { name?: string; qty?: number | null; unit?: string | null };
+      if (!name || !String(name).trim()) return res.status(400).json({ error: "name required" });
+      const doc = coll.doc();
+      await doc.set(
+        {
+          name: String(name).trim(),
+          qty: typeof qty === "number" ? qty : null,
+          unit: unit ? String(unit) : null,
+          done: false,
+          list_id: listId || null,
+          added_at: isoNow(),
+          updated_at: isoNow(),
+        },
+        { merge: true }
+      );
+      return res.status(200).json({ ok: true, id: doc.id });
     }
 
     if (req.method === "PATCH") {
-      const { id, name, people } = (req.body || {}) as { id?: string; name?: string; people?: number };
+      const { id, done, name, qty, unit } = (req.body || {}) as { id?: string; done?: boolean; name?: string; qty?: number | null; unit?: string | null };
       if (!id) return res.status(400).json({ error: "id required" });
-      const patch: any = { updated_at: isoNow() };
-      if (name !== undefined) patch.name = String(name || "").trim();
-      if (people !== undefined) patch.people = toNumber(people, 1);
-      await listsCol.doc(id).set(patch, { merge: true });
-      const doc = await listsCol.doc(id).get();
-      const x = doc.data() as any;
-      return res.status(200).json({
-        list: {
-          id,
-          name: x.name,
-          people: x.people,
-          created_at: x.created_at,
-          updated_at: x.updated_at,
-        },
-      });
+      const patch: Record<string, any> = {};
+      if (typeof done === "boolean") patch.done = done;
+      if (typeof name === "string") patch.name = name.trim();
+      if (typeof qty === "number") patch.qty = qty;
+      if (typeof unit === "string") patch.unit = unit;
+      if (Object.keys(patch).length === 0) return res.status(400).json({ error: "No fields to update" });
+      patch.updated_at = isoNow();
+      await coll.doc(id).set(patch, { merge: true });
+      return res.status(200).json({ ok: true });
     }
 
     if (req.method === "DELETE") {
       const { id } = (req.body || {}) as { id?: string };
       if (!id) return res.status(400).json({ error: "id required" });
-
-      // Delete: items in this list, any attached recipes, and the list doc
-      const listRef = listsCol.doc(id);
-      const batch = firestore.batch();
-
-      const itemsSnap = await itemsCol.where("list_id", "==", id).get();
-      itemsSnap.forEach((d) => batch.delete(d.ref));
-
-      const recipesSnap = await listRef.collection("recipes").get();
-      recipesSnap.forEach((d) => batch.delete(d.ref));
-
-      batch.delete(listRef);
-      await batch.commit();
+      await coll.doc(id).delete();
       return res.status(200).json({ ok: true });
     }
 
     res.setHeader("Allow", "GET, POST, PATCH, DELETE");
     return res.status(405).json({ error: "Method not allowed" });
   } catch (e: any) {
-    console.error("[shopping/lists]", e?.message || e);
-    return res.status(500).json({ error: "Lists error" });
+    console.error("[shopping/list]", e?.message || e);
+    return res.status(500).json({ error: "Shopping list error" });
   }
 }
