@@ -2,20 +2,26 @@
 // components/workouts/ListViewer.tsx
 "use client";
 
+import TechniqueChips, { BoxingAction } from "./TechniqueChips";
+import ProtocolBadge, { KBStyle } from "./ProtocolBadge";
+
 /**
- * Simplified linear view of the workout.
- * (No TechniqueChips or ProtocolBadge here yet — we’ll wire those in next.)
+ * Linear list view with Boxing + Kettlebell sections.
+ * - Includes TechniqueChips under each boxing combo (with optional technique links)
+ * - Includes ProtocolBadge (EMOM/AMRAP/LADDER explainer) next to kettlebell round titles
  */
 
-type KBStyle = "EMOM" | "AMRAP" | "LADDER";
-type BoxingAction = { kind: "punch" | "defence"; code: string; count?: number; notes?: string };
 type ExerciseItemOut = {
   item_id: string;
   type: "Boxing" | "Kettlebell";
   style?: KBStyle | "Combo";
   order: number;
+
+  // Boxing
   duration_s?: number;
   combo?: { name?: string; actions: BoxingAction[]; notes?: string };
+
+  // Kettlebell
   exercise_id?: string;
   reps?: string;
   time_s?: number;
@@ -23,6 +29,7 @@ type ExerciseItemOut = {
   tempo?: string;
   rest_s?: number;
 };
+
 type RoundOut = {
   round_id: string;
   name: string;
@@ -37,10 +44,12 @@ export default function ListViewer({
   boxingRounds,
   kbRounds,
   exerciseNameById,
+  techVideoByCode, // ✅ optional and now typed
 }: {
   boxingRounds: RoundOut[];
   kbRounds: RoundOut[];
   exerciseNameById: Record<string, string>;
+  techVideoByCode?: Record<string, string | undefined>;
 }) {
   return (
     <>
@@ -67,9 +76,16 @@ export default function ListViewer({
                   border: "1px solid rgba(255,255,255,0.08)",
                 }}
               >
-                <div className="d-flex justify-content-between align-items-center mb-2" style={{ gap: 8 }}>
-                  <div style={{ fontWeight: 600 }}>{round.name || `Boxing Round ${idx + 1}`}</div>
-                  <small style={{ opacity: 0.7 }}>{(round.duration_s ?? 180) / 60} mins</small>
+                <div
+                  className="d-flex justify-content-between align-items-center mb-2"
+                  style={{ gap: 8 }}
+                >
+                  <div style={{ fontWeight: 600 }}>
+                    {round.name || `Boxing Round ${idx + 1}`}
+                  </div>
+                  <small style={{ opacity: 0.7 }}>
+                    {(round.duration_s ?? 180) / 60} mins
+                  </small>
                 </div>
 
                 <div className="row gx-2 gy-2">
@@ -78,10 +94,14 @@ export default function ListViewer({
                     const actions = c?.actions || [];
                     const actionsLine =
                       actions.length > 0
-                        ? actions.map(a => a.code).join(" • ")
+                        ? actions.map((a) => a.code).join(" • ")
                         : "—";
+
                     return (
-                      <div key={item.item_id || `box-item-${i}`} className="col-12 col-md-4">
+                      <div
+                        key={item.item_id || `box-item-${i}`}
+                        className="col-12 col-md-4"
+                      >
                         <div
                           className="p-2"
                           style={{
@@ -90,8 +110,13 @@ export default function ListViewer({
                             border: "1px solid rgba(255,255,255,0.08)",
                           }}
                         >
-                          <div className="d-flex align-items-center justify-content-between mb-1" style={{ gap: 8 }}>
-                            <div className="fw-semibold">{c?.name || `Combo ${i + 1}`}</div>
+                          <div
+                            className="d-flex align-items-center justify-content-between mb-1"
+                            style={{ gap: 8 }}
+                          >
+                            <div className="fw-semibold">
+                              {c?.name || `Combo ${i + 1}`}
+                            </div>
                             <span
                               className="badge bg-transparent"
                               style={{
@@ -102,7 +127,22 @@ export default function ListViewer({
                               Combo
                             </span>
                           </div>
-                          <div className="text-dim" style={{ fontSize: 13 }}>{actionsLine}</div>
+
+                          {/* Simple codes line */}
+                          <div className="text-dim" style={{ fontSize: 13 }}>
+                            {actionsLine}
+                          </div>
+
+                          {/* Technique video chips */}
+                          {actions.length > 0 ? (
+                            <div className="mt-1">
+                              <TechniqueChips
+                                actions={actions}
+                                techVideoByCode={techVideoByCode}
+                              />
+                            </div>
+                          ) : null}
+
                           {c?.notes ? (
                             <div className="mt-1">
                               <small style={{ opacity: 0.8 }}>{c.notes}</small>
@@ -123,7 +163,10 @@ export default function ListViewer({
       <section className="futuristic-card p-3 mb-3">
         <div
           className="fw-bold mb-2"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", paddingBottom: 8 }}
+          style={{
+            borderBottom: "1px solid rgba(255,255,255,0.15)",
+            paddingBottom: 8,
+          }}
         >
           Kettlebell Rounds
         </div>
@@ -142,9 +185,24 @@ export default function ListViewer({
                   border: "1px solid rgba(255,255,255,0.08)",
                 }}
               >
-                <div className="d-flex justify-content-between align-items-center mb-2" style={{ gap: 8 }}>
-                  <div style={{ fontWeight: 600 }}>
+                <div
+                  className="d-flex justify-content-between align-items-center mb-2"
+                  style={{ gap: 8 }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
                     {round.name || `Kettlebells Round ${idx + 1}`}
+                    {round.style ? (
+                      <ProtocolBadge
+                        style={round.style as KBStyle}
+                        summaryLabel={round.style}
+                      />
+                    ) : null}
                   </div>
                   {round.style ? (
                     <span
@@ -183,7 +241,9 @@ export default function ListViewer({
                     >
                       <div>
                         <div style={{ fontWeight: 600 }}>{displayName}</div>
-                        {!!bits && <small style={{ opacity: 0.7 }}>{bits}</small>}
+                        {!!bits && (
+                          <small style={{ opacity: 0.7 }}>{bits}</small>
+                        )}
                       </div>
                     </div>
                   );
