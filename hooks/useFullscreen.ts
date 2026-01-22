@@ -27,14 +27,11 @@ export default function useFullscreen(targetRef: React.RefObject<HTMLElement>) {
   }, []);
 
   const toggle = useCallback(() => {
-    if (isFullscreen) exit();
-    else enter();
+    if (isFullscreen) exit(); else enter();
   }, [isFullscreen, enter, exit]);
 
   useEffect(() => {
-    const onChange = () => {
-      setIsFullscreen(!!document.fullscreenElement /* || (document as any).webkitFullscreenElement */);
-    };
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onChange);
     // @ts-ignore
     document.addEventListener?.("webkitfullscreenchange", onChange);
