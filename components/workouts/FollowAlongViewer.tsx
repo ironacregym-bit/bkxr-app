@@ -3,11 +3,11 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import ExerciseMedia from "./ExerciseMedia";
 import TimerControls from "./TimerControls";
 import RoundMediaRail from "./RoundMediaRail";
 import TechniqueChips, { BoxingAction } from "./TechniqueChips";
 import ModalMedia from "./ModalMedia";
+import KbCompositeMedia from "./KbCompositeMedia";
 import { useFollowAlongMachine, TimelineRound } from "../../hooks/useFollowAlongMachine";
 import useGestureControls from "../../hooks/useGestureControls";
 import useWakeLock from "../../hooks/useWakeLock";
@@ -34,8 +34,8 @@ type RoundOut = {
   name: string;
   order: number;
   category: "Boxing" | "Kettlebell";
-  style?: KBStyle;           // KB style
-  duration_s?: number;       // boxing default 180
+  style?: KBStyle;           // KB style; for boxing treat this as type (Basics/Speed/Power/Defence/Engine)
+  duration_s?: number;
   items: ExerciseItemOut[];
 };
 
@@ -45,7 +45,7 @@ export default function FollowAlongViewer({
   rounds,
   exerciseNameById,
   videoByExerciseId,
-  gifByExerciseId,          // optional: GIF map { exercise_id: gif_url }
+  gifByExerciseId,
   techVideoByCode,
   boxRoundsCount = 5,
 }: {
@@ -56,13 +56,13 @@ export default function FollowAlongViewer({
   techVideoByCode?: Record<string, string | undefined>;
   boxRoundsCount?: number;
 }) {
-  // Sorted input rounds
+  // Sorted by order
   const ordered = useMemo(
     () => rounds.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
     [rounds]
   );
 
-  // Build segments: add 1:00 rest after every round, except final; add 5:00 after boxing #5
+  // Build timeline: add 1:00 rest after each round; 5:00 half-time after boxing 5
   const timeline: TimelineRound[] = useMemo(() => {
     const segs: TimelineRound[] = [];
     const total = ordered.length;
@@ -74,12 +74,11 @@ export default function FollowAlongViewer({
         name: r.name,
         duration: dur,
         category: r.category,
-        style: r.style || (isBox ? r.name : undefined), // show boxing type label under title
+        style: r.style, // Boxing type under title; KB style under title
         items: r.items || [],
       });
 
       const isLast = idx === total - 1;
-      // Half-time rest after Boxing round 5
       if (isBox && idx === boxRoundsCount - 1) {
         segs.push({ id: `rest-half-${idx}`, name: "Half-time Rest", duration: 300, category: "Rest" });
       } else if (!isLast) {
@@ -89,8 +88,8 @@ export default function FollowAlongViewer({
     return segs;
   }, [ordered, boxRoundsCount]);
 
-  // Runner with haptics
   const [muted, setMuted] = useState(false);
+
   const {
     index, remaining, running, duration, current, nextRound,
     play, pause, reset, next, prev, totalRounds,
@@ -102,23 +101,23 @@ export default function FollowAlongViewer({
   });
 
   const isRest = current?.category === "Rest";
-  const sideLabel = current?.category === "Boxing" ? "BOX" : current?.category === "Kettlebell" ? "BELL" : "REST";
-  const leftChip = `Segment ${index + 1}/${totalRounds} • ${sideLabel}`;
+  const side = current?.category === "Boxing" ? "BOX" : current?.category === "Kettlebell" ? "BELL" : "REST";
+  const leftChip = `Segment ${index + 1}/${totalRounds} • ${side}`;
   const rightChips = [current?.category || "", current?.style || ""].filter(Boolean);
 
-  // minute index 0..floor(duration/60)
+  // 0..n minute index
   const minuteIndex = Math.max(0, Math.floor(((duration || 180) - remaining) / 60));
 
-  // wake lock while running
+  // Keep screen on while running
   useWakeLock(running);
 
-  // fullscreen toggles (tiny icons above)
+  // Fullscreen (tiny icon above)
   const cardRef = useRef<HTMLDivElement | null>(null);
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(cardRef);
 
-  // gestures (avoid page scroll)
-  const gestureRef = useRef<HTMLDivElement | null>(null);
-  useGestureControls(gestureRef, {
+  // Gesture strip (only in a narrow area, so taps on content open modals cleanly)
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  useGestureControls(stripRef, {
     onSwipeLeft: () => next(),
     onSwipeRight: () => prev(),
     onTap: () => (running ? pause() : play()),
@@ -126,29 +125,25 @@ export default function FollowAlongViewer({
     onLongPress: () => pause(),
   }, { lockScrollOnSwipe: true });
 
-  // Modal state (boxing punch or KB exercise)
+  // Modal (punch or exercise)
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
   const [modalGif, setModalGif] = useState<string | undefined>(undefined);
   const [modalVideo, setModalVideo] = useState<string | undefined>(undefined);
 
-  function openPunchModal(code: string) {
-    const label = code;
-    setModalTitle(label);
-    // map code->tech if available (video; GIF mapping future)
-    const vid = techVideoByCode?.[code];
-    setModalVideo(vid || undefined);
+  const openPunchModal = (code: string) => {
+    setModalTitle(code);
     setModalGif(undefined);
+    setModalVideo(techVideoByCode?.[code]);
     setModalOpen(true);
-  }
-  function openExerciseModal(exId: string) {
-    const title =
-      exerciseNameById[exId] || exId || "Exercise";
+  };
+  const openExerciseModal = (id: string) => {
+    const title = exerciseNameById[id] || id;
     setModalTitle(title);
-    setModalGif(gifByExerciseId?.[exId]);
-    setModalVideo(videoByExerciseId?.[exId]);
+    setModalGif(gifByExerciseId?.[id]);
+    setModalVideo(videoByExerciseId?.[id]);
     setModalOpen(true);
-  }
+  };
 
   const containerStyle: React.CSSProperties = {
     overscrollBehavior: "contain",
@@ -157,14 +152,14 @@ export default function FollowAlongViewer({
     paddingBottom: "env(safe-area-inset-bottom)",
   };
 
-  /* ---- Boxing: 1 combo per minute; next up = next combo inside round ---- */
+  /* ---------------- Boxing content ---------------- */
   function BoxingPane() {
     const combos = (current?.items || []).filter((it: any) => !!it.combo);
     const activeCombo = combos.length ? combos[Math.min(minuteIndex, combos.length - 1)].combo : null;
     const nextCombo =
       combos.length && minuteIndex < combos.length - 1 ? combos[minuteIndex + 1].combo : null;
 
-    const activeTitle = activeCombo?.name || current?.name || "Boxing";
+    const title = activeCombo?.name || current?.name || "Boxing";
     const codesLine = activeCombo?.actions?.length
       ? activeCombo.actions.map((a: BoxingAction) => a.code).join(" • ")
       : "Cycle the 3 combos";
@@ -180,13 +175,14 @@ export default function FollowAlongViewer({
 
     return (
       <div>
-        <div className="mb-1 fw-semibold">{current?.name}</div>
-        {/* Boxing-type label below title */}
+        {/* Boxing round name */}
+        <div className="fw-semibold">{current?.name}</div>
+        {/* Boxing type (Basics/Speed/Power/Defence/Engine) below */}
         {current?.style ? (
           <div className="text-dim mb-2" style={{ fontSize: 12 }}>{current.style}</div>
         ) : null}
 
-        {/* minute dots */}
+        {/* Minute dots */}
         <div className="d-flex align-items-center mb-2" style={{ gap: 6 }}>
           {[0, 1, 2].map((m) => (
             <span
@@ -201,13 +197,19 @@ export default function FollowAlongViewer({
           ))}
         </div>
 
-        <ExerciseMedia
-          title={activeTitle}
-          subtitle={codesLine}
-          aspect="16x9"
-        />
+        {/* Simple media card (if later you store combo GIF/video, pass here) */}
+        <div className="futuristic-card p-2" style={{ overflow: "hidden" }}>
+          <div className="ratio ratio-16x9" style={{ borderRadius: 12, overflow: "hidden" }}>
+            <div className="d-flex align-items-center justify-content-center text-center px-3">
+              <div>
+                <div className="fw-bold">{title}</div>
+                <div className="text-dim" style={{ fontSize: 12 }}>{codesLine}</div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-        {/* Tap a punch → modal */}
+        {/* Punch chips: tap -> modal */}
         {activeCombo?.actions?.length ? (
           <div className="mt-2">
             <TechniqueChips actions={activeCombo.actions} techVideoByCode={techVideoByCode} onActionClick={openPunchModal} />
@@ -228,25 +230,49 @@ export default function FollowAlongViewer({
     );
   }
 
-  /* ---- Kettlebell: chips for ALL exercises; modal per exercise ---- */
+  /* ---------------- Kettlebell content ---------------- */
   function KettlebellPane() {
     const items = current?.items || [];
-
     return (
       <div>
-        <div className="mb-1 fw-semibold">{current?.name || "Kettlebell Round"}</div>
-        {/* KB style label below title */}
+        <div className="fw-semibold">{current?.name || "Kettlebell Round"}</div>
+        {/* KB style badge on the right with tooltip (no expander) */}
         {current?.style ? (
-          <div className="text-dim mb-2" style={{ fontSize: 12 }}>{current.style}</div>
+          <div className="d-flex align-items-center justify-content-end mb-2">
+            <span
+              className="badge bg-transparent"
+              style={{ border: "1px solid rgba(255,255,255,0.18)", color: "#cfd7df" }}
+              title={
+                current.style === "EMOM"
+                  ? "Every Minute On the Minute: Do the work at each minute, rest the remainder."
+                  : current.style === "AMRAP"
+                  ? "As Many Rounds/Reps As Possible: Cycle movements steadily for the duration."
+                  : current.style === "LADDER"
+                  ? "Ladder: Alternate movements while increasing reps smoothly."
+                  : current.style
+              }
+            >
+              {current.style}
+            </span>
+          </div>
         ) : null}
 
+        {/* Composite grid of all exercise GIFs */}
+        <KbCompositeMedia
+          items={items}
+          gifByExerciseId={gifByExerciseId}
+          exerciseNameById={exerciseNameById}
+          aspect="16x9"
+        />
+
+        {/* Chips for all exercises (tap -> modal) */}
         <RoundMediaRail
           items={items}
           exerciseNameById={exerciseNameById}
-          onOpenMedia={(id) => openExerciseModal(id)}
+          onOpenMedia={openExerciseModal}
         />
 
-        {/* Optional: 'Next up' shows next segment (usually rest or next round) */}
+        {/* Next up (usually rest/next round) */}
         {nextRound ? (
           <div className="mt-3 d-flex align-items-center justify-content-between">
             <div className="text-dim" style={{ fontSize: 12 }}>Next up</div>
@@ -257,11 +283,11 @@ export default function FollowAlongViewer({
     );
   }
 
-  /* ---- Rest pane (simple) ---- */
+  /* ---------------- Rest content ---------------- */
   function RestPane() {
     return (
       <div className="text-center">
-        <div className="mb-1 fw-semibold">{current?.name || "Rest"}</div>
+        <div className="fw-semibold">{current?.name || "Rest"}</div>
         <div className="text-dim" style={{ fontSize: 12 }}>Breathe, shake out, hydrate.</div>
       </div>
     );
@@ -273,7 +299,7 @@ export default function FollowAlongViewer({
       className="futuristic-card p-3 mb-3"
       style={containerStyle}
     >
-      {/* Tiny icon row (top-right): sound & fullscreen */}
+      {/* Tiny icons (top-right) */}
       <div className="d-flex justify-content-end" style={{ gap: 8, marginTop: -6, marginBottom: 4 }}>
         <button
           className="btn btn-bxkr-outline btn-sm"
@@ -282,7 +308,7 @@ export default function FollowAlongViewer({
           aria-label={muted ? "Unmute" : "Mute"}
           title={muted ? "Unmute" : "Mute"}
         >
-          {muted ? "🔇" : "🔊"}
+          <i className={`fas ${muted ? "fa-volume-xmark" : "fa-volume-high"}`} />
         </button>
         <button
           className="btn btn-bxkr-outline btn-sm"
@@ -291,7 +317,7 @@ export default function FollowAlongViewer({
           aria-label="Fullscreen"
           title="Fullscreen"
         >
-          ⤢
+          <i className="fas fa-maximize" />
         </button>
       </div>
 
@@ -309,17 +335,35 @@ export default function FollowAlongViewer({
         rightChips={[...(isRest ? ["Rest"] : []), ...rightChips]}
       />
 
-      {/* Content – wrapped in gesture area */}
-      <div ref={gestureRef} style={{ touchAction: "pan-y" }}>
+      {/* Content */}
+      <div style={{ touchAction: "pan-y" }}>
         {isRest
           ? <RestPane />
           : current?.category === "Boxing"
-            ? <BoxingPane />
-            : <KettlebellPane />
+          ? <BoxingPane />
+          : <KettlebellPane />
         }
       </div>
 
-      {/* Media modal (punch or exercise) */}
+      {/* Swipe strip (dedicated gesture area so taps on content open modals) */}
+      <div
+        ref={stripRef}
+        className="mt-2 d-flex align-items-center justify-content-center"
+        style={{
+          userSelect: "none",
+          touchAction: "none",
+          border: "1px dashed rgba(255,255,255,0.2)",
+          borderRadius: 999,
+          fontSize: 12,
+          color: "#cfd7df",
+          padding: "6px 10px",
+        }}
+        title="Swipe here to change"
+      >
+        <i className="fas fa-arrows-left-right" /> <span className="ms-2">Swipe here</span>
+      </div>
+
+      {/* Media modal */}
       <ModalMedia
         open={modalOpen}
         onClose={() => setModalOpen(false)}
