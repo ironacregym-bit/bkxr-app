@@ -147,3 +147,4 @@ export default function useGestureControls<T extends HTMLElement>(
     ref, onSwipeLeft, onSwipeRight, onTap, onDoubleTap, onLongPress,
     SWIPE, TAP_MOVE, TAP_TIME, DBL_GAP, LONG_MS, LOCK_SCROLL
   ]);
+}
