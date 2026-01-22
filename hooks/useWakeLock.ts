@@ -1,150 +1,81 @@
 
-// hooks/useGestureControls.ts
+// hooks/useWakeLock.ts
 "use client";
 
 import { useEffect, useRef } from "react";
 
-type Callbacks = {
-  onSwipeLeft?: () => void;
-  onSwipeRight?: () => void;
-  onTap?: () => void;
-  onDoubleTap?: () => void;
-  onLongPress?: () => void;
+export type WakeLockOptions = {
+  /** Re-request the lock when tab/app becomes visible again. Default true */
+  reRequestOnVisibility?: boolean;
+  /** For test environments or SSR stubs */
+  doc?: Document;
+  nav?: any;
 };
 
-type Options = {
-  swipeThresholdPx?: number; // default 60
-  tapMoveTolPx?: number;     // default 8
-  tapTimeMs?: number;        // default 220
-  dblTapGapMs?: number;      // default 280
-  longPressMs?: number;      // default 450
-  lockScrollOnSwipe?: boolean; // default true
-};
+// Overloads so calls with 1 or 2 args are valid
+export default function useWakeLock(enabled: boolean): void;
+export default function useWakeLock(enabled: boolean, opts?: WakeLockOptions): void;
 
-export default function useGestureControls<T extends HTMLElement>(
-  ref: React.RefObject<T>,
-  cbs: Callbacks,
-  opts: Options = {}
-) {
-  const {
-    onSwipeLeft, onSwipeRight, onTap, onDoubleTap, onLongPress,
-  } = cbs;
-
-  const SWIPE = opts.swipeThresholdPx ?? 60;
-  const TAP_MOVE = opts.tapMoveTolPx ?? 8;
-  const TAP_TIME = opts.tapTimeMs ?? 220;
-  const DBL_GAP = opts.dblTapGapMs ?? 280;
-  const LONG_MS = opts.longPressMs ?? 450;
-  const LOCK_SCROLL = opts.lockScrollOnSwipe ?? true;
-
-  const startX = useRef(0);
-  const startY = useRef(0);
-  const startT = useRef(0);
-  const moved = useRef(false);
-  const swiping = useRef<false | "h" | "v">(false);
-  const lastTapT = useRef(0);
-  const longTimer = useRef<number | null>(null);
+export default function useWakeLock(enabled: boolean, opts?: WakeLockOptions) {
+  const lockRef = useRef<any>(null);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    const doc = opts?.doc ?? (typeof document !== "undefined" ? document : undefined);
+    const nav = opts?.nav ?? (typeof navigator !== "undefined" ? (navigator as any) : undefined);
+    const reRequest = opts?.reRequestOnVisibility ?? true;
 
-    const onTouchStart = (e: TouchEvent) => {
-      if (!e.touches.length) return;
-      const t = e.touches[0];
-      startX.current = t.clientX;
-      startY.current = t.clientY;
-      startT.current = Date.now();
-      moved.current = false;
-      swiping.current = false;
+    let cancelled = false;
 
-      if (onLongPress) {
-        longTimer.current = window.setTimeout(() => {
-          onLongPress?.();
-          if (longTimer.current) {
-            clearTimeout(longTimer.current);
-            longTimer.current = null;
-          }
-        }, LONG_MS);
-      }
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (!e.touches.length) return;
-      const t = e.touches[0];
-      const dx = t.clientX - startX.current;
-      const dy = t.clientY - startY.current;
-      const adx = Math.abs(dx);
-      const ady = Math.abs(dy);
-
-      if (Math.hypot(dx, dy) > TAP_MOVE) moved.current = true;
-
-      // Establish swipe axis once
-      if (!swiping.current) {
-        if (adx > 8 || ady > 8) {
-          swiping.current = adx > ady ? "h" : "v";
-        }
-      }
-
-      // Cancel long-press once they move
-      if (longTimer.current && (adx > TAP_MOVE || ady > TAP_MOVE)) {
-        clearTimeout(longTimer.current);
-        longTimer.current = null;
-      }
-
-      // Stop page from scrolling when doing a horizontal swipe
-      if (LOCK_SCROLL && swiping.current === "h") {
-        e.preventDefault(); // needs non-passive listener
-      }
-    };
-
-    const onTouchEnd = (e: TouchEvent) => {
-      if (longTimer.current) {
-        clearTimeout(longTimer.current);
-        longTimer.current = null;
-      }
-
-      const endT = Date.now();
-      const dt = endT - startT.current;
-
-      const changed = e.changedTouches[0];
-      if (!changed) return;
-
-      const dx = changed.clientX - startX.current;
-      const dy = changed.clientY - startY.current;
-      const adx = Math.abs(dx);
-      const ady = Math.abs(dy);
-
-      // Swipe?
-      if (adx >= SWIPE && adx > ady) {
-        if (dx < 0) onSwipeLeft?.();
-        else onSwipeRight?.();
-        swiping.current = false;
+    async function requestLock() {
+      if (!enabled) {
+        release();
         return;
       }
+      const api = nav?.wakeLock;
+      if (!api?.request) return; // unsupported browser
 
-      // Tap / Double tap
-      if (!moved.current && dt <= TAP_TIME) {
-        const gap = endT - lastTapT.current;
-        lastTapT.current = endT;
-        if (gap <= DBL_GAP) onDoubleTap?.();
-        else onTap?.();
+      try {
+        const sentry = await api.request("screen");
+        if (cancelled) {
+          try { await sentry.release(); } catch {}
+          return;
+        }
+        lockRef.current = sentry;
+        // Some impls fire 'release' events; not relied upon here.
+        sentry.addEventListener?.("release", () => {
+          // No-op; we conditionally re-request on visibilitychange instead.
+        });
+      } catch {
+        // Ignored (permissions/unsupported)
       }
+    }
 
-      swiping.current = false;
+    function release() {
+      const current = lockRef.current;
+      if (current) {
+        try { current.release?.(); } catch {}
+        lockRef.current = null;
+      }
+    }
+
+    // Initial attempt
+    requestLock();
+
+    // Re-request when coming back to foreground, if desired
+    const onVis = () => {
+      if (!doc) return;
+      if (reRequest && doc.visibilityState === "visible" && enabled) {
+        requestLock();
+      }
     };
 
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: false }); // important for preventDefault
-    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    doc?.addEventListener?.("visibilitychange", onVis);
 
     return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
+      cancelled = true;
+      doc?.removeEventListener?.("visibilitychange", onVis);
+      release();
     };
-  }, [
-    ref, onSwipeLeft, onSwipeRight, onTap, onDoubleTap, onLongPress,
-    SWIPE, TAP_MOVE, TAP_TIME, DBL_GAP, LONG_MS, LOCK_SCROLL
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, opts?.reRequestOnVisibility]);
 }
