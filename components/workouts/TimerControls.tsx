@@ -30,23 +30,22 @@ export default function TimerControls({
   const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
   const ss = String(Math.max(remaining % 60, 0)).padStart(2, "0");
 
-  const outline: React.CSSProperties = {
+  const outlineBtn: React.CSSProperties = {
     borderRadius: 24,
-    border: `1px solid ${ACCENT}80`,
+    border: `1px solid ${ACCENT}88`,
     color: ACCENT,
     background: "transparent",
-    padding: "6px 10px",
-    fontWeight: 700,
+    padding: "6px 12px",
+    lineHeight: 1,
   };
-
-  const playStyle: React.CSSProperties = {
+  const playBtn: React.CSSProperties = {
     borderRadius: 24,
     color: "#fff",
     background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
     boxShadow: `0 0 14px ${ACCENT}66`,
     border: "none",
-    padding: "6px 14px",
-    fontWeight: 800,
+    padding: "6px 16px",
+    lineHeight: 1,
   };
 
   return (
@@ -62,6 +61,7 @@ export default function TimerControls({
               key={`${txt}-${i}`}
               className="badge bg-transparent"
               style={{ border: "1px solid rgba(255,255,255,0.18)", color: "#cfd7df" }}
+              title={txt}
             >
               {txt}
             </span>
@@ -69,21 +69,32 @@ export default function TimerControls({
         </div>
       </div>
 
-      {/* Transport row: arrows + big play/pause + reset */}
+      {/* Transport row (icon-only) */}
       <div className="d-flex align-items-center justify-content-between">
         <div className="d-flex" style={{ gap: 6 }}>
-          <button className="btn btn-sm" style={outline} onClick={onPrev} aria-label="Previous">←</button>
+          <button className="btn btn-sm" style={outlineBtn} onClick={onPrev} aria-label="Previous">
+            <i className="fas fa-chevron-left" />
+          </button>
           {running ? (
-            <button className="btn btn-sm" style={outline} onClick={onPause} aria-label="Pause">⏸</button>
+            <button className="btn btn-sm" style={outlineBtn} onClick={onPause} aria-label="Pause">
+              <i className="fas fa-pause" />
+            </button>
           ) : (
-            <button className="btn btn-sm" style={playStyle} onClick={onPlay} aria-label="Play">▶</button>
+            <button className="btn btn-sm" style={playBtn} onClick={onPlay} aria-label="Play">
+              <i className="fas fa-play" />
+            </button>
           )}
-          <button className="btn btn-sm" style={outline} onClick={onNext} aria-label="Next">→</button>
+          <button className="btn btn-sm" style={outlineBtn} onClick={onNext} aria-label="Next">
+            <i className="fas fa-chevron-right" />
+          </button>
         </div>
-        <button className="btn btn-sm" style={outline} onClick={onReset} aria-label="Reset">⟲</button>
+
+        <button className="btn btn-sm" style={outlineBtn} onClick={onReset} aria-label="Reset">
+          <i className="fas fa-rotate-right" />
+        </button>
       </div>
 
-      {/* Timer + progress */}
+      {/* Timer bar */}
       <div className="mt-1">
         <div style={{ fontSize: 34, fontWeight: 800 }}>
           {mm}:{ss}
