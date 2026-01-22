@@ -4,7 +4,7 @@
 
 export type BoxingAction = {
   kind: "punch" | "defence";
-  code: string;       // e.g. "1"…"6", "D" or text codes like "jab"
+  code: string;
   count?: number;
   notes?: string;
 };
@@ -29,9 +29,11 @@ const LABELS: Record<string, string> = {
 export default function TechniqueChips({
   actions,
   techVideoByCode,
+  onActionClick, // (code: string) => void
 }: {
   actions: BoxingAction[];
   techVideoByCode?: Record<string, string | undefined>;
+  onActionClick?: (code: string) => void;
 }) {
   const codes = Array.from(new Set(actions.map((a) => a.code))).filter(Boolean);
   if (!codes.length) return null;
@@ -42,42 +44,16 @@ export default function TechniqueChips({
         const label = LABELS[code] || code;
         const href = techVideoByCode?.[code];
 
-        return href ? (
-          <a
+        return (
+          <button
             key={code}
-            href={href}
-            target="_blank"
-            rel="noreferrer"
-            title={`Technique: ${label}`}
-            className="text-decoration-none"
-            style={{
-              padding: "6px 10px",
-              borderRadius: 999,
-              fontSize: 12,
-              background: "rgba(100,195,122,0.15)",
-              border: "1px solid rgba(100,195,122,0.35)",
-              color: "#64c37a",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {label} • video
-          </a>
-        ) : (
-          <span
-            key={code}
-            title={`Technique (add later): ${label}`}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 999,
-              fontSize: 12,
-              background: "rgba(255,255,255,0.06)",
-              border: "1px dashed rgba(255,255,255,0.25)",
-              color: "rgba(255,255,255,0.9)",
-              whiteSpace: "nowrap",
-            }}
+            className="btn btn-bxkr-outline btn-sm"
+            style={{ borderRadius: 999 }}
+            onClick={() => onActionClick?.(code)}
+            title={href ? `${label} • tap to view` : label}
           >
             {label}
-          </span>
+          </button>
         );
       })}
     </div>
