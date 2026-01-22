@@ -2,11 +2,6 @@
 // components/workouts/TimerControls.tsx
 "use client";
 
-/**
- * Shared transport + time readout + progress bar.
- * Leave container styling to the parent; this renders the controls & timer block.
- */
-
 export default function TimerControls({
   running,
   remaining,
@@ -16,12 +11,17 @@ export default function TimerControls({
   onPrev,
   onNext,
   onReset,
-  leftChip,   // e.g. "Round 3/10 • BOX"
-  rightChips, // e.g. ["Boxing","EMOM"]
+  leftChip,
+  rightChips,
+  // new (optional)
+  muted,
+  onToggleSound,
+  isFullscreen,
+  onToggleFullscreen,
 }: {
   running: boolean;
-  remaining: number; // seconds
-  duration: number;  // seconds
+  remaining: number;
+  duration: number;
   onPlay: () => void;
   onPause: () => void;
   onPrev: () => void;
@@ -29,21 +29,21 @@ export default function TimerControls({
   onReset: () => void;
   leftChip?: string;
   rightChips?: string[];
+  muted?: boolean;
+  onToggleSound?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }) {
   const ACCENT = "#FF8A2A";
   const pct = Math.max(0, Math.min(1, (duration - remaining) / Math.max(1, duration)));
-
   const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
   const ss = String(Math.max(remaining % 60, 0)).padStart(2, "0");
 
   return (
     <div>
-      {/* Top row: chips + transport */}
       <div className="d-flex align-items-center justify-content-between mb-2" style={{ gap: 8 }}>
         <div className="d-flex align-items-center" style={{ gap: 10 }}>
-          {leftChip ? (
-            <span style={{ letterSpacing: ".06em", color: "#9fb3c8" }}>{leftChip}</span>
-          ) : null}
+          {leftChip ? <span style={{ letterSpacing: ".06em", color: "#9fb3c8" }}>{leftChip}</span> : null}
           {rightChips?.map((txt, i) => (
             <span
               key={`${txt}-${i}`}
@@ -56,13 +56,9 @@ export default function TimerControls({
         </div>
 
         <div className="d-flex" style={{ gap: 8 }}>
-          <button className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }} onClick={onPrev}>
-            ← Prev
-          </button>
+          <button className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }} onClick={onPrev}>← Prev</button>
           {running ? (
-            <button className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }} onClick={onPause}>
-              Pause
-            </button>
+            <button className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }} onClick={onPause}>Pause</button>
           ) : (
             <button
               className="btn btn-sm"
@@ -79,16 +75,35 @@ export default function TimerControls({
               Play
             </button>
           )}
-          <button className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }} onClick={onNext}>
-            Next →
-          </button>
-          <button className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }} onClick={onReset}>
-            Reset
-          </button>
+          <button className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }} onClick={onNext}>Next →</button>
+          <button className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }} onClick={onReset}>Reset</button>
+
+          {/* Sound toggle */}
+          {typeof onToggleSound === "function" && (
+            <button
+              className="btn btn-bxkr-outline btn-sm"
+              style={{ borderRadius: 24 }}
+              onClick={onToggleSound}
+              title={muted ? "Unmute beeps" : "Mute beeps"}
+            >
+              {muted ? "🔇" : "🔊"}
+            </button>
+          )}
+
+          {/* Fullscreen toggle */}
+          {typeof onToggleFullscreen === "function" && (
+            <button
+              className="btn btn-bxkr-outline btn-sm"
+              style={{ borderRadius: 24 }}
+              onClick={onToggleFullscreen}
+              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+            >
+              {isFullscreen ? "⤢" : "⤢"}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Timer + progress */}
       <div className="mb-2">
         <div style={{ fontSize: 36, fontWeight: 800 }}>
           {mm}:{ss}
