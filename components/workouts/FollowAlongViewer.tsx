@@ -2,12 +2,16 @@
 // components/workouts/FollowAlongViewer.tsx
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import ExerciseMedia from "./ExerciseMedia";
 import TimerControls from "./TimerControls";
 import RoundMediaRail from "./RoundMediaRail";
 import TechniqueChips from "./TechniqueChips";
 import { useFollowAlongMachine, TimelineRound } from "../../hooks/useFollowAlongMachine";
+import useGestureControls from "../../hooks/useGestureControls";
+import useWakeLock from "../../hooks/useWakeLock";
+import useFullscreen from "../../hooks/useFullscreen";
+import { pulseSoft, pulseMedium } from "../../hooks/useHaptics";
 
 type KBStyle = "EMOM" | "AMRAP" | "LADDER";
 type BoxingAction = { kind: "punch" | "defence"; code: string; count?: number; tempo?: string; notes?: string };
@@ -17,12 +21,8 @@ type ExerciseItemOut = {
   type: "Boxing" | "Kettlebell";
   style?: KBStyle | "Combo";
   order: number;
-
-  // Boxing
   duration_s?: number;
   combo?: { name?: string; actions: BoxingAction[]; notes?: string };
-
-  // Kettlebell
   exercise_id?: string;
   reps?: string;
   time_s?: number;
@@ -37,7 +37,7 @@ type RoundOut = {
   order: number;
   category: "Boxing" | "Kettlebell";
   style?: KBStyle;
-  duration_s?: number; // boxing default 180
+  duration_s?: number;
   items: ExerciseItemOut[];
 };
 
@@ -46,7 +46,7 @@ const ACCENT = "#FF8A2A";
 export default function FollowAlongViewer({
   rounds,
   exerciseNameById,
-  videoByExerciseId, // optional: map exercise_id -> video_url (from /api/exercises/media)
+  videoByExerciseId,
   techVideoByCode,
   boxRoundsCount = 5,
 }: {
@@ -66,7 +66,7 @@ export default function FollowAlongViewer({
       ordered.map((r) => ({
         id: r.round_id,
         name: r.name,
-        duration: r.category === "Boxing" ? r.duration_s ?? 180 : 180, // 3:00 for KB display
+        duration: r.category === "Boxing" ? r.duration_s ?? 180 : 180,
         category: r.category,
         style: r.style,
         items: r.items || [],
@@ -74,33 +74,20 @@ export default function FollowAlongViewer({
     [ordered]
   );
 
+  // sound + mobile niceties
+  const [muted, setMuted] = useState(false);
+
+  // playback machine
   const {
-    index,
-    remaining,
-    running,
-    duration,
-    current,
-    nextRound,
-    progress,
-    play,
-    pause,
-    reset,
-    next,
-    prev,
-    totalRounds,
+    index, remaining, running, duration, current, nextRound, play, pause, reset, next, prev, totalRounds,
   } = useFollowAlongMachine(timeline, {
-    thresholds: [120, 60], // beep at 2:00 and 1:00
-    onRoundChange: (i) => {
-      // Announce when switching from Boxing to Kettlebell
-      if (
-        typeof window !== "undefined" &&
-        "speechSynthesis" in window &&
-        i === boxRoundsCount
-      ) {
-        window.speechSynthesis.speak(
-          new SpeechSynthesisUtterance("Switch to kettlebell")
-        );
-      }
+    thresholds: [120, 60],
+    muted,
+    onRoundChange: () => {
+      pulseMedium(); // haptic on round change
+    },
+    onMinuteChange: (m) => {
+      if (m > 0) pulseSoft(); // haptic on minute tick (except 0)
     },
   });
 
@@ -108,13 +95,34 @@ export default function FollowAlongViewer({
   const leftChip = `Round ${index + 1}/${totalRounds} • ${sideLabel}`;
   const rightChips = [current?.category || "", current?.style || ""].filter(Boolean);
 
-  // Minute-of-round index for 3:00 (0..2)
-  const minuteIndex = useMemo(() => {
-    const elapsed = (duration || 180) - remaining;
-    return Math.min(2, Math.max(0, Math.floor(elapsed / 60)));
-  }, [duration, remaining]);
+  // derive minute index 0..2
+  const minuteIndex = Math.min(2, Math.max(0, Math.floor(((duration || 180) - remaining) / 60)));
 
-  /* ---------------- Boxing: 1 combo per minute ---------------- */
+  // wake lock while running
+  useWakeLock(running);
+
+  // fullscreen control
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(cardRef);
+
+  // gestures
+  const gestureRef = useRef<HTMLDivElement | null>(null);
+  useGestureControls(gestureRef, {
+    onSwipeLeft: () => next(),
+    onSwipeRight: () => prev(),
+    onTap: () => (running ? pause() : play()),
+    onDoubleTap: () => toggleFullscreen(),
+    onLongPress: () => pause(),
+  });
+
+  // iOS pull‑to‑refresh avoidance (contain overscroll) + safe area
+  const containerStyle: React.CSSProperties = {
+    overscrollBehavior: "contain",
+    paddingBottom: "env(safe-area-inset-bottom)",
+    borderRadius: 12,
+  };
+
+  /* ------------- Boxing: one combo per minute ------------- */
   function BoxingPane() {
     const combos = (current?.items || []).filter((it: any) => !!it.combo);
     const activeCombo = combos.length ? combos[minuteIndex % combos.length].combo : null;
@@ -129,7 +137,6 @@ export default function FollowAlongViewer({
         ? activeCombo.actions.map((a: BoxingAction) => a.code).join(" • ")
         : "Cycle the 3 combos";
 
-    // Next-up label: next combo inside the round, else next round when on last minute
     const nextUpLabel =
       nextCombo?.name
         ? `Next: ${nextCombo.name}`
@@ -139,16 +146,13 @@ export default function FollowAlongViewer({
 
     return (
       <div>
-        {/* Minute dots (which combo is active) */}
         <div className="d-flex align-items-center mb-2" style={{ gap: 6 }}>
           {[0, 1, 2].map((m) => (
             <span
               key={m}
               title={`Minute ${m + 1}`}
               style={{
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
+                width: 10, height: 10, borderRadius: "50%",
                 background: m === minuteIndex ? ACCENT : "rgba(255,255,255,0.22)",
                 boxShadow: m === minuteIndex ? `0 0 8px ${ACCENT}88` : "none",
               }}
@@ -156,15 +160,8 @@ export default function FollowAlongViewer({
           ))}
         </div>
 
-        {/* Big media (fallback card unless you wire per-combo videos) */}
-        <ExerciseMedia
-          title={activeTitle}
-          subtitle={codesLine}
-          videoUrl={undefined}
-          aspect="16x9"
-        />
+        <ExerciseMedia title={activeTitle} subtitle={codesLine} aspect="16x9" />
 
-        {/* Technique chips for the current combo */}
         {activeCombo?.actions?.length ? (
           <div className="mt-2">
             <TechniqueChips actions={activeCombo.actions} techVideoByCode={techVideoByCode} />
@@ -172,17 +169,12 @@ export default function FollowAlongViewer({
         ) : null}
 
         {activeCombo?.notes ? (
-          <div className="mt-2 text-dim" style={{ fontSize: 12 }}>
-            {activeCombo.notes}
-          </div>
+          <div className="mt-2 text-dim" style={{ fontSize: 12 }}>{activeCombo.notes}</div>
         ) : null}
 
-        {/* Next up (combo-in-round first; next round only when appropriate) */}
         {nextUpLabel ? (
           <div className="mt-3 d-flex align-items-center justify-content-between">
-            <div className="text-dim" style={{ fontSize: 12 }}>
-              Next up
-            </div>
+            <div className="text-dim" style={{ fontSize: 12 }}>Next up</div>
             <div className="fw-semibold">{nextUpLabel}</div>
           </div>
         ) : null}
@@ -190,11 +182,10 @@ export default function FollowAlongViewer({
     );
   }
 
-  /* ---------------- Kettlebell: full exercise list via rail ---------------- */
+  /* ------------- Kettlebell: media rail shows all exercises ------------- */
   function KettlebellPane() {
     const items = current?.items || [];
 
-    // Subtitle now lists ALL exercises for this round (not just two)
     const subtitleAll =
       items
         .map((it: any) => {
@@ -205,9 +196,7 @@ export default function FollowAlongViewer({
           const meta = [
             it.reps ? `${it.reps} reps` : "",
             typeof it.time_s === "number" ? `${it.time_s}s` : "",
-          ]
-            .filter(Boolean)
-            .join(" ");
+          ].filter(Boolean).join(" ");
           return [nm, meta].filter(Boolean).join(" — ");
         })
         .filter(Boolean)
@@ -218,17 +207,12 @@ export default function FollowAlongViewer({
         <div className="mb-2 d-flex align-items-center" style={{ gap: 8 }}>
           <div className="fw-semibold">{current?.name || "Kettlebell Round"}</div>
           {current?.style ? (
-            <span
-              className="badge bg-transparent"
-              style={{ border: "1px solid rgba(255,255,255,0.18)", color: "#cfd7df" }}
-              title={current.style}
-            >
+            <span className="badge bg-transparent" style={{ border: "1px solid rgba(255,255,255,0.18)", color: "#cfd7df" }}>
               {current.style}
             </span>
           ) : null}
         </div>
 
-        {/* Big media rail (shows ALL exercises in the round; tap to switch) */}
         <RoundMediaRail
           items={items}
           exerciseNameById={exerciseNameById}
@@ -236,43 +220,44 @@ export default function FollowAlongViewer({
           aspect="16x9"
         />
 
-        {/* Full round summary under the rail */}
-        <div className="mt-2 text-dim" style={{ fontSize: 12 }}>
-          {subtitleAll}
-        </div>
+        <div className="mt-2 text-dim" style={{ fontSize: 12 }}>{subtitleAll}</div>
+
+        {nextRound ? (
+          <div className="mt-3 d-flex align-items-center justify-content-between">
+            <div className="text-dim" style={{ fontSize: 12 }}>Next up</div>
+            <div className="fw-semibold">{nextRound.name}</div>
+          </div>
+        ) : null}
       </div>
     );
   }
 
   return (
-    <section className="futuristic-card p-3 mb-3">
-      {/* Transport + progress */}
-      <TimerControls
-        running={running}
-        remaining={remaining}
-        duration={duration}
-        onPlay={play}
-        onPause={pause}
-        onPrev={prev}
-        onNext={next}
-        onReset={reset}
-        leftChip={leftChip}
-        rightChips={rightChips}
-      />
+    <section
+      ref={cardRef}
+      className="futuristic-card p-3 mb-3"
+      style={containerStyle}
+    >
+      <div ref={gestureRef}>
+        <TimerControls
+          running={running}
+          remaining={remaining}
+          duration={duration}
+          onPlay={play}
+          onPause={pause}
+          onPrev={prev}
+          onNext={next}
+          onReset={reset}
+          leftChip={leftChip}
+          rightChips={rightChips}
+          muted={muted}
+          onToggleSound={() => setMuted((m) => !m)}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+        />
 
-      {/* Content */}
-      {current?.category === "Boxing" ? <BoxingPane /> : <KettlebellPane />}
-
-      {/* If BoxingPane already shows next combo, we only show next round when applicable in BoxingPane.
-          For KB, we always show next round here. */}
-      {current?.category === "Kettlebell" && nextRound ? (
-        <div className="mt-3 d-flex align-items-center justify-content-between">
-          <div className="text-dim" style={{ fontSize: 12 }}>
-            Next up
-          </div>
-          <div className="fw-semibold">{nextRound.name}</div>
-        </div>
-      ) : null}
+        {current?.category === "Boxing" ? <BoxingPane /> : <KettlebellPane />}
+      </div>
     </section>
   );
 }
