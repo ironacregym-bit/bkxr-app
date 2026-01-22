@@ -2,26 +2,19 @@
 // components/workouts/ListViewer.tsx
 "use client";
 
+import { useMemo, useState } from "react";
 import TechniqueChips, { BoxingAction } from "./TechniqueChips";
-import ProtocolBadge, { KBStyle } from "./ProtocolBadge";
+import ModalMedia from "./ModalMedia";
 
-/**
- * Linear list view with Boxing + Kettlebell sections.
- * - Includes TechniqueChips under each boxing combo (with optional technique links)
- * - Includes ProtocolBadge (EMOM/AMRAP/LADDER explainer) next to kettlebell round titles
- */
+type KBStyle = "EMOM" | "AMRAP" | "LADDER";
 
 type ExerciseItemOut = {
   item_id: string;
   type: "Boxing" | "Kettlebell";
   style?: KBStyle | "Combo";
   order: number;
-
-  // Boxing
   duration_s?: number;
   combo?: { name?: string; actions: BoxingAction[]; notes?: string };
-
-  // Kettlebell
   exercise_id?: string;
   reps?: string;
   time_s?: number;
@@ -35,7 +28,7 @@ type RoundOut = {
   name: string;
   order: number;
   category: "Boxing" | "Kettlebell";
-  style?: KBStyle;
+  style?: KBStyle; // KB style; for boxing treat this as type (Basics/Speed/…)
   duration_s?: number;
   items: ExerciseItemOut[];
 };
@@ -44,25 +37,46 @@ export default function ListViewer({
   boxingRounds,
   kbRounds,
   exerciseNameById,
-  techVideoByCode, // ✅ optional and now typed
+  techVideoByCode,
+  gifByExerciseId,
+  videoByExerciseId,
 }: {
   boxingRounds: RoundOut[];
   kbRounds: RoundOut[];
   exerciseNameById: Record<string, string>;
   techVideoByCode?: Record<string, string | undefined>;
+  gifByExerciseId?: Record<string, string | undefined>;
+  videoByExerciseId?: Record<string, string | undefined>;
 }) {
+  // Modal
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState("");
+  const [modalGif, setModalGif] = useState<string | undefined>(undefined);
+  const [modalVideo, setModalVideo] = useState<string | undefined>(undefined);
+
+  const openPunchModal = (code: string) => {
+    setModalTitle(code);
+    setModalGif(undefined);
+    setModalVideo(techVideoByCode?.[code]);
+    setModalOpen(true);
+  };
+  const openExerciseModal = (id: string) => {
+    const title = exerciseNameById[id] || id;
+    setModalTitle(title);
+    setModalGif(gifByExerciseId?.[id]);
+    setModalVideo(videoByExerciseId?.[id]);
+    setModalOpen(true);
+  };
+
   return (
     <>
       {/* Boxing */}
       <section className="futuristic-card p-3 mb-3">
-        <div
-          className="fw-bold mb-2"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", paddingBottom: 8 }}
-        >
+        <div className="fw-bold mb-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", paddingBottom: 8 }}>
           Boxing Rounds
         </div>
 
-        {boxingRounds.length === 0 ? (
+        {!boxingRounds.length ? (
           <div className="text-dim">No boxing rounds</div>
         ) : (
           <div className="p-1">
@@ -76,32 +90,38 @@ export default function ListViewer({
                   border: "1px solid rgba(255,255,255,0.08)",
                 }}
               >
-                <div
-                  className="d-flex justify-content-between align-items-center mb-2"
-                  style={{ gap: 8 }}
-                >
-                  <div style={{ fontWeight: 600 }}>
-                    {round.name || `Boxing Round ${idx + 1}`}
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <div className="fw-semibold">{round.name || `Boxing Round ${idx + 1}`}</div>
+                  <div className="d-flex align-items-center" style={{ gap: 6 }}>
+                    {round.style ? (
+                      <span
+                        className="badge bg-transparent"
+                        style={{ border: "1px solid rgba(255,255,255,0.18)", color: "#cfd7df" }}
+                        title={
+                          round.style === "EMOM"
+                            ? "Every Minute On the Minute"
+                            : round.style === "AMRAP"
+                            ? "As Many Rounds/Reps As Possible"
+                            : round.style === "LADDER"
+                            ? "Ladder: increase reps smoothly"
+                            : String(round.style)
+                        }
+                      >
+                        {round.style}
+                      </span>
+                    ) : null}
+                    <small style={{ opacity: 0.7 }}>{(round.duration_s ?? 180) / 60} mins</small>
                   </div>
-                  <small style={{ opacity: 0.7 }}>
-                    {(round.duration_s ?? 180) / 60} mins
-                  </small>
                 </div>
 
                 <div className="row gx-2 gy-2">
                   {(round.items || []).map((item, i) => {
                     const c = item.combo;
                     const actions = c?.actions || [];
-                    const actionsLine =
-                      actions.length > 0
-                        ? actions.map((a) => a.code).join(" • ")
-                        : "—";
+                    const actionsLine = actions.length ? actions.map(a => a.code).join(" • ") : "—";
 
                     return (
-                      <div
-                        key={item.item_id || `box-item-${i}`}
-                        className="col-12 col-md-4"
-                      >
+                      <div key={item.item_id || `box-item-${i}`} className="col-12 col-md-4">
                         <div
                           className="p-2"
                           style={{
@@ -110,36 +130,22 @@ export default function ListViewer({
                             border: "1px solid rgba(255,255,255,0.08)",
                           }}
                         >
-                          <div
-                            className="d-flex align-items-center justify-content-between mb-1"
-                            style={{ gap: 8 }}
-                          >
-                            <div className="fw-semibold">
-                              {c?.name || `Combo ${i + 1}`}
-                            </div>
+                          <div className="d-flex align-items-center justify-content-between mb-1" style={{ gap: 8 }}>
+                            <div className="fw-semibold">{c?.name || `Combo ${i + 1}`}</div>
                             <span
                               className="badge bg-transparent"
-                              style={{
-                                border: "1px solid rgba(255,127,50,0.35)",
-                                color: "#FF8A2A",
-                              }}
+                              style={{ border: "1px solid rgba(255,127,50,0.35)", color: "#FF8A2A" }}
                             >
                               Combo
                             </span>
                           </div>
 
-                          {/* Simple codes line */}
-                          <div className="text-dim" style={{ fontSize: 13 }}>
-                            {actionsLine}
-                          </div>
+                          <div className="text-dim" style={{ fontSize: 13 }}>{actionsLine}</div>
 
-                          {/* Technique video chips */}
-                          {actions.length > 0 ? (
+                          {/* Tap punches to open modal */}
+                          {actions.length ? (
                             <div className="mt-1">
-                              <TechniqueChips
-                                actions={actions}
-                                techVideoByCode={techVideoByCode}
-                              />
+                              <TechniqueChips actions={actions} techVideoByCode={techVideoByCode} onActionClick={openPunchModal} />
                             </div>
                           ) : null}
 
@@ -161,17 +167,11 @@ export default function ListViewer({
 
       {/* Kettlebells */}
       <section className="futuristic-card p-3 mb-3">
-        <div
-          className="fw-bold mb-2"
-          style={{
-            borderBottom: "1px solid rgba(255,255,255,0.15)",
-            paddingBottom: 8,
-          }}
-        >
+        <div className="fw-bold mb-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", paddingBottom: 8 }}>
           Kettlebell Rounds
         </div>
 
-        {kbRounds.length === 0 ? (
+        {!kbRounds.length ? (
           <div className="text-dim">No kettlebell rounds</div>
         ) : (
           <div className="p-1">
@@ -185,33 +185,21 @@ export default function ListViewer({
                   border: "1px solid rgba(255,255,255,0.08)",
                 }}
               >
-                <div
-                  className="d-flex justify-content-between align-items-center mb-2"
-                  style={{ gap: 8 }}
-                >
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      display: "flex",
-                      alignItems: "center",
-                    }}
-                  >
-                    {round.name || `Kettlebells Round ${idx + 1}`}
-                    {round.style ? (
-                      <ProtocolBadge
-                        style={round.style as KBStyle}
-                        summaryLabel={round.style}
-                      />
-                    ) : null}
-                  </div>
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <div className="fw-semibold">{round.name || `Kettlebells Round ${idx + 1}`}</div>
                   {round.style ? (
                     <span
                       className="badge bg-transparent"
-                      style={{
-                        border: "1px solid rgba(255,255,255,0.18)",
-                        color: "#cfd7df",
-                      }}
-                      title={round.style}
+                      style={{ border: "1px solid rgba(255,255,255,0.18)", color: "#cfd7df" }}
+                      title={
+                        round.style === "EMOM"
+                          ? "Every Minute On the Minute: Do the work at each minute, rest the remainder."
+                          : round.style === "AMRAP"
+                          ? "As Many Rounds/Reps As Possible: Cycle movements steadily."
+                          : round.style === "LADDER"
+                          ? "Ladder: Alternate movements while increasing reps."
+                          : String(round.style)
+                      }
                     >
                       {round.style}
                     </span>
@@ -219,10 +207,8 @@ export default function ListViewer({
                 </div>
 
                 {(round.items || []).map((it, i) => {
-                  const displayName =
-                    (it.exercise_id && exerciseNameById[it.exercise_id]) ||
-                    it.exercise_id ||
-                    `Item ${i + 1}`;
+                  const id = it.exercise_id || "";
+                  const displayName = (id && (exerciseNameById[id] || id)) || `Item ${i + 1}`;
                   const bits = [
                     it.reps ? `${it.reps} reps` : "",
                     typeof it.time_s === "number" ? `${it.time_s}s` : "",
@@ -239,12 +225,18 @@ export default function ListViewer({
                       className="d-flex justify-content-between align-items-center p-2"
                       style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
                     >
-                      <div>
-                        <div style={{ fontWeight: 600 }}>{displayName}</div>
-                        {!!bits && (
-                          <small style={{ opacity: 0.7 }}>{bits}</small>
-                        )}
-                      </div>
+                      <button
+                        className="btn btn-bxkr-outline btn-sm"
+                        style={{ borderRadius: 999 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          id && openExerciseModal(id);
+                        }}
+                        title={displayName}
+                      >
+                        {displayName}
+                      </button>
+                      {!!bits && <small style={{ opacity: 0.7 }}>{bits}</small>}
                     </div>
                   );
                 })}
@@ -253,6 +245,15 @@ export default function ListViewer({
           </div>
         )}
       </section>
+
+      {/* Media modal */}
+      <ModalMedia
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        gifUrl={modalGif}
+        videoUrl={modalVideo}
+      />
     </>
   );
 }
