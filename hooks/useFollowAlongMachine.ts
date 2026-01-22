@@ -8,19 +8,19 @@ export type TimelineRound = {
   id: string;
   name: string;
   duration: number;     // seconds
-  category?: string;    // "Boxing" | "Kettlebell"
-  style?: string;       // "EMOM" | "AMRAP" | "LADDER"
+  category?: string;    // "Boxing" | "Kettlebell" | "Rest"
+  style?: string;       // "EMOM" | "AMRAP" | "LADDER" | "Basics" | "Speed" | ...
   items?: any[];
 };
 
 export type FollowAlongOptions = {
-  thresholds?: number[];            // e.g. [120,60]
+  thresholds?: number[];            // e.g., [120, 60]
   beepSrc?: string;                 // default "/beep.mp3"
   bellSrc?: string;                 // default "/triple-bell.mp3"
-  muted?: boolean;                  // new: mute audio beeps
+  muted?: boolean;
   onRoundChange?: (index: number, round: TimelineRound) => void;
   onFinish?: () => void;
-  onMinuteChange?: (minuteIndex: number) => void; // new: 0..floor(duration/60)
+  onMinuteChange?: (minuteIndex: number) => void;
 };
 
 export function useFollowAlongMachine(
@@ -28,16 +28,14 @@ export function useFollowAlongMachine(
   opts: FollowAlongOptions = {}
 ) {
   const thresholds = useMemo(
-    () => (opts.thresholds?.length ? opts.thresholds.slice().sort((a,b)=>b-a) : [120,60]),
+    () => (opts.thresholds?.length ? opts.thresholds.slice().sort((a,b)=>b-a) : [120, 60]),
     [opts.thresholds]
   );
 
-  // state
   const [index, setIndex] = useState(0);
   const [remaining, setRemaining] = useState<number>(timeline[0]?.duration ?? 180);
   const [running, setRunning] = useState(false);
 
-  // refs
   const indexRef = useRef(index);
   const remainingRef = useRef(remaining);
   const runningRef = useRef(running);
@@ -61,22 +59,18 @@ export function useFollowAlongMachine(
   }, [opts.beepSrc, opts.bellSrc]);
   const playBeep = () => {
     if (mutedRef.current) return;
-    const el = beepRef.current;
-    if (!el) return;
-    el.currentTime = 0;
-    void el.play().catch(() => {});
+    const el = beepRef.current; if (!el) return;
+    el.currentTime = 0; void el.play().catch(()=>{});
   };
   const playBell = () => {
     if (mutedRef.current) return;
-    const el = bellRef.current;
-    if (!el) return;
-    el.currentTime = 0;
-    void el.play().catch(() => {});
+    const el = bellRef.current; if (!el) return;
+    el.currentTime = 0; void el.play().catch(()=>{});
   };
 
   const crossed = (prev: number, next: number, mark: number) => prev > mark && next <= mark;
 
-  // tick
+  // main ticker
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
     if (!running) {
@@ -84,57 +78,43 @@ export function useFollowAlongMachine(
       return;
     }
     intervalRef.current = setInterval(() => {
-      setRemaining((prev) => {
+      setRemaining(prev => {
         const next = prev - 1;
-
         const dur = timeline[indexRef.current]?.duration ?? 180;
 
-        // minute change callback (derived)
-        const minuteNow = Math.floor((dur - Math.max(next,0)) / 60);
+        // minute callback
+        const minuteNow = Math.floor((dur - Math.max(next, 0)) / 60);
         if (minuteNow !== prevMinuteRef.current) {
           prevMinuteRef.current = minuteNow;
           opts.onMinuteChange?.(minuteNow);
         }
 
-        // threshold beeps
+        // thresholds
         for (const m of thresholds) {
-          if (m > 0 && m < dur && crossed(prev, next, m)) {
-            playBeep();
-            break;
-          }
+          if (m > 0 && m < dur && crossed(prev, next, m)) { playBeep(); break; }
         }
 
+        // segment end
         if (next < 0) {
           const ni = indexRef.current + 1;
           if (ni >= timeline.length) {
-            playBell();
-            setRunning(false);
-            opts.onFinish?.();
-            return 0;
+            playBell(); setRunning(false); opts.onFinish?.(); return 0;
           }
-          setIndex(ni);
-          playBeep();
-          opts.onRoundChange?.(ni, timeline[ni]);
-          prevMinuteRef.current = null; // reset minute tracker
+          setIndex(ni); playBeep(); opts.onRoundChange?.(ni, timeline[ni]);
+          prevMinuteRef.current = null;
           return timeline[ni]?.duration ?? 180;
         }
         return next;
       });
     }, 1000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [running, thresholds, timeline, opts.onFinish, opts.onMinuteChange, opts.onRoundChange]);
 
   // controls
-  function play() {
-    setRunning(true);
-    playBeep(); // unlock
-  }
+  function play() { setRunning(true); playBeep(); }
   function pause() { setRunning(false); }
   function reset() {
-    setRunning(false);
-    setIndex(0);
+    setRunning(false); setIndex(0);
     setRemaining(timeline[0]?.duration ?? 180);
     prevMinuteRef.current = null;
   }
@@ -142,20 +122,16 @@ export function useFollowAlongMachine(
     setRunning(false);
     const ni = Math.min(timeline.length - 1, indexRef.current + 1);
     if (ni !== indexRef.current) {
-      setIndex(ni);
-      setRemaining(timeline[ni]?.duration ?? 180);
-      prevMinuteRef.current = null;
-      opts.onRoundChange?.(ni, timeline[ni]);
+      setIndex(ni); setRemaining(timeline[ni]?.duration ?? 180);
+      prevMinuteRef.current = null; opts.onRoundChange?.(ni, timeline[ni]);
     }
   }
   function prev() {
     setRunning(false);
     const ni = Math.max(0, indexRef.current - 1);
     if (ni !== indexRef.current) {
-      setIndex(ni);
-      setRemaining(timeline[ni]?.duration ?? 180);
-      prevMinuteRef.current = null;
-      opts.onRoundChange?.(ni, timeline[ni]);
+      setIndex(ni); setRemaining(timeline[ni]?.duration ?? 180);
+      prevMinuteRef.current = null; opts.onRoundChange?.(ni, timeline[ni]);
     }
   }
 
