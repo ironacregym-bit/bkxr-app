@@ -1,4 +1,5 @@
 
+// pages/register.tsx
 import Head from "next/head";
 import Link from "next/link";
 import { signIn, useSession } from "next-auth/react";
@@ -10,21 +11,26 @@ export default function Register() {
   const router = useRouter();
   const ACCENT = "#FF8A2A";
 
-  // Redirect authenticated users to home
   useEffect(() => {
     if (status === "authenticated") {
       router.replace("/");
     }
   }, [status, router]);
 
-  // Hydration-safe mount flag
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // Show success banner when coming from PAR-Q
   const showParqBanner = mounted && router.query.parq === "ok";
 
-  // Email magic link state
+  // ✅ Persist ?ref= to localStorage for later capture
+  useEffect(() => {
+    if (!mounted) return;
+    const ref = (router.query.ref as string) || "";
+    if (ref && typeof window !== "undefined") {
+      localStorage.setItem("bxkr_ref", ref);
+    }
+  }, [mounted, router.query.ref]);
+
   const [email, setEmail] = useState("");
   const [busyEmail, setBusyEmail] = useState(false);
   const [sent, setSent] = useState(false);
@@ -71,7 +77,6 @@ export default function Register() {
       </Head>
 
       <main className="container py-4" style={{ paddingBottom: 80, color: "#fff" }}>
-        {/* Top: logo & back */}
         <div className="d-flex justify-content-between align-items-center mb-3">
           <div className="d-flex align-items-center gap-2">
             <img
@@ -84,14 +89,12 @@ export default function Register() {
           <Link href="/" className="btn-bxkr-outline">Back</Link>
         </div>
 
-        {/* PAR-Q success banner (optional) */}
         {showParqBanner && (
           <div className="pill-success mb-3" aria-live="polite">
             <i className="fa fa-check" aria-hidden="true" /> PAR‑Q received — create your account to link it.
           </div>
         )}
 
-        {/* Minimal hero/heading */}
         <section className="mb-3">
           <h1 className="fw-bold" style={{ fontSize: "1.8rem", lineHeight: 1.2 }}>
             Sign in to <span style={{ color: ACCENT }}>register</span> or log in
@@ -101,7 +104,6 @@ export default function Register() {
           </p>
         </section>
 
-        {/* Simple sign-in block */}
         <section className="futuristic-card p-3 mb-3">
           <div className="d-grid gap-2">
             <button
@@ -114,7 +116,6 @@ export default function Register() {
 
             <div className="text-center text-dim small">or</div>
 
-            {/* Magic link email form */}
             <form onSubmit={submitEmail} className="d-grid gap-2">
               <input
                 type="email"
@@ -143,7 +144,6 @@ export default function Register() {
           </div>
         </section>
 
-        {/* Footer links */}
         <footer className="text-center text-dim small">
           © {new Date().getFullYear()} BXKR · <Link href="/privacy">Privacy</Link> ·{" "}
           <Link href="/terms">Terms</Link>
