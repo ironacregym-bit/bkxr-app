@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
-// Removed: import AddToHomeScreen from "../components/AddToHomeScreen";
+import AddToHomeScreen from "../components/AddToHomeScreen";
 import { getSession } from "next-auth/react";
 import type { GetServerSideProps } from "next";
 import DailyTasksCard from "../components/DailyTasksCard";
@@ -653,7 +653,11 @@ export default function Home() {
           </div>
         )}
       </main>
-
+      
+      {/* Show A2HS only after onboarding is complete */}
+      {mounted && onboarding?.complete === true && (
+        <AddToHomeScreen />
+      )}
       {/* Bottom Navigation */}
       <BottomNav />
     </>
