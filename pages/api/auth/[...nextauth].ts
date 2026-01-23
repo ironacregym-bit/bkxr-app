@@ -6,6 +6,7 @@ import EmailProvider from "next-auth/providers/email";
 import { FirestoreAdapter } from "@next-auth/firebase-adapter";
 import { cert } from "firebase-admin/app";
 import firestore from "../../../lib/firestoreClient";
+import { generateUniqueReferralCode } from "../../../lib/referrals/generateCode";
 
 const hasAll = (keys: string[]) =>
   keys.every((k) => process.env[k] && String(process.env[k]).trim() !== "");
@@ -78,24 +79,19 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    // Allow switching between Google + Email without blocking
     async signIn() {
       return true;
     },
 
-    // ✅ Ensure email lives in the JWT (then we can mirror to session)
     async jwt({ token, account, user }) {
-      // Keep your access token logic
       if (account) {
         (token as any).accessToken = (account as any).access_token;
       }
 
-      // Ensure email stored on the JWT once we have a user
       if (!token.email && user?.email) {
         token.email = user.email;
       }
 
-      // Enrich from Firestore when we have an email
       if (token.email) {
         const snap = await firestore.collection("users").doc(token.email).get();
         const data = snap.exists ? snap.data() ?? {} : {};
@@ -106,20 +102,16 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
 
-    // ✅ Mirror email (and your role/gym fields) onto the session
     async session({ session, token }) {
       if (session.user) {
-        // Ensure email is present on session.user
         (session.user as any).email =
           (session.user as any).email || (token.email as string) || null;
 
-        // Keep your enrichment
         (session.user as any).role = ((token as any).role as string) || "user";
         (session.user as any).gym_id =
           ((token as any).gym_id as string) || null;
       }
 
-      // Keep your access token exposure
       (session as any).accessToken = (token as any).accessToken as string;
 
       return session;
@@ -145,12 +137,11 @@ export const authOptions: NextAuthOptions = {
         const nowIso = new Date().toISOString();
 
         if (!snap.exists) {
-          // Initialise a 14-day trial for new users
           const now = new Date();
           const trialDays = 14;
-          const trialEnd = new Date(
-            now.getTime() + trialDays * 86400000
-          ).toISOString();
+          const trialEnd = new Date(now.getTime() + trialDays * 86400000).toISOString();
+
+          const referral_code = await generateUniqueReferralCode();
 
           await ref.set(
             {
@@ -160,23 +151,32 @@ export const authOptions: NextAuthOptions = {
               created_at: nowIso,
               last_login_at: nowIso,
               role: "user",
-              // trial init (only if missing)
               trial_start: now.toISOString(),
               trial_end: trialEnd,
               subscription_status: "trialing",
-              is_premium: true, // in-app unlock during trial
+              is_premium: true,
+              referral_code,
+              referral_totals: {
+                total_signups: 0,
+                active_paid: 0,
+                commission_rate: 0.05,
+                total_earned: 0,
+              },
             },
             { merge: true }
           );
         } else {
-          // One-time safety: add a trial if doc exists but has no status
           const data = snap.data() || {};
+
+          if (!data.referral_code) {
+            const referral_code = await generateUniqueReferralCode();
+            await ref.set({ referral_code }, { merge: true });
+          }
+
           if (!data.trial_end && !data.subscription_status) {
             const now = new Date();
             const trialDays = 14;
-            const trialEnd = new Date(
-              now.getTime() + trialDays * 86400000
-            ).toISOString();
+            const trialEnd = new Date(now.getTime() + trialDays * 86400000).toISOString();
             await ref.set(
               {
                 trial_start: now.toISOString(),
@@ -187,6 +187,7 @@ export const authOptions: NextAuthOptions = {
               { merge: true }
             );
           }
+
           await ref.set({ last_login_at: nowIso }, { merge: true });
         }
       } catch (e) {
@@ -200,16 +201,10 @@ export const authOptions: NextAuthOptions = {
           await firestore
             .collection("users")
             .doc(user.email)
-            .set(
-              { last_login_at: new Date().toISOString() },
-              { merge: true }
-            );
+            .set({ last_login_at: new Date().toISOString() }, { merge: true });
         }
       } catch (e) {
-        console.error(
-          "[NextAuth events.signIn] update last_login_at failed:",
-          e
-        );
+        console.error("[NextAuth events.signIn] update last_login_at failed:", e);
       }
     },
   },
