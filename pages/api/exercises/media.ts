@@ -18,7 +18,9 @@ function normalise(
     (typeof x.name === "string" && x.name.trim()) ||
     id;
   const video_url = typeof x.video_url === "string" ? x.video_url : "";
-  return { id, exercise_name, video_url };
+  const gif_url = typeof x.gif_url === "string" ? x.gif_url : "";
+  return { id, exercise_name, video_url, gif_url };
+
 }
 
 // Firestore supports up to 10 values in an 'in' clause → chunk.
