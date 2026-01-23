@@ -6,11 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
-// Removed: useAvailableHeight (not needed after removing Workout Type step)
 // import { useAvailableHeight } from "../components/Onboarding/useAvailableHeight";
 import StepMetrics from "../components/Onboarding/StepMetrics";
 import StepJobGoal from "../components/Onboarding/StepJobGoal";
-// Removed: StepWorkoutType
 // import StepWorkoutType from "../components/Onboarding/StepWorkoutType";
 import StepFinishTrial from "../components/Onboarding/StepFinishTrial";
 import type { UsersDoc, JobType } from "../components/Onboarding/types";
@@ -54,8 +52,6 @@ export default function OnboardingPage() {
     carb_target: null,
     fat_target: null,
     goal_primary: null,
-    // workout_type remains in the profile so previously saved values still load,
-    // but there is no longer a step to edit it during onboarding.
     workout_type: null,
     subscription_status: null,
     trial_end: null,
@@ -68,7 +64,6 @@ export default function OnboardingPage() {
   const swrKey = email ? `/api/profile?email=${encodeURIComponent(email)}` : null;
   const { data, error } = useSWR(swrKey, fetcher);
 
-  // Compute targets on demand (UI-only; data flow unchanged)
   const targets = useMemo(() => {
     const goal = profile.goal_primary;
     const weight = Number(profile.weight_kg ?? 0);
@@ -122,15 +117,10 @@ export default function OnboardingPage() {
     !!profile.activity_factor &&
     !!profile.goal_primary;
 
-  // Total steps: Metrics (0), Job+Goal (1), Finish Trial (2)
   const totalSteps = 3;
   const isFirstStep = step <= 0;
   const isLastStep = step >= totalSteps - 1;
 
-  // Removed: availableHeight since Workout Type step is gone
-  // const availableHeight = useAvailableHeight("onb-header", "onb-page-nav");
-
-  /* ---- Prefill (refresh-safe) ---- */
   useEffect(() => {
     (async () => {
       if (status === "loading") return;
@@ -156,13 +146,11 @@ export default function OnboardingPage() {
               if (Math.abs(v - 1.9) < 0.01) return "athlete";
               return null;
             })(j?.activity_factor),
-          // workout_type is still read if present, but not edited in this flow
           workout_type: j?.workout_type ?? prev.workout_type ?? null,
           subscription_status: j?.subscription_status ?? prev.subscription_status ?? null,
           trial_end: j?.trial_end ?? prev.trial_end ?? null,
         }));
 
-        // mark started (non-null writes handled by API)
         await fetch("/api/onboarding/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -174,7 +162,6 @@ export default function OnboardingPage() {
     })();
   }, [status, email]);
 
-  /* ---- Auto-hide 'Saved' pill after 1.5s ---- */
   useEffect(() => {
     if (savedMsg && savedMsg.toLowerCase().includes("saved")) {
       const t = setTimeout(() => setSavedMsg(null), 1500);
@@ -204,7 +191,6 @@ export default function OnboardingPage() {
           carb_target: targets.carb_target,
           fat_target: targets.fat_target,
           goal_primary: profile.goal_primary ?? null,
-          // workout_type included if already present; not edited in this flow
           workout_type: profile.workout_type ?? null,
           gym_id: profile.gym_id ?? null,
           location: profile.location ?? null,
@@ -246,7 +232,6 @@ export default function OnboardingPage() {
     }
   }
 
-  /* --------------- Guards --------------- */
   if (!email) {
     return (
       <>
@@ -275,10 +260,8 @@ export default function OnboardingPage() {
     );
   }
 
-  /* -------------------- Render -------------------- */
   return (
     <>
-      {/* Header */}
       <header id="onb-header" className="container py-2" style={{ color: "#fff" }}>
         <div className="d-flex align-items-center justify-content-between">
           <h2 className="mb-0" style={{ fontWeight: 700 }}>Let’s Tailor BXKR To You</h2>
@@ -303,7 +286,6 @@ export default function OnboardingPage() {
         </div>
       </header>
 
-      {/* Content */}
       <main className="container py-2" style={{ color: "#fff" }}>
         {step === 0 && (
           <StepMetrics profile={profile} setProfile={setProfile} markDirty={markDirty} />
@@ -324,9 +306,21 @@ export default function OnboardingPage() {
             subscription_status={profile.subscription_status ?? null}
             saving={saving}
             startTrial={startTrial}
-            finish={() => {
-              autoSave();
-              window.location.href = "/";
+            finish={async () => {
+              try {
+                await autoSave();
+                const ref = typeof window !== "undefined" ? localStorage.getItem("bxkr_ref") : null;
+                if (ref) {
+                  await fetch("/api/referrals/capture", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ referral_code: ref }),
+                  }).catch(() => null);
+                  localStorage.removeItem("bxkr_ref");
+                }
+              } finally {
+                window.location.href = "/";
+              }
             }}
             ACCENT={ACCENT}
             isFirstStep={isFirstStep}
@@ -334,7 +328,6 @@ export default function OnboardingPage() {
           />
         )}
 
-        {/* Sticky Navigation (hidden on final step so no global Save button) */}
         {!isLastStep && (
           <div
             id="onb-page-nav"
