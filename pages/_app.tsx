@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { SessionProvider } from "next-auth/react";
 import type { AppProps } from "next/app";
 import "../styles/bootstrap.css";
-import AddToHomeScreen from "../components/AddToHomeScreen";
+
 import NotificationsInit from "../components/NotificationsInit";
 
 export default function App({ Component, pageProps }: AppProps) {
@@ -21,9 +21,6 @@ export default function App({ Component, pageProps }: AppProps) {
     <SessionProvider session={(pageProps as any).session}>
       {/* Headless initialiser: asks permission, subscribes to push, posts subscription to server */}
       <NotificationsInit />
-
-      {/* Your global PWA banner (keep as you had) */}
-      <AddToHomeScreen />
 
       <Component {...pageProps} />
     </SessionProvider>
