@@ -10,7 +10,7 @@ type MediaRow = { exercise_name: string; video_url: string };
 
 function normalise(
   d: FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData>
-): { id: string; exercise_name: string; video_url: string } {
+): { id: string; exercise_name: string; video_url: string, gif_url: string } {
   const id = d.id;
   const x = (d.data() || {}) as any;
   const exercise_name =
