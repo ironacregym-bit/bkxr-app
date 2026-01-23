@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -7,7 +8,8 @@ interface BeforeInstallPromptEvent extends Event {
 
 export default function AddToHomeScreen() {
   const [show, setShow] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferredPrompt, setDeferredPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
 
   const isIOS =
     typeof window !== "undefined" &&
@@ -19,8 +21,8 @@ export default function AddToHomeScreen() {
       (window.navigator as any).standalone === true);
 
   useEffect(() => {
-    if (localStorage.getItem("A2HS-dismissed") === "true") return;
     if (isInStandalone) return;
+    if (localStorage.getItem("A2HS-dismissed") === "true") return;
 
     const handler = (e: Event) => {
       e.preventDefault();
@@ -30,14 +32,13 @@ export default function AddToHomeScreen() {
 
     window.addEventListener("beforeinstallprompt", handler);
 
-    if (isIOS) {
-      setShow(true);
-    }
+    // iOS never fires beforeinstallprompt
+    if (isIOS) setShow(true);
 
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  const dismiss = () => {
+  const close = () => {
     setShow(false);
     localStorage.setItem("A2HS-dismissed", "true");
   };
@@ -47,55 +48,88 @@ export default function AddToHomeScreen() {
     await deferredPrompt.prompt();
     const choice = await deferredPrompt.userChoice;
 
-    if (choice.outcome === "accepted") setShow(false);
+    if (choice.outcome === "accepted") {
+      close();
+    }
   };
 
   if (!show) return null;
 
   return (
     <div
+      onClick={close}
       style={{
         position: "fixed",
-        bottom: "20px",
-        left: "50%",
-        transform: "translateX(-50%)",
+        inset: 0,
+        background: "rgba(0,0,0,0.65)",
+        backdropFilter: "blur(6px)",
         zIndex: 9999,
-        maxWidth: "90%",
-        animation: "slideUp 0.4s ease-out",
+        padding: "20px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        animation: "fadeIn 0.3s ease-out",
       }}
     >
-      <div className="card shadow-lg p-3" style={{ borderRadius: "16px", background: "white" }}>
-        {!isIOS && (
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(420px, 92vw)",
+          background: "#fff",
+          borderRadius: "20px",
+          padding: "24px",
+          textAlign: "center",
+          animation: "slideUp 0.4s ease-out",
+        }}
+      >
+        {!isIOS ? (
           <>
-            <h6 className="mb-2">Add this app to your home screen</h6>
-            <p className="mb-3 small text-muted">
-              Get faster access next time, no browser needed.
+            <h2 style={{ fontWeight: 700, marginBottom: 8 }}>
+              Add BXKR to Your Home Screen
+            </h2>
+            <p style={{ marginBottom: 20, color: "#444" }}>
+              Install BXKR like a real app for faster access and a better
+              full‑screen experience.
             </p>
-            <button className="btn btn-primary w-100 mb-2" onClick={install}>
-              Add to Home Screen
+            <button
+              className="btn btn-primary w-100 mb-2"
+              onClick={install}
+              style={{ borderRadius: 12 }}
+            >
+              Install App
             </button>
           </>
-        )}
-
-        {isIOS && (
+        ) : (
           <>
-            <h6 className="mb-2">Install this app</h6>
-            <p className="small text-muted mb-2">
-              Tap the <strong>Share</strong> icon → <strong>Add to Home Screen</strong>.
+            <h2 style={{ fontWeight: 700, marginBottom: 8 }}>
+              Install BXKR
+            </h2>
+            <p style={{ marginBottom: 20, color: "#444" }}>
+              Tap the <strong>Share</strong> icon →{" "}
+              <strong>Add to Home Screen</strong>.
             </p>
           </>
         )}
 
-        <button className="btn btn-light w-100" onClick={dismiss}>
-          Dismiss
+        <button
+          className="btn btn-light w-100"
+          onClick={close}
+          style={{ borderRadius: 12 }}
+        >
+          Not now
         </button>
       </div>
 
       <style>
         {`
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+          }
+
           @keyframes slideUp {
-            from { transform: translate(-50%, 40px); opacity: 0; }
-            to   { transform: translate(-50%, 0); opacity: 1; }
+            from { transform: translateY(40px); opacity: 0; }
+            to   { transform: translateY(0); opacity: 1; }
           }
         `}
       </style>
