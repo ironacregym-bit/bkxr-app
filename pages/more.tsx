@@ -13,9 +13,12 @@ export default function MorePage() {
   useEffect(() => setMounted(true), []);
 
   // Resolve role only after mount to avoid hydration mismatch
-  const role: string | undefined = mounted ? ((session?.user as any)?.role as string | undefined) : undefined;
+  const role: string | undefined = mounted
+    ? ((session?.user as any)?.role as string | undefined)
+    : undefined;
   const isGym = role === "gym";
 
+  // -------- Base menu (shown to all users) --------
   const baseMenu = useMemo(
     () => [
       { href: "/profile", label: "Profile" },
@@ -23,6 +26,10 @@ export default function MorePage() {
       { href: "/supplements", label: "Supplements" },
       { href: "/progress", label: "Progress Data & Photos" },
       { href: "/exercise-library", label: "Exercise Library" },
+
+      // ⭐ NEW ENTRY — Everyone gets Referrals
+      { href: "/referrals", label: "Referrals" },
+
       {
         href: `https://wa.me/${process.env.NEXT_PUBLIC_TRAINER_PHONE}?text=Hi%20Coach%20I%27m%20doing%20BXKR`,
         label: "Chat",
@@ -32,12 +39,11 @@ export default function MorePage() {
     []
   );
 
-  // Append Admin link only when the user has the 'gym' role
+  // -------- Add Admin link only if the user has role "gym" --------
   const menuItems = useMemo(() => {
     if (!mounted) return baseMenu;
     return isGym ? [...baseMenu, { href: "/admin", label: "Admin" }] : baseMenu;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted, isGym]);
+  }, [mounted, isGym, baseMenu]);
 
   return (
     <>
