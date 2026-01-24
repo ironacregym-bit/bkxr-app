@@ -1,4 +1,3 @@
-
 import Head from "next/head";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -11,17 +10,16 @@ export default function Landing() {
   const accent = "#FF8A2A";
 
   /**
-   * TODO: Replace this with your real WhatsApp number (E.164 without '+')
-   * e.g. UK mobile: '447912345678'
+   * WhatsApp number (E.164 without '+')
+   * UK example: '447912345678'
    */
   const whatsappNumber = "447860861120";
 
   // Pre-filled WhatsApp message for In-Person interest
   const waHref = useMemo(() => {
     const msg = encodeURIComponent(
-      "Hi – I'm interested in trying a BXKR class at Iron Acre Gym in Westerfield. Could you share the next available sessions and how to book?"
+      "Hi – I'm interested in booking a trial BXKR class at Iron Acre Gym in Westerfield. Could you share the next available sessions?"
     );
-    // wa.me requires the number without '+' or spaces
     return `https://wa.me/${whatsappNumber}?text=${msg}`;
   }, [whatsappNumber]);
 
@@ -35,7 +33,7 @@ export default function Landing() {
   return (
     <>
       <Head>
-        <title>BXKR — Boxing x Kettlebell Hybrid Transformation</title>
+        <title>BXKR — Boxing & Kettlebell Training</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
@@ -50,7 +48,6 @@ export default function Landing() {
             />
           </div>
 
-          {/* Route to the register page instead of direct NextAuth */}
           <Link href="/register" className="bxkr-btn" aria-label="Sign in">
             Sign in
           </Link>
@@ -60,28 +57,27 @@ export default function Landing() {
         <section className="row align-items-center mb-5">
           <div className="col-12 col-md-6 mb-4">
             <h1 className="fw-bold" style={{ fontSize: "2.6rem", lineHeight: 1.2 }}>
-              A Hybrid <span style={{ color: accent }}>Boxing &amp; Kettlebell</span>
+              Boxing &amp; <span style={{ color: accent }}>Kettlebell</span>
               <br />
-              Transformation Programme
+              Training Done Properly
             </h1>
 
             <p className="mt-3 text-dim">
-              BXKR blends boxing (fitness &amp; technique) with kettlebell functional strength
-              to build real conditioning, skill and athleticism — not random workouts.
+              BXKR combines boxing conditioning and kettlebell strength into structured,
+              coach-led sessions designed to build real fitness — not random workouts.
             </p>
 
             <p className="small text-dim">
-              Train in person at Iron Acre Gym — an open barn on a working farm in Westerfield —
-              or go fully online inside the BXKR app.
+              Train in person at Iron Acre Gym — an open barn on a working farm in Westerfield.
+              Small groups. Real coaching. Measurable progress.
             </p>
 
             <div className="d-flex gap-2 mt-3 flex-wrap">
-              {/* Route to register page */}
-              <Link href="/register" className="bxkr-btn">
-                Start Your Transformation
+              <Link href="#inperson" className="bxkr-btn">
+                Train In-Person
               </Link>
-              <Link href="#compare" className="btn-bxkr-outline">
-                Compare Options
+              <Link href="/online" className="btn-bxkr-outline">
+                Train Online
               </Link>
             </div>
           </div>
@@ -99,10 +95,10 @@ export default function Landing() {
         {/* IN-PERSON TRAINING */}
         <section className="mb-5" id="inperson">
           <div className="text-center mb-4">
-            <h2 className="fw-bold">In‑Person BXKR at Iron Acre Gym (Westerfield)</h2>
+            <h2 className="fw-bold">In-Person BXKR at Iron Acre Gym (Westerfield)</h2>
             <p className="text-dim">
-              Train in an open barn on a working farm. Raw atmosphere. Serious training. Coach‑led
-              sessions. A proper environment for people who want to get better.
+              Train in an open barn on a working farm. Raw atmosphere. Serious training.
+              Coach-led sessions built for progress.
             </p>
           </div>
 
@@ -121,29 +117,34 @@ export default function Landing() {
               <div className="futuristic-card p-4 h-100">
                 <h4 className="fw-bold">A Training Environment Like No Other</h4>
                 <p className="text-dim small mt-2">
-                  Fresh air through the barn. Bags and pads. Chalk and bells. No mirrors. No fluff.
-                  Just quality work and progression with coaching.
+                  Fresh air through the barn. Bags and bells. Chalk and sweat.
+                  No mirrors. No fluff. Just quality work with coaching.
                 </p>
 
                 <ul className="small text-dim mt-3">
                   <li>Unlimited BXKR sessions each week</li>
-                  <li>Coach‑led boxing conditioning &amp; kettlebell strength</li>
-                  <li>Real technique, real progression — not boxercise</li>
-                  <li>Community, energy &amp; accountability</li>
+                  <li>Coach-led boxing &amp; kettlebell training</li>
+                  <li>Real technique and progression</li>
+                  <li>Small group accountability</li>
                   <li>Includes full BXKR app access</li>
                 </ul>
 
                 <div className="fw-bold mt-3" style={{ fontSize: "1.2rem" }}>
                   £60 / month
                 </div>
-                <div className="small text-dim">Or pay‑as‑you‑go: £8 per class</div>
+                <div className="small text-dim">Or £8 per class (PAYG)</div>
 
                 <div className="d-flex gap-2 mt-3 flex-wrap">
-                  <a href={waHref} target="_blank" rel="noopener noreferrer" className="bxkr-btn">
-                    Join In‑Person via WhatsApp
+                  <a
+                    href={waHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bxkr-btn"
+                  >
+                    Book a Trial Session (WhatsApp)
                   </a>
-                  <Link href="#online" className="btn-bxkr-outline">
-                    See Online Programme
+                  <Link href="/online" className="btn-bxkr-outline">
+                    View Online Programme
                   </Link>
                 </div>
               </div>
@@ -156,8 +157,8 @@ export default function Landing() {
           <div className="text-center mb-4">
             <h2 className="fw-bold">BXKR Online Programme</h2>
             <p className="text-dim">
-              The full BXKR system delivered through the app — train anywhere, track everything,
-              and progress every week.
+              The full BXKR system delivered through the app — train anywhere,
+              stay consistent, and track progress properly.
             </p>
           </div>
 
@@ -176,32 +177,28 @@ export default function Landing() {
               <div className="futuristic-card p-4 h-100">
                 <h4 className="fw-bold">Train Anywhere. Stay Accountable.</h4>
                 <p className="text-dim small mt-2">
-                  Structure beats motivation. BXKR Online gives you hybrid boxing &amp; kettlebell
-                  training, habit tracking, nutrition logging, and smart progress — all inside a
-                  clean, fast app.
+                  Structure beats motivation. BXKR Online gives you the same hybrid
+                  boxing &amp; kettlebell logic — without needing to be on-site.
                 </p>
 
                 <ul className="small text-dim mt-3">
-                  <li>10‑round structured sessions (Boxing 1–5, Kettlebells 6–10)</li>
-                  <li>Habit tracking with daily check‑off</li>
-                  <li>Nutrition logging with barcode scanner</li>
-                  <li>Weekly overview, streaks &amp; micro‑stats</li>
-                  <li>Workout scheduling &amp; class booking</li>
-                  <li>Push notification accountability</li>
+                  <li>Structured 10-round BXKR sessions</li>
+                  <li>Habit &amp; nutrition tracking</li>
+                  <li>Weekly progress overview</li>
+                  <li>Workout scheduling &amp; reminders</li>
+                  <li>Lower cost than in-person coaching</li>
                 </ul>
 
                 <div className="fw-bold mt-3" style={{ fontSize: "1.2rem" }}>
                   £20 / month
                 </div>
-                <div className="small text-dim">Start anywhere. Train consistently.</div>
 
                 <div className="d-flex gap-2 mt-3 flex-wrap">
-                  {/* Route to register page */}
-                  <Link href="/register" className="bxkr-btn">
-                    Join BXKR Online
+                  <Link href="/online" className="bxkr-btn">
+                    View BXKR Online
                   </Link>
                   <Link href="#inperson" className="btn-bxkr-outline">
-                    See In‑Person Option
+                    Train In-Person Instead
                   </Link>
                 </div>
               </div>
@@ -212,32 +209,35 @@ export default function Landing() {
         {/* COMPARISON */}
         <section className="mb-5" id="compare">
           <div className="text-center mb-4">
-            <h2 className="fw-bold">Which BXKR Is Right for You?</h2>
+            <h2 className="fw-bold">Choose Your BXKR Path</h2>
           </div>
 
           <div className="row">
             <div className="col-12 col-md-6 mb-3">
               <div className="futuristic-card p-4 h-100">
                 <h4 className="fw-semibold" style={{ color: accent }}>
-                  In‑Person at Iron Acre
+                  In-Person at Iron Acre
                 </h4>
                 <ul className="small text-dim mt-2">
-                  <li>Open‑barn training environment (Westerfield)</li>
-                  <li>Coach‑led sessions with technique cues</li>
-                  <li>Unlimited BXKR group workouts</li>
-                  <li>Community, energy &amp; accountability</li>
-                  <li>Includes full BXKR app access</li>
+                  <li>Open-barn training environment</li>
+                  <li>Coach-led sessions</li>
+                  <li>Unlimited group workouts</li>
+                  <li>Community &amp; accountability</li>
+                  <li>Includes BXKR app access</li>
                 </ul>
+
                 <div className="fw-bold mt-3">£60 / month</div>
-                <div className="small text-dim">Or £8 per class (PAYG)</div>
+                <div className="small text-dim">Or £8 per class</div>
 
                 <div className="d-flex gap-2 mt-3">
-                  <a href={waHref} target="_blank" rel="noopener noreferrer" className="bxkr-btn">
-                    Join In‑Person via WhatsApp
+                  <a
+                    href={waHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bxkr-btn"
+                  >
+                    Book Trial (WhatsApp)
                   </a>
-                  <Link href="#online" className="btn-bxkr-outline">
-                    Learn More
-                  </Link>
                 </div>
               </div>
             </div>
@@ -248,21 +248,17 @@ export default function Landing() {
                   BXKR Online
                 </h4>
                 <ul className="small text-dim mt-2">
-                  <li>Train anywhere — home, gym, outdoors</li>
-                  <li>Track habits, nutrition &amp; progression</li>
-                  <li>Hybrid boxing + kettlebell structure</li>
-                  <li>Daily accountability via push notifications</li>
-                  <li>Lower cost than in‑person coaching</li>
+                  <li>Train anywhere</li>
+                  <li>Hybrid boxing + kettlebell system</li>
+                  <li>Progress tracking &amp; habits</li>
+                  <li>Lower cost, high structure</li>
                 </ul>
+
                 <div className="fw-bold mt-3">£20 / month</div>
 
                 <div className="d-flex gap-2 mt-3">
-                  {/* Route to register page */}
-                  <Link href="/register" className="bxkr-btn">
-                    Join Online
-                  </Link>
-                  <Link href="#inperson" className="btn-bxkr-outline">
-                    Learn More
+                  <Link href="/online" className="bxkr-btn">
+                    View Online Programme
                   </Link>
                 </div>
               </div>
@@ -276,6 +272,6 @@ export default function Landing() {
           <Link href="/terms">Terms</Link>
         </footer>
       </main>
-       </>
+    </>
   );
 }
