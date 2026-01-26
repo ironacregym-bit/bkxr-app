@@ -252,7 +252,7 @@ export default function GymCreateWorkoutPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed to create gym workout");
       setMsg("Created ✅");
-      setTimeout(() => router.push(`/workouts/${json.workout_id}`), 700);
+      setTimeout(() => router.push(`/admin/workouts/${json.workout_id}`), 700);
     } catch (e: any) {
       setMsg(e?.message || "Failed to create workout");
     } finally {
