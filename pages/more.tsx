@@ -25,7 +25,7 @@ export default function MorePage() {
       { href: "/check-ins", label: "Check Ins" },
       { href: "/supplements", label: "Supplements" },
       { href: "/progress", label: "Progress Data & Photos" },
-      { href: "/exercise-library", label: "Exercise Library" },
+      { href: "/exercises", label: "Exercise Library" },
 
       // ⭐ NEW ENTRY — Everyone gets Referrals
       { href: "/referrals", label: "Referrals" },
