@@ -11,10 +11,30 @@ import { useMemo } from "react";
 import BottomNav from "../../../components/BottomNav";
 
 const ACCENT = "#FF8A2A";
-const fetcher = (u: string) => fetch(u).then((r) => {
-  if (!r.ok) throw new Error(`Failed: ${r.status}`);
-  return r.json();
-});
+
+/**
+ * Improved fetcher:
+ *  - Parses JSON body even on non-OK responses
+ *  - Surfaces { error, where, details } from the API so the UI shows *why* a 500 happened
+ */
+const fetcher = async (u: string) => {
+  const r = await fetch(u);
+  let json: any = null;
+  try {
+    json = await r.json();
+  } catch {
+    // ignore JSON parse errors (e.g., empty body)
+  }
+  if (!r.ok) {
+    const message = json?.error
+      ? `${json.error}${json?.where ? ` (${json.where})` : ""}${
+          json?.details ? ` – ${json.details}` : ""
+        }`
+      : `Failed: ${r.status}`;
+    throw new Error(message);
+  }
+  return json;
+};
 
 type SingleItem = {
   type: "Single";
@@ -40,7 +60,10 @@ type SupersetItem = {
   type: "Superset";
   order: number;
   name?: string | null;
-  items: SupersetSubItem[];
+  // Normalised field (preferred)
+  items?: SupersetSubItem[];
+  // Legacy/raw field (your data): superset_items
+  superset_items?: SupersetSubItem[];
   sets?: number;            // admin may see legacy without sets
   rest_s?: number | null;
   notes?: string | null;
@@ -76,15 +99,23 @@ function RoundSection({ title, round }: { title: string; round?: AdminRound | nu
   );
 
   return (
-    <section className="bxkr-card p-3 mb-3">
+    <section className="futuristic-card p-3 mb-3">
       <div className="d-flex align-items-center justify-content-between">
         <h5 className="m-0">{title}</h5>
         <span className="text-dim small">Round order: {round.order}</span>
       </div>
       <div className="mt-2">
         {items.map((it, idx) => (
-          <div key={`${title}-${idx}`} className="p-2 rounded mb-2" style={{ background: "rgba(255,255,255,0.04)" }}>
-            {it.type === "Single" ? <SingleRow item={it as SingleItem} /> : <SupersetRow item={it as SupersetItem} />}
+          <div
+            key={`${title}-${idx}`}
+            className="p-2 rounded mb-2"
+            style={{ background: "rgba(255,255,255,0.04)" }}
+          >
+            {it.type === "Single" ? (
+              <SingleRow item={it as SingleItem} />
+            ) : (
+              <SupersetRow item={it as SupersetItem} />
+            )}
           </div>
         ))}
       </div>
@@ -111,6 +142,14 @@ function SingleRow({ item }: { item: SingleItem }) {
 }
 
 function SupersetRow({ item }: { item: SupersetItem }) {
+  // Tolerate both normalised `items` and legacy `superset_items`
+  const subItems: SupersetSubItem[] =
+    Array.isArray(item.items)
+      ? item.items!
+      : Array.isArray(item.superset_items)
+      ? item.superset_items!
+      : [];
+
   return (
     <>
       <div className="d-flex justify-content-between align-items-center">
@@ -120,9 +159,12 @@ function SupersetRow({ item }: { item: SupersetItem }) {
         </span>
       </div>
       <div className="mt-2">
-        {(item.items || []).map((s, i) => (
-          <div key={i} className="d-flex align-items-center gap-2 small py-1"
-               style={{ borderBottom: "1px dashed rgba(255,255,255,0.1)" }}>
+        {subItems.map((s, i) => (
+          <div
+            key={i}
+            className="d-flex align-items-center gap-2 small py-1"
+            style={{ borderBottom: "1px dashed rgba(255,255,255,0.1)" }}
+          >
             <span className="text-dim">#{i + 1}</span>
             <span className="fw-semibold">{s.exercise_name || s.exercise_id || "Exercise"}</span>
             <span className="text-dim ms-auto">
@@ -160,18 +202,24 @@ export default function AdminWorkoutViewPage() {
 
   return (
     <>
-      <Head><title>{data?.workout_name ? `${data.workout_name} • Admin Workout` : "Admin Workout"}</title></Head>
+      <Head>
+        <title>{data?.workout_name ? `${data.workout_name} • Admin Workout` : "Admin Workout"}</title>
+      </Head>
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <div className="mb-3">
           <Link href="/admin" className="btn btn-outline-secondary">← Back to Admin</Link>
         </div>
 
         {isLoading && <div className="small text-dim">Loading workout…</div>}
-        {error && <div className="alert alert-danger">Failed to load: {String(error.message || error)}</div>}
+        {error && (
+          <div className="alert alert-danger">
+            Failed to load: {String((error as Error)?.message || error)}
+          </div>
+        )}
 
         {data && (
           <>
-            <section className="bxkr-card p-3 mb-3">
+            <section className="futuristic-card p-3 mb-3">
               <div className="d-flex align-items-center justify-content-between">
                 <h2 className="m-0">{data.workout_name}</h2>
                 <span className="badge" style={{ background: ACCENT, color: "#0b0f14" }}>
@@ -186,14 +234,19 @@ export default function AdminWorkoutViewPage() {
               {data.notes ? <div className="mt-2">{data.notes}</div> : null}
               {data.video_url ? (
                 <div className="mt-2">
-                  <a className="btn btn-sm btn-outline-light" href={data.video_url} target="_blank" rel="noreferrer" style={{ borderRadius: 24 }}>
+                  <a
+                    className="btn btn-sm btn-outline-light"
+                    href={data.video_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ borderRadius: 24 }}
+                  >
                     Watch Video
                   </a>
                 </div>
               ) : null}
 
               <div className="d-flex gap-2 mt-3">
-                {/* If you have an edit page that can prefill by ID, link it here. */}
                 <Link
                   href={`/admin/workouts/gym-create?edit=${encodeURIComponent(data.workout_id)}`}
                   className="btn"
@@ -201,7 +254,11 @@ export default function AdminWorkoutViewPage() {
                 >
                   Edit This Workout
                 </Link>
-                <Link href={`/workouts/${encodeURIComponent(data.workout_id)}`} className="btn btn-outline-light" style={{ borderRadius: 24 }}>
+                <Link
+                  href={`/workouts/${encodeURIComponent(data.workout_id)}`}
+                  className="btn btn-outline-light"
+                  style={{ borderRadius: 24 }}
+                >
                   Public View
                 </Link>
               </div>
@@ -209,7 +266,7 @@ export default function AdminWorkoutViewPage() {
 
             <RoundSection title={data.warmup?.name || "Warm Up"} round={data.warmup} />
             <RoundSection title={data.main?.name || "Main Set"} round={data.main || undefined} />
-            <RoundSection title={data.finisher?.name || "Finisher"} round={data.finisher} />
+           er"} round={data.finisher} />
           </>
         )}
       </main>
