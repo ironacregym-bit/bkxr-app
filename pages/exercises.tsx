@@ -76,7 +76,7 @@ export default function ExercisesPage() {
         </div>
 
         {/* Filters + Search */}
-        <div className="bxkr-card p-3 mb-3">
+        <div className="futuristic-card p-3 mb-3">
           {/* Type chips */}
           <div className="d-flex flex-wrap gap-2 mb-2">
             {TYPES.map((t) => (
@@ -114,10 +114,10 @@ export default function ExercisesPage() {
         </div>
 
         {/* Results */}
-        {isLoading && <div className="bxkr-card p-3 mb-3">Loading…</div>}
-        {error && <div className="bxkr-card p-3 mb-3 text-danger">Failed to load exercises.</div>}
+        {isLoading && <div className="futuristic-card p-3 mb-3">Loading…</div>}
+        {error && <div className="futuristic-card p-3 mb-3 text-danger">Failed to load exercises.</div>}
         {!isLoading && !error && items.length === 0 && (
-          <div className="bxkr-card p-3 mb-3 text-dim">No exercises found.</div>
+          <div className="futuristic-card p-3 mb-3 text-dim">No exercises found.</div>
         )}
 
         <div className="row g-3">
@@ -131,7 +131,7 @@ export default function ExercisesPage() {
 
             return (
               <div className="col-12" key={id}>
-                <div className="bxkr-card p-3 d-flex align-items-center justify-content-between">
+                <div className="futuristic-card p-3 d-flex align-items-center justify-content-between">
                   <div className="me-2">
                     <div className="fw-semibold">{name}</div>
                     <div className="small text-dim">
