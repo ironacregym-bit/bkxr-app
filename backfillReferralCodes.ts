@@ -1,5 +1,5 @@
 
-import firestore from "../lib/firestoreClient";
+import firestore from "/lib/firestoreClient";
 import { randomBytes } from "crypto";
 
 function shortCode(len = 6) {
