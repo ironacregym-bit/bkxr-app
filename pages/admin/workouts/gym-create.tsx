@@ -23,12 +23,20 @@ type SingleItem = {
   notes?: string | null;
 };
 
+type SupersetSubItem = {
+  exercise_id: string;
+  reps?: string;
+  weight_kg?: number | null;
+};
+
 type SupersetItem = {
   type: "Superset";
   order: number;
   name?: string | null;
-  items: Array<{ exercise_id: string; reps?: string; weight_kg?: number | null }>;
-  sets?: number | null;
+  /** Unlimited sub-exercises now */
+  items: SupersetSubItem[];
+  /** Superset-level sets to complete (required in UI; default 3) */
+  sets: number;
   rest_s?: number | null;
   notes?: string | null;
 };
@@ -74,49 +82,151 @@ export default function GymCreateWorkoutPage() {
     );
   }
 
+  /** ---------- Helpers for Single Items ---------- */
+
   function addSingle(round: "warmup" | "main" | "finisher") {
     const newItem: SingleItem = { type: "Single", order: 1, exercise_id: "", reps: "", sets: 3 };
-    if (round === "warmup") setWarmup((prev) => prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : prev);
-    if (round === "main") setMain((prev) => ({ ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] }));
-    if (round === "finisher") setFinisher((prev) => prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : { name: "Finisher", order: 3, items: [newItem] });
-  }
-
-  function addSuperset(round: "warmup" | "main" | "finisher") {
-    const newItem: SupersetItem = { type: "Superset", order: 1, name: "", items: [{ exercise_id: "", reps: "" }, { exercise_id: "", reps: "" }], sets: 3 };
-    if (round === "warmup") setWarmup((prev) => prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : prev);
-    if (round === "main") setMain((prev) => ({ ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] }));
-    if (round === "finisher") setFinisher((prev) => prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : { name: "Finisher", order: 3, items: [newItem] });
+    if (round === "warmup")
+      setWarmup((prev) => (prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : prev));
+    if (round === "main")
+      setMain((prev) => ({ ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] }));
+    if (round === "finisher")
+      setFinisher((prev) => (prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : { name: "Finisher", order: 3, items: [newItem] }));
   }
 
   function updateSingle(round: "warmup" | "main" | "finisher", idx: number, patch: Partial<SingleItem>) {
-    const up = (r: GymRound | null) => r ? { ...r, items: r.items.map((it, i) => i === idx ? { ...(it as SingleItem), ...patch } : it) } : r;
+    const up = (r: GymRound | null) =>
+      r ? { ...r, items: r.items.map((it, i) => (i === idx ? { ...(it as SingleItem), ...patch } : it)) } : r;
     if (round === "warmup") setWarmup((prev) => up(prev));
     if (round === "main") setMain((prev) => up(prev) as GymRound);
     if (round === "finisher") setFinisher((prev) => up(prev));
   }
 
+  /** ---------- Helpers for Supersets (unlimited items + sets at superset level) ---------- */
+
+  function addSuperset(round: "warmup" | "main" | "finisher") {
+    const newItem: SupersetItem = {
+      type: "Superset",
+      order: 1,
+      name: "",
+      // Start with two, but user can add/remove more
+      items: [{ exercise_id: "", reps: "" }, { exercise_id: "", reps: "" }],
+      sets: 3,
+      rest_s: null,
+    };
+    if (round === "warmup")
+      setWarmup((prev) => (prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : prev));
+    if (round === "main")
+      setMain((prev) => ({ ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] }));
+    if (round === "finisher")
+      setFinisher((prev) =>
+        prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : { name: "Finisher", order: 3, items: [newItem] }
+      );
+  }
+
   function updateSuperset(round: "warmup" | "main" | "finisher", idx: number, patch: Partial<SupersetItem>) {
-    const up = (r: GymRound | null) => r ? { ...r, items: r.items.map((it, i) => i === idx ? { ...(it as SupersetItem), ...patch } : it) } : r;
+    const up = (r: GymRound | null) =>
+      r ? { ...r, items: r.items.map((it, i) => (i === idx ? { ...(it as SupersetItem), ...patch } : it)) } : r;
     if (round === "warmup") setWarmup((prev) => up(prev));
     if (round === "main") setMain((prev) => up(prev) as GymRound);
     if (round === "finisher") setFinisher((prev) => up(prev));
   }
 
   function setSupersetExercise(round: "warmup" | "main" | "finisher", idx: number, subIdx: number, exercise_id: string) {
-    const up = (r: GymRound | null) => r ? {
-      ...r,
-      items: r.items.map((it, i) => {
-        if (i !== idx) return it;
-        const ss = it as SupersetItem;
-        const newItems = [...ss.items];
-        newItems[subIdx] = { ...newItems[subIdx], exercise_id };
-        return { ...ss, items: newItems };
-      })
-    } : r;
+    const up = (r: GymRound | null) =>
+      r
+        ? {
+            ...r,
+            items: r.items.map((it, i) => {
+              if (i !== idx) return it;
+              const ss = it as SupersetItem;
+              const newItems = [...ss.items];
+              newItems[subIdx] = { ...newItems[subIdx], exercise_id };
+              return { ...ss, items: newItems };
+            }),
+          }
+        : r;
     if (round === "warmup") setWarmup((prev) => up(prev));
     if (round === "main") setMain((prev) => up(prev) as GymRound);
     if (round === "finisher") setFinisher((prev) => up(prev));
   }
+
+  function setSupersetReps(round: "warmup" | "main" | "finisher", idx: number, subIdx: number, reps: string) {
+    const up = (r: GymRound | null) =>
+      r
+        ? {
+            ...r,
+            items: r.items.map((it, i) => {
+              if (i !== idx) return it;
+              const ss = it as SupersetItem;
+              const newItems = [...ss.items];
+              newItems[subIdx] = { ...newItems[subIdx], reps };
+              return { ...ss, items: newItems };
+            }),
+          }
+        : r;
+    if (round === "warmup") setWarmup((prev) => up(prev));
+    if (round === "main") setMain((prev) => up(prev) as GymRound);
+    if (round === "finisher") setFinisher((prev) => up(prev));
+  }
+
+  function setSupersetWeight(round: "warmup" | "main" | "finisher", idx: number, subIdx: number, weight_kg: number | null) {
+    const up = (r: GymRound | null) =>
+      r
+        ? {
+            ...r,
+            items: r.items.map((it, i) => {
+              if (i !== idx) return it;
+              const ss = it as SupersetItem;
+              const newItems = [...ss.items];
+              newItems[subIdx] = { ...newItems[subIdx], weight_kg };
+              return { ...ss, items: newItems };
+            }),
+          }
+        : r;
+    if (round === "warmup") setWarmup((prev) => up(prev));
+    if (round === "main") setMain((prev) => up(prev) as GymRound);
+    if (round === "finisher") setFinisher((prev) => up(prev));
+  }
+
+  function addExerciseToSuperset(round: "warmup" | "main" | "finisher", idx: number) {
+    const up = (r: GymRound | null) =>
+      r
+        ? {
+            ...r,
+            items: r.items.map((it, i) => {
+              if (i !== idx) return it;
+              const ss = it as SupersetItem;
+              const next = [...ss.items, { exercise_id: "", reps: "" } as SupersetSubItem];
+              return { ...ss, items: next };
+            }),
+          }
+        : r;
+    if (round === "warmup") setWarmup((prev) => up(prev));
+    if (round === "main") setMain((prev) => up(prev) as GymRound);
+    if (round === "finisher") setFinisher((prev) => up(prev));
+  }
+
+  function removeExerciseFromSuperset(round: "warmup" | "main" | "finisher", idx: number, subIdx: number) {
+    const up = (r: GymRound | null) =>
+      r
+        ? {
+            ...r,
+            items: r.items.map((it, i) => {
+              if (i !== idx) return it;
+              const ss = it as SupersetItem;
+              if (!ss.items || ss.items.length <= 1) return ss; // keep at least 1
+              const next = ss.items.filter((_, j) => j !== subIdx);
+              return { ...ss, items: next };
+            }),
+          }
+        : r;
+    if (round === "warmup") setWarmup((prev) => up(prev));
+    if (round === "main") setMain((prev) => up(prev) as GymRound);
+    if (round === "finisher") setFinisher((prev) => up(prev));
+  }
+
+  /** ---------- Save ---------- */
 
   async function save() {
     setSaving(true);
@@ -152,6 +262,117 @@ export default function GymCreateWorkoutPage() {
 
   const ACCENT = "#FF8A2A";
 
+  /** ---------- UI ---------- */
+
+  function SupersetBlock({
+    round,
+    it,
+    idx,
+  }: {
+    round: "warmup" | "main" | "finisher";
+    it: SupersetItem;
+    idx: number;
+  }) {
+    return (
+      <>
+        <div className="col-12 col-md-4">
+          <label className="form-label">Superset name</label>
+          <input
+            className="form-control"
+            value={it.name ?? ""}
+            onChange={(e) => updateSuperset(round, idx, { name: e.target.value })}
+          />
+          <div className="row mt-2 g-2">
+            <div className="col-6">
+              <label className="form-label">Sets (rounds)</label>
+              <input
+                className="form-control"
+                type="number"
+                min={1}
+                value={Number.isFinite(it.sets) ? it.sets : 3}
+                onChange={(e) => updateSuperset(round, idx, { sets: Math.max(1, Number(e.target.value) || 3) })}
+              />
+            </div>
+            <div className="col-6">
+              <label className="form-label">Rest between sets (s)</label>
+              <input
+                className="form-control"
+                type="number"
+                min={0}
+                value={it.rest_s ?? ""}
+                onChange={(e) => updateSuperset(round, idx, { rest_s: Number(e.target.value) || 0 })}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic list of sub-exercises */}
+        <div className="col-12 col-md-8">
+          {Array.isArray(it.items) && it.items.length > 0 ? (
+            it.items.map((s, sidx) => (
+              <div key={`${idx}-${sidx}`} className="row g-2 align-items-end mb-2">
+                <div className="col-12 col-md-5">
+                  <label className="form-label">Exercise</label>
+                  <select
+                    className="form-select"
+                    value={s.exercise_id}
+                    onChange={(e) => setSupersetExercise(round, idx, sidx, e.target.value)}
+                  >
+                    <option value="">— Select —</option>
+                    {exercises.map((e: any) => (
+                      <option key={e.id} value={e.id}>
+                        {e.exercise_name} {e.type ? `• ${e.type}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-6 col-md-3">
+                  <label className="form-label">Reps</label>
+                  <input
+                    className="form-control"
+                    value={s.reps ?? ""}
+                    onChange={(e) => setSupersetReps(round, idx, sidx, e.target.value)}
+                  />
+                </div>
+                <div className="col-4 col-md-2">
+                  <label className="form-label">Weight (kg)</label>
+                  <input
+                    className="form-control"
+                    type="number"
+                    min={0}
+                    value={s.weight_kg ?? ""}
+                    onChange={(e) => setSupersetWeight(round, idx, sidx, Number(e.target.value) || null)}
+                  />
+                </div>
+                <div className="col-2 col-md-2 d-flex">
+                  <button
+                    type="button"
+                    className="btn btn-outline-danger ms-auto"
+                    onClick={() => removeExerciseFromSuperset(round, idx, sidx)}
+                    title="Remove exercise from superset"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-dim small">No exercises yet.</div>
+          )}
+
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-light mt-2"
+            style={{ borderRadius: 24 }}
+            onClick={() => addExerciseToSuperset(round, idx)}
+          >
+            + Add Exercise to Superset
+          </button>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <Head><title>Create Gym Workout • Admin</title></Head>
@@ -168,13 +389,19 @@ export default function GymCreateWorkoutPage() {
           <div className="row g-2">
             <div className="col-12 col-md-6">
               <label className="form-label">Workout Name</label>
-              <input className="form-control" value={meta.workout_name}
-                     onChange={(e) => setMeta({ ...meta, workout_name: e.target.value })} />
+              <input
+                className="form-control"
+                value={meta.workout_name}
+                onChange={(e) => setMeta({ ...meta, workout_name: e.target.value })}
+              />
             </div>
             <div className="col-6 col-md-3">
               <label className="form-label">Visibility</label>
-              <select className="form-select" value={meta.visibility}
-                      onChange={(e) => setMeta({ ...meta, visibility: e.target.value as any })}>
+              <select
+                className="form-select"
+                value={meta.visibility}
+                onChange={(e) => setMeta({ ...meta, visibility: e.target.value as any })}
+              >
                 <option value="global">Global</option>
                 <option value="private">Private</option>
               </select>
@@ -182,18 +409,29 @@ export default function GymCreateWorkoutPage() {
             </div>
             <div className="col-6 col-md-3">
               <label className="form-label">Focus</label>
-              <input className="form-control" value={meta.focus}
-                     onChange={(e) => setMeta({ ...meta, focus: e.target.value })} placeholder="e.g., Upper Body" />
+              <input
+                className="form-control"
+                value={meta.focus}
+                onChange={(e) => setMeta({ ...meta, focus: e.target.value })}
+                placeholder="e.g., Upper Body"
+              />
             </div>
             <div className="col-12">
               <label className="form-label">Notes</label>
-              <textarea className="form-control" value={meta.notes}
-                        onChange={(e) => setMeta({ ...meta, notes: e.target.value })} />
+              <textarea
+                className="form-control"
+                value={meta.notes}
+                onChange={(e) => setMeta({ ...meta, notes: e.target.value })}
+              />
             </div>
             <div className="col-12 col-md-6">
               <label className="form-label">Video URL</label>
-              <input className="form-control" value={meta.video_url}
-                     onChange={(e) => setMeta({ ...meta, video_url: e.target.value })} placeholder="https://…" />
+              <input
+                className="form-control"
+                value={meta.video_url}
+                onChange={(e) => setMeta({ ...meta, video_url: e.target.value })}
+                placeholder="https://…"
+              />
             </div>
           </div>
         </section>
@@ -203,78 +441,90 @@ export default function GymCreateWorkoutPage() {
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h6 className="m-0">Warm Up</h6>
             <div className="d-flex gap-2">
-              <button className="btn btn-sm" style={{ background: ACCENT, color: "#0b0f14", borderRadius: 24 }} onClick={() => addSingle("warmup")}>+ Single</button>
-              <button className="btn btn-sm btn-outline-light" style={{ borderRadius: 24 }} onClick={() => addSuperset("warmup")}>+ Superset</button>
+              <button
+                className="btn btn-sm"
+                style={{ background: ACCENT, color: "#0b0f14", borderRadius: 24 }}
+                onClick={() => addSingle("warmup")}
+              >
+                + Single
+              </button>
+              <button
+                className="btn btn-sm btn-outline-light"
+                style={{ borderRadius: 24 }}
+                onClick={() => addSuperset("warmup")}
+              >
+                + Superset
+              </button>
             </div>
           </div>
-          {warmup?.items.length ? warmup.items.map((it, idx) => (
-            <div key={`wu-${idx}`} className="row g-2 mb-2">
-              {it.type === "Single" ? (
-                <>
-                  <div className="col-12 col-md-4">
-                    <label className="form-label">Exercise</label>
-                    <select className="form-select" value={(it as SingleItem).exercise_id}
-                            onChange={(e) => updateSingle("warmup", idx, { exercise_id: e.target.value })}>
-                      <option value="">— Select —</option>
-                      {exercises.map((e: any) => <option key={e.id} value={e.id}>{e.exercise_name} {e.type ? `• ${e.type}` : ""}</option>)}
-                    </select>
-                  </div>
-                  <div className="col-4 col-md-2">
-                    <label className="form-label">Sets</label>
-                    <input className="form-control" type="number" min={1} value={(it as SingleItem).sets ?? ""} onChange={(e) => updateSingle("warmup", idx, { sets: Number(e.target.value) || undefined })} />
-                  </div>
-                  <div className="col-8 col-md-3">
-                    <label className="form-label">Reps</label>
-                    <input className="form-control" value={(it as SingleItem).reps ?? ""} onChange={(e) => updateSingle("warmup", idx, { reps: e.target.value })} placeholder="e.g., 10 or 10-8-6" />
-                  </div>
-                  <div className="col-6 col-md-2">
-                    <label className="form-label">Weight (kg)</label>
-                    <input className="form-control" type="number" min={0} value={(it as SingleItem).weight_kg ?? ""} onChange={(e) => updateSingle("warmup", idx, { weight_kg: Number(e.target.value) || null })} />
-                  </div>
-                  <div className="col-6 col-md-1">
-                    <label className="form-label">Rest (s)</label>
-                    <input className="form-control" type="number" min={0} value={(it as SingleItem).rest_s ?? ""} onChange={(e) => updateSingle("warmup", idx, { rest_s: Number(e.target.value) || null })} />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="col-12 col-md-4">
-                    <label className="form-label">Superset name</label>
-                    <input className="form-control" value={(it as SupersetItem).name ?? ""} onChange={(e) => updateSuperset("warmup", idx, { name: e.target.value })} />
-                  </div>
-                  {((it as SupersetItem).items || []).map((s, sidx) => (
-                    <div key={`${idx}-${sidx}`} className="col-12 col-md-8">
-                      <div className="row g-2">
-                        <div className="col-6">
-                          <label className="form-label">Exercise</label>
-                          <select className="form-select" value={s.exercise_id} onChange={(e) => setSupersetExercise("warmup", idx, sidx, e.target.value)}>
-                            <option value="">— Select —</option>
-                            {exercises.map((e: any) => <option key={e.id} value={e.id}>{e.exercise_name} {e.type ? `• ${e.type}` : ""}</option>)}
-                          </select>
-                        </div>
-                        <div className="col-3">
-                          <label className="form-label">Reps</label>
-                          <input className="form-control" value={s.reps ?? ""} onChange={(e) => {
-                            const ss = it as SupersetItem;
-                            const newItems = [...ss.items]; newItems[sidx] = { ...newItems[sidx], reps: e.target.value };
-                            updateSuperset("warmup", idx, { items: newItems });
-                          }} />
-                        </div>
-                        <div className="col-3">
-                          <label className="form-label">Weight (kg)</label>
-                          <input className="form-control" type="number" min={0} value={s.weight_kg ?? ""} onChange={(e) => {
-                            const ss = it as SupersetItem;
-                            const newItems = [...ss.items]; newItems[sidx] = { ...newItems[sidx], weight_kg: Number(e.target.value) || null };
-                            updateSuperset("warmup", idx, { items: newItems });
-                          }} />
-                        </div>
-                      </div>
+          {warmup?.items.length ? (
+            warmup.items.map((it, idx) => (
+              <div key={`wu-${idx}`} className="row g-2 mb-2">
+                {it.type === "Single" ? (
+                  <>
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">Exercise</label>
+                      <select
+                        className="form-select"
+                        value={(it as SingleItem).exercise_id}
+                        onChange={(e) => updateSingle("warmup", idx, { exercise_id: e.target.value })}
+                      >
+                        <option value="">— Select —</option>
+                        {exercises.map((e: any) => (
+                          <option key={e.id} value={e.id}>
+                            {e.exercise_name} {e.type ? `• ${e.type}` : ""}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  ))}
-                </>
-              )}
-            </div>
-          )) : <div className="small text-dim">Add warm-up items.</div>}
+                    <div className="col-4 col-md-2">
+                      <label className="form-label">Sets</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        min={1}
+                        value={(it as SingleItem).sets ?? ""}
+                        onChange={(e) => updateSingle("warmup", idx, { sets: Number(e.target.value) || undefined })}
+                      />
+                    </div>
+                    <div className="col-8 col-md-3">
+                      <label className="form-label">Reps</label>
+                      <input
+                        className="form-control"
+                        value={(it as SingleItem).reps ?? ""}
+                        onChange={(e) => updateSingle("warmup", idx, { reps: e.target.value })}
+                        placeholder="e.g., 10 or 10-8-6"
+                      />
+                    </div>
+                    <div className="col-6 col-md-2">
+                      <label className="form-label">Weight (kg)</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        min={0}
+                        value={(it as SingleItem).weight_kg ?? ""}
+                        onChange={(e) => updateSingle("warmup", idx, { weight_kg: Number(e.target.value) || null })}
+                      />
+                    </div>
+                    <div className="col-6 col-md-1">
+                      <label className="form-label">Rest (s)</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        min={0}
+                        value={(it as SingleItem).rest_s ?? ""}
+                        onChange={(e) => updateSingle("warmup", idx, { rest_s: Number(e.target.value) || null })}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <SupersetBlock round="warmup" it={it as SupersetItem} idx={idx} />
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="small text-dim">Add warm-up items.</div>
+          )}
         </section>
 
         {/* Main */}
@@ -282,79 +532,89 @@ export default function GymCreateWorkoutPage() {
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h6 className="m-0">Main Set</h6>
             <div className="d-flex gap-2">
-              <button className="btn btn-sm" style={{ background: ACCENT, color: "#0b0f14", borderRadius: 24 }} onClick={() => addSingle("main")}>+ Single</button>
-              <button className="btn btn-sm btn-outline-light" style={{ borderRadius: 24 }} onClick={() => addSuperset("main")}>+ Superset</button>
+              <button
+                className="btn btn-sm"
+                style={{ background: ACCENT, color: "#0b0f14", borderRadius: 24 }}
+                onClick={() => addSingle("main")}
+              >
+                + Single
+              </button>
+              <button
+                className="btn btn-sm btn-outline-light"
+                style={{ borderRadius: 24 }}
+                onClick={() => addSuperset("main")}
+              >
+                + Superset
+              </button>
             </div>
           </div>
-          {main.items.length ? main.items.map((it, idx) => (
-            <div key={`main-${idx}`} className="row g-2 mb-2">
-              {/* Same inputs as warmup, but mapped to main */}
-              {it.type === "Single" ? (
-                <>
-                  <div className="col-12 col-md-4">
-                    <label className="form-label">Exercise</label>
-                    <select className="form-select" value={(it as SingleItem).exercise_id}
-                            onChange={(e) => updateSingle("main", idx, { exercise_id: e.target.value })}>
-                      <option value="">— Select —</option>
-                      {exercises.map((e: any) => <option key={e.id} value={e.id}>{e.exercise_name} {e.type ? `• ${e.type}` : ""}</option>)}
-                    </select>
-                  </div>
-                  <div className="col-4 col-md-2">
-                    <label className="form-label">Sets</label>
-                    <input className="form-control" type="number" min={1} value={(it as SingleItem).sets ?? ""} onChange={(e) => updateSingle("main", idx, { sets: Number(e.target.value) || undefined })} />
-                  </div>
-                  <div className="col-8 col-md-3">
-                    <label className="form-label">Reps</label>
-                    <input className="form-control" value={(it as SingleItem).reps ?? ""} onChange={(e) => updateSingle("main", idx, { reps: e.target.value })} />
-                  </div>
-                  <div className="col-6 col-md-2">
-                    <label className="form-label">Weight (kg)</label>
-                    <input className="form-control" type="number" min={0} value={(it as SingleItem).weight_kg ?? ""} onChange={(e) => updateSingle("main", idx, { weight_kg: Number(e.target.value) || null })} />
-                  </div>
-                  <div className="col-6 col-md-1">
-                    <label className="form-label">Rest (s)</label>
-                    <input className="form-control" type="number" min={0} value={(it as SingleItem).rest_s ?? ""} onChange={(e) => updateSingle("main", idx, { rest_s: Number(e.target.value) || null })} />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="col-12 col-md-4">
-                    <label className="form-label">Superset name</label>
-                    <input className="form-control" value={(it as SupersetItem).name ?? ""} onChange={(e) => updateSuperset("main", idx, { name: e.target.value })} />
-                  </div>
-                  {((it as SupersetItem).items || []).map((s, sidx) => (
-                    <div key={`${idx}-${sidx}`} className="col-12 col-md-8">
-                      <div className="row g-2">
-                        <div className="col-6">
-                          <label className="form-label">Exercise</label>
-                          <select className="form-select" value={s.exercise_id} onChange={(e) => setSupersetExercise("main", idx, sidx, e.target.value)}>
-                            <option value="">— Select —</option>
-                            {exercises.map((e: any) => <option key={e.id} value={e.id}>{e.exercise_name} {e.type ? `• ${e.type}` : ""}</option>)}
-                          </select>
-                        </div>
-                        <div className="col-3">
-                          <label className="form-label">Reps</label>
-                          <input className="form-control" value={s.reps ?? ""} onChange={(e) => {
-                            const ss = it as SupersetItem;
-                            const newItems = [...ss.items]; newItems[sidx] = { ...newItems[sidx], reps: e.target.value };
-                            updateSuperset("main", idx, { items: newItems });
-                          }} />
-                        </div>
-                        <div className="col-3">
-                          <label className="form-label">Weight (kg)</label>
-                          <input className="form-control" type="number" min={0} value={s.weight_kg ?? ""} onChange={(e) => {
-                            const ss = it as SupersetItem;
-                            const newItems = [...ss.items]; newItems[sidx] = { ...newItems[sidx], weight_kg: Number(e.target.value) || null };
-                            updateSuperset("main", idx, { items: newItems });
-                          }} />
-                        </div>
-                      </div>
+          {main.items.length ? (
+            main.items.map((it, idx) => (
+              <div key={`main-${idx}`} className="row g-2 mb-2">
+                {it.type === "Single" ? (
+                  <>
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">Exercise</label>
+                      <select
+                        className="form-select"
+                        value={(it as SingleItem).exercise_id}
+                        onChange={(e) => updateSingle("main", idx, { exercise_id: e.target.value })}
+                      >
+                        <option value="">— Select —</option>
+                        {exercises.map((e: any) => (
+                          <option key={e.id} value={e.id}>
+                            {e.exercise_name} {e.type ? `• ${e.type}` : ""}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  ))}
-                </>
-              )}
-            </div>
-          )) : <div className="small text-dim">Add main set items.</div>}
+                    <div className="col-4 col-md-2">
+                      <label className="form-label">Sets</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        min={1}
+                        value={(it as SingleItem).sets ?? ""}
+                        onChange={(e) => updateSingle("main", idx, { sets: Number(e.target.value) || undefined })}
+                      />
+                    </div>
+                    <div className="col-8 col-md-3">
+                      <label className="form-label">Reps</label>
+                      <input
+                        className="form-control"
+                        value={(it as SingleItem).reps ?? ""}
+                        onChange={(e) => updateSingle("main", idx, { reps: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-6 col-md-2">
+                      <label className="form-label">Weight (kg)</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        min={0}
+                        value={(it as SingleItem).weight_kg ?? ""}
+                        onChange={(e) => updateSingle("main", idx, { weight_kg: Number(e.target.value) || null })}
+                      />
+                    </div>
+                    <div className="col-6 col-md-1">
+                      <label className="form-label">Rest (s)</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        min={0}
+                        value={(it as SingleItem).rest_s ?? ""}
+                        onChange={(e) => updateSingle("main", idx, { rest_s: Number(e.target.value) || null })}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <SupersetBlock round="main" it={it as SupersetItem} idx={idx} />
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="small text-dim">Add main set items.</div>
+          )}
         </section>
 
         {/* Finisher */}
@@ -362,80 +622,89 @@ export default function GymCreateWorkoutPage() {
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h6 className="m-0">Finisher</h6>
             <div className="d-flex gap-2">
-              <button className="btn btn-sm" style={{ background: ACCENT, color: "#0b0f14", borderRadius: 24 }} onClick={() => addSingle("finisher")}>+ Single</button>
-              <button className="btn btn-sm btn-outline-light" style={{ borderRadius: 24 }} onClick={() => addSuperset("finisher")}>+ Superset</button>
+              <button
+                className="btn btn-sm"
+                style={{ background: ACCENT, color: "#0b0f14", borderRadius: 24 }}
+                onClick={() => addSingle("finisher")}
+              >
+                + Single
+              </button>
+              <button
+                className="btn btn-sm btn-outline-light"
+                style={{ borderRadius: 24 }}
+                onClick={() => addSuperset("finisher")}
+              >
+                + Superset
+              </button>
             </div>
           </div>
-          {!finisher?.items?.length ? <div className="small text-dim">Optional finisher.</div> : finisher.items.map((it, idx) => (
-            <div key={`fin-${idx}`} className="row g-2 mb-2">
-              {/* same inputs as warmup but mapped to finisher */}
-              {/* You can refactor into a subcomponent if you like */}
-              {it.type === "Single" ? (
-                <>
-                  <div className="col-12 col-md-4">
-                    <label className="form-label">Exercise</label>
-                    <select className="form-select" value={(it as SingleItem).exercise_id}
-                            onChange={(e) => updateSingle("finisher", idx, { exercise_id: e.target.value })}>
-                      <option value="">— Select —</option>
-                      {exercises.map((e: any) => <option key={e.id} value={e.id}>{e.exercise_name} {e.type ? `• ${e.type}` : ""}</option>)}
-                    </select>
-                  </div>
-                  <div className="col-4 col-md-2">
-                    <label className="form-label">Sets</label>
-                    <input className="form-control" type="number" min={1} value={(it as SingleItem).sets ?? ""} onChange={(e) => updateSingle("finisher", idx, { sets: Number(e.target.value) || undefined })} />
-                  </div>
-                  <div className="col-8 col-md-3">
-                    <label className="form-label">Reps</label>
-                    <input className="form-control" value={(it as SingleItem).reps ?? ""} onChange={(e) => updateSingle("finisher", idx, { reps: e.target.value })} />
-                  </div>
-                  <div className="col-6 col-md-2">
-                    <label className="form-label">Weight (kg)</label>
-                    <input className="form-control" type="number" min={0} value={(it as SingleItem).weight_kg ?? ""} onChange={(e) => updateSingle("finisher", idx, { weight_kg: Number(e.target.value) || null })} />
-                  </div>
-                  <div className="col-6 col-md-1">
-                    <label className="form-label">Rest (s)</label>
-                    <input className="form-control" type="number" min={0} value={(it as SingleItem).rest_s ?? ""} onChange={(e) => updateSingle("finisher", idx, { rest_s: Number(e.target.value) || null })} />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="col-12 col-md-4">
-                    <label className="form-label">Superset name</label>
-                    <input className="form-control" value={(it as SupersetItem).name ?? ""} onChange={(e) => updateSuperset("finisher", idx, { name: e.target.value })} />
-                  </div>
-                  {((it as SupersetItem).items || []).map((s, sidx) => (
-                    <div key={`${idx}-${sidx}`} className="col-12 col-md-8">
-                      <div className="row g-2">
-                        <div className="col-6">
-                          <label className="form-label">Exercise</label>
-                          <select className="form-select" value={s.exercise_id} onChange={(e) => setSupersetExercise("finisher", idx, sidx, e.target.value)}>
-                            <option value="">— Select —</option>
-                            {exercises.map((e: any) => <option key={e.id} value={e.id}>{e.exercise_name} {e.type ? `• ${e.type}` : ""}</option>)}
-                          </select>
-                        </div>
-                        <div className="col-3">
-                          <label className="form-label">Reps</label>
-                          <input className="form-control" value={s.reps ?? ""} onChange={(e) => {
-                            const ss = it as SupersetItem;
-                            const newItems = [...ss.items]; newItems[sidx] = { ...newItems[sidx], reps: e.target.value };
-                            updateSuperset("finisher", idx, { items: newItems });
-                          }} />
-                        </div>
-                        <div className="col-3">
-                          <label className="form-label">Weight (kg)</label>
-                          <input className="form-control" type="number" min={0} value={s.weight_kg ?? ""} onChange={(e) => {
-                            const ss = it as SupersetItem;
-                            const newItems = [...ss.items]; newItems[sidx] = { ...newItems[sidx], weight_kg: Number(e.target.value) || null };
-                            updateSuperset("finisher", idx, { items: newItems });
-                          }} />
-                        </div>
-                      </div>
+          {!finisher?.items?.length ? (
+            <div className="small text-dim">Optional finisher.</div>
+          ) : (
+            finisher.items.map((it, idx) => (
+              <div key={`fin-${idx}`} className="row g-2 mb-2">
+                {it.type === "Single" ? (
+                  <>
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">Exercise</label>
+                      <select
+                        className="form-select"
+                        value={(it as SingleItem).exercise_id}
+                        onChange={(e) => updateSingle("finisher", idx, { exercise_id: e.target.value })}
+                      >
+                        <option value="">— Select —</option>
+                        {exercises.map((e: any) => (
+                          <option key={e.id} value={e.id}>
+                            {e.exercise_name} {e.type ? `• ${e.type}` : ""}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  ))}
-                </>
-              )}
-            </div>
-          ))}
+                    <div className="col-4 col-md-2">
+                      <label className="form-label">Sets</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        min={1}
+                        value={(it as SingleItem).sets ?? ""}
+                        onChange={(e) => updateSingle("finisher", idx, { sets: Number(e.target.value) || undefined })}
+                      />
+                    </div>
+                    <div className="col-8 col-md-3">
+                      <label className="form-label">Reps</label>
+                      <input
+                        className="form-control"
+                        value={(it as SingleItem).reps ?? ""}
+                        onChange={(e) => updateSingle("finisher", idx, { reps: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-6 col-md-2">
+                      <label className="form-label">Weight (kg)</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        min={0}
+                        value={(it as SingleItem).weight_kg ?? ""}
+                        onChange={(e) => updateSingle("finisher", idx, { weight_kg: Number(e.target.value) || null })}
+                      />
+                    </div>
+                    <div className="col-6 col-md-1">
+                      <label className="form-label">Rest (s)</label>
+                      <input
+                        className="form-control"
+                        type="number"
+                        min={0}
+                        value={(it as SingleItem).rest_s ?? ""}
+                        onChange={(e) => updateSingle("finisher", idx, { rest_s: Number(e.target.value) || null })}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <SupersetBlock round="finisher" it={it as SupersetItem} idx={idx} />
+                )}
+              </div>
+            ))
+          )}
         </section>
 
         <button
