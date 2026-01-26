@@ -266,7 +266,7 @@ export default function AdminWorkoutViewPage() {
 
             <RoundSection title={data.warmup?.name || "Warm Up"} round={data.warmup} />
             <RoundSection title={data.main?.name || "Main Set"} round={data.main || undefined} />
-           er"} round={data.finisher} />
+            <RoundSection title={data.finisher?.name || "Finisher"} round={data.finisher} />
           </>
         )}
       </main>
