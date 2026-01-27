@@ -1,12 +1,11 @@
 
-// pages/api/completions/create.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]";
 
-// Types used by GYM completions
+// ---------- Types ----------
 type GymCompletionSet = {
   exercise_id: string;
   set: number;
@@ -14,7 +13,6 @@ type GymCompletionSet = {
   reps: number | null;
 };
 
-// Types used by BXKR benchmark completions
 type Style = "AMRAP" | "EMOM" | "LADDER" | string;
 type PartMetrics = {
   style?: Style;
@@ -24,6 +22,7 @@ type PartMetrics = {
 };
 type PartName = "engine" | "power" | "core" | "ladder" | "load";
 
+// ---------- Handler ----------
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -31,21 +30,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // SESSION
+    // Session-derived user (no client-provided email)
     const session = await getServerSession(req, res, authOptions);
     if (!session?.user?.email) {
       return res.status(401).json({ error: "Not signed in" });
     }
     const user_email = session.user.email.toLowerCase();
 
-    // BODY
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+    // Body
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
     const workout_id = String(body.workout_id || "").trim();
     if (!workout_id) {
       return res.status(400).json({ error: "workout_id required" });
     }
 
-    // We allow manual overrides (NOT auto guesses)
+    // Manual overrides only (no auto estimates)
     const calories_burned =
       body.calories_burned != null && Number.isFinite(Number(body.calories_burned))
         ? Number(body.calories_burned)
@@ -56,6 +55,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? Number(body.duration_minutes)
         : null;
 
+    const activity_type =
+      typeof body.activity_type === "string" && body.activity_type.trim() !== ""
+        ? body.activity_type.trim()
+        : "Strength training";
+
     const rpe = body.rpe != null ? Number(body.rpe) : null;
     const notes = typeof body.notes === "string" ? body.notes : null;
 
@@ -65,23 +69,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? Timestamp.fromDate(new Date(body.completed_at))
         : Timestamp.fromDate(now);
 
-    // ---- Detect if this payload is a GYM completion or a BXKR completion ----
+    // Determine mode
     const isGym = Array.isArray(body.sets) && body.sets.length > 0;
     const isBenchmarkLike =
       body.engine || body.power || body.core || body.ladder || body.load || body.is_benchmark;
 
-    // UNIQUE DOC ID (keeps history instead of overwriting)
+    // New doc (keep history; do not overwrite)
     const docRef = firestore.collection("workoutCompletions").doc();
     const docId = docRef.id;
 
-    // ---- GYM COMPLETION MODE ----
+    // ---------- GYM COMPLETION ----------
     if (isGym) {
       const sets: GymCompletionSet[] = body.sets
-        .map((s: any) => ({
-          exercise_id: String(s.exercise_id || "").trim(),
-          set: Number(s.set || 0),
-          weight: s.weight == null ? null : Number(s.weight),
-          reps: s.reps == null ? null : Number(s.reps),
+        .map((s: any): GymCompletionSet => ({
+          exercise_id: String(s?.exercise_id || "").trim(),
+          set: Number(s?.set || 0),
+          weight: s?.weight == null ? null : Number(s.weight),
+          reps: s?.reps == null ? null : Number(s.reps),
         }))
         .filter((s: GymCompletionSet) => s.exercise_id && s.set > 0);
 
@@ -90,13 +94,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         workout_id,
         user_email,
         completed_date: completedDateTS,
-        date_completed: completedDateTS,
+        date_completed: completedDateTS, // legacy field
 
-        // GYM specifics
-        activity_type: "Strength training",
+        activity_type,
         sets,
 
-        // Optional manual overrides
+        // Manual overrides (optional)
         calories_burned,
         duration_minutes,
         rpe,
@@ -107,11 +110,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
 
       await docRef.set(payload, { merge: true });
-
       return res.status(201).json({ ok: true, type: "gym", id: docId });
     }
 
-    // ---- BXKR BENCHMARK COMPLETION MODE ----
+    // ---------- BXKR / BENCHMARK COMPLETION ----------
     if (isBenchmarkLike) {
       const parts: PartName[] = ["engine", "power", "core", "ladder", "load"];
       const provided: Record<PartName, PartMetrics> = {} as any;
@@ -140,9 +142,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const note = typeof v.notes === "string" ? v.notes : undefined;
 
         const hasContent = style != null || rounds != null || weight != null || note != null;
-        return hasContent
-          ? { style, rounds_completed: rounds, weight_kg: weight, notes: note }
-          : undefined;
+        return hasContent ? { style, rounds_completed: rounds, weight_kg: weight, notes: note } : undefined;
       };
 
       for (const p of parts) {
@@ -157,9 +157,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         completed_date: completedDateTS,
         date_completed: completedDateTS,
 
-        // Manual override if provided
+        // Manual overrides (optional)
         calories_burned: calories_burned ?? null,
-        duration: duration_minutes ?? null,
+        duration: duration_minutes ?? null, // <- keep legacy 'duration' name for BXKR
         rating: body.rating != null ? Number(body.rating) : null,
         weight_completed_with:
           body.weight_completed_with != null ? Number(body.weight_completed_with) : null,
@@ -178,14 +178,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
 
       await docRef.set(payload, { merge: true });
-
       return res.status(201).json({ ok: true, type: "bxkr", id: docId });
     }
 
-    // ---- NO VALID MODE DETECTED ----
+    // ---------- No valid mode ----------
     return res.status(400).json({
-      error:
-        "Invalid payload: send gym { sets[] } OR benchmark metrics OR explicit flags",
+      error: "Invalid payload: send gym { sets[] } OR benchmark metrics / flags.",
     });
   } catch (err: any) {
     console.error("[completions/create] error:", err?.message || err);
