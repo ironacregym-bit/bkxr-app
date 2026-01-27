@@ -340,7 +340,7 @@ export default function GymWorkoutViewerPage() {
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <div className="mb-3">
-          <Link href="/weekly" className="btn btn-outline-secondary">← Back</Link>
+          <Link href="/" className="btn btn-outline-secondary">← Back</Link>
         </div>
 
         {error && <div className="alert alert-danger">Could not load this workout.</div>}
