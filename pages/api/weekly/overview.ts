@@ -1,5 +1,5 @@
 
-// /pages/api/weekly/overview.ts (or your file path)
+// /pages/api/weekly/overview.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { getServerSession } from "next-auth";
@@ -7,19 +7,35 @@ import { authOptions } from "../auth/[...nextauth]";
 import { hasRole } from "../../../lib/rbac";
 
 /** ===== Types ===== */
+type SimpleWorkoutRef = { id: string; name?: string };
+
 type DayOverview = {
   dateKey: string;
   isFriday: boolean;
+
+  // Nutrition
   nutritionLogged: boolean;
   nutritionSummary?: { calories: number; protein: number };
+
+  // Habits
   habitAllDone: boolean;
   habitSummary?: { completed: number; total: number };
+
+  // Weekly check-in
   checkinComplete: boolean;
   checkinSummary?: { weight: number; body_fat_pct: number; weightChange?: number; bfChange?: number };
+
+  // Mandatory workout (recurring if present; else BXKR/programmed)
   hasWorkout: boolean;
   workoutDone: boolean;
-  workoutIds: string[];
+  workoutIds: string[]; // IDs of the mandatory set for the day (recurring or programmed)
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
+
+  // NEW: Recurring vs Optional split
+  hasRecurringToday: boolean;
+  recurringWorkouts: SimpleWorkoutRef[];
+  recurringDone: boolean;
+  optionalWorkouts: SimpleWorkoutRef[]; // BXKR/programmed moved here when recurring exists
 };
 
 type WeeklyOverviewResponse = {
@@ -91,6 +107,9 @@ function numOrUndefined(v: any): number | undefined {
   }
   return undefined;
 }
+
+// Map Date.getDay() to name used in recurring_day
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default async function handler(
   req: NextApiRequest,
@@ -188,7 +207,7 @@ export default async function handler(
       }
     }
 
-    /** ===== WORKOUTS (app-wide) by date range ===== */
+    /** ===== PROGRAMMED (date-scheduled) WORKOUTS by range (BXKR/global) ===== */
     let workoutsSnap: any;
     try {
       workoutsSnap = await firestore
@@ -207,19 +226,56 @@ export default async function handler(
       workoutsSnap = { docs: filtered };
     }
 
-    const workoutsByDay = new Map<string, { id: string; name?: string }[]>();
-    const allWeekWorkoutIds: string[] = [];
+    const programmedByDay = new Map<string, SimpleWorkoutRef[]>();
     (workoutsSnap.docs || []).forEach((doc: any) => {
       const w = doc.data() as any;
       const when = w.date?.toDate ? w.date.toDate() : new Date(w.date);
       const dk = formatYMD(when);
       const id = String(w.workout_id || w.id || doc.id);
       const name = typeof w.workout_name === "string" ? w.workout_name : undefined;
-      const arr = workoutsByDay.get(dk) || [];
+      const arr = programmedByDay.get(dk) || [];
       arr.push({ id, name });
-      workoutsByDay.set(dk, arr);
-      if (id) allWeekWorkoutIds.push(id);
+      programmedByDay.set(dk, arr);
     });
+
+    /** ===== RECURRING WORKOUTS (assigned to this user) ===== */
+    // Strategy: query assigned recurring docs then place onto matching weekdays in the target week,
+    // if the specific day is within [recurring_start, recurring_end].
+    const recurringByDay = new Map<string, SimpleWorkoutRef[]>();
+    try {
+      const recSnap = await firestore
+        .collection(WORKOUTS_COLLECTION)
+        .where("recurring", "==", true)
+        .where("assigned_to", "==", userEmail)
+        .get();
+
+      (recSnap.docs || []).forEach((doc: any) => {
+        const w = doc.data() as any;
+        const id = String(w.workout_id || w.id || doc.id);
+        const name = typeof w.workout_name === "string" ? w.workout_name : undefined;
+
+        const recDayName = String(w.recurring_day || "").trim(); // e.g., "Monday"
+        const startTs = w.recurring_start?.toDate?.() || (w.recurring_start ? new Date(w.recurring_start) : null);
+        const endTs = w.recurring_end?.toDate?.() || (w.recurring_end ? new Date(w.recurring_end) : null);
+
+        // For each day in the week, if the weekday matches recurring_day and the day is between start/end, include it
+        weekDays.forEach((d) => {
+          const ymd = formatYMD(d);
+          const dayName = DAY_NAMES[d.getDay()]; // "Monday", etc.
+          const withinWindow =
+            (!startTs || d >= startTs) &&
+            (!endTs || d <= endTs);
+
+          if (withinWindow && dayName === recDayName) {
+            const arr = recurringByDay.get(ymd) || [];
+            arr.push({ id, name });
+            recurringByDay.set(ymd, arr);
+          }
+        });
+      });
+    } catch {
+      // Soft-fail; no recurring
+    }
 
     /** ===== COMPLETIONS (THIS WEEK totals) ===== */
     let completionsWeek: any[] = [];
@@ -272,7 +328,7 @@ export default async function handler(
         duration: typeof c.duration === "number" ? c.duration : undefined,
         weight_completed_with:
           c.weight_completed_with ??
-          c.weight_compelted_with /* tolerate legacy typo */ ??
+          c.weight_compelted_with /* legacy typo */ ??
           c.weight_used ??
           undefined,
         completedAt
@@ -291,11 +347,11 @@ export default async function handler(
 
     completionsWeek.forEach((c: any) => {
       totalWorkoutsCompleted += 1;
-      totalWorkoutTime += Number(c.duration || 0);
+      totalWorkoutTime += Number(c.duration || c.duration_minutes || 0);
       totalCaloriesBurned += Number(c.calories_burned || 0);
     });
 
-    /** ===== Build days ===== */
+    /** ===== Build days (with Recurring vs Optional split) ===== */
     const days: DayOverview[] = weekDays.map((d) => {
       const ymd = formatYMD(d);
       const isFriday = d.getDay() === 5;
@@ -306,15 +362,23 @@ export default async function handler(
       // Nutrition
       const nutritionInfo = nutritionMap[ymd] || { logged: false, calories: 0, protein: 0 };
 
-      // Workouts scheduled on this day
-      const todaysWorkouts = workoutsByDay.get(ymd) || [];
-      const workoutIds = todaysWorkouts.map((w) => w.id);
-      const hasWorkout = todaysWorkouts.length > 0;
+      // Recurring and Programmed for the day
+      const todaysRecurring = recurringByDay.get(ymd) || [];
+      const todaysProgrammed = programmedByDay.get(ymd) || [];
+      const hasRecurringToday = todaysRecurring.length > 0;
 
-      // Any-day completion by workout_id
+      // Mandatory set for the day
+      const mandatorySet = hasRecurringToday ? todaysRecurring : todaysProgrammed;
+      const optionalSet = hasRecurringToday ? todaysProgrammed : [];
+
+      const workoutIds = mandatorySet.map((w) => w.id);
+      const hasWorkout = mandatorySet.length > 0;
+
+      // Done states
+      const recurringDone = hasRecurringToday && todaysRecurring.some((w) => completionIds.has(w.id));
       const workoutDone = hasWorkout && workoutIds.some((id) => completionIds.has(id));
 
-      // Latest completion summary (if any)
+      // Latest completion summary from the mandatory set
       let workoutCalories = 0;
       let workoutDuration = 0;
       let weightUsed: string | undefined;
@@ -332,9 +396,10 @@ export default async function handler(
         }
       }
 
-      // ✅ Check-in completion keyed ONLY on body_fat_pct being present & numeric, and Friday
+      // Check-in
       const checkinCompleteForDay = isFriday && currentBodyFat !== undefined;
 
+      // Deltas
       const weightChange =
         currentWeight !== undefined && lastWeight !== undefined
           ? ((currentWeight - lastWeight) / lastWeight) * 100
@@ -345,7 +410,7 @@ export default async function handler(
           ? currentBodyFat - lastBodyFat
           : undefined;
 
-      // Tasks & completes – exactly what UI shows
+      // Tasks & completes – exactly what UI shows (MANDATORY set only counts)
       const dayTasks = 1 /* nutrition */ + 1 /* habit */ + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
       totalTasks += dayTasks;
 
@@ -363,6 +428,7 @@ export default async function handler(
         nutritionSummary: { calories: nutritionInfo.calories, protein: nutritionInfo.protein },
         habitAllDone: habitInfo.allDone,
         habitSummary: { completed: habitInfo.completed, total: habitInfo.total },
+
         checkinComplete: checkinCompleteForDay,
         checkinSummary:
           isFriday && checkinCompleteForDay
@@ -373,12 +439,20 @@ export default async function handler(
                 bfChange
               }
             : undefined,
+
+        // Mandatory set (recurring if present; else programmed)
         hasWorkout,
         workoutDone,
         workoutIds,
         workoutSummary: workoutDone
           ? { calories: workoutCalories, duration: workoutDuration, weightUsed }
-          : undefined
+          : undefined,
+
+        // New fields for UI split
+        hasRecurringToday,
+        recurringWorkouts: todaysRecurring,
+        recurringDone,
+        optionalWorkouts: optionalSet,
       };
     });
 
