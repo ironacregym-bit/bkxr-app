@@ -58,7 +58,7 @@ export default function FoodEditor({
   const servingLabel = hasServing ? `1 serving (${food.servingSize})` : undefined;
 
   return (
-    <div className="bxkr-card p-3">
+    <div className="futuristic-card p-3">
       {/* Amount row: serving dropdown (if available) + grams input */}
       <div className="row g-2 align-items-center mb-2">
         <div className={hasServing ? "col-6" : "col-12"}>
