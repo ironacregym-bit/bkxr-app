@@ -2,6 +2,8 @@
 import React from "react";
 import Link from "next/link";
 
+const ACCENT = "#FF8A2A";
+
 type SimpleWorkoutRef = { id: string; name?: string };
 
 type Props = {
@@ -27,8 +29,8 @@ type Props = {
   // NEW — Recurring vs Optional split
   hasRecurringToday?: boolean; // true if there is at least one recurring workout today
   recurringDone?: boolean;     // completion state of the recurring (mandatory) set
-  recurringWorkouts?: SimpleWorkoutRef[];       // recurring workouts for the day (first is primary)
-  optionalWorkouts?: SimpleWorkoutRef[];        // BXKR/programmed workouts shown as optional when recurring exists
+  recurringWorkouts?: SimpleWorkoutRef[]; // recurring workouts for the day (first is primary)
+  optionalWorkouts?: SimpleWorkoutRef[];  // BXKR/programmed shown as optional when recurring exists
 
   // Hrefs (use "#" to lock)
   hrefs: {
@@ -222,7 +224,7 @@ export default function DailyTasksCard({
           <div style={rowStyle(recurringDone, "#5b7c99")} aria-label="Recurring workout (mandatory)" aria-live="polite">
             <span style={iconWrap}>
               <i className="fas fa-dumbbell" style={{ color: "#5b7c99" }} />
-              <span>Recurring Workout</span>
+              <span>{recurringWorkoutLabel}</span>
               <span
                 className="ms-2"
                 style={{
