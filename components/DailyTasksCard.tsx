@@ -103,7 +103,7 @@ export default function DailyTasksCard({
   const firstOptional = Array.isArray(optionalWorkouts) && optionalWorkouts[0] ? optionalWorkouts[0] : null;
 
   const recurringHref = hrefs.recurring ?? (firstRecurring ? `/gymworkout/${encodeURIComponent(firstRecurring.id)}` : "#");
-  const optionalHref = hrefs.optionalWorkout ?? (firstOptional ? `/workouts/${encodeURIComponent(firstOptional.id)}` : "#");
+  const optionalHref = hrefs.optionalWorkout ?? (firstOptional ? `/workout/${encodeURIComponent(firstOptional.id)}` : "#");
 
   // Row styles
   const rowStyle = (
