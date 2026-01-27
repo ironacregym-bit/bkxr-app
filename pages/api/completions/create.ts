@@ -3,16 +3,25 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../auth/[...nextauth]";
 
+// Types used by GYM completions
+type GymCompletionSet = {
+  exercise_id: string;
+  set: number;
+  weight: number | null;
+  reps: number | null;
+};
+
+// Types used by BXKR benchmark completions
 type Style = "AMRAP" | "EMOM" | "LADDER" | string;
-
 type PartMetrics = {
   style?: Style;
   rounds_completed?: number | null;
   weight_kg?: number | null;
   notes?: string | null;
 };
-
 type PartName = "engine" | "power" | "core" | "ladder" | "load";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -22,168 +31,164 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const {
-      workout_id,
-      user_email,
-
-      // Optional fields your client may send
-      calories_burned,
-      duration,
-      rating,
-      sets_completed,
-      weight_completed_with,
-      notes,
-
-      // Optional time inputs (for back-compat); if absent, we use "now"
-      completed_at, // ISO string or undefined
-      started_at,   // ISO string or undefined (stored only if provided)
-
-      // Benchmark additions (either per-part keys or a combined object)
-      is_benchmark,
-      engine,
-      power,
-      core,
-      ladder,
-      load,
-      benchmark_metrics,
-    } = req.body || {};
-
-    if (!workout_id || !user_email) {
-      return res.status(400).json({ error: "workout_id and user_email are required" });
+    // SESSION
+    const session = await getServerSession(req, res, authOptions);
+    if (!session?.user?.email) {
+      return res.status(401).json({ error: "Not signed in" });
     }
+    const user_email = session.user.email.toLowerCase();
+
+    // BODY
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+    const workout_id = String(body.workout_id || "").trim();
+    if (!workout_id) {
+      return res.status(400).json({ error: "workout_id required" });
+    }
+
+    // We allow manual overrides (NOT auto guesses)
+    const calories_burned =
+      body.calories_burned != null && Number.isFinite(Number(body.calories_burned))
+        ? Number(body.calories_burned)
+        : null;
+
+    const duration_minutes =
+      body.duration_minutes != null && Number.isFinite(Number(body.duration_minutes))
+        ? Number(body.duration_minutes)
+        : null;
+
+    const rpe = body.rpe != null ? Number(body.rpe) : null;
+    const notes = typeof body.notes === "string" ? body.notes : null;
 
     const now = new Date();
-    const completedDateTS = completed_at
-      ? Timestamp.fromDate(new Date(completed_at))
-      : Timestamp.fromDate(now);
+    const completedDateTS =
+      body.completed_at != null
+        ? Timestamp.fromDate(new Date(body.completed_at))
+        : Timestamp.fromDate(now);
 
-    // Deterministic doc id for idempotency and for your /api/completions checks
-    const docId = `${String(user_email)}_${String(workout_id)}`;
-    const docRef = firestore.collection("workoutCompletions").doc(docId);
-    const snap = await docRef.get();
+    // ---- Detect if this payload is a GYM completion or a BXKR completion ----
+    const isGym = Array.isArray(body.sets) && body.sets.length > 0;
+    const isBenchmarkLike =
+      body.engine || body.power || body.core || body.ladder || body.load || body.is_benchmark;
 
-    // ---- Build benchmark metrics safely -------------------------------------
-    const parts: PartName[] = ["engine", "power", "core", "ladder", "load"];
-    const provided: Record<PartName, PartMetrics> = {} as any;
-    let anyBenchmarkProvided = false;
+    // UNIQUE DOC ID (keeps history instead of overwriting)
+    const docRef = firestore.collection("workoutCompletions").doc();
+    const docId = docRef.id;
 
-    // Helper to normalise a single part metrics object
-    const normalisePart = (v: any): PartMetrics | undefined => {
-      if (!v || typeof v !== "object") return undefined;
+    // ---- GYM COMPLETION MODE ----
+    if (isGym) {
+      const sets: GymCompletionSet[] = body.sets
+        .map((s: any) => ({
+          exercise_id: String(s.exercise_id || "").trim(),
+          set: Number(s.set || 0),
+          weight: s.weight == null ? null : Number(s.weight),
+          reps: s.reps == null ? null : Number(s.reps),
+        }))
+        .filter((s) => s.exercise_id && s.set > 0);
 
-      const styleStr = typeof v.style === "string" ? v.style.trim() : undefined;
-      const style: Style | undefined =
-        styleStr && ["AMRAP", "EMOM", "LADDER"].includes(styleStr.toUpperCase())
-          ? styleStr.toUpperCase()
-          : styleStr; // allow custom strings, but normalise common values
+      const payload = {
+        id: docId,
+        workout_id,
+        user_email,
+        completed_date: completedDateTS,
+        date_completed: completedDateTS,
 
+        // GYM specifics
+        activity_type: "Strength training",
+        sets,
 
-      const rounds =
-        v.rounds_completed != null && Number.isFinite(Number(v.rounds_completed))
-          ? Math.max(0, Math.floor(Number(v.rounds_completed)))
+        // Optional manual overrides
+        calories_burned,
+        duration_minutes,
+        rpe,
+        notes,
+
+        created_at: Timestamp.fromDate(now),
+        updated_at: Timestamp.fromDate(now),
+      };
+
+      await docRef.set(payload, { merge: true });
+
+      return res.status(201).json({ ok: true, type: "gym", id: docId });
+    }
+
+    // ---- BXKR BENCHMARK COMPLETION MODE ----
+    if (isBenchmarkLike) {
+      const parts: PartName[] = ["engine", "power", "core", "ladder", "load"];
+      const provided: Record<PartName, PartMetrics> = {} as any;
+
+      const normalisePart = (v: any): PartMetrics | undefined => {
+        if (!v || typeof v !== "object") return undefined;
+
+        const styleStr = typeof v.style === "string" ? v.style.trim() : undefined;
+        const style: Style | undefined =
+          styleStr && ["AMRAP", "EMOM", "LADDER"].includes(styleStr.toUpperCase())
+            ? styleStr.toUpperCase()
+            : styleStr;
+
+        const rounds =
+          v.rounds_completed != null && Number.isFinite(Number(v.rounds_completed))
+            ? Math.max(0, Math.floor(Number(v.rounds_completed)))
+            : undefined;
+
+        const weight =
+          v.weight_kg != null && Number.isFinite(Number(v.weight_kg))
+            ? Number(v.weight_kg)
+            : v.weight_kg === null
+            ? null
+            : undefined;
+
+        const note = typeof v.notes === "string" ? v.notes : undefined;
+
+        const hasContent = style != null || rounds != null || weight != null || note != null;
+        return hasContent
+          ? { style, rounds_completed: rounds, weight_kg: weight, notes: note }
           : undefined;
+      };
 
-
-      const weight =
-        v.weight_kg != null && Number.isFinite(Number(v.weight_kg))
-          ? Number(v.weight_kg)
-          : v.weight_kg === null
-          ? null
-          : undefined;
-
-      const note = typeof v.notes === "string" ? v.notes : undefined;
-
-      const hasContent = style != null || rounds != null || weight != null || note != null;
-      return hasContent
-        ? { style, rounds_completed: rounds, weight_kg: weight, notes: note }
-        : undefined;
-    };
-
-    // Accept either top-level part keys or combined benchmark_metrics object
-    const sourceMetrics: Record<string, any> = {
-      ...(benchmark_metrics && typeof benchmark_metrics === "object" ? benchmark_metrics : {}),
-      ...(engine ? { engine } : {}),
-      ...(power ? { power } : {}),
-      ...(core ? { core } : {}),
-      ...(ladder ? { ladder } : {}),
-      ...(load ? { load } : {}),
-    };
-
-    for (const p of parts) {
-      const norm = normalisePart(sourceMetrics[p]);
-      if (norm) {
-        provided[p] = norm;
-        anyBenchmarkProvided = true;
+      for (const p of parts) {
+        const norm = normalisePart(body[p]);
+        if (norm) provided[p] = norm;
       }
+
+      const payload: any = {
+        id: docId,
+        workout_id,
+        user_email,
+        completed_date: completedDateTS,
+        date_completed: completedDateTS,
+
+        // Manual override if provided
+        calories_burned: calories_burned ?? null,
+        duration: duration_minutes ?? null,
+        rating: body.rating != null ? Number(body.rating) : null,
+        weight_completed_with:
+          body.weight_completed_with != null ? Number(body.weight_completed_with) : null,
+        sets_completed: body.sets_completed != null ? Number(body.sets_completed) : null,
+        notes,
+
+        is_benchmark:
+          body.is_benchmark === true ||
+          String(body.is_benchmark || "").toLowerCase() === "true" ||
+          Object.keys(provided).length > 0,
+
+        benchmark_metrics: Object.keys(provided).length > 0 ? provided : undefined,
+
+        created_at: Timestamp.fromDate(now),
+        updated_at: Timestamp.fromDate(now),
+      };
+
+      await docRef.set(payload, { merge: true });
+
+      return res.status(201).json({ ok: true, type: "bxkr", id: docId });
     }
 
-    // Aggregates from provided parts
-    const totalRounds = parts.reduce((sum, p) => {
-      const rc = provided[p]?.rounds_completed;
-      return sum + (rc != null ? rc : 0);
-    }, 0);
-
-    const maxWeight = parts.reduce((max, p) => {
-      const w = provided[p]?.weight_kg;
-      return w != null ? Math.max(max, w) : max;
-    }, 0);
-
-    // Final flags
-    const finalIsBenchmark =
-      is_benchmark === true ||
-      String(is_benchmark || "").toLowerCase() === "true" ||
-      anyBenchmarkProvided;
-
-    // ---- Build payload -------------------------------------------------------
-    const payload: any = {
-      id: docId,                                  // ✅ matches your collection
-      workout_id: String(workout_id),
-      user_email: String(user_email),
-      completed_date: completedDateTS,            // ✅ key your history/orderBy relies on
-
-      calories_burned: Number(calories_burned ?? 0),
-      duration: Number(duration ?? 0),
-      rating: rating != null ? Number(rating) : null,
-
-      // If client sent sets_completed, keep it; otherwise use aggregate if any parts provided
-      sets_completed:
-        sets_completed != null
-          ? Number(sets_completed)
-          : anyBenchmarkProvided
-          ? Number(totalRounds)
-          : Number(0),
-
-      // If client sent weight, keep it; otherwise use aggregate max across parts
-      weight_completed_with:
-        weight_completed_with != null
-          ? Number(weight_completed_with)
-          : anyBenchmarkProvided && maxWeight > 0
-          ? Number(maxWeight)
-          : Number(0),
-
-      notes: typeof notes === "string" ? notes : "",
-
-      updated_at: Timestamp.fromDate(now),        // optional audit field
-    };
-
-    if (finalIsBenchmark) payload.is_benchmark = true;
-    if (anyBenchmarkProvided) payload.benchmark_metrics = provided;
-
-    // Optional fields: keep only if provided
-    if (started_at) payload.started_at = Timestamp.fromDate(new Date(started_at));
-
-    // Create vs update
-    if (!snap.exists) {
-      payload.created_at = Timestamp.fromDate(now);
-    }
-
-    // ---- Persist -------------------------------------------------------------
-    await docRef.set(payload, { merge: true });
-
-    const saved = (await docRef.get()).data() || null;
-    return res.status(200).json({ ok: true, entry: saved });
+    // ---- NO VALID MODE DETECTED ----
+    return res.status(400).json({
+      error:
+        "Invalid payload: send gym { sets[] } OR benchmark metrics OR explicit flags",
+    });
   } catch (err: any) {
-    console.error("Failed to create completion:", err?.message || err);
+    console.error("[completions/create] error:", err?.message || err);
     return res.status(500).json({ error: "Failed to create completion" });
   }
 }
