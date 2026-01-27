@@ -1,7 +1,7 @@
 
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 
 const COLORS = {
   calories: "#ff7f32",
@@ -20,11 +20,11 @@ export type Food = {
   name: string;
   brand: string;
   image: string | null;
-  calories: number; // per 100g or scaled
+  calories: number;
   protein: number;
   carbs: number;
   fat: number;
-  servingSize?: string | null;
+  servingSize?: string | null;          // e.g. "1 egg (60g)"
   caloriesPerServing?: number | null;
   proteinPerServing?: number | null;
   carbsPerServing?: number | null;
@@ -54,12 +54,29 @@ export default function FoodEditor({
   isFavourite: boolean;
   onToggleFavourite: () => void;
 }) {
+
   const hasServing = !!food.servingSize;
   const servingLabel = hasServing ? `1 serving (${food.servingSize})` : undefined;
 
+  // ---------- NEW: auto-load serving by default ----------
+  useEffect(() => {
+    if (!hasServing) return;
+
+    const match =
+      (food.servingSize || "").match(/(\d+(?:\.\d+)?)\s*g/i) ||
+      (food.servingSize || "").match(/\((\d+(?:\.\d+)?)\s*g\)/i);
+
+    const gramsFromServing = match && match[1] ? Number(match[1]) : null;
+
+    if (gramsFromServing != null) {
+      setUsingServing("serving");
+      setGrams(gramsFromServing);
+    }
+  }, [food.servingSize, hasServing, setGrams, setUsingServing]);
+
   return (
     <div className="futuristic-card p-3">
-      {/* Amount row: serving dropdown (if available) + grams input */}
+      {/* Amount row */}
       <div className="row g-2 align-items-center mb-2">
         <div className={hasServing ? "col-6" : "col-12"}>
           <label className="form-label small text-dim mb-1">Grams</label>
@@ -74,6 +91,7 @@ export default function FoodEditor({
             }}
           />
         </div>
+
         {hasServing && (
           <div className="col-6">
             <label className="form-label small text-dim mb-1">Amount</label>
@@ -82,7 +100,8 @@ export default function FoodEditor({
               value={usingServing}
               onChange={(e) => {
                 const mode = e.target.value === "serving" ? "serving" : "per100";
-                setUsingServing(mode as "per100" | "serving");
+                setUsingServing(mode);
+
                 if (mode === "serving") {
                   const match =
                     (food.servingSize || "").match(/(\d+(?:\.\d+)?)\s*g/i) ||
@@ -108,7 +127,7 @@ export default function FoodEditor({
       </div>
 
       <div className="d-flex gap-2 mb-2">
-        <button className="btn btn-bxkr w-100" onClick={() => addEntry(meal, (scaledSelected || food))}>
+        <button className="btn btn-bxkr w-100" onClick={() => addEntry(meal, scaledSelected || food)}>
           Add to {meal}
         </button>
         <button
@@ -124,10 +143,12 @@ export default function FoodEditor({
       <div className="fw-bold">
         {food.name} ({food.brand}) — {round2(food.calories)} kcal/100g
       </div>
+
       {hasServing && (
         <div className="small text-dim">
           Serving: {food.servingSize}
-          {food.caloriesPerServing != null && ` — ${round2(food.caloriesPerServing)} kcal/serving`}
+          {food.caloriesPerServing != null &&
+            ` — ${round2(food.caloriesPerServing)} kcal/serving`}
         </div>
       )}
     </div>
