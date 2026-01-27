@@ -1,5 +1,4 @@
 
-// pages/workout/[id].tsx
 "use client";
 
 import Head from "next/head";
@@ -182,6 +181,11 @@ export default function WorkoutPage() {
   const [durationMins, setDurationMins] = useState<number>(() =>
     Math.round((totalDurationSec || 1800) / 60)
   );
+
+  // NEW: allow manual calories entry (pre-filled with estimate)
+  const [calories, setCalories] = useState<number | "">("");
+  const [caloriesTouched, setCaloriesTouched] = useState<boolean>(false);
+
   const [kbWeightUsed, setKbWeightUsed] = useState<number | "">("");
   const [notes, setNotes] = useState<string>("");
 
@@ -189,35 +193,54 @@ export default function WorkoutPage() {
     setDurationMins(Math.round((totalDurationSec || 1800) / 60));
   }, [totalDurationSec]);
 
+  // Prefill calories when opening modal or when duration changes (only if user hasn't edited)
+  function estimateCalories(minutes: number): number {
+    // Simple estimate, editable by user
+    const assumedWeightKg = 70;
+    const avgMET = 8;
+    return Math.round(avgMET * assumedWeightKg * (minutes / 60) * 1.05);
+  }
+
   async function handleCompleteClick() {
     if (!session?.user?.email) {
       alert("Please sign in to log your workout.");
       return;
     }
+    const mins = Number(durationMins) > 0 ? Number(durationMins) : Math.round((totalDurationSec || 1800) / 60);
+    const est = estimateCalories(mins);
+    setCalories(est);
+    setCaloriesTouched(false);
     setShowComplete(true);
   }
 
-  async function submitCompletion() {
-    if (!session?.user?.email || !id) return;
-    const minutes =
-      Number(durationMins) > 0 ? Number(durationMins) : Math.round((totalDurationSec || 1800) / 60);
+  useEffect(() => {
+    if (!showComplete) return;
+    const mins = Number(durationMins) > 0 ? Number(durationMins) : Math.round((totalDurationSec || 1800) / 60);
+    if (!caloriesTouched) setCalories(estimateCalories(mins));
+  }, [durationMins, totalDurationSec, showComplete, caloriesTouched]);
 
-    const assumedWeightKg = 70;
-    const avgMET = 8;
-    const calories = Math.round(avgMET * assumedWeightKg * (minutes / 60) * 1.05);
+  async function submitCompletion() {
+    if (!id) return;
+    const minutes = Number(durationMins) > 0 ? Number(durationMins) : Math.round((totalDurationSec || 1800) / 60);
+    const cals = calories === "" ? null : Number(calories);
 
     try {
       const dateKey = formatDateKeyLocal(new Date());
+      // IMPORTANT:
+      // The unified /api/completions/create handler expects either:
+      //  - gym { sets: [] } OR
+      //  - benchmark mode. We trigger benchmark mode by setting is_benchmark: true
+      //    so BXKR sessions without detailed per-part metrics can still be saved.
       const payload = {
-        user_email: session.user.email,
         workout_id: String(id),
+        is_benchmark: true, // ensure BXKR completion is accepted by API
         activity_type: "Strength training",
-        calories_burned: calories,
+        calories_burned: cals,
         duration_minutes: minutes,
         weight_completed_with: kbWeightUsed === "" ? null : Number(kbWeightUsed),
         rpe: Number(rpe),
         notes: notes?.trim() || null,
-        duration: minutes,
+        duration: minutes, // legacy compatibility
         dateKey,
       };
 
@@ -228,7 +251,6 @@ export default function WorkoutPage() {
       });
 
       if (res.ok) {
-        alert(`Workout logged! Calories burned: ${calories}`);
         setShowComplete(false);
         setKbWeightUsed("");
         setNotes("");
@@ -474,7 +496,11 @@ export default function WorkoutPage() {
               >
                 <div className="d-flex justify-content-between align-items-center mb-2">
                   <div className="fw-semibold">Log completion</div>
-                  <button className="btn btn-bxkr-outline btn-sm" onClick={() => setShowComplete(false)} style={{ borderRadius: 24 }}>
+                  <button
+                    className="btn btn-bxkr-outline btn-sm"
+                    onClick={() => setShowComplete(false)}
+                    style={{ borderRadius: 24 }}
+                  >
                     Close
                   </button>
                 </div>
@@ -493,6 +519,7 @@ export default function WorkoutPage() {
                       }
                     />
                   </div>
+
                   <div className="col-6">
                     <label className="form-label">Duration (mins)</label>
                     <input
@@ -503,6 +530,31 @@ export default function WorkoutPage() {
                       onChange={(e) => setDurationMins(Math.max(1, Number(e.target.value || 0)))}
                     />
                   </div>
+
+                  {/* NEW: Manual calories field (prefilled, editable) */}
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">Calories burned</label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="form-control"
+                      placeholder="e.g., 350"
+                      value={calories}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "") {
+                          setCalories("");
+                          setCaloriesTouched(true);
+                        } else {
+                          const n = Math.max(0, Number(v));
+                          setCalories(Number.isFinite(n) ? n : 0);
+                          setCaloriesTouched(true);
+                        }
+                      }}
+                    />
+                    <small className="text-dim">Prefilled estimate — you can edit this.</small>
+                  </div>
+
                   <div className="col-12 col-md-6">
                     <label className="form-label">KB weight used (kg)</label>
                     <input
@@ -518,6 +570,7 @@ export default function WorkoutPage() {
                     />
                     <small className="text-dim">If mixed bells, enter most-used or average.</small>
                   </div>
+
                   <div className="col-12">
                     <label className="form-label">Notes (optional)</label>
                     <textarea
@@ -531,10 +584,25 @@ export default function WorkoutPage() {
                 </div>
 
                 <div className="d-flex justify-content-end gap-2 mt-3">
-                  <button className="btn btn-bxkr-outline btn-sm" onClick={() => setShowComplete(false)} style={{ borderRadius: 24 }}>
+                  <button
+                    className="btn btn-bxkr-outline btn-sm"
+                    onClick={() => setShowComplete(false)}
+                    style={{ borderRadius: 24 }}
+                  >
                     Cancel
                   </button>
-                  <button className="btn btn-sm" onClick={submitCompletion} style={{ borderRadius: 24, color: "#fff", background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, boxShadow: `0 0 14px ${ACCENT}66`, border: "none", paddingInline: 14 }}>
+                  <button
+                    className="btn btn-sm"
+                    onClick={submitCompletion}
+                    style={{
+                      borderRadius: 24,
+                      color: "#fff",
+                      background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                      boxShadow: `0 0 14px ${ACCENT}66`,
+                      border: "none",
+                      paddingInline: 14,
+                    }}
+                  >
                     Save
                   </button>
                 </div>
