@@ -619,6 +619,33 @@ export default function WorkoutPage() {
         </section>
       </main>
 
+      {/* -------- Global, scoped overrides to enforce 64px thumbs + compact inputs -------- */}
+      <style jsx global>{`
+        /* Keep exercise thumbnails 64x64 no matter what (buttons with image inside) */
+        main.container .futuristic-card button.btn.btn-sm.btn-outline-light img,
+        main.container .futuristic-card .exercise-thumb,
+        main.container .futuristic-card .kb-thumb img {
+          width: 64px !important;
+          height: 64px !important;
+          object-fit: cover !important;
+          display: block;
+        }
+
+        /* On small screens, keep inputs compact so thumbs are never squeezed */
+        @media (max-width: 560px) {
+          main.container .futuristic-card input[type="number"] {
+            max-width: 80px;
+            font-size: 0.9rem;
+          }
+          /* Make reps even narrower */
+          main.container .futuristic-card input[type="number"][placeholder="Reps"],
+          main.container .futuristic-card input[aria-label*="reps"],
+          main.container .futuristic-card input[aria-label*="Reps"] {
+            max-width: 60px;
+          }
+        }
+      `}</style>
+
       <BottomNav />
     </>
   );
