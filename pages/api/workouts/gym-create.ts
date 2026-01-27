@@ -1,5 +1,4 @@
 
-// pages/api/workouts/gym-create.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
@@ -35,6 +34,8 @@ type GymRound = {
   items: Array<SingleItem | SupersetItem>;
 };
 
+type DayName = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
+
 type GymCreatePayload = {
   visibility: "global" | "private";
   owner_email?: string;
@@ -45,7 +46,31 @@ type GymCreatePayload = {
   warmup?: GymRound | null;
   main: GymRound;
   finisher?: GymRound | null;
+
+  // NEW — Recurrence & assignment
+  recurring?: boolean;
+  recurring_day?: DayName | null;
+  recurring_start?: string | null; // ISO or parseable date string
+  recurring_end?: string | null;   // ISO or parseable date string
+  assigned_to?: string | null;     // email of athlete (lowercased)
 };
+
+const ALLOWED_DAYS: DayName[] = [
+  "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
+];
+
+function isEmail(s: string): boolean {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
+}
+
+function parseDateToTimestamp(s: string | null | undefined): Timestamp | null {
+  if (!s) return null;
+  const dt = new Date(s);
+  if (Number.isNaN(dt.getTime())) return null;
+  // Normalise hour to avoid TZ-midnight drift
+  dt.setHours(12, 0, 0, 0);
+  return Timestamp.fromDate(dt);
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -54,6 +79,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const p = req.body as GymCreatePayload;
+
+  // ----- Basic validations (existing) -----
   if (!p.workout_name || !p.visibility) {
     return res.status(400).json({ error: "workout_name and visibility are required" });
   }
@@ -64,35 +91,74 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: "main must include at least one item" });
   }
 
+  // ----- Recurrence validations (new) -----
+  const isRecurring = !!p.recurring;
+  let assignedTo: string | null = null;
+  let dayName: DayName | null = null;
+  let tsStart: Timestamp | null = null;
+  let tsEnd: Timestamp | null = null;
+
+  if (isRecurring) {
+    const incomingAssigned = (p.assigned_to || "").trim().toLowerCase();
+    if (!incomingAssigned || !isEmail(incomingAssigned)) {
+      return res.status(400).json({ error: "assigned_to must be a valid email when recurring is true" });
+    }
+    assignedTo = incomingAssigned;
+
+    const rd = (p.recurring_day || "").trim() as DayName;
+    if (!ALLOWED_DAYS.includes(rd)) {
+      return res.status(400).json({ error: "recurring_day must be one of Monday–Sunday when recurring is true" });
+    }
+    dayName = rd;
+
+    tsStart = parseDateToTimestamp(p.recurring_start || null);
+    tsEnd = parseDateToTimestamp(p.recurring_end || null);
+    if (!tsStart || !tsEnd) {
+      return res.status(400).json({ error: "recurring_start and recurring_end must be valid dates when recurring is true" });
+    }
+    if (tsStart.toDate().getTime() > tsEnd.toDate().getTime()) {
+      return res.status(400).json({ error: "recurring_start must be on or before recurring_end" });
+    }
+  }
+
   try {
     const db = firestore;
     const workoutRef = db.collection("workouts").doc();
     const now = Timestamp.now();
     const batch = db.batch();
 
-    // Base workout doc
+    // Base workout doc (add workout_id mirror + recurring fields)
     batch.set(
       workoutRef,
       {
+        workout_id: workoutRef.id,
         workout_name: p.workout_name,
         focus: p.focus ?? null,
         notes: p.notes ?? null,
         video_url: p.video_url ?? null,
         visibility: p.visibility,
-        owner_email: p.visibility === "private" ? p.owner_email : null,
+        owner_email: p.visibility === "private" ? (p.owner_email || null) : null,
         is_benchmark: false,
         benchmark_name: null,
-        workout_type: "gym_custom",       // helpful discriminator
+        workout_type: "gym_custom", // helpful discriminator
         created_at: now,
         updated_at: now,
+
+        // NEW — recurring fields
+        recurring: isRecurring,
+        recurring_day: isRecurring ? dayName : null,
+        recurring_start: isRecurring ? tsStart : null,
+        recurring_end: isRecurring ? tsEnd : null,
+        assigned_to: isRecurring ? assignedTo : null,
       },
       { merge: true }
     );
 
+    // Build rounds array in the persisted order
     const rounds: GymRound[] = [];
     if (p.warmup) rounds.push({ ...p.warmup, order: 1 });
     rounds.push({ ...p.main, order: p.warmup ? 2 : 1 });
-    if (p.finisher) rounds.push({ ...p.finisher, order: p.warmup ? 3 : p.main ? 2 : 1 });
+    if (p.finisher) rounds.push({ ...p.finisher, order: p.warmup ? 3 : (p.main ? 2 : 1) });
 
     // Persist rounds/items
     for (const r of rounds) {
@@ -106,7 +172,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         is_benchmark_component: false,
       });
 
-      // sort by order and write items
       const sorted = [...r.items].sort((a, b) => a.order - b.order);
       for (const it of sorted) {
         const itemRef = roundRef.collection("items").doc();
