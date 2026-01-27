@@ -1,7 +1,7 @@
 
 // pages/gymworkout/[id].tsx
-// BXKR — Gym Workout Viewer (List-style, with set logging and GIF→Video media modal)
-// Styling: Bootstrap + existing BXKR classes (no Tailwind). Hydration-safe.
+// BXKR — Gym Workout Viewer (List-style, set logging, GIF→Video media modal)
+// Bootstrap-only, hydration-safe, GIF size 64px always.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
@@ -12,12 +12,16 @@ import useGymExerciseMedia, { GymRound as MediaRound } from "../../hooks/useGymE
 import BottomNav from "../../components/BottomNav";
 
 const ACCENT = "#FF8A2A";
-const fetcher = (u: string) => fetch(u).then((r) => {
-  if (!r.ok) throw new Error(`Failed: ${r.status}`);
-  return r.json();
-});
+const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-/** ---------- Types for UI (matches your gym-create shapes) ---------- */
+// Fix for Firestore gif_url containing "public/"
+function fixGifUrl(u?: string) {
+  if (!u) return u;
+  if (u.startsWith("public/")) return "/" + u.replace(/^public\//, "");
+  return u;
+}
+
+/* ---------------- Types ---------------- */
 type UISingleItem = {
   type: "Single";
   order: number;
@@ -75,7 +79,7 @@ type PreviousCompletion = {
   completedAt?: string;
 };
 
-/** ---------- Helpers to feed media hook without leaking UI details ---------- */
+/* Build rounds for media hook */
 function toMediaRounds(w: GymWorkout | undefined | null): MediaRound[] {
   if (!w) return [];
   const rounds: UIRound[] = [];
@@ -86,20 +90,18 @@ function toMediaRounds(w: GymWorkout | undefined | null): MediaRound[] {
   return rounds.map((r, i) => ({
     name: r.name,
     order: i + 1,
-    items: r.items.map((it) => {
-      if (it.type === "Single") {
-        return { type: "Single" as const, exercise_id: (it as UISingleItem).exercise_id };
-      }
-      const ss = it as UISupersetItem;
-      return {
-        type: "Superset" as const,
-        items: (ss.items || []).map((s) => ({ exercise_id: s.exercise_id })),
-      };
-    }),
+    items: r.items.map((it) =>
+      it.type === "Single"
+        ? { type: "Single" as const, exercise_id: (it as UISingleItem).exercise_id }
+        : {
+            type: "Superset" as const,
+            items: (it as UISupersetItem).items.map((s) => ({ exercise_id: s.exercise_id })),
+          }
+    ),
   }));
 }
 
-/** ---------- Media Modal (GIF-first, swipe to Video) ---------- */
+/* ---------------- Media Modal ---------------- */
 type MediaModalProps = {
   open: boolean;
   title?: string;
@@ -144,9 +146,8 @@ function MediaModal({ open, title, gifUrl, videoUrl, onClose }: MediaModalProps)
     if (start == null) return;
     const end = e.changedTouches[0]?.clientX ?? start;
     const dx = end - start;
-    const THRESH = 40;
-    if (dx < -THRESH) setIndex((i) => Math.min(slides.length - 1, i + 1));
-    if (dx > THRESH) setIndex((i) => Math.max(0, i - 1));
+    if (dx < -40) setIndex((i) => Math.min(slides.length - 1, i + 1));
+    if (dx > 40) setIndex((i) => Math.max(0, i - 1));
     touchStartX.current = null;
   }
 
@@ -162,7 +163,6 @@ function MediaModal({ open, title, gifUrl, videoUrl, onClose }: MediaModalProps)
         zIndex: 1050,
       }}
       onClick={(e) => {
-        // scrim close if clicked outside the content
         if ((e.target as HTMLElement).dataset?.scrim === "1") onClose();
       }}
       data-scrim="1"
@@ -172,9 +172,8 @@ function MediaModal({ open, title, gifUrl, videoUrl, onClose }: MediaModalProps)
         style={{ width: "92vw", maxWidth: 680 }}
       >
         <div className="futuristic-card p-2" onClick={(e) => e.stopPropagation()}>
-          {/* Header */}
           <div className="d-flex justify-content-between align-items-center mb-2">
-            <div className="fw-semibold">{title || "Exercise"}</div>
+            <div className="fw-semibold">{title}</div>
             <button
               aria-label="Close"
               className="btn btn-sm btn-outline-light"
@@ -185,10 +184,13 @@ function MediaModal({ open, title, gifUrl, videoUrl, onClose }: MediaModalProps)
             </button>
           </div>
 
-          {/* Carousel area */}
           <div
             className="position-relative"
-            style={{ borderRadius: 12, overflow: "hidden", background: "rgba(255,255,255,0.06)" }}
+            style={{
+              borderRadius: 12,
+              overflow: "hidden",
+              background: "rgba(255,255,255,0.06)",
+            }}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
@@ -197,14 +199,14 @@ function MediaModal({ open, title, gifUrl, videoUrl, onClose }: MediaModalProps)
             ) : slides[index].kind === "gif" ? (
               <img
                 src={slides[index].url}
-                alt={title || "Exercise GIF"}
+                alt={title}
                 style={{ width: "100%", height: "auto", display: "block" }}
               />
             ) : (
               <div style={{ position: "relative", paddingTop: "56.25%" }}>
                 <iframe
                   src={slides[index].url}
-                  title={title || "Exercise Video"}
+                  title={title}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
                   style={{
@@ -216,28 +218,6 @@ function MediaModal({ open, title, gifUrl, videoUrl, onClose }: MediaModalProps)
                   }}
                 />
               </div>
-            )}
-
-            {/* Arrows */}
-            {slides.length > 1 && (
-              <>
-                <button
-                  aria-label="Previous"
-                  className="btn btn-sm btn-outline-light position-absolute"
-                  onClick={() => setIndex((i) => Math.max(0, i - 1))}
-                  style={{ top: "50%", left: 8, transform: "translateY(-50%)", borderRadius: 999 }}
-                >
-                  ‹
-                </button>
-                <button
-                  aria-label="Next"
-                  className="btn btn-sm btn-outline-light position-absolute"
-                  onClick={() => setIndex((i) => Math.min(slides.length - 1, i + 1))}
-                  style={{ top: "50%", right: 8, transform: "translateY(-50%)", borderRadius: 999 }}
-                >
-                  ›
-                </button>
-              </>
             )}
           </div>
 
@@ -257,7 +237,6 @@ function MediaModal({ open, title, gifUrl, videoUrl, onClose }: MediaModalProps)
                     cursor: "pointer",
                     boxShadow: i === index ? `0 0 10px ${ACCENT}77` : undefined,
                   }}
-                  aria-label={`Slide ${i + 1}`}
                 />
               ))}
             </div>
@@ -268,7 +247,7 @@ function MediaModal({ open, title, gifUrl, videoUrl, onClose }: MediaModalProps)
   );
 }
 
-/** ---------- Main Page ---------- */
+/* ---------------- Main Page ---------------- */
 export default function GymWorkoutViewerPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -285,13 +264,13 @@ export default function GymWorkoutViewerPage() {
   const [previousSession, setPreviousSession] = useState<PreviousCompletion | null>(null);
   const [showPrev, setShowPrev] = useState(false);
 
-  // Media modal state
+  // Media modal
   const [mediaOpen, setMediaOpen] = useState(false);
   const [mediaTitle, setMediaTitle] = useState<string | undefined>();
   const [mediaGif, setMediaGif] = useState<string | undefined>();
   const [mediaVideo, setMediaVideo] = useState<string | undefined>();
 
-  // Load previous session (if endpoint present)
+  // Load previous session
   useEffect(() => {
     if (!mounted || !id || Array.isArray(id)) return;
     fetch(`/api/completions/last?workout_id=${id}`)
@@ -302,14 +281,14 @@ export default function GymWorkoutViewerPage() {
       .catch(() => {});
   }, [mounted, id]);
 
-  // Build media rounds for hook
+  // Media hook
   const mediaRounds = useMemo(() => toMediaRounds(data), [data]);
   const { mediaById } = useGymExerciseMedia(mediaRounds);
 
   function openMedia(exercise_id: string) {
     const row = mediaById[exercise_id] || {};
     setMediaTitle(row.exercise_name || exercise_id);
-    setMediaGif(row.gif_url);
+    setMediaGif(fixGifUrl(row.gif_url));
     setMediaVideo(row.video_url);
     setMediaOpen(true);
   }
@@ -357,7 +336,6 @@ export default function GymWorkoutViewerPage() {
     <>
       <Head>
         <title>{data?.workout_name || "Gym Workout"}</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
@@ -378,7 +356,7 @@ export default function GymWorkoutViewerPage() {
                   Gym
                 </span>
               </div>
-              {data.notes ? <div className="mt-1 text-dim small">{data.notes}</div> : null}
+              {data.notes && <div className="mt-1 text-dim small">{data.notes}</div>}
             </section>
 
             {/* Previous Session */}
@@ -406,28 +384,28 @@ export default function GymWorkoutViewerPage() {
             )}
 
             {/* Rounds */}
-            {data.warmup ? (
+            {data.warmup && (
               <RoundBlock
                 round={data.warmup}
                 media={mediaById}
                 onUpdateSet={updateSet}
                 onOpenMedia={openMedia}
               />
-            ) : null}
+            )}
             <RoundBlock
               round={data.main}
               media={mediaById}
               onUpdateSet={updateSet}
               onOpenMedia={openMedia}
             />
-            {data.finisher ? (
+            {data.finisher && (
               <RoundBlock
                 round={data.finisher}
                 media={mediaById}
                 onUpdateSet={updateSet}
                 onOpenMedia={openMedia}
               />
-            ) : null}
+            )}
 
             {/* RPE */}
             <section className="futuristic-card p-3 mb-3">
@@ -455,7 +433,6 @@ export default function GymWorkoutViewerPage() {
         )}
       </main>
 
-      {/* Media Modal */}
       <MediaModal
         open={mediaOpen}
         title={mediaTitle}
@@ -469,7 +446,7 @@ export default function GymWorkoutViewerPage() {
   );
 }
 
-/** ---------- Round rendering ---------- */
+/* ---------------- Round Block ---------------- */
 function RoundBlock({
   round,
   media,
@@ -517,7 +494,7 @@ function RoundBlock({
   );
 }
 
-/** ---------- Single Exercise ---------- */
+/* ---------------- Single Item Block ---------------- */
 function SingleItemBlock({
   item,
   media,
@@ -541,7 +518,6 @@ function SingleItemBlock({
           style={{ borderRadius: 12, padding: 0, overflow: "hidden" }}
           onClick={() => onOpenMedia(item.exercise_id)}
           aria-label={`Open media for ${media?.exercise_name || item.exercise_id}`}
-          title="Open media"
         >
           {media?.gif_url ? (
             <img
@@ -558,6 +534,7 @@ function SingleItemBlock({
             </div>
           )}
         </button>
+
         <div>
           <strong>{media?.exercise_name || item.exercise_id}</strong>
           <div className="text-dim small">
@@ -567,32 +544,44 @@ function SingleItemBlock({
       </div>
 
       {[...Array(sets)].map((_, i) => (
-        <div key={i} className="d-flex gap-2 mb-2">
+        <div key={i} className="d-flex gap-2 mb-2 flex-wrap">
           <input
             className="form-control"
             type="number"
             inputMode="decimal"
-            placeholder="Weight (kg)"
-            aria-label={`Set ${i + 1} weight (kg)`}
-            onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { weight: Number(e.target.value) || null })}
+            placeholder="kg"
+            onChange={(e) =>
+              onUpdateSet(item.exercise_id, i + 1, { weight: Number(e.target.value) || null })
+            }
+            style={{
+              maxWidth: "70px",
+              flex: "0 0 auto",
+              fontSize: "0.9rem",
+            }}
           />
           <input
             className="form-control"
             type="number"
             inputMode="numeric"
             placeholder="Reps"
-            aria-label={`Set ${i + 1} reps`}
-            onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { reps: Number(e.target.value) || null })}
+            onChange={(e) =>
+              onUpdateSet(item.exercise_id, i + 1, { reps: Number(e.target.value) || null })
+            }
+            style={{
+              maxWidth: "60px",
+              flex: "0 0 auto",
+              fontSize: "0.9rem",
+            }}
           />
         </div>
       ))}
 
-      {item.notes ? <div className="small text-dim mt-1">{item.notes}</div> : null}
+      {item.notes && <div className="small text-dim mt-1">{item.notes}</div>}
     </div>
   );
 }
 
-/** ---------- Superset ---------- */
+/* ---------------- Superset Block ---------------- */
 function SupersetBlock({
   item,
   media,
@@ -615,15 +604,17 @@ function SupersetBlock({
           {sets} sets
         </span>
       </div>
+
       <div className="text-dim small mb-2">
-        {rest != null ? `Rest between sets: ${rest}s` : ""}{item.notes ? ` • ${item.notes}` : ""}
+        {rest != null ? `Rest between sets: ${rest}s` : ""}
+        {item.notes ? ` • ${item.notes}` : ""}
       </div>
 
       {[...Array(sets)].map((_, setIdx) => (
         <div key={setIdx} className="mb-3">
           <div className="fw-semibold mb-1">Set {setIdx + 1}</div>
 
-          {(item.items || []).map((sub, i) => {
+          {item.items.map((sub, i) => {
             const m = media[sub.exercise_id] || {};
             return (
               <div key={i} className="d-flex align-items-center gap-2 mb-2">
@@ -632,19 +623,26 @@ function SupersetBlock({
                   className="btn btn-sm btn-outline-light"
                   style={{ borderRadius: 12, padding: 0, overflow: "hidden" }}
                   onClick={() => onOpenMedia(sub.exercise_id)}
-                  aria-label={`Open media for ${m.exercise_name || sub.exercise_id}`}
-                  title="Open media"
                 >
                   {m.gif_url ? (
                     <img
                       src={m.gif_url}
                       alt={m.exercise_name || sub.exercise_id}
-                      style={{ width: 56, height: 56, objectFit: "cover", display: "block" }}
+                      style={{
+                        width: 64,
+                        height: 64,
+                        objectFit: "cover",
+                        display: "block",
+                      }}
                     />
                   ) : (
                     <div
                       className="d-flex align-items-center justify-content-center"
-                      style={{ width: 56, height: 56, background: "rgba(255,255,255,0.06)" }}
+                      style={{
+                        width: 64,
+                        height: 64,
+                        background: "rgba(255,255,255,0.06)",
+                      }}
                     >
                       <i className="fas fa-play" />
                     </div>
@@ -652,25 +650,41 @@ function SupersetBlock({
                 </button>
 
                 <div className="flex-fill">
-                  <div className="fw-semibold">
-                    {m.exercise_name || sub.exercise_id}
-                  </div>
-                  <div className="d-flex gap-2 mt-1">
+                  <div className="fw-semibold">{m.exercise_name || sub.exercise_id}</div>
+
+                  <div className="d-flex gap-2 mt-1 flex-wrap">
                     <input
                       className="form-control"
                       type="number"
                       inputMode="decimal"
-                      placeholder="Weight (kg)"
-                      aria-label={`Set ${setIdx + 1} weight for ${m.exercise_name || sub.exercise_id}`}
-                      onChange={(e) => onUpdateSet(sub.exercise_id, setIdx + 1, { weight: Number(e.target.value) || null })}
+                      placeholder="kg"
+                      onChange={(e) =>
+                        onUpdateSet(sub.exercise_id, setIdx + 1, {
+                          weight: Number(e.target.value) || null,
+                        })
+                      }
+                      style={{
+                        maxWidth: "70px",
+                        flex: "0 0 auto",
+                        fontSize: "0.85rem",
+                      }}
                     />
+
                     <input
                       className="form-control"
                       type="number"
                       inputMode="numeric"
                       placeholder="Reps"
-                      aria-label={`Set ${setIdx + 1} reps for ${m.exercise_name || sub.exercise_id}`}
-                      onChange={(e) => onUpdateSet(sub.exercise_id, setIdx + 1, { reps: Number(e.target.value) || null })}
+                      onChange={(e) =>
+                        onUpdateSet(sub.exercise_id, setIdx + 1, {
+                          reps: Number(e.target.value) || null,
+                        })
+                      }
+                      style={{
+                        maxWidth: "60px",
+                        flex: "0 0 auto",
+                        fontSize: "0.85rem",
+                      }}
                     />
                   </div>
                 </div>
