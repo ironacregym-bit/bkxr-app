@@ -306,7 +306,7 @@ export default function Home() {
   // Mandatory planned workout href:
   // - Recurring day → not used by card's "workout" row (card will render Recurring row instead)
   // - Else → BXKR /workouts/[id]
-  const bxkrHref = hasWorkoutToday && hasWorkoutId ? `/workouts/${encodeURIComponent(workoutIds[0])}` : "#";
+  const bxkrHref = hasWorkoutToday && hasWorkoutId ? `/workout/${encodeURIComponent(workoutIds[0])}` : "#";
   const workoutHref = workoutLocked ? "#" : bxkrHref;
   const habitHref = habitsLocked ? "#" : habitHrefBase;
 
@@ -319,7 +319,7 @@ export default function Home() {
     : "#";
 
   const optionalWorkoutHref = firstOptional
-    ? `/workouts/${encodeURIComponent(firstOptional.id)}`
+    ? `/workout/${encodeURIComponent(firstOptional.id)}`
     : "#";
 
   // Round nutrition macros to 2 dp before passing to card
