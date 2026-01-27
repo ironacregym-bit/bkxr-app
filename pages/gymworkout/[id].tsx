@@ -322,7 +322,7 @@ export default function GymWorkoutViewerPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed to submit completion");
-      router.push("/weekly");
+      router.push("/");
     } catch (e) {
       console.error(e);
     } finally {
