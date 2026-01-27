@@ -1,5 +1,4 @@
 
-// pages/admin/workouts/gym-create.tsx
 "use client";
 
 import Head from "next/head";
@@ -7,10 +6,14 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import useSWR from "swr";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import BottomNav from "../../../components/BottomNav";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
+const ACCENT = "#FF8A2A";
+
+const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"] as const;
+type DayName = typeof DAYS[number];
 
 type SingleItem = {
   type: "Single";
@@ -50,19 +53,26 @@ type GymRound = {
 export default function GymCreateWorkoutPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const ownerEmail = session?.user?.email || "";
+  const ownerEmail = (session?.user?.email || "").toLowerCase();
   const role = (session?.user as any)?.role || "user";
 
   const { data } = useSWR("/api/exercises?limit=1000", fetcher, { revalidateOnFocus: false });
   const exercises = Array.isArray(data?.exercises) ? data!.exercises : [];
 
-  // Base form
+  // Base form + assignment/recurrence
   const [meta, setMeta] = useState({
     workout_name: "",
     focus: "",
     notes: "",
     video_url: "",
     visibility: "global" as "global" | "private",
+
+    // New assignment & recurrence fields
+    recurring: false,
+    recurring_day: "Monday" as DayName,
+    recurring_start: "" as string, // YYYY-MM-DD
+    recurring_end: "" as string,   // YYYY-MM-DD
+    assigned_to: ownerEmail || "",
   });
 
   const [warmup, setWarmup] = useState<GymRound | null>({ name: "Warm Up", order: 1, items: [] });
@@ -83,7 +93,6 @@ export default function GymCreateWorkoutPage() {
   }
 
   /** ---------- Helpers for Single Items ---------- */
-
   function addSingle(round: "warmup" | "main" | "finisher") {
     const newItem: SingleItem = { type: "Single", order: 1, exercise_id: "", reps: "", sets: 3 };
     if (round === "warmup")
@@ -91,7 +100,9 @@ export default function GymCreateWorkoutPage() {
     if (round === "main")
       setMain((prev) => ({ ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] }));
     if (round === "finisher")
-      setFinisher((prev) => (prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : { name: "Finisher", order: 3, items: [newItem] }));
+      setFinisher((prev) =>
+        prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : { name: "Finisher", order: 3, items: [newItem] }
+      );
   }
 
   function updateSingle(round: "warmup" | "main" | "finisher", idx: number, patch: Partial<SingleItem>) {
@@ -103,13 +114,11 @@ export default function GymCreateWorkoutPage() {
   }
 
   /** ---------- Helpers for Supersets (unlimited items + sets at superset level) ---------- */
-
   function addSuperset(round: "warmup" | "main" | "finisher") {
     const newItem: SupersetItem = {
       type: "Superset",
       order: 1,
       name: "",
-      // Start with two, but user can add/remove more
       items: [{ exercise_id: "", reps: "" }, { exercise_id: "", reps: "" }],
       sets: 3,
       rest_s: null,
@@ -227,11 +236,37 @@ export default function GymCreateWorkoutPage() {
   }
 
   /** ---------- Save ---------- */
+  function toISODateOrNull(s: string): string | null {
+    if (!s) return null;
+    const dt = new Date(s);
+    if (isNaN(dt.getTime())) return null;
+    // normalise to 12:00 to avoid TZ midnight drift when server reads it as local
+    dt.setHours(12, 0, 0, 0);
+    return dt.toISOString();
+  }
 
   async function save() {
     setSaving(true);
     setMsg(null);
     try {
+      // Client-side validation for recurring fields
+      if (meta.recurring) {
+        if (!meta.assigned_to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(meta.assigned_to)) {
+          throw new Error("Please enter a valid email for 'Assigned To'.");
+        }
+        if (!DAYS.includes(meta.recurring_day)) {
+          throw new Error("Please choose a valid recurring day.");
+        }
+        if (!meta.recurring_start || !meta.recurring_end) {
+          throw new Error("Please choose both a start and end date for recurrence.");
+        }
+        const start = new Date(meta.recurring_start);
+        const end = new Date(meta.recurring_end);
+        if (start > end) {
+          throw new Error("Recurring start date must be before end date.");
+        }
+      }
+
       const body = {
         visibility: meta.visibility,
         owner_email: meta.visibility === "private" ? ownerEmail : undefined,
@@ -242,6 +277,13 @@ export default function GymCreateWorkoutPage() {
         warmup,
         main,
         finisher,
+
+        // New fields (API will validate & coerce)
+        recurring: !!meta.recurring,
+        recurring_day: meta.recurring ? meta.recurring_day : null,
+        recurring_start: meta.recurring ? toISODateOrNull(meta.recurring_start) : null,
+        recurring_end: meta.recurring ? toISODateOrNull(meta.recurring_end) : null,
+        assigned_to: meta.recurring ? meta.assigned_to.trim().toLowerCase() : null,
       };
 
       const res = await fetch("/api/workouts/gym-create", {
@@ -259,8 +301,6 @@ export default function GymCreateWorkoutPage() {
       setSaving(false);
     }
   }
-
-  const ACCENT = "#FF8A2A";
 
   /** ---------- UI ---------- */
 
@@ -373,6 +413,79 @@ export default function GymCreateWorkoutPage() {
     );
   }
 
+  const AssignmentSection = useMemo(() => {
+    return (
+      <section className="futuristic-card p-3 mb-3">
+        <h6 className="m-0 mb-2">Assignment & Recurrence</h6>
+        <div className="row g-2">
+          <div className="col-12 col-md-4">
+            <div className="form-check form-switch mt-1">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                id="recurringSwitch"
+                checked={meta.recurring}
+                onChange={(e) => setMeta({ ...meta, recurring: e.target.checked })}
+              />
+              <label className="form-check-label" htmlFor="recurringSwitch">
+                Recurring (weekly)
+              </label>
+            </div>
+            <small className="text-dim d-block mt-1">When on: this session repeats weekly and becomes the user’s mandatory workout for that weekday.</small>
+          </div>
+
+          <div className="col-12 col-md-4">
+            <label className="form-label">Assigned To (email)</label>
+            <input
+              className="form-control"
+              type="email"
+              value={meta.assigned_to}
+              onChange={(e) => setMeta({ ...meta, assigned_to: e.target.value })}
+              placeholder="athlete@example.com"
+              disabled={!meta.recurring}
+            />
+            <small className="text-dim">Defaults to your email</small>
+          </div>
+
+          <div className="col-12 col-md-4">
+            <label className="form-label">Recurring Day</label>
+            <select
+              className="form-select"
+              value={meta.recurring_day}
+              onChange={(e) => setMeta({ ...meta, recurring_day: e.target.value as DayName })}
+              disabled={!meta.recurring}
+            >
+              {DAYS.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="col-6 col-md-3">
+            <label className="form-label">Start Date</label>
+            <input
+              className="form-control"
+              type="date"
+              value={meta.recurring_start}
+              onChange={(e) => setMeta({ ...meta, recurring_start: e.target.value })}
+              disabled={!meta.recurring}
+            />
+          </div>
+          <div className="col-6 col-md-3">
+            <label className="form-label">End Date</label>
+            <input
+              className="form-control"
+              type="date"
+              value={meta.recurring_end}
+              onChange={(e) => setMeta({ ...meta, recurring_end: e.target.value })}
+              disabled={!meta.recurring}
+            />
+          </div>
+        </div>
+      </section>
+    );
+  }, [meta]);
+
   return (
     <>
       <Head><title>Create Gym Workout • Admin</title></Head>
@@ -385,7 +498,7 @@ export default function GymCreateWorkoutPage() {
         {msg && <div className={`alert ${msg.includes("Failed") ? "alert-danger" : "alert-info"}`}>{msg}</div>}
 
         {/* Meta */}
-        <section className="bxkr-card p-3 mb-3">
+        <section className="futuristic-card p-3 mb-3">
           <div className="row g-2">
             <div className="col-12 col-md-6">
               <label className="form-label">Workout Name</label>
@@ -436,8 +549,11 @@ export default function GymCreateWorkoutPage() {
           </div>
         </section>
 
+        {/* Assignment & Recurrence */}
+        {AssignmentSection}
+
         {/* Warm Up */}
-        <section className="bxkr-card p-3 mb-3">
+        <section className="futuristic-card p-3 mb-3">
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h6 className="m-0">Warm Up</h6>
             <div className="d-flex gap-2">
@@ -528,7 +644,7 @@ export default function GymCreateWorkoutPage() {
         </section>
 
         {/* Main */}
-        <section className="bxkr-card p-3 mb-3">
+        <section className="futuristic-card p-3 mb-3">
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h6 className="m-0">Main Set</h6>
             <div className="d-flex gap-2">
@@ -618,7 +734,7 @@ export default function GymCreateWorkoutPage() {
         </section>
 
         {/* Finisher */}
-        <section className="bxkr-card p-3 mb-3">
+        <section className="futuristic-card p-3 mb-3">
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h6 className="m-0">Finisher</h6>
             <div className="d-flex gap-2">
