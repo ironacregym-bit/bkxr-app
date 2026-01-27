@@ -83,7 +83,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           weight: s.weight == null ? null : Number(s.weight),
           reps: s.reps == null ? null : Number(s.reps),
         }))
-        .filter((s) => s.exercise_id && s.set > 0);
+        .filter((s: GymCompletionSet) => s.exercise_id && s.set > 0);
 
       const payload = {
         id: docId,
