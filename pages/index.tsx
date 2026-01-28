@@ -10,7 +10,6 @@ import type { GetServerSideProps } from "next";
 import DailyTasksCard from "../components/DailyTasksCard";
 import WeeklyCircles from "../components/dashboard/WeeklyCircles";
 import NotificationsBanner from "../components/NotificationsBanner";
-import Link from "next/link";
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getSession(context);
@@ -85,7 +84,7 @@ type ApiDay = {
   checkinSummary?: { weight: number; body_fat_pct: number; weightChange?: number; bfChange?: number };
   workoutIds?: string[]; // mandatory set IDs (recurring or programmed)
 
-  // NEW (from /api/weekly/overview PART 3)
+  // NEW (from /api/weekly/overview)
   hasRecurringToday?: boolean;
   recurringDone?: boolean;
   recurringWorkouts?: SimpleWorkoutRef[];
@@ -303,14 +302,12 @@ export default function Home() {
   const workoutLocked = !isPremium && isWedOrFri;
   const habitsLocked = !isPremium;
 
-  // Mandatory planned workout href:
-  // - Recurring day → not used by card's "workout" row (card will render Recurring row instead)
-  // - Else → BXKR /workouts/[id]
-  const bxkrHref = hasWorkoutToday && hasWorkoutId ? `/workout/${encodeURIComponent(workoutIds[0])}` : "#";
+  // Mandatory planned workout href when NO recurring: BXKR plural route
+  const bxkrHref = hasWorkoutToday && hasWorkoutId ? `/workouts/${encodeURIComponent(workoutIds[0])}` : "#";
   const workoutHref = workoutLocked ? "#" : bxkrHref;
   const habitHref = habitsLocked ? "#" : habitHrefBase;
 
-  // Derive recurring/optional links (explicit for clarity)
+  // Recurring/optional links
   const firstRecurring = selectedDayData?.recurringWorkouts?.[0];
   const firstOptional = selectedDayData?.optionalWorkouts?.[0];
 
@@ -319,7 +316,7 @@ export default function Home() {
     : "#";
 
   const optionalWorkoutHref = firstOptional
-    ? `/workout/${encodeURIComponent(firstOptional.id)}`
+    ? `/workouts/${encodeURIComponent(firstOptional.id)}`
     : "#";
 
   // Round nutrition macros to 2 dp before passing to card
@@ -443,8 +440,6 @@ export default function Home() {
       },
     };
   }, [daySummary, dayCompletions, selectedDateKey]);
-
-  const accentMicro = "#ff8a2a";
 
   return (
     <>
