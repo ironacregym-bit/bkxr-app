@@ -1,4 +1,3 @@
-
 // pages/admin/index.tsx (AdminDashboard)
 "use client";
 
@@ -28,10 +27,8 @@ export default function AdminDashboard() {
         return;
       }
 
-      // Ensure SW is ready
       const reg = await navigator.serviceWorker.ready;
 
-      // Ask for permission if needed
       let perm = Notification.permission;
       if (perm === "default") perm = await Notification.requestPermission();
       if (perm !== "granted") {
@@ -39,24 +36,19 @@ export default function AdminDashboard() {
         return;
       }
 
-      // Unsubscribe any old subscription
       const existing = await reg.pushManager.getSubscription();
       if (existing) {
         try {
           await existing.unsubscribe();
-        } catch {
-          /* ignore */
-        }
+        } catch {}
       }
 
-      // Get current public key (base64url, no '=')
       const vapidPub = (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "").trim();
       if (!vapidPub) {
         setMsg("Missing NEXT_PUBLIC_VAPID_PUBLIC_KEY.");
         return;
       }
 
-      // Convert base64url → Uint8Array
       const toUint8 = (b64: string) => {
         const pad = "=".repeat((4 - (b64.length % 4)) % 4);
         const base64 = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
@@ -64,13 +56,11 @@ export default function AdminDashboard() {
         return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
       };
 
-      // Subscribe with current key
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: toUint8(vapidPub),
       });
 
-      // Register with server
       const subObj = JSON.parse(JSON.stringify(sub));
       const resp = await fetch("/api/notifications/register", {
         method: "POST",
@@ -84,9 +74,9 @@ export default function AdminDashboard() {
       }
 
       localStorage.setItem("bxkr_vapid_pub", vapidPub);
-      setMsg("Notifications re‑enabled ✅");
+      setMsg("Notifications re-enabled ✅");
     } catch (e: any) {
-      setMsg(e?.message || "Failed to re‑enable notifications.");
+      setMsg(e?.message || "Failed to re-enable notifications.");
     } finally {
       setBusy(false);
     }
@@ -116,8 +106,10 @@ export default function AdminDashboard() {
     { title: "Manage Users", icon: "fas fa-users", link: "/admin/users", color: "dark" },
     { title: "Members", icon: "fas fa-address-book", link: "/admin/members", color: "primary" },
 
-    // ✅ New: Recipes Admin tile
     { title: "Recipes", icon: "fas fa-utensils", link: "/admin/recipes", color: "danger" },
+
+    // 🆕 Supplements admin
+    { title: "Supplements", icon: "fas fa-pills", link: "/admin/supplements", color: "warning" },
   ];
 
   return (
@@ -132,17 +124,20 @@ export default function AdminDashboard() {
         </div>
 
         {/* Re-enable notifications card */}
-        <div className="card p-3 mb-3" style={{ background: "rgba(255,255,255,0.06)", borderRadius: 16 }}>
+        <div
+          className="card p-3 mb-3"
+          style={{ background: "rgba(255,255,255,0.06)", borderRadius: 16 }}
+        >
           <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
             <div>
               <div className="fw-semibold">Notifications</div>
               <div className="small text-muted">
-                If you’ve changed VAPID keys or moved devices, re‑enable push notifications here.
+                If you’ve changed VAPID keys or moved devices, re-enable push notifications here.
               </div>
             </div>
 
             <div className="d-flex gap-2 align-items-center">
-              <Link href="/admin/notifications" className="btn-bxkr-outline" aria-label="Open Notifications Admin">
+              <Link href="/admin/notifications" className="btn-bxkr-outline">
                 Open Notifications Admin
               </Link>
 
@@ -161,13 +156,18 @@ export default function AdminDashboard() {
                   fontWeight: 600,
                 }}
               >
-                {busy ? "Working…" : "Re‑enable notifications"}
+                {busy ? "Working…" : "Re-enable notifications"}
               </button>
             </div>
           </div>
 
           {msg && (
-            <div className={`mt-2 alert ${msg.includes("✅") ? "alert-success" : "alert-info"}`} role="alert">
+            <div
+              className={`mt-2 alert ${
+                msg.includes("✅") ? "alert-success" : "alert-info"
+              }`}
+              role="alert"
+            >
               {msg}
             </div>
           )}
