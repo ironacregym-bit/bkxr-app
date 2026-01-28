@@ -303,7 +303,7 @@ export default function Home() {
   const habitsLocked = !isPremium;
 
   // Mandatory planned workout href when NO recurring: BXKR plural route
-  const bxkrHref = hasWorkoutToday && hasWorkoutId ? `/workouts/${encodeURIComponent(workoutIds[0])}` : "#";
+  const bxkrHref = hasWorkoutToday && hasWorkoutId ? `/workout/${encodeURIComponent(workoutIds[0])}` : "#";
   const workoutHref = workoutLocked ? "#" : bxkrHref;
   const habitHref = habitsLocked ? "#" : habitHrefBase;
 
@@ -316,7 +316,7 @@ export default function Home() {
     : "#";
 
   const optionalWorkoutHref = firstOptional
-    ? `/workouts/${encodeURIComponent(firstOptional.id)}`
+    ? `/workout/${encodeURIComponent(firstOptional.id)}`
     : "#";
 
   // Round nutrition macros to 2 dp before passing to card
