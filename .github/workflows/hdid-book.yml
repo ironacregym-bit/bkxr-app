@@ -1,0 +1,90 @@
+
+name: HDID Tee Time Booking
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Y-M-D (local UK)"
+        required: false
+        type: string
+      time:
+        description: "HH:MM (24h)"
+        required: false
+        type: string
+      players:
+        description: "Players (1-4)"
+        required: false
+        type: number
+      earliest:
+        description: "Arm until (HH:MM:SS) before clicking"
+        required: false
+        type: string
+  schedule:
+    # Adjust to your club’s release pattern (example: 06:59 UK time every day)
+    - cron: '58 6 * * *'  # runs at 06:58 UTC by default; use env TZ below for London
+
+env:
+  TZ: Europe/London
+  # Base env defaults; workflow_dispatch can override
+  HDID_DATE: ${{ inputs.date }}
+  HDID_TIME: ${{ inputs.time }}
+  HDID_PLAYERS: ${{ inputs.players }}
+  HDID_EARLIEST: ${{ inputs.earliest }}
+
+jobs:
+  book:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: hdid-booking
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install deps
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      # Optional: restore storage state from a secret (base64)
+      - name: Restore storage state (optional)
+        if: ${{ env.HDID_STORAGE_STATE_B64 != '' }}
+        shell: bash
+        env:
+          HDID_STORAGE_STATE_B64: ${{ secrets.HDID_STORAGE_STATE_B64 }}
+        run: |
+          if [ -n "$HDID_STORAGE_STATE_B64" ]; then
+            echo "$HDID_STORAGE_STATE_B64" | base64 -d > hdid-storage-state.json
+          fi
+
+      - name: Run booking
+        env:
+          HDID_EMAIL: ${{ secrets.HDID_EMAIL }}
+          HDID_PASSWORD: ${{ secrets.HDID_PASSWORD }}
+          HDID_CLUB: ${{ secrets.HDID_CLUB }}
+          HDID_COURSE: ${{ secrets.HDID_COURSE }}
+          # If you commit scripts under /hdid-automation/scripts/hdid, cd first or use -c to target
+        run: |
+          npx playwright test scripts/hdid/book-golf.spec.ts --project=chromium
+
+      - name: Upload artifacts (trace/video/screenshots)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            playwright-report
+            test-results
+            **/*.webm
+            **/*.png
+            **/*.zip
+          if-no-files-found: ignore
