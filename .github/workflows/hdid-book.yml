@@ -74,7 +74,8 @@ jobs:
           HDID_COURSE: ${{ secrets.HDID_COURSE }}
           # If you commit scripts under /hdid-automation/scripts/hdid, cd first or use -c to target
         run: |
-          npx playwright test scripts/hdid/book-golf.spec.ts --project=chromium
+          npx cd
+          npx playwright test hdid-automation/scripts/hdid/book-golf.spec.ts --project=chromium
 
       - name: Upload artifacts (trace/video/screenshots)
         if: always()
