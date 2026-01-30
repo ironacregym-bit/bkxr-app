@@ -16,7 +16,7 @@ type WorkoutListItem = {
 type AssignWorkoutModalProps = {
   open: boolean;
   onClose: () => void;
-  userEmail: string;               // target member email
+  userEmail: string;                 // target member email
   onAssigned?: (assignmentId: string) => void; // optional callback on success
 };
 
@@ -35,6 +35,7 @@ export default function AssignWorkoutModal({
   userEmail,
   onAssigned,
 }: AssignWorkoutModalProps) {
+  // SWR key is null when closed (no fetch), hook remains top-level (hydration-safe)
   const workoutsKey = open ? "/api/admin/workouts/list?limit=100" : null;
   const { data: workoutsList, isValidating: loadingWorkoutsList, error: wlErr } =
     useSWR<{ items: WorkoutListItem[]; nextCursor?: string | null }>(workoutsKey, fetcher, {
@@ -106,11 +107,12 @@ export default function AssignWorkoutModal({
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || `Failed (${res.status})`);
+
       setOkMsg("Assigned ✅");
       if (typeof onAssigned === "function" && json?.assignment_id) {
         onAssigned(json.assignment_id);
       }
-      // keep modal open for multiple assigns; clear selection only
+      // Keep modal open for multiple assigns; clear selection only
       setForm((f) => ({ ...f, workout_id: "", note: "" }));
     } catch (err: any) {
       setErrMsg(err?.message || "Failed to assign workout");
