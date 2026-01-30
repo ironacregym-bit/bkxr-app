@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../auth/[...nextauth]";
-import firestore from "../../../../lib/firestoreClient";
-import { hasRole } from "../../../../lib/rbac";
+import { authOptions } from "../../../auth/[...nextauth]";
+import firestore from "../../../../../lib/firestoreClient";
+import { hasRole } from "../../../../../lib/rbac";
 
 // ---- Helpers (aligned with /api/checkins/weekly.ts) -----------------------
 function isYMD(s: string): boolean {
