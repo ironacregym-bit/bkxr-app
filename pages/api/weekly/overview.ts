@@ -1,4 +1,3 @@
-
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { getServerSession } from "next-auth";
@@ -57,12 +56,14 @@ const CHECKINS_COLLECTION = "check_ins";
 const NUTRITION_COLLECTION = "nutrition_logs";
 const WORKOUTS_COLLECTION = "workouts";
 const COMPLETIONS_COLLECTION = "workoutCompletions";
+const ASSIGNMENTS_COLLECTION = "workout_assignments"; // NEW
 
 /** ===== Helpers ===== */
 function isYMD(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 function formatYMD(d: Date): string {
+  // 'en-CA' yields YYYY-MM-DD
   return d.toLocaleDateString("en-CA");
 }
 function parseYMD(ymd: string): Date {
@@ -108,6 +109,18 @@ function numOrUndefined(v: any): number | undefined {
 
 // Map Date.getDay() to name used in recurring_day
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** Safe date extraction from Firestore values */
+function toDate(v: any): Date | null {
+  try {
+    if (!v) return null;
+    if (typeof v.toDate === "function") return v.toDate();
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -203,7 +216,7 @@ export default async function handler(
       }
     }
 
-    /** ===== PROGRAMMED WORKOUTS (BXKR/global) ===== */
+    /** ===== PROGRAMMED WORKOUTS (BXKR/global with explicit date) ===== */
     let workoutsSnap: any;
     try {
       workoutsSnap = await firestore
@@ -212,6 +225,7 @@ export default async function handler(
         .where("date", "<=", weekEnd)
         .get();
     } catch (e) {
+      // Fallback: fetch all, filter in memory
       const all = await firestore.collection(WORKOUTS_COLLECTION).get();
       const filtered = all.docs.filter((doc: any) => {
         const w = doc.data() as any;
@@ -233,8 +247,88 @@ export default async function handler(
       programmedByDay.set(dk, arr);
     });
 
-    /** ===== RECURRING WORKOUTS (assigned to this user) ===== */
+    /** ===== RECURRING WORKOUTS via NEW assignments collection =====
+     * Pull active assignments overlapping [weekStart, weekEnd].
+     * Because Firestore doesn't support range filters on two different fields simultaneously,
+     * we query: user_email == X, status == "active", start_date <= weekEnd
+     * and filter in memory for end_date >= weekStart.
+     */
     const recurringByDay = new Map<string, SimpleWorkoutRef[]>();
+
+    type AssignmentDoc = {
+      assignment_id: string;
+      user_email: string;
+      workout_id: string;
+      recurring_day: string; // "Monday"..."Sunday"
+      start_date?: any; // Timestamp | string
+      end_date?: any;   // Timestamp | string
+      status?: string;
+    };
+
+    let assignments: AssignmentDoc[] = [];
+    try {
+      const q = firestore
+        .collection(ASSIGNMENTS_COLLECTION)
+        .where("user_email", "==", userEmail)
+        .where("status", "==", "active")
+        .where("start_date", "<=", weekEnd);
+      const snap = await q.get();
+      assignments = snap.docs.map((d: any) => ({ assignment_id: d.id, ...(d.data() || {}) }));
+    } catch (err) {
+      // Fallback (no index or older projects): fetch by user and filter in memory
+      const alt = await firestore.collection(ASSIGNMENTS_COLLECTION).where("user_email", "==", userEmail).get();
+      assignments = alt.docs.map((d: any) => ({ assignment_id: d.id, ...(d.data() || {}) }))
+        .filter((a) => String(a?.status || "").toLowerCase() === "active");
+    }
+
+    // Filter assignments that overlap the requested week
+    const overlapping = assignments.filter((a) => {
+      const s = toDate(a.start_date) || new Date(0);
+      const e = toDate(a.end_date) || new Date(8640000000000000); // far future
+      return !(e < weekStart || s > weekEnd);
+    });
+
+    // Resolve workout names for assignment workout_ids (batch by individual gets to avoid FieldPath import)
+    const assignIds = Array.from(new Set(overlapping.map((a) => String(a.workout_id || "").trim()).filter(Boolean)));
+    const nameByWorkoutId = new Map<string, string | undefined>();
+    if (assignIds.length) {
+      const docSnaps = await Promise.all(
+        assignIds.map((wid) => firestore.collection(WORKOUTS_COLLECTION).doc(wid).get())
+      );
+      docSnaps.forEach((snap) => {
+        if (!snap.exists) return;
+        const wid = snap.id;
+        const w = snap.data() as any;
+        const name = typeof w?.workout_name === "string" ? w.workout_name : undefined;
+        nameByWorkoutId.set(wid, name);
+      });
+    }
+
+    // Place assigned workouts onto the correct day if within the assignment window and day-name matches
+    for (const a of overlapping) {
+      const recDayName = String(a.recurring_day || "").trim();
+      const s = toDate(a.start_date) || new Date(0);
+      const e = toDate(a.end_date) || new Date(8640000000000000);
+      const wid = String(a.workout_id || "").trim();
+      const wname = nameByWorkoutId.get(wid);
+
+      if (!wid || !recDayName) continue;
+
+      weekDays.forEach((d) => {
+        if (!inRange(d, s, e)) return;
+        const ymd = formatYMD(d);
+        const dayName = DAY_NAMES[d.getDay()];
+        if (dayName === recDayName) {
+          const arr = recurringByDay.get(ymd) || [];
+          arr.push({ id: wid, name: wname });
+          recurringByDay.set(ymd, arr);
+        }
+      });
+    }
+
+    /** ===== LEGACY RECURRING WORKOUTS (keep compatibility) =====
+     * Old model: workouts with fields { recurring: true, assigned_to: user_email, ... }.
+     */
     try {
       const recSnap = await firestore
         .collection(WORKOUTS_COLLECTION)
@@ -266,7 +360,7 @@ export default async function handler(
         });
       });
     } catch {
-      // Soft-fail; no recurring
+      // Soft-fail; legacy may not exist
     }
 
     /** ===== COMPLETIONS (THIS WEEK totals) ===== */
