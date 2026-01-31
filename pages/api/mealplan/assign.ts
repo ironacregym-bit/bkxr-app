@@ -86,7 +86,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       end_date: end,
       status: "active" as const,
       created_at: new Date(),
-      created_by: (session.user as any)?.email || null,
+      created_by: session?.user?.email || null, // <-- FIX: guard session
     };
 
     // Build per-day mapping from plan
