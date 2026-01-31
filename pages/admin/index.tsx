@@ -1,4 +1,3 @@
-// pages/admin/index.tsx (AdminDashboard)
 "use client";
 
 import Head from "next/head";
@@ -29,7 +28,7 @@ export default function AdminDashboard() {
 
       const reg = await navigator.serviceWorker.ready;
 
-      let perm = Notification.permission;
+      let perm = Notification.permission as NotificationPermission;
       if (perm === "default") perm = await Notification.requestPermission();
       if (perm !== "granted") {
         setMsg("Notifications permission not granted.");
@@ -100,14 +99,12 @@ export default function AdminDashboard() {
     { title: "Create Exercise", icon: "fas fa-plus-circle", link: "/admin/exercises/create", color: "success" },
     { title: "Create Gym Workout", icon: "fas fa-weight-hanging", link: "/admin/workouts/gym-create", color: "warning" },
     { title: "Create Session", icon: "fas fa-calendar-plus", link: "/admin/sessions/create", color: "info" },
-    { title: "Manage Bookings", icon: "fas fa-list", link: "/admin/bookings", color: "secondary" },
     { title: "Generate WhatsApp Link", icon: "fab fa-whatsapp", link: "/admin/share", color: "success" },
     { title: "Notifications", icon: "fas fa-bell", link: "/admin/notifications", color: "danger" },
-    { title: "Manage Users", icon: "fas fa-users", link: "/admin/users", color: "dark" },
     { title: "Members", icon: "fas fa-address-book", link: "/admin/members", color: "primary" },
-
     { title: "Recipes", icon: "fas fa-utensils", link: "/admin/recipes", color: "danger" },
-
+    // 🆕 Meal Plans admin
+    { title: "Meal Plans", icon: "fas fa-clipboard-list", link: "/admin/mealplans", color: "warning" },
     // 🆕 Supplements admin
     { title: "Supplements", icon: "fas fa-pills", link: "/admin/supplements", color: "warning" },
   ];
@@ -124,10 +121,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Re-enable notifications card */}
-        <div
-          className="card p-3 mb-3"
-          style={{ background: "rgba(255,255,255,0.06)", borderRadius: 16 }}
-        >
+        <div className="card p-3 mb-3" style={{ background: "rgba(255,255,255,0.06)", borderRadius: 16 }}>
           <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
             <div>
               <div className="fw-semibold">Notifications</div>
@@ -162,12 +156,7 @@ export default function AdminDashboard() {
           </div>
 
           {msg && (
-            <div
-              className={`mt-2 alert ${
-                msg.includes("✅") ? "alert-success" : "alert-info"
-              }`}
-              role="alert"
-            >
+            <div className={`mt-2 alert ${msg.includes("✅") ? "alert-success" : "alert-info"}`} role="alert">
               {msg}
             </div>
           )}
@@ -193,3 +182,4 @@ export default function AdminDashboard() {
     </>
   );
 }
+``
