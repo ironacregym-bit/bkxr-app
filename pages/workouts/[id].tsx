@@ -161,11 +161,15 @@ function SupersetView({ item }: { item: SupersetItem }) {
   );
 }
 
+// Allow both duration fields for display compatibility
 type LastCompletion = {
   workout_id?: string;
   calories_burned?: number;
-  duration?: number; // minutes
-  difficulty?: string;
+  duration?: number;          // legacy
+  duration_minutes?: number;  // new (gym path)
+  difficulty?: string;        // if ever stored
+  rpe?: number;               // gym path
+  rating?: number;            // benchmark path
   completed_date?: string | { seconds: number; nanoseconds: number };
   weight_completed_with?: string | number;
   notes?: string;
@@ -197,7 +201,7 @@ export default function WorkoutDetailPage() {
   const lastKey =
     workoutId ? `/api/completions/last?workout_id=${encodeURIComponent(workoutId)}` : null;
 
-  // TypeScript strict: annotate fetcher parameter
+  // TS strict-safe fetcher parameter
   const { data: lastJson, error: lastErr } = useSWR<LastCompletion>(
     lastKey,
     (u: string) => fetch(u).then((r) => (r.ok ? r.json() : null)),
@@ -207,16 +211,27 @@ export default function WorkoutDetailPage() {
 
   const loading = !error && (!data || isValidating);
 
-  // ---- Complete modal
+  // ---- Complete modal ----
   const [showComplete, setShowComplete] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
+  // Form fields
   const [calories, setCalories] = useState<string>("");
-  const [duration, setDuration] = useState<string>("");
-  const [difficulty, setDifficulty] = useState<string>("");
+  const [duration, setDuration] = useState<string>(""); // minutes
+  const [difficulty, setDifficulty] = useState<string>(""); // Easy | Medium | Hard
   const [weightUsed, setWeightUsed] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
+
+  // Map Difficulty -> RPE (0-10). Pick clear buckets.
+  // Easy=4, Medium=6, Hard=8 (tunable later).
+  const difficultyToRPE = (d: string): number | null => {
+    const v = d.toLowerCase();
+    if (v === "easy") return 4;
+    if (v === "medium") return 6;
+    if (v === "hard") return 8;
+    return null;
+  };
 
   const canSubmit =
     !!workoutId &&
@@ -229,15 +244,25 @@ export default function WorkoutDetailPage() {
     setSaving(true);
     setSaveMsg(null);
     try {
-      const body: any = { workout_id: workoutId };
-      if (calories) body.calories_burned = Number(calories);
-      if (duration) body.duration = Number(duration); // minutes
-      if (difficulty) body.difficulty = String(difficulty);
-      if (weightUsed)
-        body.weight_completed_with = isNaN(Number(weightUsed))
-          ? weightUsed
-          : Number(weightUsed);
-      if (notes) body.notes = String(notes);
+      const rpe = difficultyToRPE(difficulty);
+      // Build body matching your /api/completions/create expectations (gym/simple path)
+      const body: any = {
+        workout_id: workoutId,
+        // Manual overrides
+        ...(calories ? { calories_burned: Number(calories) } : {}),
+        ...(duration ? { duration_minutes: Number(duration) } : {}),
+        ...(rpe != null ? { rpe } : {}),
+        ...(weightUsed
+          ? {
+              weight_completed_with: isNaN(Number(weightUsed))
+                ? weightUsed
+                : Number(weightUsed),
+            }
+          : {}),
+        ...(notes ? { notes: String(notes) } : {}),
+        // Optional: set an activity type for clarity (API stores this on gym path)
+        activity_type: "Strength training",
+      };
 
       const res = await fetch("/api/completions/create", {
         method: "POST",
@@ -249,6 +274,7 @@ export default function WorkoutDetailPage() {
       if (!res.ok) throw new Error(j?.error || `Failed (${res.status})`);
 
       setSaveMsg("Saved ✅");
+
       // Refresh the "last completion" chip
       if (lastKey) {
         try {
@@ -268,6 +294,11 @@ export default function WorkoutDetailPage() {
       setSaving(false);
     }
   }
+
+  // Choose which duration field to show in the chip
+  const lastDuration =
+    (typeof last?.duration_minutes === "number" ? last.duration_minutes : undefined) ??
+    (typeof last?.duration === "number" ? last.duration : undefined);
 
   return (
     <>
@@ -337,7 +368,7 @@ export default function WorkoutDetailPage() {
                       ? `${Math.round(last.calories_burned)} kcal`
                       : "—"}
                     {" · "}
-                    {typeof last.duration === "number" ? `${last.duration} min` : "—"}
+                    {typeof lastDuration === "number" ? `${lastDuration} min` : "—"}
                     {" · "}
                     {toISODate(last.completed_date)
                       ? new Date(toISODate(last.completed_date)!).toLocaleString()
@@ -385,7 +416,7 @@ export default function WorkoutDetailPage() {
                 Create Another
               </Link>
 
-              {/* New: Complete workout */}
+              {/* Complete workout */}
               <button
                 className="btn btn-bxkr"
                 style={{
@@ -434,7 +465,7 @@ export default function WorkoutDetailPage() {
               </button>
             </div>
             <div className="small text-dim">
-              Log what you did. <strong>Calories burnt</strong> is the key field here.
+              Log what you did. <strong>Calories burnt</strong> and <strong>Difficulty</strong> are the key fields here.
             </div>
 
             <form onSubmit={submitCompletion} className="mt-3">
