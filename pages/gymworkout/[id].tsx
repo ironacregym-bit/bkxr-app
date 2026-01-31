@@ -1,4 +1,3 @@
-
 // pages/gymworkout/[id].tsx
 // BXKR — Gym Workout Viewer (List-style, set logging, GIF→Video media modal)
 // Bootstrap-only, hydration-safe, GIF size 64px always.
@@ -259,10 +258,16 @@ export default function GymWorkoutViewerPage() {
   useEffect(() => setMounted(true), []);
 
   const [formSets, setFormSets] = useState<CompletionSet[]>([]);
-  const [rpe, setRpe] = useState<number>(7);
   const [submitting, setSubmitting] = useState(false);
   const [previousSession, setPreviousSession] = useState<PreviousCompletion | null>(null);
   const [showPrev, setShowPrev] = useState(false);
+
+  // Completion modal (Difficulty/Calories/etc.)
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [difficulty, setDifficulty] = useState<string>("");
+  const [calories, setCalories] = useState<string>("");
+  const [duration, setDuration] = useState<string>("");
+  const [notes, setNotes] = useState<string>("");
 
   // Media modal
   const [mediaOpen, setMediaOpen] = useState(false);
@@ -270,13 +275,18 @@ export default function GymWorkoutViewerPage() {
   const [mediaGif, setMediaGif] = useState<string | undefined>();
   const [mediaVideo, setMediaVideo] = useState<string | undefined>();
 
+  const KG_INPUT_W = 84;
+  const REPS_INPUT_W = 84;
+
   // Load previous session
   useEffect(() => {
     if (!mounted || !id || Array.isArray(id)) return;
     fetch(`/api/completions/last?workout_id=${id}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
-        if (json?.ok && json.last) setPreviousSession(json.last);
+        // Page tolerates either {ok,last} or direct object; adapt:
+        const last = json?.last || json;
+        if (last?.sets) setPreviousSession({ sets: last.sets, completedAt: last.completed_date });
       })
       .catch(() => {});
   }, [mounted, id]);
@@ -303,28 +313,46 @@ export default function GymWorkoutViewerPage() {
     });
   }
 
+  // Difficulty -> RPE mapping
+  const difficultyToRPE = (d: string): number | null => {
+    const v = d.toLowerCase();
+    if (v === "easy") return 4;
+    if (v === "medium") return 6;
+    if (v === "hard") return 8;
+    return null;
+  };
+
   async function submitCompletion() {
     if (!id || Array.isArray(id)) return;
     try {
       setSubmitting(true);
-      const body = {
+
+      const body: any = {
         workout_id: id,
         activity_type: "Strength training",
-        duration_minutes: null,
-        calories_burned: null,
-        rpe,
-        sets: formSets,
+        sets: formSets, // <-- per-exercise results
       };
+
+      // Summary fields (optional but recommended)
+      if (calories) body.calories_burned = Number(calories);
+      if (duration) body.duration_minutes = Number(duration);
+      const rpe = difficultyToRPE(difficulty);
+      if (rpe != null) body.rpe = rpe;
+      if (notes.trim()) body.notes = notes.trim();
+
       const res = await fetch(`/api/completions/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to submit completion");
+
+      // Navigate away or show toast; keep as before:
       router.push("/");
     } catch (e) {
       console.error(e);
+      alert((e as any)?.message || "Failed to submit completion");
     } finally {
       setSubmitting(false);
     }
@@ -339,8 +367,10 @@ export default function GymWorkoutViewerPage() {
       </Head>
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
-        <div className="mb-3">
+        <div className="mb-3 d-flex justify-content-between align-items-center">
           <Link href="/" className="btn btn-outline-secondary">← Back</Link>
+          {data?.workout_name && <div className="fw-bold">{data.workout_name}</div>}
+          <div />
         </div>
 
         {error && <div className="alert alert-danger">Could not load this workout.</div>}
@@ -390,6 +420,8 @@ export default function GymWorkoutViewerPage() {
                 media={mediaById}
                 onUpdateSet={updateSet}
                 onOpenMedia={openMedia}
+                kgWidth={KG_INPUT_W}
+                repsWidth={REPS_INPUT_W}
               />
             )}
             <RoundBlock
@@ -397,6 +429,8 @@ export default function GymWorkoutViewerPage() {
               media={mediaById}
               onUpdateSet={updateSet}
               onOpenMedia={openMedia}
+              kgWidth={KG_INPUT_W}
+              repsWidth={REPS_INPUT_W}
             />
             {data.finisher && (
               <RoundBlock
@@ -404,42 +438,120 @@ export default function GymWorkoutViewerPage() {
                 media={mediaById}
                 onUpdateSet={updateSet}
                 onOpenMedia={openMedia}
+                kgWidth={KG_INPUT_W}
+                repsWidth={REPS_INPUT_W}
               />
             )}
 
-            {/* RPE */}
-            <section className="futuristic-card p-3 mb-3">
-              <label className="form-label">RPE (1–10)</label>
-              <input
-                type="number"
-                className="form-control"
-                min={1}
-                max={10}
-                value={rpe}
-                onChange={(e) => setRpe(Math.min(10, Math.max(1, Number(e.target.value) || 1)))}
-              />
-            </section>
-
-            {/* Submit */}
-            <button
-              className="btn btn-primary w-100"
-              style={{ background: ACCENT, border: "none", borderRadius: 24 }}
-              disabled={submitting}
-              onClick={submitCompletion}
-            >
-              {submitting ? "Submitting…" : "Submit Completion"}
-            </button>
+            {/* Complete Workout */}
+            <div className="d-grid mt-3">
+              <button
+                className="btn btn-primary"
+                style={{
+                  background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                  border: "none",
+                  borderRadius: 24,
+                  fontWeight: 700,
+                }}
+                onClick={() => setCompleteOpen(true)}
+              >
+                Complete Workout
+              </button>
+            </div>
           </>
         )}
       </main>
 
-      <MediaModal
-        open={mediaOpen}
-        title={mediaTitle}
-        gifUrl={mediaGif}
-        videoUrl={mediaVideo}
-        onClose={() => setMediaOpen(false)}
-      />
+      {/* Completion Modal: Difficulty + Calories (+ optional Duration/Notes) */}
+      {completeOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="position-fixed top-0 start-0 w-100 h-100"
+          style={{ background: "rgba(0,0,0,0.65)", zIndex: 1050 }}
+          onClick={(e) => {
+            if ((e.target as HTMLElement).dataset?.scrim === "1") setCompleteOpen(false);
+          }}
+          data-scrim="1"
+        >
+          <div className="position-absolute top-50 start-50 translate-middle" style={{ width: "92vw", maxWidth: 720 }}>
+            <div className="futuristic-card p-3" onClick={(e) => e.stopPropagation()}>
+              <div className="d-flex align-items-center justify-content-between">
+                <h5 className="m-0">Complete workout</h5>
+                <button className="btn btn-sm btn-outline-light" style={{ borderRadius: 999 }} onClick={() => setCompleteOpen(false)}>
+                  ✕
+                </button>
+              </div>
+
+              <div className="small text-dim mt-1">
+                We’ll save your logged sets. Add <strong>Difficulty</strong> and <strong>Calories burnt</strong> for better tracking.
+              </div>
+
+              <div className="row g-2 mt-2">
+                <div className="col-12 col-md-4">
+                  <label className="form-label">Difficulty</label>
+                  <select className="form-select" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+                    <option value="">—</option>
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                  </select>
+                </div>
+                <div className="col-6 col-md-4">
+                  <label className="form-label">Calories burnt (kcal)</label>
+                  <input
+                    className="form-control"
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="e.g., 420"
+                    min={0}
+                    value={calories}
+                    onChange={(e) => setCalories(e.target.value)}
+                  />
+                </div>
+                <div className="col-6 col-md-4">
+                  <label className="form-label">Duration (min)</label>
+                  <input
+                    className="form-control"
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="e.g., 55"
+                    min={0}
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                  />
+                </div>
+                <div className="col-12">
+                  <label className="form-label">Notes (optional)</label>
+                  <textarea
+                    className="form-control"
+                    rows={2}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Anything to note…"
+                  />
+                </div>
+              </div>
+
+              <div className="d-flex justify-content-end gap-2 mt-3">
+                <button className="btn btn-outline-light" style={{ borderRadius: 24 }} onClick={() => setCompleteOpen(false)} disabled={submitting}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{ borderRadius: 24, background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, border: "none" }}
+                  onClick={submitCompletion}
+                  disabled={submitting}
+                >
+                  {submitting ? "Saving…" : "Save completion"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <MediaModal open={mediaOpen} title={mediaTitle} gifUrl={mediaGif} videoUrl={mediaVideo} onClose={() => setMediaOpen(false)} />
 
       <BottomNav />
     </>
@@ -452,11 +564,15 @@ function RoundBlock({
   media,
   onUpdateSet,
   onOpenMedia,
+  kgWidth,
+  repsWidth,
 }: {
   round: UIRound;
   media: Record<string, { gif_url?: string; video_url?: string; exercise_name?: string }>;
   onUpdateSet: (exercise_id: string, set: number, patch: Partial<CompletionSet>) => void;
   onOpenMedia: (exercise_id: string) => void;
+  kgWidth: number;
+  repsWidth: number;
 }) {
   const sorted = useMemo(
     () => [...(round.items || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
@@ -471,13 +587,23 @@ function RoundBlock({
         <div className="text-dim small">No items.</div>
       ) : (
         sorted.map((it, idx) => (
-          <div key={`${round.name}-${idx}`} className="mb-4">
+          <div
+            key={`${round.name}-${idx}`}
+            className="p-2 mb-3"
+            style={{
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 12,
+            }}
+          >
             {it.type === "Single" ? (
               <SingleItemBlock
                 item={it as UISingleItem}
                 media={media[(it as UISingleItem).exercise_id]}
                 onUpdateSet={onUpdateSet}
                 onOpenMedia={onOpenMedia}
+                kgWidth={kgWidth}
+                repsWidth={repsWidth}
               />
             ) : (
               <SupersetBlock
@@ -485,6 +611,8 @@ function RoundBlock({
                 media={media}
                 onUpdateSet={onUpdateSet}
                 onOpenMedia={onOpenMedia}
+                kgWidth={kgWidth}
+                repsWidth={repsWidth}
               />
             )}
           </div>
@@ -500,18 +628,24 @@ function SingleItemBlock({
   media,
   onUpdateSet,
   onOpenMedia,
+  kgWidth,
+  repsWidth,
 }: {
   item: UISingleItem;
   media?: { gif_url?: string; video_url?: string; exercise_name?: string };
   onUpdateSet: (exercise_id: string, set: number, patch: Partial<CompletionSet>) => void;
   onOpenMedia: (exercise_id: string) => void;
+  kgWidth: number;
+  repsWidth: number;
 }) {
   const sets = Number.isFinite(item.sets) ? Number(item.sets) : 3;
   const rest = item.rest_s ?? null;
 
   return (
     <div>
-      <div className="d-flex align-items-center gap-2 mb-2">
+      {/* Header row */}
+      <div className="d-flex align-items-center gap-3 mb-2">
+        {/* Media thumb */}
         <button
           type="button"
           className="btn btn-sm btn-outline-light"
@@ -521,7 +655,7 @@ function SingleItemBlock({
         >
           {media?.gif_url ? (
             <img
-              src={media.gif_url}
+              src={fixGifUrl(media.gif_url)}
               alt={media?.exercise_name || item.exercise_id}
               style={{ width: 64, height: 64, objectFit: "cover", display: "block" }}
             />
@@ -535,48 +669,44 @@ function SingleItemBlock({
           )}
         </button>
 
-        <div>
-          <strong>{media?.exercise_name || item.exercise_id}</strong>
+        {/* Title + meta */}
+        <div className="flex-fill">
+          <div className="fw-semibold" style={{ lineHeight: 1.2 }}>
+            {media?.exercise_name || item.exercise_id}
+          </div>
           <div className="text-dim small">
             {sets} Sets{rest != null ? ` • Rest ${rest}s` : ""}{item.reps ? ` • ${item.reps}` : ""}
           </div>
+          {item.notes && <div className="small text-dim mt-1">{item.notes}</div>}
         </div>
       </div>
 
-      {[...Array(sets)].map((_, i) => (
-        <div key={i} className="d-flex gap-2 mb-2 flex-wrap">
-          <input
-            className="form-control"
-            type="number"
-            inputMode="decimal"
-            placeholder="kg"
-            onChange={(e) =>
-              onUpdateSet(item.exercise_id, i + 1, { weight: Number(e.target.value) || null })
-            }
-            style={{
-              maxWidth: "70px",
-              flex: "0 0 auto",
-              fontSize: "0.9rem",
-            }}
-          />
-          <input
-            className="form-control"
-            type="number"
-            inputMode="numeric"
-            placeholder="Reps"
-            onChange={(e) =>
-              onUpdateSet(item.exercise_id, i + 1, { reps: Number(e.target.value) || null })
-            }
-            style={{
-              maxWidth: "60px",
-              flex: "0 0 auto",
-              fontSize: "0.9rem",
-            }}
-          />
-        </div>
-      ))}
-
-      {item.notes && <div className="small text-dim mt-1">{item.notes}</div>}
+      {/* Inputs grid: same columns sizing */}
+      <div className="d-flex flex-wrap gap-2">
+        {[...Array(sets)].map((_, i) => (
+          <div key={i} className="d-flex align-items-center gap-2" style={{ marginBottom: 8 }}>
+            <div className="text-dim small" style={{ width: 44, textAlign: "right" }}>
+              Set {i + 1}
+            </div>
+            <input
+              className="form-control"
+              type="number"
+              inputMode="decimal"
+              placeholder="kg"
+              onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { weight: Number(e.target.value) || null })}
+              style={{ width: kgWidth, fontSize: "0.9rem" }}
+            />
+            <input
+              className="form-control"
+              type="number"
+              inputMode="numeric"
+              placeholder="reps"
+              onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { reps: Number(e.target.value) || null })}
+              style={{ width: repsWidth, fontSize: "0.9rem" }}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -587,17 +717,22 @@ function SupersetBlock({
   media,
   onUpdateSet,
   onOpenMedia,
+  kgWidth,
+  repsWidth,
 }: {
   item: UISupersetItem;
   media: Record<string, { gif_url?: string; video_url?: string; exercise_name?: string }>;
   onUpdateSet: (exercise_id: string, set: number, patch: Partial<CompletionSet>) => void;
   onOpenMedia: (exercise_id: string) => void;
+  kgWidth: number;
+  repsWidth: number;
 }) {
   const sets = Number.isFinite(item.sets) ? Number(item.sets) : 3;
   const rest = item.rest_s ?? null;
 
   return (
     <div>
+      {/* Superset header */}
       <div className="d-flex align-items-center justify-content-between mb-1">
         <strong>{(item.name || "").trim() || "Superset"}</strong>
         <span className="badge border" style={{ borderColor: ACCENT, color: ACCENT }}>
@@ -610,14 +745,24 @@ function SupersetBlock({
         {item.notes ? ` • ${item.notes}` : ""}
       </div>
 
+      {/* For each set, render rows of exercises with same input widths */}
       {[...Array(sets)].map((_, setIdx) => (
-        <div key={setIdx} className="mb-3">
-          <div className="fw-semibold mb-1">Set {setIdx + 1}</div>
+        <div
+          key={setIdx}
+          className="p-2 mb-2"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px dashed rgba(255,255,255,0.15)",
+            borderRadius: 10,
+          }}
+        >
+          <div className="fw-semibold mb-2">Set {setIdx + 1}</div>
 
           {item.items.map((sub, i) => {
             const m = media[sub.exercise_id] || {};
             return (
               <div key={i} className="d-flex align-items-center gap-2 mb-2">
+                {/* Media thumb */}
                 <button
                   type="button"
                   className="btn btn-sm btn-outline-light"
@@ -626,65 +771,50 @@ function SupersetBlock({
                 >
                   {m.gif_url ? (
                     <img
-                      src={m.gif_url}
+                      src={fixGifUrl(m.gif_url)}
                       alt={m.exercise_name || sub.exercise_id}
-                      style={{
-                        width: 64,
-                        height: 64,
-                        objectFit: "cover",
-                        display: "block",
-                      }}
+                      style={{ width: 64, height: 64, objectFit: "cover", display: "block" }}
                     />
                   ) : (
                     <div
                       className="d-flex align-items-center justify-content-center"
-                      style={{
-                        width: 64,
-                        height: 64,
-                        background: "rgba(255,255,255,0.06)",
-                      }}
+                      style={{ width: 64, height: 64, background: "rgba(255,255,255,0.06)" }}
                     >
                       <i className="fas fa-play" />
                     </div>
                   )}
                 </button>
 
+                {/* Name + inputs aligned with Single layout */}
                 <div className="flex-fill">
-                  <div className="fw-semibold">{m.exercise_name || sub.exercise_id}</div>
+                  <div className="fw-semibold" style={{ lineHeight: 1.2 }}>
+                    {m.exercise_name || sub.exercise_id}
+                  </div>
 
-                  <div className="d-flex gap-2 mt-1 flex-wrap">
+                  <div className="d-flex align-items-center gap-2 mt-1">
+                    <div className="text-dim small" style={{ width: 44, textAlign: "right" }}>
+                      &nbsp;
+                    </div>
                     <input
                       className="form-control"
                       type="number"
                       inputMode="decimal"
                       placeholder="kg"
                       onChange={(e) =>
-                        onUpdateSet(sub.exercise_id, setIdx + 1, {
-                          weight: Number(e.target.value) || null,
-                        })
+                        onUpdateSet(sub.exercise_id, setIdx + 1, { weight: Number(e.target.value) || null })
                       }
-                      style={{
-                        maxWidth: "70px",
-                        flex: "0 0 auto",
-                        fontSize: "0.85rem",
-                      }}
+                      style={{ width: kgWidth, fontSize: "0.85rem" }}
                     />
 
                     <input
                       className="form-control"
                       type="number"
                       inputMode="numeric"
-                      placeholder="Reps"
+                      placeholder="reps"
                       onChange={(e) =>
-                        onUpdateSet(sub.exercise_id, setIdx + 1, {
-                          reps: Number(e.target.value) || null,
-                        })
+                        onUpdateSet(sub.exercise_id, setIdx + 1, { reps: Number(e.target.value) || null })
                       }
-                      style={{
-                        maxWidth: "60px",
-                        flex: "0 0 auto",
-                        fontSize: "0.85rem",
-                      }}
+                      style={{ width: repsWidth, fontSize: "0.85rem" }}
                     />
                   </div>
                 </div>
