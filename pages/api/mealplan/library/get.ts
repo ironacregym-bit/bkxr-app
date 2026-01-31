@@ -4,7 +4,6 @@ import { authOptions } from "../../auth/[...nextauth]";
 import firestore from "../../../../lib/firestoreClient";
 
 /**
- * Plan shape:
  * meal_plan_library/{planId}:
  * {
  *   title: string,
@@ -29,11 +28,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ref = firestore.collection("meal_plan_library").doc(planId);
     const snap = await ref.get();
     if (!snap.exists) return res.status(404).json({ error: "Plan not found" });
-
-    const data = snap.data() || {};
-    return res.status(200).json({ id: snap.id, ...data });
+    return res.status(200).json({ id: snap.id, ...(snap.data() as any) });
   } catch (e: any) {
-    console.error("[mealplans/library/get]", e?.message || e);
+    console.error("[mealplan/library/get]", e?.message || e);
     return res.status(500).json({ error: "Failed to load plan" });
   }
 }
