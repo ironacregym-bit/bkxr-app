@@ -1,17 +1,16 @@
-
-// pages/workouts/[id].tsx
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import useSWR from "swr";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import BottomNav from "../../components/BottomNav";
 
 const ACCENT = "#FF8A2A";
-const fetcher = (u: string) => fetch(u).then((r) => {
-  if (!r.ok) throw new Error(`Failed: ${r.status}`);
-  return r.json();
-});
+const fetcher = (u: string) =>
+  fetch(u).then((r) => {
+    if (!r.ok) throw new Error(`Failed: ${r.status}`);
+    return r.json();
+  });
 
 /** Centralise the URL here so you can switch endpoints easily */
 function buildUrl(id: string | string[] | undefined) {
@@ -136,10 +135,15 @@ function SupersetView({ item }: { item: SupersetItem }) {
 
       <div className="mt-2">
         {(item.items || []).map((s, i) => (
-          <div key={i} className="d-flex align-items-center gap-2 small py-1"
-               style={{ borderBottom: "1px dashed rgba(255,255,255,0.1)" }}>
+          <div
+            key={i}
+            className="d-flex align-items-center gap-2 small py-1"
+            style={{ borderBottom: "1px dashed rgba(255,255,255,0.1)" }}
+          >
             <span className="text-dim">#{i + 1}</span>
-            <span className="fw-semibold">{s.exercise_name || s.exercise_id || "Exercise"}</span>
+            <span className="fw-semibold">
+              {s.exercise_name || s.exercise_id || "Exercise"}
+            </span>
             <span className="text-dim ms-auto">
               {s.reps ? `${s.reps}` : ""}
               {(s.weight_kg ?? null) !== null ? ` • ${s.weight_kg} kg` : ""}
@@ -156,16 +160,102 @@ function SupersetView({ item }: { item: SupersetItem }) {
   );
 }
 
+type LastCompletion = {
+  workout_id?: string;
+  calories_burned?: number;
+  duration?: number; // minutes
+  difficulty?: string;
+  completed_date?: string | { seconds: number; nanoseconds: number };
+  weight_completed_with?: string | number;
+  notes?: string;
+};
+
+function toISODate(v: any): string | null {
+  if (!v) return null;
+  const d =
+    typeof v?.toDate === "function"
+      ? v.toDate()
+      : v?.seconds
+      ? new Date(v.seconds * 1000)
+      : typeof v === "string"
+      ? new Date(v)
+      : null;
+  return d && !isNaN(d.getTime()) ? d.toISOString() : null;
+}
+
 export default function WorkoutDetailPage() {
   const router = useRouter();
   const { id } = router.query;
   const url = buildUrl(id);
+  const workoutId = typeof id === "string" ? id : null;
 
   const { data, error, isValidating } = useSWR<Workout>(url, fetcher, {
     revalidateOnFocus: false,
   });
 
+  const lastKey =
+    workoutId ? `/api/completions/last?workout_id=${encodeURIComponent(workoutId)}` : null;
+  const { data: lastJson, error: lastErr } = useSWR<LastCompletion>(lastKey, (u) =>
+    fetch(u).then((r) => (r.ok ? r.json() : null))
+  );
+  const last = lastJson || null;
+
   const loading = !error && (!data || isValidating);
+
+  // ---- Complete modal
+  const [showComplete, setShowComplete] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  const [calories, setCalories] = useState<string>("");
+  const [duration, setDuration] = useState<string>("");
+  const [difficulty, setDifficulty] = useState<string>("");
+  const [weightUsed, setWeightUsed] = useState<string>("");
+  const [notes, setNotes] = useState<string>("");
+
+  const canSubmit =
+    !!workoutId &&
+    !saving &&
+    // we at least require calories OR duration to avoid empty submissions
+    (!!calories || !!duration || !!difficulty || !!notes || !!weightUsed);
+
+  async function submitCompletion(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit || !workoutId) return;
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const body: any = {
+        workout_id: workoutId,
+      };
+      if (calories) body.calories_burned = Number(calories);
+      if (duration) body.duration = Number(duration); // minutes
+      if (difficulty) body.difficulty = String(difficulty);
+      if (weightUsed) body.weight_completed_with = isNaN(Number(weightUsed)) ? weightUsed : Number(weightUsed);
+      if (notes) body.notes = String(notes);
+
+      const res = await fetch("/api/completions/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error || `Failed (${res.status})`);
+
+      setSaveMsg("Saved ✅");
+      // Clear inputs but keep modal open so they can see the message
+      setCalories("");
+      setDuration("");
+      setDifficulty("");
+      setWeightUsed("");
+      setNotes("");
+    } catch (e: any) {
+      setSaveMsg(e?.message || "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <>
@@ -209,12 +299,29 @@ export default function WorkoutDetailPage() {
                 {data.owner_email ? <>Owner: <span className="text-light">{data.owner_email}</span></> : null}
               </div>
 
+              {/* Last completion chip */}
+              {!lastErr && last ? (
+                <div className="mt-2 small" style={{ opacity: 0.85 }}>
+                  <span className="badge rounded-pill" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#cbd5e1" }}>
+                    Last:{" "}
+                    {typeof last.calories_burned === "number" ? `${Math.round(last.calories_burned)} kcal` : "—"}{" "}
+                    · {typeof last.duration === "number" ? `${last.duration} min` : "—"}{" "}
+                    · {toISODate(last.completed_date) ? new Date(toISODate(last.completed_date)!).toLocaleString() : ""}
+                  </span>
+                </div>
+              ) : null}
+
               {data.notes ? <div className="mt-2">{data.notes}</div> : null}
 
               {data.video_url ? (
                 <div className="mt-2">
-                  <a className="btn btn-sm btn-bxkr-outline" href={data.video_url} target="_blank" rel="noreferrer"
-                     style={{ borderRadius: 24 }}>
+                  <a
+                    className="btn btn-sm btn-bxkr-outline"
+                    href={data.video_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ borderRadius: 24 }}
+                  >
                     Watch Video
                   </a>
                 </div>
@@ -238,10 +345,156 @@ export default function WorkoutDetailPage() {
               <Link className="btn btn-bxkr-outline" style={{ borderRadius: 24 }} href={`/admin/workouts/gym-create`}>
                 Create Another
               </Link>
+
+              {/* New: Complete workout */}
+              <button
+                className="btn btn-bxkr"
+                style={{
+                  borderRadius: 24,
+                  color: "#0b0f14",
+                  background: `linear-gradient(90deg, ${ACCENT}, #ff7f32)`,
+                }}
+                onClick={() => setShowComplete(true)}
+              >
+                Complete workout
+              </button>
             </div>
           </>
         )}
       </main>
+
+      {/* Complete workout modal */}
+      {showComplete && workoutId && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed top-0 left-0 w-100 h-100"
+          style={{
+            zIndex: 1050,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 12,
+          }}
+          onClick={() => !saving && setShowComplete(false)}
+        >
+          <div
+            className="futuristic-card p-3"
+            style={{ width: "100%", maxWidth: 720 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex align-items-center justify-content-between mb-2">
+              <h5 className="mb-0">Complete workout</h5>
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => !saving && setShowComplete(false)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="small text-dim">Log what you did. Calories burnt is the key field here.</div>
+
+            <form onSubmit={submitCompletion} className="mt-3">
+              <div className="row g-3">
+                <div className="col-6 col-md-4">
+                  <label className="form-label">Calories burnt (kcal)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={calories}
+                    onChange={(e) => setCalories(e.target.value)}
+                    placeholder="e.g., 420"
+                    inputMode="decimal"
+                    min={0}
+                  />
+                </div>
+                <div className="col-6 col-md-4">
+                  <label className="form-label">Duration (min)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                    placeholder="e.g., 55"
+                    inputMode="decimal"
+                    min={0}
+                  />
+                </div>
+                <div className="col-12 col-md-4">
+                  <label className="form-label">Difficulty</label>
+                  <select
+                    className="form-select"
+                    value={difficulty}
+                    onChange={(e) => setDifficulty(e.target.value)}
+                  >
+                    <option value="">—</option>
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                  </select>
+                </div>
+
+                <div className="col-12 col-md-6">
+                  <label className="form-label">Weight used (optional)</label>
+                  <input
+                    className="form-control"
+                    value={weightUsed}
+                    onChange={(e) => setWeightUsed(e.target.value)}
+                    placeholder="e.g., 24 kg kettlebell"
+                  />
+                </div>
+
+                <div className="col-12">
+                  <label className="form-label">Notes</label>
+                  <textarea
+                    className="form-control"
+                    rows={3}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Anything worth noting…"
+                  />
+                </div>
+              </div>
+
+              {saveMsg && (
+                <div
+                  className={`mt-3 alert ${saveMsg.includes("✅") ? "alert-success" : "alert-info"}`}
+                >
+                  {saveMsg}
+                </div>
+              )}
+
+              <div className="d-flex gap-2 mt-3">
+                <button
+                  type="submit"
+                  disabled={!canSubmit}
+                  className="btn"
+                  style={{
+                    borderRadius: 24,
+                    color: "#0a0a0c",
+                    background: canSubmit
+                      ? `linear-gradient(90deg, ${ACCENT}, #ff7f32)`
+                      : "linear-gradient(90deg, #777, #555)",
+                    border: "1px solid rgba(255,255,255,0.18)",
+                  }}
+                >
+                  {saving ? "Saving…" : "Save completion"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  style={{ borderRadius: 24 }}
+                  onClick={() => !saving && setShowComplete(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <BottomNav />
     </>
