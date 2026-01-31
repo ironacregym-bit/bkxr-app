@@ -8,25 +8,15 @@ type DayName = typeof DAYS[number];
 
 function isYMD(s: string) { return /^\d{4}-\d{2}-\d{2}$/.test(s); }
 const toISO = (d = new Date()) => d.toISOString();
-const parseYMD = (s: string): Date => {
-  const [y, m, dd] = s.split("-").map(Number);
-  return new Date(y, m - 1, dd, 12, 0, 0, 0); // 12:00 to avoid TZ drift
-};
-function addDays(d: Date, n: number): Date {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-function formatYMD(d: Date): string {
-  return d.toLocaleDateString("en-CA");
-}
+const parseYMD = (s: string): Date => { const [y,m,dd]=s.split("-").map(Number); return new Date(y, m-1, dd, 12,0,0,0); };
+function addDays(d: Date, n: number) { const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function formatYMD(d: Date) { return d.toLocaleDateString("en-CA"); }
 
 type AssignBody = {
   plan_id: string;
-  start_date: string; // YYYY-MM-DD (Monday recommended but not required)
+  start_date: string; // YYYY-MM-DD
   weeks: number;      // 1..12
-  people?: number;    // used when generating shopping lists later; items multiplier remains per-serving by default
-  overwrite?: boolean;// clear existing items for this plan within range
+  overwrite?: boolean;
 };
 
 type PlanItem = {
@@ -73,7 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Premium gate
     const userSnap = await firestore.collection("users").doc(email).get();
     const user = userSnap.exists ? (userSnap.data() as any) : {};
-    const subscription = String(user.subscription_status || "").toLowerCase(); // "active"|"trialing"|...
+    const subscription = String(user.subscription_status || "").toLowerCase();
     const isPremium = subscription === "active" || subscription === "trialing";
     if (tier === "premium" && !isPremium) {
       return res.status(402).json({ error: "Premium plan requires an active subscription" });
@@ -86,7 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const start = parseYMD(start_date);
     const end = addDays(start, nWeeks * 7 - 1);
 
-    // Create assignment record
+    // Assignment record
     const assignRef = firestore.collection("meal_plan_assignments").doc();
     const assignment = {
       assignment_id: assignRef.id,
@@ -99,41 +89,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       created_by: (session.user as any)?.email || null,
     };
 
-    // Build per-day lists from plan
+    // Build per-day mapping from plan
     const daysCount = Math.round((end.getTime() - start.getTime()) / (24*3600*1000)) + 1;
     const perDay: Record<string, PlanItem[]> = {};
     for (let i = 0; i < daysCount; i++) {
-      const day = addDays(start, i);
-      const ymd = formatYMD(day);
-      const name = DAYS[day.getDay()];
+      const d = addDays(start, i);
+      const ymd = formatYMD(d);
+      const name = DAYS[d.getDay()];
       const todays = items.filter((it) => it.day === name);
       if (todays.length) perDay[ymd] = todays;
     }
 
-    // Optional overwrite: remove older plan-injected items for this plan within range
+    // Optional: remove previous items for this plan in the range
     const batch = firestore.batch();
     if (overwrite) {
       const ymds = Object.keys(perDay);
       for (const ymd of ymds) {
         const itemsColl = firestore.collection("meal_plans").doc(email).collection("days").doc(ymd).collection("items");
-        // Query items that were created from this plan (we write 'source.plan_id' field when materialising)
         const oldSnap = await itemsColl.where("source.plan_id", "==", plan_id).limit(500).get();
         oldSnap.forEach((doc) => batch.delete(doc.ref));
       }
     }
 
-    // Cache recipes to reduce reads
-    const recipeCache = new Map<string, RecipeDoc>();
-    async function getRecipe(recipeId: string): Promise<RecipeDoc | null> {
-      if (recipeCache.has(recipeId)) return recipeCache.get(recipeId)!;
+    // Cache recipes
+    const recipeCache = new Map<string, RecipeDoc | null>();
+    async function getRecipe(recipeId: string) {
+      if (recipeCache.has(recipeId)) return recipeCache.get(recipeId);
       const r = await firestore.collection("recipes").doc(recipeId).get();
-      if (!r.exists) { recipeCache.set(recipeId, null as any); return null; }
+      if (!r.exists) { recipeCache.set(recipeId, null); return null; }
       const data = (r.data() || {}) as RecipeDoc;
       recipeCache.set(recipeId, data);
       return data;
     }
 
-    // Materialise items
+    // Materialise day items
     const nowIso = toISO();
     for (const [ymd, rows] of Object.entries(perDay)) {
       const dayRef = firestore.collection("meal_plans").doc(email).collection("days").doc(ymd);
@@ -159,7 +148,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // Commit assignment + items
     batch.set(assignRef, assignment, { merge: true });
     await batch.commit();
 
@@ -172,7 +160,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       weeks: nWeeks,
     });
   } catch (e: any) {
-    console.error("[mealplans/assign]", e?.message || e);
+    console.error("[mealplan/assign]", e?.message || e);
     return res.status(500).json({ error: "Failed to assign meal plan" });
   }
 }
