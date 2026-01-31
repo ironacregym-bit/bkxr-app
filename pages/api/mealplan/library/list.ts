@@ -9,7 +9,7 @@ type PlanSummary = {
   tier: "free" | "premium";
   description?: string | null;
   image?: string | null;
-  locked?: boolean; // true if tier=premium but user not subscribed
+  locked?: boolean; // premium but user not subscribed
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -25,12 +25,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const userSnap = await firestore.collection("users").doc(email).get();
     const user = userSnap.exists ? (userSnap.data() as any) : {};
-    const subscription = String(user.subscription_status || "").toLowerCase(); // e.g., "active", "trialing"
+    const subscription = String(user.subscription_status || "").toLowerCase(); // "active"|"trialing"|...
     const isPremium = subscription === "active" || subscription === "trialing";
 
     const tierFilter = String(req.query.tier || "").trim().toLowerCase(); // optional: free|premium
     let ref: FirebaseFirestore.Query = firestore.collection("meal_plan_library").orderBy("title");
-
     if (tierFilter && (tierFilter === "free" || tierFilter === "premium")) {
       ref = ref.where("tier", "==", tierFilter);
     }
@@ -51,7 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({ plans, isPremium });
   } catch (e: any) {
-    console.error("[mealplans/library/list]", e?.message || e);
+    console.error("[mealplan/library/list]", e?.message || e);
     return res.status(500).json({ error: "Failed to list meal plans" });
   }
 }
