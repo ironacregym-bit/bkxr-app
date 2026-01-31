@@ -3,9 +3,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
 import firestore from "../../../../lib/firestoreClient";
 
-const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"] as const;
-const isMeal = (s: any) => ["breakfast","lunch","dinner","snack"].includes(String(s || "").toLowerCase());
-const isDay = (s: any) => (DAYS as readonly string[]).includes(String(s || ""));
+const isMeal = (s: any) =>
+  ["breakfast","lunch","dinner","snack"].includes(String(s || "").toLowerCase());
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -14,7 +13,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   const session = await getServerSession(req, res, authOptions);
   const role = (session?.user as any)?.role || "user";
-  if (!session?.user?.email || (role !== "admin" && role !== "gym")) return res.status(401).json({ error: "Unauthorized" });
+  if (!session?.user?.email || (role !== "admin" && role !== "gym"))
+    return res.status(401).json({ error: "Unauthorized" });
 
   try {
     const { plans } = req.body || {};
@@ -31,15 +31,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const tier = String(p?.tier || "free").toLowerCase();
       if (!["free","premium"].includes(tier)) continue;
 
-      const items = Array.isArray(p?.items) ? p.items : [];
-      const cleanItems = items
-        .filter((it: any) => it?.recipe_id && isDay(it?.day) && isMeal(it?.meal_type))
-        .map((it: any) => ({
-          day: String(it.day),
-          meal_type: String(it.meal_type).toLowerCase(),
-          recipe_id: String(it.recipe_id),
-          default_multiplier: it.default_multiplier != null ? Number(it.default_multiplier) : undefined,
-        }));
+      const itemsIn = Array.isArray(p?.items) ? p.items : [];
+      if (!itemsIn.length) continue;
+      const cleanItems = itemsIn
+        .filter((it: any) => it?.recipe_id)
+        .map((it: any) => {
+          const out: any = { recipe_id: String(it.recipe_id) };
+          if (it.meal_type && isMeal(it.meal_type)) out.meal_type = String(it.meal_type).toLowerCase();
+          if (it.default_multiplier != null) out.default_multiplier = Number(it.default_multiplier) || 1;
+          return out;
+        });
 
       const ref = col.doc();
       await ref.set({
