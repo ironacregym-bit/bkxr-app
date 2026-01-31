@@ -4,175 +4,78 @@ import { authOptions } from "../auth/[...nextauth]";
 import firestore from "../../../lib/firestoreClient";
 
 const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"] as const;
-type DayName = typeof DAYS[number];
-
-function isYMD(s: string) { return /^\d{4}-\d{2}-\d{2}$/.test(s); }
-const toISO = (d = new Date()) => d.toISOString();
-const parseYMD = (s: string): Date => {
-  const [y, m, dd] = s.split("-").map(Number);
-  return new Date(y, m - 1, dd, 12, 0, 0, 0); // 12:00 to avoid TZ drift
-};
-function addDays(d: Date, n: number): Date {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-function formatYMD(d: Date): string {
-  return d.toLocaleDateString("en-CA");
-}
-
-type AssignBody = {
-  plan_id: string;
-  start_date: string; // YYYY-MM-DD (Monday recommended but not required)
-  weeks: number;      // 1..12
-  people?: number;    // used when generating shopping lists later; items multiplier remains per-serving by default
-  overwrite?: boolean;// clear existing items for this plan within range
-};
-
-type PlanItem = {
-  day: DayName;
-  meal_type: "breakfast"|"lunch"|"dinner"|"snack";
-  recipe_id: string;
-  default_multiplier?: number;
-};
-
-type RecipeDoc = {
-  title?: string;
-  image?: string | null;
-  per_serving?: { calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number };
-};
-
-function scaleMacros(per: any, mul: number) {
-  const out: any = {};
-  for (const [k, v] of Object.entries(per || {})) {
-    out[k] = typeof v === "number" ? Number((v * mul).toFixed(2)) : v;
-  }
-  return out;
-}
+function startOfAlignedWeek(d: Date) { const day = d.getDay(); const diffToMon = (day + 6) % 7; const s = new Date(d); s.setDate(d.getDate() - diffToMon); s.setHours(0,0,0,0); return s; }
+function formatYMD(d: Date) { return d.toLocaleDateString("en-CA"); }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") { res.setHeader("Allow","POST"); return res.status(405).json({ error: "Method not allowed" }); }
+  if (req.method !== "GET") { res.setHeader("Allow","GET"); return res.status(405).json({ error: "Method not allowed" }); }
   const session = await getServerSession(req, res, authOptions);
   const email = session?.user?.email || "";
   if (!email) return res.status(401).json({ error: "Unauthorized" });
 
   try {
-    const body = (req.body || {}) as AssignBody;
-    const { plan_id, start_date, weeks, overwrite } = body;
-    if (!plan_id) return res.status(400).json({ error: "plan_id required" });
-    if (!isYMD(start_date)) return res.status(400).json({ error: "start_date must be YYYY-MM-DD" });
-    const nWeeks = Math.min(Math.max(Number(weeks || 1), 1), 12);
+    const today = new Date();
+    const weekStart = startOfAlignedWeek(today);
+    const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
 
-    // Load plan
-    const planRef = firestore.collection("meal_plan_library").doc(plan_id);
-    const planSnap = await planRef.get();
-    if (!planSnap.exists) return res.status(404).json({ error: "Plan not found" });
-    const plan = planSnap.data() as any;
-    const tier = String(plan.tier || "free").toLowerCase();
+    // Find overlapping active assignment (latest created wins)
+    const q = firestore
+      .collection("meal_plan_assignments")
+      .where("user_email", "==", email)
+      .where("status", "==", "active")
+      .where("start_date", "<=", weekEnd);
 
-    // Premium gate
-    const userSnap = await firestore.collection("users").doc(email).get();
-    const user = userSnap.exists ? (userSnap.data() as any) : {};
-    const subscription = String(user.subscription_status || "").toLowerCase(); // "active"|"trialing"|...
-    const isPremium = subscription === "active" || subscription === "trialing";
-    if (tier === "premium" && !isPremium) {
-      return res.status(402).json({ error: "Premium plan requires an active subscription" });
+    const snap = await q.get();
+    const overlapping = snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as any) }))
+      .filter((a) => {
+        const s = a.start_date?.toDate?.() || new Date(a.start_date);
+        const e = a.end_date?.toDate?.() || new Date(a.end_date);
+        return !(e < weekStart || s > weekEnd);
+      })
+      .sort((a, b) => {
+        const ac = (a.created_at?.toDate?.() || new Date(a.created_at || 0)).getTime();
+        const bc = (b.created_at?.toDate?.() || new Date(b.created_at || 0)).getTime();
+        return bc - ac;
+      });
+
+    const assignment = overlapping[0] || null;
+    if (!assignment) return res.status(200).json({ assignment: null, week: [], plan: null });
+
+    const planSnap = await firestore.collection("meal_plan_library").doc(String(assignment.plan_id)).get();
+    const plan = planSnap.exists ? { id: planSnap.id, ...(planSnap.data() as any) } : null;
+
+    const out: Array<{ ymd: string; day: string; items: any[] }> = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
+      const ymd = formatYMD(d);
+      const dayName = DAYS[d.getDay()];
+      const itemsRef = firestore
+        .collection("meal_plans")
+        .doc(email)
+        .collection("days")
+        .doc(ymd)
+        .collection("items")
+        .where("source.plan_id", "==", String(assignment.plan_id));
+
+      const itemsSnap = await itemsRef.limit(200).get();
+      const items = itemsSnap.docs.map((x) => ({ id: x.id, ...(x.data() as any) }));
+      out.push({ ymd, day: dayName, items });
     }
 
-    const items: PlanItem[] = Array.isArray(plan.items) ? plan.items : [];
-    if (!items.length) return res.status(400).json({ error: "Plan has no items" });
-
-    // Date range
-    const start = parseYMD(start_date);
-    const end = addDays(start, nWeeks * 7 - 1);
-
-    // Create assignment record
-    const assignRef = firestore.collection("meal_plan_assignments").doc();
-    const assignment = {
-      assignment_id: assignRef.id,
-      user_email: email,
-      plan_id,
-      start_date: start,
-      end_date: end,
-      status: "active" as const,
-      created_at: new Date(),
-      created_by: (session.user as any)?.email || null,
-    };
-
-    // Build per-day lists from plan
-    const daysCount = Math.round((end.getTime() - start.getTime()) / (24*3600*1000)) + 1;
-    const perDay: Record<string, PlanItem[]> = {};
-    for (let i = 0; i < daysCount; i++) {
-      const day = addDays(start, i);
-      const ymd = formatYMD(day);
-      const name = DAYS[day.getDay()];
-      const todays = items.filter((it) => it.day === name);
-      if (todays.length) perDay[ymd] = todays;
-    }
-
-    // Optional overwrite: remove older plan-injected items for this plan within range
-    const batch = firestore.batch();
-    if (overwrite) {
-      const ymds = Object.keys(perDay);
-      for (const ymd of ymds) {
-        const itemsColl = firestore.collection("meal_plans").doc(email).collection("days").doc(ymd).collection("items");
-        // Query items that were created from this plan (we write 'source.plan_id' field when materialising)
-        const oldSnap = await itemsColl.where("source.plan_id", "==", plan_id).limit(500).get();
-        oldSnap.forEach((doc) => batch.delete(doc.ref));
-      }
-    }
-
-    // Cache recipes to reduce reads
-    const recipeCache = new Map<string, RecipeDoc>();
-    async function getRecipe(recipeId: string): Promise<RecipeDoc | null> {
-      if (recipeCache.has(recipeId)) return recipeCache.get(recipeId)!;
-      const r = await firestore.collection("recipes").doc(recipeId).get();
-      if (!r.exists) { recipeCache.set(recipeId, null as any); return null; }
-      const data = (r.data() || {}) as RecipeDoc;
-      recipeCache.set(recipeId, data);
-      return data;
-    }
-
-    // Materialise items
-    const nowIso = toISO();
-    for (const [ymd, rows] of Object.entries(perDay)) {
-      const dayRef = firestore.collection("meal_plans").doc(email).collection("days").doc(ymd);
-      for (const row of rows) {
-        const rec = await getRecipe(row.recipe_id);
-        if (!rec) continue;
-        const multiplier = Number(row.default_multiplier || 1);
-        const per = rec.per_serving || {};
-        const scaled = scaleMacros(per, multiplier);
-        const payload = {
-          recipe_id: row.recipe_id,
-          title: rec.title || "Recipe",
-          meal_type: row.meal_type,
-          image: rec.image || null,
-          multiplier,
-          per_serving: per,
-          scaled,
-          added_at: nowIso,
-          source: { type: "plan", plan_id, assignment_id: assignRef.id },
-        };
-        const newRef = dayRef.collection("items").doc();
-        batch.set(newRef, payload, { merge: true });
-      }
-    }
-
-    // Commit assignment + items
-    batch.set(assignRef, assignment, { merge: true });
-    await batch.commit();
-
-    return res.status(201).json({
-      ok: true,
-      assignment_id: assignRef.id,
-      plan_id,
-      start_date: start.toISOString(),
-      end_date: end.toISOString(),
-      weeks: nWeeks,
+    return res.status(200).json({
+      assignment: {
+        id: assignment.assignment_id || String(assignment.id),
+        plan_id: assignment.plan_id,
+        start_date: (assignment.start_date?.toDate?.() || new Date(assignment.start_date)).toISOString(),
+        end_date: (assignment.end_date?.toDate?.() || new Date(assignment.end_date)).toISOString(),
+        status: assignment.status || "active",
+      },
+      plan,
+      week: out,
     });
   } catch (e: any) {
-    console.error("[mealplans/assign]", e?.message || e);
-    return res.status(500).json({ error: "Failed to assign meal plan" });
+    console.error("[mealplan/my]", e?.message || e);
+    return res.status(500).json({ error: "Failed to load current plan" });
   }
 }
