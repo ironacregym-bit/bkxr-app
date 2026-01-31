@@ -3,13 +3,10 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
 import firestore from "../../../../lib/firestoreClient";
 
-const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"] as const;
-type DayName = typeof DAYS[number];
 type MealType = "breakfast"|"lunch"|"dinner"|"snack";
 
 type PlanItem = {
-  day: DayName;
-  meal_type: MealType;
+  meal_type?: MealType;           // optional
   recipe_id: string;
   default_multiplier?: number;
 };
@@ -23,12 +20,8 @@ type Plan = {
   items: PlanItem[];
 };
 
-function isDayName(s: string): s is DayName {
-  return (DAYS as readonly string[]).includes(s);
-}
-function isMealType(s: string): s is MealType {
-  return ["breakfast","lunch","dinner","snack"].includes(s);
-}
+const isMeal = (s: string) =>
+  ["breakfast","lunch","dinner","snack"].includes(String(s || "").toLowerCase());
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -48,15 +41,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const tier = String(plan.tier || "free").toLowerCase();
     if (!["free","premium"].includes(tier)) return res.status(400).json({ error: "tier must be 'free' or 'premium'" });
 
-    const items: PlanItem[] = Array.isArray(plan.items) ? plan.items : [];
-    for (const [idx, it] of items.entries()) {
-      if (!it?.recipe_id) return res.status(400).json({ error: `items[${idx}].recipe_id required` });
-      if (!isDayName(String(it.day))) return res.status(400).json({ error: `items[${idx}].day invalid` });
-      if (!isMealType(String(it.meal_type))) return res.status(400).json({ error: `items[${idx}].meal_type invalid` });
-      if (it.default_multiplier != null && (!Number.isFinite(Number(it.default_multiplier)) || Number(it.default_multiplier) <= 0)) {
-        return res.status(400).json({ error: `items[${idx}].default_multiplier must be > 0` });
+    const itemsIn: any[] = Array.isArray(plan.items) ? plan.items : [];
+    if (!itemsIn.length) return res.status(400).json({ error: "items must include at least one meal" });
+
+    // Validate items (no day)
+    const items: PlanItem[] = itemsIn.map((it, idx) => {
+      if (!it?.recipe_id) throw new Error(`items[${idx}].recipe_id required`);
+      const out: PlanItem = {
+        recipe_id: String(it.recipe_id),
+      };
+      if (it.meal_type) {
+        const mt = String(it.meal_type).toLowerCase();
+        if (!isMeal(mt)) throw new Error(`items[${idx}].meal_type invalid`);
+        out.meal_type = mt as MealType;
       }
-    }
+      if (it.default_multiplier != null) {
+        const m = Number(it.default_multiplier);
+        if (!Number.isFinite(m) || m <= 0) throw new Error(`items[${idx}].default_multiplier must be > 0`);
+        out.default_multiplier = m;
+      }
+      return out;
+    });
 
     const clean: Plan = {
       id: plan.id || undefined,
@@ -64,12 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       tier: tier === "premium" ? "premium" : "free",
       description: plan.description ? String(plan.description) : null,
       image: plan.image ? String(plan.image) : null,
-      items: items.map((x) => ({
-        day: x.day,
-        meal_type: x.meal_type,
-        recipe_id: String(x.recipe_id),
-        default_multiplier: x.default_multiplier != null ? Number(x.default_multiplier) : undefined,
-      })),
+      items,
     };
 
     const col = firestore.collection("meal_plan_library");
@@ -106,7 +106,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(201).json({ ok: true, id: ref.id, created: true });
     }
   } catch (e: any) {
-    console.error("[mealplan/library/upsert]", e?.message || e);
-    return res.status(500).json({ error: "Failed to save meal plan" });
+    const msg = e?.message || e;
+    console.error("[mealplan/library/upsert]", msg);
+    return res.status(500).json({ error: String(msg).startsWith("items[") ? msg : "Failed to save meal plan" });
   }
 }
