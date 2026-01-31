@@ -7,29 +7,23 @@ import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../../components/BottomNav";
 
-type DayName = "Sunday"|"Monday"|"Tuesday"|"Wednesday"|"Thursday"|"Friday"|"Saturday";
-type MealType = "breakfast"|"lunch"|"dinner"|"snack";
-
+type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 type PlanItem = {
-  day: DayName;
-  meal_type: MealType;
+  meal_type?: MealType;
   recipe_id: string;
   default_multiplier?: number;
-  // local UI
+  // local-only helper
   recipe_title?: string;
 };
-
 type Plan = {
   id?: string;
   title: string;
-  tier: "free"|"premium";
+  tier: "free" | "premium";
   description?: string;
   image?: string | null;
   items: PlanItem[];
 };
-
-type PlanSummary = { id: string; title: string; tier: "free"|"premium"; description?: string|null; image?: string|null; locked?: boolean };
-
+type PlanSummary = { id: string; title: string; tier: "free" | "premium"; description?: string | null; image?: string | null };
 type RecipeSummary = {
   id: string;
   title: string;
@@ -40,8 +34,7 @@ type RecipeSummary = {
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const ACCENT = "#FF8A2A";
-const DAYS: DayName[] = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-const MEALS: MealType[] = ["breakfast","lunch","dinner","snack"];
+const MEALS: MealType[] = ["breakfast", "lunch", "dinner", "snack"];
 
 export default function AdminMealPlans() {
   const { data: session, status } = useSession();
@@ -51,13 +44,17 @@ export default function AdminMealPlans() {
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Filters for library
-  const [tierFilter, setTierFilter] = useState<"all"|"free"|"premium">("all");
-  const plansKey = authed ? `/api/mealplan/library/list${tierFilter==="all" ? "" : `?tier=${tierFilter}`}` : null;
-  const { data: plansResp, mutate: mutatePlans } = useSWR<{ plans: PlanSummary[] }>(plansKey, fetcher, { revalidateOnFocus: false, dedupingInterval: 20_000 });
+  // Library filter
+  const [tierFilter, setTierFilter] = useState<"all" | "free" | "premium">("all");
+  const plansKey = authed ? `/api/mealplan/library/list${tierFilter === "all" ? "" : `?tier=${tierFilter}`}` : null;
+  const { data: plansResp, mutate: mutatePlans } = useSWR<{ plans: PlanSummary[] }>(
+    plansKey,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 20_000 }
+  );
   const plans = useMemo(() => plansResp?.plans || [], [plansResp]);
 
-  // Recipes (for picker)
+  // Recipes for picker
   const [recipeFilter, setRecipeFilter] = useState<MealType | "all">("all");
   const [recipeQ, setRecipeQ] = useState<string>("");
   const recipeQuery = useMemo(() => {
@@ -67,10 +64,14 @@ export default function AdminMealPlans() {
     p.set("limit", "200");
     return `/api/recipes/list${p.toString() ? `?${p.toString()}` : ""}`;
   }, [recipeFilter, recipeQ]);
-  const { data: recipesResp } = useSWR<{ recipes: RecipeSummary[] }>(authed ? recipeQuery : null, fetcher, { revalidateOnFocus: false, dedupingInterval: 20_000 });
+  const { data: recipesResp } = useSWR<{ recipes: RecipeSummary[] }>(
+    authed ? recipeQuery : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 20_000 }
+  );
   const recipes = useMemo(() => recipesResp?.recipes || [], [recipesResp]);
 
-  // Single plan form
+  // Form state
   const [p, setP] = useState<Plan>({
     title: "",
     tier: "free",
@@ -79,7 +80,7 @@ export default function AdminMealPlans() {
     items: [],
   });
 
-  // Bulk JSON import
+  // Bulk JSON
   const [bulk, setBulk] = useState<string>("");
 
   useEffect(() => {
@@ -95,7 +96,9 @@ export default function AdminMealPlans() {
         <main className="container py-4">
           <h3>Access denied</h3>
           <p>You need admin or gym role to manage meal plans.</p>
-          <Link href="/admin" className="btn-bxkr-outline"><i className="fas fa-arrow-left me-1" /> Back to Admin</Link>
+          <Link href="/admin" className="btn-bxkr-outline">
+            <i className="fas fa-arrow-left me-1" /> Back to Admin
+          </Link>
         </main>
         <BottomNav />
       </>
@@ -105,10 +108,9 @@ export default function AdminMealPlans() {
   function addItem() {
     setP((prev) => ({
       ...prev,
-      items: [...prev.items, { day: "Monday", meal_type: "dinner", recipe_id: "", default_multiplier: 1 }],
+      items: [...prev.items, { meal_type: undefined, recipe_id: "", default_multiplier: 1 }],
     }));
   }
-
   function updateItem(idx: number, patch: Partial<PlanItem>) {
     setP((prev) => {
       const next = [...prev.items];
@@ -116,7 +118,6 @@ export default function AdminMealPlans() {
       return { ...prev, items: next };
     });
   }
-
   function removeItem(idx: number) {
     setP((prev) => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }));
   }
@@ -127,12 +128,13 @@ export default function AdminMealPlans() {
       .then((r) => r.json())
       .then((j) => {
         if (!j?.id) throw new Error("Plan not found");
-        const items: PlanItem[] = Array.isArray(j.items) ? j.items.map((it: any) => ({
-          day: it.day,
-          meal_type: it.meal_type,
-          recipe_id: it.recipe_id,
-          default_multiplier: it.default_multiplier != null ? Number(it.default_multiplier) : undefined,
-        })) : [];
+        const items: PlanItem[] = Array.isArray(j.items)
+          ? j.items.map((it: any) => ({
+              meal_type: it.meal_type || undefined,
+              recipe_id: String(it.recipe_id),
+              default_multiplier: it.default_multiplier != null ? Number(it.default_multiplier) : 1,
+            }))
+          : [];
         setP({
           id: j.id,
           title: j.title || "Meal Plan",
@@ -151,15 +153,14 @@ export default function AdminMealPlans() {
     setBusy(true); setMsg(null);
     try {
       if (!p.title.trim()) throw new Error("Title required");
-      if (!["free","premium"].includes(p.tier)) throw new Error("Tier invalid");
+      if (!["free", "premium"].includes(p.tier)) throw new Error("Tier invalid");
       if (!Array.isArray(p.items) || p.items.length === 0) throw new Error("At least one item required");
       for (const [i, it] of p.items.entries()) {
-        if (!it.recipe_id) throw new Error(`Item ${i+1}: recipe required`);
-        if (!DAYS.includes(it.day)) throw new Error(`Item ${i+1}: day invalid`);
-        if (!MEALS.includes(it.meal_type)) throw new Error(`Item ${i+1}: meal type invalid`);
+        if (!it.recipe_id) throw new Error(`Item ${i + 1}: recipe required`);
         const m = it.default_multiplier != null ? Number(it.default_multiplier) : 1;
-        if (!Number.isFinite(m) || m <= 0) throw new Error(`Item ${i+1}: multiplier must be > 0`);
+        if (!Number.isFinite(m) || m <= 0) throw new Error(`Item ${i + 1}: multiplier must be > 0`);
       }
+
       const clean: Plan = {
         id: p.id,
         title: p.title.trim(),
@@ -167,12 +168,12 @@ export default function AdminMealPlans() {
         description: p.description?.trim() || "",
         image: p.image?.trim() || "",
         items: p.items.map((it) => ({
-          day: it.day,
           meal_type: it.meal_type,
           recipe_id: it.recipe_id,
           default_multiplier: it.default_multiplier != null ? Number(it.default_multiplier) : 1,
         })),
       };
+
       const r = await fetch("/api/mealplan/library/upsert", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan: clean }),
@@ -238,13 +239,15 @@ export default function AdminMealPlans() {
         <section className="futuristic-card p-3 mb-3">
           <div className="d-flex align-items-center justify-content-between flex-wrap" style={{ gap: 8 }}>
             <div className="d-flex align-items-center gap-2">
-              <Link href="/admin" className="btn-bxkr-outline"><i className="fas fa-arrow-left me-1" /> Back</Link>
+              <Link href="/admin" className="btn-bxkr-outline">
+                <i className="fas fa-arrow-left me-1" /> Back
+              </Link>
               <h4 className="m-0">Meal Plans</h4>
             </div>
             <div className="d-flex gap-2">
-              <button className="btn-bxkr-outline" aria-pressed={tierFilter==="all"} onClick={() => setTierFilter("all")}>All</button>
-              <button className="btn-bxkr-outline" aria-pressed={tierFilter==="free"} onClick={() => setTierFilter("free")}>Free</button>
-              <button className="btn-bxkr-outline" aria-pressed={tierFilter==="premium"} onClick={() => setTierFilter("premium")}>Premium</button>
+              <button className="btn-bxkr-outline" aria-pressed={tierFilter === "all"} onClick={() => setTierFilter("all")}>All</button>
+              <button className="btn-bxkr-outline" aria-pressed={tierFilter === "free"} onClick={() => setTierFilter("free")}>Free</button>
+              <button className="btn-bxkr-outline" aria-pressed={tierFilter === "premium"} onClick={() => setTierFilter("premium")}>Premium</button>
             </div>
           </div>
           {msg && <div className={`alert ${msg.includes("✅") ? "alert-success" : "alert-info"} mt-2`}>{msg}</div>}
@@ -284,50 +287,43 @@ export default function AdminMealPlans() {
               <div className="table-responsive">
                 <table className="bxkr-table">
                   <thead>
-                    <tr><th>Day</th><th>Meal</th><th>Recipe</th><th>Multiplier</th><th /></tr>
+                    <tr><th>Meal (optional)</th><th>Recipe</th><th>Multiplier</th><th /></tr>
                   </thead>
                   <tbody>
                     {p.items.length === 0 && (
-                      <tr><td colSpan={5}><div className="text-dim">No items. Add one.</div></td></tr>
+                      <tr><td colSpan={4}><div className="text-dim">No items. Add one.</div></td></tr>
                     )}
                     {p.items.map((it, i) => {
-                      // Filter recipes optionally by meal type to keep dropdown short
-                      const filtered = recipes.filter(r => recipeFilter==="all" ? true : r.meal_type === recipeFilter);
+                      const filtered = recipes.filter(r => recipeFilter === "all" ? true : r.meal_type === recipeFilter);
                       return (
                         <tr key={i}>
-                          <td style={{ minWidth: 140 }}>
-                            <select className="form-select" value={it.day} onChange={(e) => updateItem(i, { day: e.target.value as DayName })}>
-                              {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-                            </select>
-                          </td>
-                          <td style={{ minWidth: 140 }}>
+                          <td style={{ minWidth: 160 }}>
                             <select
                               className="form-select"
-                              value={it.meal_type}
-                              onChange={(e) => updateItem(i, { meal_type: e.target.value as MealType })}
+                              value={it.meal_type || ""}
+                              onChange={(e) => updateItem(i, { meal_type: (e.target.value || undefined) as MealType })}
                             >
+                              <option value="">—</option>
                               {MEALS.map(m => <option key={m} value={m}>{m}</option>)}
                             </select>
                           </td>
-                          <td style={{ minWidth: 300 }}>
-                            <div className="d-flex gap-2">
-                              <select
-                                className="form-select"
-                                value={it.recipe_id}
-                                onChange={(e) => {
-                                  const rid = e.target.value;
-                                  const rec = recipes.find(r => r.id === rid);
-                                  updateItem(i, { recipe_id: rid, recipe_title: rec?.title });
-                                }}
-                              >
-                                <option value="">— Select recipe —</option>
-                                {filtered.map(r => (
-                                  <option key={r.id} value={r.id}>
-                                    {r.title} • {r.meal_type} • {Math.round(r.per_serving?.calories || 0)} kcal
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
+                          <td style={{ minWidth: 320 }}>
+                            <select
+                              className="form-select"
+                              value={it.recipe_id}
+                              onChange={(e) => {
+                                const rid = e.target.value;
+                                const rec = recipes.find(r => r.id === rid);
+                                updateItem(i, { recipe_id: rid, recipe_title: rec?.title });
+                              }}
+                            >
+                              <option value="">— Select recipe —</option>
+                              {filtered.map(r => (
+                                <option key={r.id} value={r.id}>
+                                  {r.title} • {r.meal_type} • {Math.round(r.per_serving?.calories || 0)} kcal
+                                </option>
+                              ))}
+                            </select>
                           </td>
                           <td style={{ width: 140 }}>
                             <input
@@ -348,7 +344,7 @@ export default function AdminMealPlans() {
                 </table>
               </div>
 
-              {/* Recipe filters (assist the dropdowns) */}
+              {/* Recipe filters for the picker */}
               <div className="d-flex align-items-end gap-2 mt-2 flex-wrap">
                 <div>
                   <label className="form-label">Recipe filter</label>
@@ -380,7 +376,7 @@ export default function AdminMealPlans() {
             rows={10}
             value={bulk}
             onChange={e => setBulk(e.target.value)}
-            placeholder='{"title":"BXKR Starter (Free)","tier":"free","description":"Simple high-protein week","items":[{"day":"Monday","meal_type":"breakfast","recipe_id":"<id>","default_multiplier":1},{"day":"Monday","meal_type":"dinner","recipe_id":"<id>"}]}'
+            placeholder='{"title":"BXKR Starter (Free)","tier":"free","description":"Simple high-protein set","items":[{"meal_type":"breakfast","recipe_id":"<id>","default_multiplier":1},{"meal_type":"dinner","recipe_id":"<id>"}]}'
           />
           <div className="mt-2 d-flex gap-2">
             <button className="btn-bxkr" onClick={importBulk} disabled={busy}>
@@ -388,7 +384,7 @@ export default function AdminMealPlans() {
             </button>
           </div>
           <div className="text-dim mt-2" style={{ fontSize: 13 }}>
-            Paste a single object or an array of plan objects. Items require valid day/meal_type and recipe_id.
+            Paste a single object or an array of plan objects. Items require a valid recipe_id; meal_type is optional.
           </div>
         </section>
 
