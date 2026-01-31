@@ -1,8 +1,9 @@
+// pages/workouts/[id].tsx
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import useSWR from "swr";
-import { useMemo, useState, useEffect } from "react";
+import useSWR, { mutate as globalMutate } from "swr";
+import { useMemo, useState } from "react";
 import BottomNav from "../../components/BottomNav";
 
 const ACCENT = "#FF8A2A";
@@ -189,14 +190,18 @@ export default function WorkoutDetailPage() {
   const url = buildUrl(id);
   const workoutId = typeof id === "string" ? id : null;
 
-  const { data, error, isValidating } = useSWR<Workout>(url, fetcher, {
+  const { data, error, isValidating } = useSWR<Workout>(url ?? null, fetcher, {
     revalidateOnFocus: false,
   });
 
   const lastKey =
     workoutId ? `/api/completions/last?workout_id=${encodeURIComponent(workoutId)}` : null;
-  const { data: lastJson, error: lastErr } = useSWR<LastCompletion>(lastKey, (u) =>
-    fetch(u).then((r) => (r.ok ? r.json() : null))
+
+  // TypeScript strict: annotate fetcher parameter
+  const { data: lastJson, error: lastErr } = useSWR<LastCompletion>(
+    lastKey,
+    (u: string) => fetch(u).then((r) => (r.ok ? r.json() : null)),
+    { revalidateOnFocus: false }
   );
   const last = lastJson || null;
 
@@ -216,7 +221,6 @@ export default function WorkoutDetailPage() {
   const canSubmit =
     !!workoutId &&
     !saving &&
-    // we at least require calories OR duration to avoid empty submissions
     (!!calories || !!duration || !!difficulty || !!notes || !!weightUsed);
 
   async function submitCompletion(e: React.FormEvent) {
@@ -225,13 +229,14 @@ export default function WorkoutDetailPage() {
     setSaving(true);
     setSaveMsg(null);
     try {
-      const body: any = {
-        workout_id: workoutId,
-      };
+      const body: any = { workout_id: workoutId };
       if (calories) body.calories_burned = Number(calories);
       if (duration) body.duration = Number(duration); // minutes
       if (difficulty) body.difficulty = String(difficulty);
-      if (weightUsed) body.weight_completed_with = isNaN(Number(weightUsed)) ? weightUsed : Number(weightUsed);
+      if (weightUsed)
+        body.weight_completed_with = isNaN(Number(weightUsed))
+          ? weightUsed
+          : Number(weightUsed);
       if (notes) body.notes = String(notes);
 
       const res = await fetch("/api/completions/create", {
@@ -244,7 +249,14 @@ export default function WorkoutDetailPage() {
       if (!res.ok) throw new Error(j?.error || `Failed (${res.status})`);
 
       setSaveMsg("Saved ✅");
-      // Clear inputs but keep modal open so they can see the message
+      // Refresh the "last completion" chip
+      if (lastKey) {
+        try {
+          await globalMutate(lastKey);
+        } catch {}
+      }
+
+      // Clear inputs but keep modal open so they see the message
       setCalories("");
       setDuration("");
       setDifficulty("");
@@ -266,7 +278,9 @@ export default function WorkoutDetailPage() {
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <div className="mb-3">
-          <Link href="/workouts" className="btn btn-outline-secondary">← Back</Link>
+          <Link href="/workouts" className="btn btn-outline-secondary">
+            ← Back
+          </Link>
         </div>
 
         {loading && (
@@ -294,19 +308,40 @@ export default function WorkoutDetailPage() {
               </div>
 
               <div className="small text-dim mt-1">
-                {data.focus ? <>Focus: <span className="text-light">{data.focus}</span></> : null}
+                {data.focus ? (
+                  <>
+                    Focus: <span className="text-light">{data.focus}</span>
+                  </>
+                ) : null}
                 {data.focus && data.owner_email ? " • " : ""}
-                {data.owner_email ? <>Owner: <span className="text-light">{data.owner_email}</span></> : null}
+                {data.owner_email ? (
+                  <>
+                    Owner: <span className="text-light">{data.owner_email}</span>
+                  </>
+                ) : null}
               </div>
 
               {/* Last completion chip */}
               {!lastErr && last ? (
                 <div className="mt-2 small" style={{ opacity: 0.85 }}>
-                  <span className="badge rounded-pill" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#cbd5e1" }}>
-                    Last:{" "}
-                    {typeof last.calories_burned === "number" ? `${Math.round(last.calories_burned)} kcal` : "—"}{" "}
-                    · {typeof last.duration === "number" ? `${last.duration} min` : "—"}{" "}
-                    · {toISODate(last.completed_date) ? new Date(toISODate(last.completed_date)!).toLocaleString() : ""}
+                  <span
+                    className="badge rounded-pill"
+                    style={{
+                      background: "rgba(255,255,255,0.08)",
+                      border: "1px solid rgba(255,255,255,0.15)",
+                      color: "#cbd5e1",
+                    }}
+                  >
+                    Last:&nbsp;
+                    {typeof last.calories_burned === "number"
+                      ? `${Math.round(last.calories_burned)} kcal`
+                      : "—"}
+                    {" · "}
+                    {typeof last.duration === "number" ? `${last.duration} min` : "—"}
+                    {" · "}
+                    {toISODate(last.completed_date)
+                      ? new Date(toISODate(last.completed_date)!).toLocaleString()
+                      : ""}
                   </span>
                 </div>
               ) : null}
@@ -342,7 +377,11 @@ export default function WorkoutDetailPage() {
               >
                 Copy Link
               </button>
-              <Link className="btn btn-bxkr-outline" style={{ borderRadius: 24 }} href={`/admin/workouts/gym-create`}>
+              <Link
+                className="btn btn-bxkr-outline"
+                style={{ borderRadius: 24 }}
+                href={`/admin/workouts/gym-create`}
+              >
                 Create Another
               </Link>
 
@@ -394,7 +433,9 @@ export default function WorkoutDetailPage() {
                 ✕
               </button>
             </div>
-            <div className="small text-dim">Log what you did. Calories burnt is the key field here.</div>
+            <div className="small text-dim">
+              Log what you did. <strong>Calories burnt</strong> is the key field here.
+            </div>
 
             <form onSubmit={submitCompletion} className="mt-3">
               <div className="row g-3">
@@ -460,7 +501,9 @@ export default function WorkoutDetailPage() {
 
               {saveMsg && (
                 <div
-                  className={`mt-3 alert ${saveMsg.includes("✅") ? "alert-success" : "alert-info"}`}
+                  className={`mt-3 alert ${
+                    saveMsg.includes("✅") ? "alert-success" : "alert-info"
+                  }`}
                 >
                   {saveMsg}
                 </div>
