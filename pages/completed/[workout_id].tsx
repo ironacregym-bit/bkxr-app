@@ -2,23 +2,17 @@ import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import useSWR from "swr";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../../components/BottomNav";
 
 const ACCENT = "#FF8A2A";
-const DARK = "#0a0a0c";
-const FG = "#e6eef9";
+const BG_DARK = "#0a0a0c";
+const TEXT = "#f3f7ff";
 
-type CompletionSet = {
-  exercise_id: string;
-  set: number;
-  weight: number | null;
-  reps: number | null;
-};
-
+type CompletionSet = { exercise_id: string; set: number; weight: number | null; reps: number | null };
 type LastCompletion = {
   workout_id?: string;
-  workout_name?: string; // optional if API returns it
+  workout_name?: string;
   completed_date?: any;
   calories_burned?: number | null;
   duration_minutes?: number | null; // gym path
@@ -26,6 +20,7 @@ type LastCompletion = {
   rpe?: number | null;
   rating?: number | null;           // legacy rating
   notes?: string | null;
+  weight_completed_with?: number | string | null;
   sets?: CompletionSet[];
 };
 
@@ -42,13 +37,27 @@ function toISO(v: any): string | null {
     return null;
   }
 }
-
-// Render-safe string (fallback)
-function nice(s: any, d = "—") {
-  const v = s == null ? "" : String(s);
-  return v.trim() ? v : d;
+function niceN(n: any): number | null {
+  const v = Number(n);
+  return Number.isFinite(v) ? v : null;
 }
-
+function pickDuration(c: LastCompletion | null): number | null {
+  if (!c) return null;
+  return typeof c.duration_minutes === "number"
+    ? c.duration_minutes
+    : typeof c.duration === "number"
+    ? c.duration
+    : null;
+}
+function heaviestWeight(c: LastCompletion | null): number | null {
+  if (!c) return null;
+  const summary = c.weight_completed_with;
+  const summaryNum = niceN(summary as any);
+  if (summaryNum != null) return summaryNum;
+  const arr = Array.isArray(c.sets) ? c.sets : [];
+  if (!arr.length) return null;
+  return arr.reduce((m, s) => Math.max(m, niceN(s.weight) ?? 0), 0) || null;
+}
 function rpeToDifficulty(rpe?: number | null): "Easy" | "Medium" | "Hard" | "—" {
   if (rpe == null || Number.isNaN(rpe)) return "—";
   if (rpe <= 4) return "Easy";
@@ -56,178 +65,162 @@ function rpeToDifficulty(rpe?: number | null): "Easy" | "Medium" | "Hard" | "—
   return "Hard";
 }
 
-// Convert dumb exercise IDs to readable if no names present
-function titleCaseId(id: string) {
-  return id.replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim().replace(/\b\w/g, (m) => m.toUpperCase());
-}
-
-// Build highlights: per exercise -> heaviest (weight desc, then reps desc)
-function buildHighlights(sets: CompletionSet[] | undefined) {
-  if (!Array.isArray(sets) || sets.length === 0) return [];
-  const byEx: Record<string, CompletionSet[]> = {};
-  for (const s of sets) {
-    if (!s.exercise_id) continue;
-    if (!byEx[s.exercise_id]) byEx[s.exercise_id] = [];
-    byEx[s.exercise_id].push(s);
-  }
-  const rows = Object.entries(byEx).map(([ex, arr]) => {
-    const best = [...arr].sort((a, b) => {
-      const wa = a.weight ?? 0, wb = b.weight ?? 0;
-      if (wb !== wa) return wb - wa;
-      const ra = a.reps ?? 0, rb = b.reps ?? 0;
-      return rb - ra;
-    })[0];
-    return {
-      exercise_id: ex,
-      label: titleCaseId(ex),
-      weight: best.weight ?? null,
-      reps: best.reps ?? null,
-    };
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
   });
-  // Keep top 6 to avoid clutter
-  return rows.slice(0, 6);
 }
 
-// Build an SVG story/square card and return SVG string
-function buildShareSVG(opts: {
+/** Render Peloton‑style story/square PNG and return Blob + dataURL */
+async function renderShareImage(opts: {
   mode: "story" | "square";
-  logoUrl?: string;
   title: string;
-  subtitle?: string;
-  dateText?: string;
-  calories?: number | null;
-  duration?: number | null;
-  rpe?: number | null;
-  highlights: Array<{ label: string; weight: number | null; reps: number | null }>;
+  dateText: string;
+  calories: number | null;
+  weightUsed: number | null;
+  duration: number | null;
+  difficulty: string;
   notes?: string | null;
-}) {
-  const width = 1080;
-  const height = opts.mode === "story" ? 1920 : 1080;
-  const pad = 64;
+  bgUrl: string;   // full bleed background
+  logoUrl: string; // BXKR logo
+}): Promise<{ blob: Blob; dataUrl: string }> {
+  const W = 1080;
+  const H = opts.mode === "story" ? 1920 : 1080;
 
-  const bgGrad = `
-    <defs>
-      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#0b0f14"/>
-        <stop offset="100%" stop-color="#0a0a0c"/>
-      </linearGradient>
-      <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0%" stop-color="${ACCENT}"/>
-        <stop offset="100%" stop-color="#ff7f32"/>
-      </linearGradient>
-      <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
-        <feGaussianBlur in="SourceGraphic" stdDeviation="20" result="blur"/>
-        <feBlend in="SourceGraphic" in2="blur" mode="normal"/>
-      </filter>
-    </defs>
-  `;
+  // Load assets (placeholders ok)
+  let bgImg: HTMLImageElement | null = null;
+  let logoImg: HTMLImageElement | null = null;
+  try { bgImg = await loadImage(opts.bgUrl); } catch {}
+  try { logoImg = await loadImage(opts.logoUrl); } catch {}
 
-  const cal = opts.calories != null ? Math.round(opts.calories) : null;
-  const dur = opts.duration != null ? Math.round(opts.duration) : null;
-  const diff = rpeToDifficulty(opts.rpe);
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = BG_DARK;
+  ctx.fillRect(0, 0, W, H);
 
-  // Highlights rows as <tspan>
-  const highlightLines = opts.highlights.map((h, i) => {
-    const w = h.weight != null ? `${h.weight}kg` : "-";
-    const r = h.reps != null ? `${h.reps} reps` : "-";
-    return `<tspan x="${pad}" dy="${i === 0 ? 0 : 58}">${h.label} • ${w} × ${r}</tspan>`;
-  }).join("");
+  // Background cover
+  if (bgImg) {
+    const rC = W / H;
+    const rI = bgImg.width / bgImg.height;
+    let drawW = W, drawH = H, dx = 0, dy = 0;
+    if (rI > rC) { drawH = H; drawW = (bgImg.width / bgImg.height) * drawH; dx = (W - drawW) / 2; }
+    else { drawW = W; drawH = (bgImg.height / bgImg.width) * drawW; dy = (H - drawH) / 2; }
+    ctx.drawImage(bgImg, dx, dy, drawW, drawH);
+  }
 
-  const notesBlock = opts.notes?.trim()
-    ? `<text x="${pad}" y="${height - pad - 64}" fill="${FG}" font-size="34" opacity="0.75">
-         ${escapeXml(opts.notes.trim()).slice(0, 220)}
-       </text>`
-    : "";
+  // Dark overlay for readability
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, "rgba(0,0,0,0.55)");
+  grad.addColorStop(0.5, "rgba(0,0,0,0.62)");
+  grad.addColorStop(1, "rgba(0,0,0,0.7)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
 
-  const logo = opts.logoUrl
-    ? `<image href="${opts.logoUrl}" x="${width - pad - 160}" y="${pad}" width="160" height="160" preserveAspectRatio="xMidYMid meet" opacity="0.96"/>`
-    : `<g transform="translate(${width - pad - 200}, ${pad + 20})">
-         <rect width="200" height="80" rx="16" fill="url(#accent)" />
-         <text x="100" y="52" font-size="40" text-anchor="middle" font-weight="900" fill="#0b0f14">BXKR</text>
-       </g>`;
+  // Logo (top-right)
+  if (logoImg) {
+    const LOGO_W = 200, LOGO_H = (logoImg.height / logoImg.width) * LOGO_W;
+    ctx.drawImage(logoImg, W - LOGO_W - 48, 48, LOGO_W, LOGO_H);
+  } else {
+    ctx.fillStyle = ACCENT;
+    roundRect(ctx, W - 240, 48, 192, 72, 16); ctx.fill();
+    ctx.fillStyle = "#0b0f14";
+    ctx.font = "900 40px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.textAlign = "center";
+    ctx.fillText("BXKR", W - 240 + 96, 48 + 50);
+  }
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-  ${bgGrad}
-  <rect x="0" y="0" width="${width}" height="${height}" fill="url(#bg)"/>
-  <!-- Ambient accent glows -->
-  <circle cx="${width * 0.2}" cy="${height * 0.1}" r="220" fill="${ACCENT}" opacity="0.08" filter="url(#soft)"/>
-  <circle cx="${width * 0.85}" cy="${height * 0.85}" r="260" fill="${ACCENT}" opacity="0.07" filter="url(#soft)"/>
+  // Title + date
+  ctx.fillStyle = TEXT;
+  ctx.textAlign = "left";
+  ctx.font = "800 66px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+  ctx.fillText(trimFit(ctx, opts.title, 48, W - 48 - 260, 66), 48, 140);
+  ctx.globalAlpha = 0.8;
+  ctx.font = "400 34px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+  ctx.fillText(opts.dateText, 48, 188);
+  ctx.globalAlpha = 1;
 
-  <!-- Header -->
-  <text x="${pad}" y="${pad + 64}" fill="${FG}" font-size="56" font-weight="800">${escapeXml(opts.title)}</text>
-  <text x="${pad}" y="${pad + 120}" fill="${FG}" opacity="0.7" font-size="36">${escapeXml(opts.subtitle || "")}</text>
-  ${opts.dateText ? `<text x="${pad}" y="${pad + 168}" fill="${FG}" opacity="0.6" font-size="30">${escapeXml(opts.dateText)}</text>` : ""}
+  // Metrics column (left), Peloton-style stacked cards
+  const PILL_W = 480, PILL_H = 180, GAP = 24, TOP = 260;
+  const pills = [
+    { label: "CALORIES", value: opts.calories != null ? `${Math.round(opts.calories)} kcal` : "—" },
+    { label: "WEIGHT USED", value: opts.weightUsed != null ? `${Math.round(opts.weightUsed)} kg` : "—" },
+    { label: "TIME", value: opts.duration != null ? `${Math.round(opts.duration)} min` : "—" },
+    { label: "DIFFICULTY", value: opts.difficulty || "—" },
+  ];
+  pills.forEach((p, i) => {
+    const x = 48, y = TOP + i * (PILL_H + GAP);
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    roundRect(ctx, x, y, PILL_W, PILL_H, 22); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.16)"; ctx.lineWidth = 1;
+    roundRect(ctx, x, y, PILL_W, PILL_H, 22); ctx.stroke();
 
-  ${logo}
+    ctx.fillStyle = TEXT;
+    ctx.textAlign = "left";
+    ctx.font = "700 72px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText(p.value, x + 28, y + 108);
+    ctx.globalAlpha = 0.85;
+    ctx.font = "600 26px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText(p.label, x + 28, y + 46);
+    ctx.globalAlpha = 1;
+  });
 
-  <!-- Stats pill row -->
-  <g transform="translate(${pad}, ${pad + 230})">
-    ${pill("Calories", cal != null ? `${cal} kcal` : "—")}
-    <g transform="translate(360, 0)">${pill("Duration", dur != null ? `${dur} min` : "—")}</g>
-    <g transform="translate(720, 0)">${pill("Difficulty", diff)}</g>
-  </g>
+  // Footer: notes (optional) + small BXKR tagline bottom-left
+  if (opts.notes && opts.notes.trim()) {
+    ctx.globalAlpha = 0.9;
+    ctx.font = "400 30px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillStyle = TEXT;
+    ctx.fillText(trimFit(ctx, opts.notes.trim(), 48, W - 96, 30), 48, H - 88);
+    ctx.globalAlpha = 1;
+  }
+  ctx.globalAlpha = 0.75;
+  ctx.font = "600 28px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+  ctx.fillStyle = TEXT;
+  ctx.fillText("BXKR • Train. Fuel. Repeat.", 48, H - 40);
+  ctx.globalAlpha = 1;
 
-  <!-- Highlights -->
-  <text x="${pad}" y="${pad + 370}" fill="${FG}" font-size="34" opacity="0.8">Top Lifts</text>
-  <rect x="${pad}" y="${pad + 392}" width="${width - pad * 2}" height="${opts.mode === "story" ? 640 : 420}" rx="16" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.12)"/>
-  <text x="${pad}" y="${pad + 452}" fill="${FG}" font-size="44" font-weight="700" xml:space="preserve">
-    ${highlightLines || "<tspan x='${pad}'>No sets logged</tspan>"}
-  </text>
-
-  <!-- Footer -->
-  ${notesBlock}
-  <text x="${pad}" y="${height - pad}" fill="${FG}" opacity="0.6" font-size="28">#BXKR • Train. Fuel. Repeat.</text>
-</svg>`;
+  const blob: Blob = await new Promise((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
+  const dataUrl = canvas.toDataURL("image/png");
+  return { blob, dataUrl };
 }
 
-function pill(label: string, value: string) {
-  return `
-  <g>
-    <rect x="0" y="0" width="320" height="100" rx="50" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.15)"/>
-    <text x="160" y="42" text-anchor="middle" fill="#cbd5e1" font-size="26">${escapeXml(label)}</text>
-    <text x="160" y="76" text-anchor="middle" fill="#ffffff" font-size="32" font-weight="800">${escapeXml(value)}</text>
-  </g>`;
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+function trimFit(ctx: CanvasRenderingContext2D, s: string, x: number, maxWidth: number, fontSize: number) {
+  if (ctx.measureText(s).width <= maxWidth) return s;
+  let out = s;
+  while (out.length > 2 && ctx.measureText(out + "…").width > maxWidth) out = out.slice(0, -1);
+  return out + "…";
 }
 
-function escapeXml(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+async function shareViaSystem(blob: Blob, filename = "bxkr-story.png") {
+  try {
+    const file = new File([blob], filename, { type: blob.type });
+    if ((navigator as any).canShare?.({ files: [file] })) {
+      await (navigator as any).share({ files: [file], title: "BXKR", text: "Train. Fuel. Repeat." });
+      return true;
+    }
+  } catch {}
+  return false;
+}
+function tryDeepLink(uri: string) {
+  try { window.location.href = uri; } catch {}
 }
 
-async function downloadSvgAsPng(svg: string, filename: string, w: number, h: number) {
-  const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(svgBlob);
-  const img = new Image();
-  img.decoding = "async";
-  img.onload = () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    // background
-    ctx.fillStyle = DARK;
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(img, 0, 0, w, h);
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const a = document.createElement("a");
-      a.download = filename;
-      a.href = URL.createObjectURL(blob);
-      a.click();
-      URL.revokeObjectURL(a.href);
-      URL.revokeObjectURL(url);
-    }, "image/png");
-  };
-  img.onerror = () => URL.revokeObjectURL(url);
-  img.src = url;
-}
-
-export default function CompletedSharePage() {
+export default function CompletedPelotonStylePage() {
   const router = useRouter();
   const { workout_id } = router.query as { workout_id?: string };
 
@@ -236,184 +229,223 @@ export default function CompletedSharePage() {
       ? `/api/completions/last?workout_id=${encodeURIComponent(workout_id)}`
       : null;
 
-  const { data } = useSWR<LastCompletion | { ok: boolean; last?: LastCompletion }>(url, fetcher, {
-    revalidateOnFocus: false,
-  });
+  const { data } = useSWR<LastCompletion | { ok: boolean; last?: LastCompletion }>(url, fetcher, { revalidateOnFocus: false });
 
-  // The /last endpoint could return either the object or {ok,last}
-  const last = useMemo<LastCompletion | null>(() => {
+  const completion: LastCompletion | null = useMemo(() => {
     if (!data) return null;
-    if ("ok" in (data as any) && (data as any).ok && (data as any).last) return (data as any).last as LastCompletion;
+    if ((data as any).ok && (data as any).last) return (data as any).last as LastCompletion;
     return data as LastCompletion;
   }, [data]);
 
-  // Optional title override: ?title=Leg%20Day
-  const qpTitle = typeof router.query.title === "string" ? router.query.title : "";
-  const title = nice(qpTitle || last?.workout_name || "Workout Complete", "Workout Complete");
-  const dateText = useMemo(() => {
-    const iso = toISO(last?.completed_date) || new Date().toISOString();
-    const d = new Date(iso);
-    return d.toLocaleString(undefined, { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-  }, [last?.completed_date]);
-
-  const calories = last?.calories_burned ?? null;
-  const duration =
-    last?.duration_minutes != null
-      ? last?.duration_minutes
-      : last?.duration != null
-      ? last?.duration
-      : null;
-  const rpe = last?.rpe ?? (typeof last?.rating === "number" ? last?.rating : null);
-  const notes = last?.notes ?? null;
-
-  const highlights = useMemo(
-    () => buildHighlights(last?.sets),
-    [last?.sets]
+  const title = completion?.workout_name || "Workout Complete";
+  const iso = toISO(completion?.completed_date) || new Date().toISOString();
+  const dateText = useMemo(
+    () =>
+      new Date(iso).toLocaleString(undefined, {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    [iso]
   );
 
-  // Placeholder logo (drop your file here later)
-  const logoUrl = "/brand/bxkr-logo.png"; // put your logo at public/brand/bxkr-logo.png
+  const calories = completion?.calories_burned ?? null;
+  const duration = pickDuration(completion);
+  const rpe = completion?.rpe ?? (typeof completion?.rating === "number" ? completion?.rating : null);
+  const difficulty = rpeToDifficulty(rpe);
+  const weightUsed = heaviestWeight(completion);
+  const notes = completion?.notes ?? null;
 
-  const storyRef = useRef<HTMLDivElement>(null);
+  // Assets (placeholders; replace with your files)
+  // Put your brand files at: /public/brand/bxkr-logo.png and /public/brand/share-bg.jpg
+  const logoUrl = "/brand/bxkr-logo.png";
+  const bgUrl = "/brand/share-bg.jpg";
+
   const [busy, setBusy] = useState(false);
-  async function download(mode: "story" | "square") {
-    try {
-      setBusy(true);
-      const svg = buildShareSVG({
-        mode,
-        logoUrl,
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { dataUrl } = await renderShareImage({
+        mode: "story",
         title,
-        subtitle: "Personal Bests & Highlights",
         dateText,
         calories,
+        weightUsed,
         duration,
-        rpe,
+        difficulty,
         notes,
-        highlights,
+        bgUrl,
+        logoUrl,
       });
-      const [w, h] = mode === "story" ? [1080, 1920] : [1080, 1080];
-      await downloadSvgAsPng(svg, `bxkr-${mode}-${new Date().toISOString().slice(0, 10)}.png`, w, h);
-    } finally {
-      setBusy(false);
-    }
+      if (alive) setPreviewUrl(dataUrl);
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, dateText, calories, weightUsed, duration, difficulty, notes]);
+
+  async function download(mode: "story" | "square") {
+    setBusy(true);
+    try {
+      const { blob } = await renderShareImage({
+        mode,
+        title,
+        dateText,
+        calories,
+        weightUsed,
+        duration,
+        difficulty,
+        notes,
+        bgUrl,
+        logoUrl,
+      });
+      const a = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      a.href = url;
+      a.download = `bxkr-${mode}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally { setBusy(false); }
+  }
+
+  async function shareInstagram() {
+    setBusy(true);
+    try {
+      const { blob } = await renderShareImage({
+        mode: "story",
+        title, dateText, calories, weightUsed, duration, difficulty, notes, bgUrl, logoUrl,
+      });
+      const shared = await shareViaSystem(blob, "bxkr-story.png");
+      tryDeepLink("instagram://story-camera");
+      if (!shared) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "bxkr-story.png"; a.click();
+        URL.revokeObjectURL(url);
+      }
+    } finally { setBusy(false); }
+  }
+
+  async function shareFacebook() {
+    setBusy(true);
+    try {
+      const { blob } = await renderShareImage({
+        mode: "story",
+        title, dateText, calories, weightUsed, duration, difficulty, notes, bgUrl, logoUrl,
+      });
+      const shared = await shareViaSystem(blob, "bxkr-story.png");
+      tryDeepLink("fb://story-camera");
+      if (!shared) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "bxkr-story.png"; a.click();
+        URL.revokeObjectURL(url);
+      }
+    } finally { setBusy(false); }
   }
 
   return (
     <>
       <Head>
         <title>{`${title} • Share • BXKR`}</title>
-        {/* Basic Open Graph (static placeholder) */}
         <meta property="og:title" content={`${title} • BXKR`} />
-        <meta property="og:description" content="I just completed a BXKR workout. Train. Fuel. Repeat." />
+        <meta property="og:description" content="Train. Fuel. Repeat." />
         <meta property="og:image" content="/og/share-placeholder.png" />
         <meta name="twitter:card" content="summary_large_image" />
       </Head>
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <div className="d-flex align-items-center justify-content-between mb-3" style={{ gap: 8 }}>
-          <Link href="/" className="btn btn-outline-secondary" style={{ borderRadius: 24 }}>
+          <Link href="/" className="btn btn-bxkr-outline" style={{ borderRadius: 24 }}>
             ← Back
           </Link>
           <h1 className="h5 m-0">Share • Completed</h1>
           <div />
         </div>
 
-        {/* Preview (HTML card approximating the SVG styling) */}
-        <section ref={storyRef} className="futuristic-card p-3 mb-3">
-          <div className="d-flex align-items-start justify-content-between">
-            <div>
-              <div className="fw-bold" style={{ fontSize: 22 }}>{title}</div>
-              <div className="text-dim" style={{ fontSize: 13 }}>{dateText}</div>
-            </div>
-            <div
-              className="d-flex align-items-center justify-content-center"
-              style={{
-                width: 96,
-                height: 48,
-                borderRadius: 12,
-                background: `linear-gradient(90deg, ${ACCENT}, #ff7f32)`,
-                color: "#0b0f14",
-                fontWeight: 900,
-              }}
-            >
-              BXKR
-            </div>
+        {/* Live preview (story aspect) */}
+        <section className="futuristic-card p-2 mb-3">
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 380,
+              marginInline: "auto",
+              borderRadius: 20,
+              overflow: "hidden",
+              border: "1px solid rgba(255,255,255,0.15)",
+              boxShadow: "0 0 24px rgba(0,0,0,0.35)",
+            }}
+          >
+            {previewUrl ? (
+              <img src={previewUrl} alt="Story preview" style={{ width: "100%", height: "auto", display: "block" }} />
+            ) : (
+              <div className="p-5 text-center text-dim small">Preparing preview…</div>
+            )}
           </div>
-
-          <div className="row g-2 mt-2">
-            <div className="col-4">
-              <div className="p-2 text-center" style={{ borderRadius: 12, background: "rgba(255,255,255,0.06)" }}>
-                <div className="text-dim" style={{ fontSize: 12 }}>Calories</div>
-                <div className="fw-bold" style={{ fontSize: 18 }}>{calories != null ? Math.round(calories) : "—"} kcal</div>
-              </div>
-            </div>
-            <div className="col-4">
-              <div className="p-2 text-center" style={{ borderRadius: 12, background: "rgba(255,255,255,0.06)" }}>
-                <div className="text-dim" style={{ fontSize: 12 }}>Duration</div>
-                <div className="fw-bold" style={{ fontSize: 18 }}>{duration != null ? Math.round(duration) : "—"} min</div>
-              </div>
-            </div>
-            <div className="col-4">
-              <div className="p-2 text-center" style={{ borderRadius: 12, background: "rgba(255,255,255,0.06)" }}>
-                <div className="text-dim" style={{ fontSize: 12 }}>Difficulty</div>
-                <div className="fw-bold" style={{ fontSize: 18 }}>{rpeToDifficulty(rpe ?? null)}</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-3">
-            <div className="text-dim" style={{ fontSize: 14 }}>Top Lifts</div>
-            <div className="p-2" style={{ borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)" }}>
-              {!highlights.length ? (
-                <div className="text-dim small">No sets logged</div>
-              ) : (
-                <ul className="m-0" style={{ listStyle: "none", padding: 0 }}>
-                  {highlights.map((h, i) => (
-                    <li key={i} className="d-flex align-items-center justify-content-between" style={{ padding: "6px 0" }}>
-                      <span className="fw-semibold">{h.label}</span>
-                      <span className="text-dim small">
-                        {h.weight != null ? `${h.weight}kg` : "-"} × {h.reps != null ? h.reps : "-"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-
-          {notes?.trim() ? (
-            <div className="mt-2">
-              <div className="text-dim small">Notes</div>
-              <div className="small">{notes.trim()}</div>
-            </div>
-          ) : null}
+          <div className="small text-dim text-center mt-2">Story preview (1080×1920)</div>
         </section>
 
         {/* Actions */}
-        <div className="d-flex flex-wrap align-items-center" style={{ gap: 8 }}>
-          <button
-            className="btn btn-sm"
-            onClick={() => download("story")}
-            disabled={busy}
-            style={{
-              borderRadius: 24,
-              color: "#0a0a0c",
-              background: `linear-gradient(90deg, ${ACCENT}, #ff7f32)`,
-              border: "none",
-            }}
-          >
-            {busy ? "Preparing…" : "Download Story (1080×1920)"}
-          </button>
-          <button
-            className="btn btn-sm btn-bxkr-outline"
-            onClick={() => download("square")}
-            disabled={busy}
-            style={{ borderRadius: 24 }}
-          >
-            {busy ? "Preparing…" : "Download Square (1080×1080)"}
-          </button>
-          <span className="text-dim small ms-1">Tip: Post to your story or feed and tag <strong>@BXKR</strong> 💥</span>
-        </div>
+        <section className="futuristic-card p-3 mb-3">
+          <div className="d-flex flex-wrap align-items-center justify-content-center" style={{ gap: 10 }}>
+            <button
+              className="btn btn-sm"
+              onClick={shareInstagram}
+              disabled={busy}
+              style={{
+                borderRadius: 24,
+                color: "#0a0a0c",
+                background: `linear-gradient(90deg, ${ACCENT}, #ff7f32)`,
+                border: "none",
+                minWidth: 200,
+                fontWeight: 700,
+              }}
+            >
+              {busy ? "Working…" : "Share to Instagram Stories"}
+            </button>
+            <button
+              className="btn btn-sm"
+              onClick={shareFacebook}
+              disabled={busy}
+              style={{
+                borderRadius: 24,
+                color: "#0a0a0c",
+                background: `linear-gradient(90deg, ${ACCENT}, #ff7f32)`,
+                border: "none",
+                minWidth: 200,
+                fontWeight: 700,
+              }}
+            >
+              {busy ? "Working…" : "Share to Facebook Stories"}
+            </button>
+
+            <div className="vr" />
+
+            <button
+              className="btn btn-sm btn-bxkr-outline"
+              onClick={() => download("story")}
+              disabled={busy}
+              style={{ borderRadius: 24, minWidth: 200 }}
+            >
+              {busy ? "Preparing…" : "Download Story PNG"}
+            </button>
+            <button
+              className="btn btn-sm btn-bxkr-outline"
+              onClick={() => download("square")}
+              disabled={busy}
+              style={{ borderRadius: 24, minWidth: 200 }}
+            >
+              {busy ? "Preparing…" : "Download Square PNG"}
+            </button>
+          </div>
+
+          <div className="text-center small text-dim mt-2">
+            Tip: If sharing doesn’t open directly, the image downloads—pick it from your Stories camera.
+          </div>
+        </section>
       </main>
 
       <BottomNav />
