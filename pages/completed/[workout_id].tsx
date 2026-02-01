@@ -9,16 +9,25 @@ const ACCENT = "#FF8A2A";
 const BG_DARK = "#0a0a0c";
 const TEXT = "#f3f7ff";
 
+// --- Brand assets ---
+// Logo: place your file at /public/BXKRLogoNoBG.jpg
+// Background: put a portrait photo at /public/brand/share-bg.jpg (or adjust path below)
+const LOGO_URL = "/BXKRLogoNoBG.jpg";
+const BG_URL = "/brand/share-bg.jpg";
+
+// Fixed Peloton-style title with motivation
+const TITLE_TEXT = "Workout Complete (Train. Fuel. Repeat.)";
+
 type CompletionSet = { exercise_id: string; set: number; weight: number | null; reps: number | null };
 type LastCompletion = {
   workout_id?: string;
   workout_name?: string;
   completed_date?: any;
   calories_burned?: number | null;
-  duration_minutes?: number | null; // gym path
-  duration?: number | null;         // legacy path
+  duration_minutes?: number | null;
+  duration?: number | null;
   rpe?: number | null;
-  rating?: number | null;           // legacy rating
+  rating?: number | null;
   notes?: string | null;
   weight_completed_with?: number | string | null;
   sets?: CompletionSet[];
@@ -124,29 +133,29 @@ async function renderShareImage(opts: {
 
   // Logo (top-right)
   if (logoImg) {
-    const LOGO_W = 200, LOGO_H = (logoImg.height / logoImg.width) * LOGO_W;
+    const LOGO_W = 220, LOGO_H = (logoImg.height / logoImg.width) * LOGO_W;
     ctx.drawImage(logoImg, W - LOGO_W - 48, 48, LOGO_W, LOGO_H);
   } else {
     ctx.fillStyle = ACCENT;
-    roundRect(ctx, W - 240, 48, 192, 72, 16); ctx.fill();
+    roundRect(ctx, W - 260, 48, 212, 80, 16); ctx.fill();
     ctx.fillStyle = "#0b0f14";
-    ctx.font = "900 40px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.font = "900 44px Inter, system-ui, -apple-system, Segoe UI, Roboto";
     ctx.textAlign = "center";
-    ctx.fillText("BXKR", W - 240 + 96, 48 + 50);
+    ctx.fillText("BXKR", W - 260 + 106, 48 + 54);
   }
 
   // Title + date
   ctx.fillStyle = TEXT;
   ctx.textAlign = "left";
   ctx.font = "800 66px Inter, system-ui, -apple-system, Segoe UI, Roboto";
-  ctx.fillText(trimFit(ctx, opts.title, 48, W - 48 - 260, 66), 48, 140);
+  ctx.fillText(trimFit(ctx, opts.title, 48, W - 48 - 280, 66), 48, 140);
   ctx.globalAlpha = 0.8;
   ctx.font = "400 34px Inter, system-ui, -apple-system, Segoe UI, Roboto";
   ctx.fillText(opts.dateText, 48, 188);
   ctx.globalAlpha = 1;
 
   // Metrics column (left), Peloton-style stacked cards
-  const PILL_W = 480, PILL_H = 180, GAP = 24, TOP = 260;
+  const PILL_W = 520, PILL_H = 190, GAP = 26, TOP = 260;
   const pills = [
     { label: "CALORIES", value: opts.calories != null ? `${Math.round(opts.calories)} kcal` : "—" },
     { label: "WEIGHT USED", value: opts.weightUsed != null ? `${Math.round(opts.weightUsed)} kg` : "—" },
@@ -156,17 +165,17 @@ async function renderShareImage(opts: {
   pills.forEach((p, i) => {
     const x = 48, y = TOP + i * (PILL_H + GAP);
     ctx.fillStyle = "rgba(255,255,255,0.08)";
-    roundRect(ctx, x, y, PILL_W, PILL_H, 22); ctx.fill();
+    roundRect(ctx, x, y, PILL_W, PILL_H, 24); ctx.fill();
     ctx.strokeStyle = "rgba(255,255,255,0.16)"; ctx.lineWidth = 1;
-    roundRect(ctx, x, y, PILL_W, PILL_H, 22); ctx.stroke();
+    roundRect(ctx, x, y, PILL_W, PILL_H, 24); ctx.stroke();
 
     ctx.fillStyle = TEXT;
     ctx.textAlign = "left";
-    ctx.font = "700 72px Inter, system-ui, -apple-system, Segoe UI, Roboto";
-    ctx.fillText(p.value, x + 28, y + 108);
+    ctx.font = "700 76px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText(p.value, x + 30, y + 112);
     ctx.globalAlpha = 0.85;
-    ctx.font = "600 26px Inter, system-ui, -apple-system, Segoe UI, Roboto";
-    ctx.fillText(p.label, x + 28, y + 46);
+    ctx.font = "600 28px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText(p.label, x + 30, y + 48);
     ctx.globalAlpha = 1;
   });
 
@@ -237,7 +246,6 @@ export default function CompletedPelotonStylePage() {
     return data as LastCompletion;
   }, [data]);
 
-  const title = completion?.workout_name || "Workout Complete";
   const iso = toISO(completion?.completed_date) || new Date().toISOString();
   const dateText = useMemo(
     () =>
@@ -258,11 +266,6 @@ export default function CompletedPelotonStylePage() {
   const weightUsed = heaviestWeight(completion);
   const notes = completion?.notes ?? null;
 
-  // Assets (placeholders; replace with your files)
-  // Put your brand files at: /public/brand/bxkr-logo.png and /public/brand/share-bg.jpg
-  const logoUrl = "/brand/bxkr-logo.png";
-  const bgUrl = "/brand/share-bg.jpg";
-
   const [busy, setBusy] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -271,36 +274,35 @@ export default function CompletedPelotonStylePage() {
     (async () => {
       const { dataUrl } = await renderShareImage({
         mode: "story",
-        title,
+        title: TITLE_TEXT,
         dateText,
         calories,
         weightUsed,
         duration,
         difficulty,
         notes,
-        bgUrl,
-        logoUrl,
+        bgUrl: BG_URL,
+        logoUrl: LOGO_URL,
       });
       if (alive) setPreviewUrl(dataUrl);
     })();
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, dateText, calories, weightUsed, duration, difficulty, notes]);
+  }, [dateText, calories, weightUsed, duration, difficulty, notes]);
 
   async function download(mode: "story" | "square") {
     setBusy(true);
     try {
       const { blob } = await renderShareImage({
         mode,
-        title,
+        title: TITLE_TEXT,
         dateText,
         calories,
         weightUsed,
         duration,
         difficulty,
         notes,
-        bgUrl,
-        logoUrl,
+        bgUrl: BG_URL,
+        logoUrl: LOGO_URL,
       });
       const a = document.createElement("a");
       const url = URL.createObjectURL(blob);
@@ -316,7 +318,8 @@ export default function CompletedPelotonStylePage() {
     try {
       const { blob } = await renderShareImage({
         mode: "story",
-        title, dateText, calories, weightUsed, duration, difficulty, notes, bgUrl, logoUrl,
+        title: TITLE_TEXT, dateText, calories, weightUsed, duration, difficulty, notes,
+        bgUrl: BG_URL, logoUrl: LOGO_URL,
       });
       const shared = await shareViaSystem(blob, "bxkr-story.png");
       tryDeepLink("instagram://story-camera");
@@ -334,7 +337,8 @@ export default function CompletedPelotonStylePage() {
     try {
       const { blob } = await renderShareImage({
         mode: "story",
-        title, dateText, calories, weightUsed, duration, difficulty, notes, bgUrl, logoUrl,
+        title: TITLE_TEXT, dateText, calories, weightUsed, duration, difficulty, notes,
+        bgUrl: BG_URL, logoUrl: LOGO_URL,
       });
       const shared = await shareViaSystem(blob, "bxkr-story.png");
       tryDeepLink("fb://story-camera");
@@ -350,14 +354,15 @@ export default function CompletedPelotonStylePage() {
   return (
     <>
       <Head>
-        <title>{`${title} • Share • BXKR`}</title>
-        <meta property="og:title" content={`${title} • BXKR`} />
+        <title>{`Workout Complete • Share • BXKR`}</title>
+        <meta property="og:title" content="Workout Complete • BXKR" />
         <meta property="og:description" content="Train. Fuel. Repeat." />
         <meta property="og:image" content="/og/share-placeholder.png" />
         <meta name="twitter:card" content="summary_large_image" />
       </Head>
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
+        {/* Top bar */}
         <div className="d-flex align-items-center justify-content-between mb-3" style={{ gap: 8 }}>
           <Link href="/" className="btn btn-bxkr-outline" style={{ borderRadius: 24 }}>
             ← Back
@@ -443,7 +448,7 @@ export default function CompletedPelotonStylePage() {
           </div>
 
           <div className="text-center small text-dim mt-2">
-            Tip: If sharing doesn’t open directly, the image downloads—pick it from your Stories camera.
+            Tip: If sharing doesn’t open directly, the image downloads—choose it from your Stories camera.
           </div>
         </section>
       </main>
