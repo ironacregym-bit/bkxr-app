@@ -1,3 +1,4 @@
+// pages/completed/[workout_id].tsx
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -49,7 +50,9 @@ function toISO(v: any): string | null {
     if (v?.seconds) return new Date(v.seconds * 1000).toISOString();
     if (typeof v === "string") return new Date(v).toISOString();
     return null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 function numOrNull(x: any): number | null { const n = Number(x); return Number.isFinite(n) ? n : null; }
 function pickDuration(c: LastCompletion | null): number | null {
@@ -58,17 +61,17 @@ function pickDuration(c: LastCompletion | null): number | null {
 }
 function rpeToDifficulty(rpe?: number | null): "Easy" | "Medium" | "Hard" | "—" {
   if (rpe == null || Number.isNaN(rpe)) return "—";
-  if (rpe <= 4) return "Easy"; if (rpe <= 7) return "Medium"; return "Hard";
+  if (rpe <= 4) return "Easy";
+  if (rpe <= 7) return "Medium";
+  return "Hard";
 }
 function heaviestOverall(sets: CompletionSet[] | undefined): CompletionSet | null {
   let top: CompletionSet | null = null;
   (sets || []).forEach((s) => {
-    if (!top) top = s;
-    else {
-      const wt = top.weight ?? 0, wr = s.weight ?? 0;
-      const rt = top.reps ?? 0, rr = s.reps ?? 0;
-      if (wr > wt || (wr === wt && rr > rt)) top = s;
-    }
+    if (!top) { top = s; return; }
+    const wt = top.weight ?? 0, wr = s.weight ?? 0;
+    const rt = top.reps ?? 0, rr = s.reps ?? 0;
+    if (wr > wt || (wr === wt && rr > rt)) top = s;
   });
   return top;
 }
@@ -89,7 +92,11 @@ type Pill = { label: string; value: string };
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const img = new Image(); img.decoding = "async"; img.onload = () => resolve(img); img.onerror = reject; img.src = src;
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
   });
 }
 async function renderShareImage(opts: {
@@ -163,9 +170,14 @@ function trimFit(ctx: CanvasRenderingContext2D, s: string, x: number, maxWidth: 
   return out + "…";
 }
 async function shareViaSystem(blob: Blob, filename = "bxkr-story.png") {
-  try { const file = new File([blob], filename, { type: blob.type });
-    if ((navigator as any).canShare?.({ files: [file] })) { await (navigator as any).share({ files: [file], title: "BXKR", text: "Train. Fuel. Repeat." }); return true; }
-  } catch {} return false;
+  try {
+    const file = new File([blob], filename, { type: blob.type });
+    if ((navigator as any).canShare?.({ files: [file] })) {
+      await (navigator as any).share({ files: [file], title: "BXKR", text: "Train. Fuel. Repeat." });
+      return true;
+    }
+  } catch {}
+  return false;
 }
 function tryDeepLink(uri: string) { try { window.location.href = uri; } catch {} }
 
@@ -175,12 +187,19 @@ export default function CompletedPelotonStylePage() {
   const { workout_id } = router.query as { workout_id?: string };
   const url = workout_id && typeof workout_id === "string" ? `/api/completions/last?workout_id=${encodeURIComponent(workout_id)}` : null;
 
-  const { data } = useSWR<LastCompletion | { ok: boolean; last?: LastCompletion }>(url, fetcher, { revalidateOnFocus: false });
-  const last: LastCompletion | null = useMemo(() => (!data ? null : (data as any).ok ? (data as any).last ?? null : (data as LastCompletion))), [data];
+  // NOTE: renamed 'data' -> 'swrData' to avoid block-scoped redeclare collisions
+  const { data: swrData } = useSWR<LastCompletion | { ok: boolean; last?: LastCompletion }>(url, fetcher, { revalidateOnFocus: false });
+  const last: LastCompletion | null = useMemo(
+    () => (!swrData ? null : (swrData as any).ok ? ((swrData as any).last ?? null) : (swrData as LastCompletion)),
+    [swrData]
+  );
 
   // Core fields
   const iso = toISO(last?.completed_date) || toISO(last?.date_completed) || new Date().toISOString();
-  const dateText = useMemo(() => new Date(iso!).toLocaleString(undefined, { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }), [iso]);
+  const dateText = useMemo(
+    () => new Date(iso!).toLocaleString(undefined, { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }),
+    [iso]
+  );
   const calories = typeof last?.calories_burned === "number" ? Math.round(last.calories_burned) : null;
   const duration = pickDuration(last);
   const difficulty = rpeToDifficulty(last?.rpe ?? last?.rating ?? null);
@@ -306,3 +325,4 @@ export default function CompletedPelotonStylePage() {
     </>
   );
 }
+``
