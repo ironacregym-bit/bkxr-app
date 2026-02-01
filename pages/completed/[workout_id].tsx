@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../../components/BottomNav";
 
 const ACCENT = "#FF8A2A";
+const ACCENT_2 = "#ff7f32";
 const BG_DARK = "#0a0a0c";
 const TEXT = "#f3f7ff";
 
@@ -14,7 +15,7 @@ const TEXT = "#f3f7ff";
 const LOGO_URL = "/BXKRLogoNoBG.jpg";
 const BG_URL = "/brand/share-bg.jpg";
 
-// Fixed Peloton-style title
+// Title
 const TITLE_TEXT = "Workout Complete (Train. Fuel. Repeat.)";
 
 type CompletionSet = { exercise_id: string; set: number; weight: number | null; reps: number | null };
@@ -43,6 +44,7 @@ type LastCompletion = {
 
 const fetcher = (u: string) => fetch(u).then((r) => (r.ok ? r.json() : null));
 
+/* ------------ util ------------ */
 function toISO(v: any): string | null {
   try {
     if (!v) return null;
@@ -50,20 +52,15 @@ function toISO(v: any): string | null {
     if (v?.seconds) return new Date(v.seconds * 1000).toISOString();
     if (typeof v === "string") return new Date(v).toISOString();
     return null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
-function numOrNull(x: any): number | null { const n = Number(x); return Number.isFinite(n) ? n : null; }
 function pickDuration(c: LastCompletion | null): number | null {
   if (!c) return null;
   return typeof c.duration_minutes === "number" ? c.duration_minutes : typeof c.duration === "number" ? c.duration : null;
 }
 function rpeToDifficulty(rpe?: number | null): "Easy" | "Medium" | "Hard" | "—" {
   if (rpe == null || Number.isNaN(rpe)) return "—";
-  if (rpe <= 4) return "Easy";
-  if (rpe <= 7) return "Medium";
-  return "Hard";
+  if (rpe <= 4) return "Easy"; if (rpe <= 7) return "Medium"; return "Hard";
 }
 function heaviestOverall(sets: CompletionSet[] | undefined): CompletionSet | null {
   let top: CompletionSet | null = null;
@@ -87,34 +84,40 @@ function summariseBenchmark(metrics?: BenchmarkMetrics | null) {
   return { rounds: rounds || null, maxLoad: maxLoad || null };
 }
 
-// ---- Canvas renderer (dynamic pills) ----
+/* ------------ canvas renderer ------------ */
 type Pill = { label: string; value: string };
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.decoding = "async";
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
+    const img = new Image(); img.decoding = "async";
+    img.onload = () => resolve(img); img.onerror = reject; img.src = src;
   });
 }
+
+/** BXKR-styled Peloton card with neon orange accents & glass metric tiles */
 async function renderShareImage(opts: {
   mode: "story" | "square";
   title: string;
   dateText: string;
-  pills: Pill[];
+  pills: Pill[]; // up to 4
   notes?: string | null;
   bgUrl: string;
   logoUrl: string;
 }): Promise<{ blob: Blob; dataUrl: string }> {
   const W = 1080, H = opts.mode === "story" ? 1920 : 1080;
+
   let bgImg: HTMLImageElement | null = null, logoImg: HTMLImageElement | null = null;
   try { bgImg = await loadImage(opts.bgUrl); } catch {}
   try { logoImg = await loadImage(opts.logoUrl); } catch {}
-  const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d")!;
+
+  // Base
   ctx.fillStyle = BG_DARK; ctx.fillRect(0, 0, W, H);
+
+  // Background cover
   if (bgImg) {
     const rC = W / H, rI = bgImg.width / bgImg.height;
     let dw = W, dh = H, dx = 0, dy = 0;
@@ -122,72 +125,116 @@ async function renderShareImage(opts: {
     else { dw = W; dh = (bgImg.height / bgImg.width) * dw; dy = (H - dh) / 2; }
     ctx.drawImage(bgImg, dx, dy, dw, dh);
   }
-  const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, "rgba(0,0,0,0.55)"); grad.addColorStop(0.5, "rgba(0,0,0,0.62)"); grad.addColorStop(1, "rgba(0,0,0,0.7)");
-  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
-  if (logoImg) {
-    const LOGO_W = 220, LOGO_H = (logoImg.height / logoImg.width) * LOGO_W;
-    ctx.drawImage(logoImg, W - LOGO_W - 48, 48, LOGO_W, LOGO_H);
-  } else {
-    ctx.fillStyle = ACCENT; roundRect(ctx, W - 260, 48, 212, 80, 16); ctx.fill();
-    ctx.fillStyle = "#0b0f14"; ctx.font = "900 44px Inter, system-ui, -apple-system, Segoe UI, Roboto"; ctx.textAlign = "center";
-    ctx.fillText("BXKR", W - 260 + 106, 48 + 54);
-  }
-  ctx.fillStyle = TEXT; ctx.textAlign = "left";
-  ctx.font = "800 66px Inter, system-ui, -apple-system, Segoe UI, Roboto";
-  ctx.fillText(trimFit(ctx, opts.title, 48, W - 48 - 280, 66), 48, 140);
-  ctx.globalAlpha = 0.8; ctx.font = "400 34px Inter, system-ui, -apple-system, Segoe UI, Roboto"; ctx.fillText(opts.dateText, 48, 188); ctx.globalAlpha = 1;
 
-  const PILL_W = 520, PILL_H = 190, GAP = 26, TOP = 260;
-  (opts.pills || []).slice(0, 4).forEach((p, i) => {
+  // Dark gradient overlay
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, "rgba(0,0,0,0.55)");
+  grad.addColorStop(0.4, "rgba(0,0,0,0.64)");
+  grad.addColorStop(1, "rgba(0,0,0,0.76)");
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+
+  // Header: title + BXKR logo
+  // BXKR watermark
+  if (logoImg) {
+    const LW = 220, LH = (logoImg.height / logoImg.width) * LW;
+    ctx.drawImage(logoImg, W - LW - 48, 52, LW, LH);
+  } else {
+    // fallback badge
+    ctx.fillStyle = ACCENT; roundRect(ctx, W - 252, 48, 204, 76, 16); ctx.fill();
+    ctx.fillStyle = "#0b0f14"; ctx.textAlign = "center";
+    ctx.font = "900 42px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText("BXKR", W - 252 + 102, 48 + 52);
+  }
+
+  // Title
+  ctx.fillStyle = TEXT; ctx.textAlign = "left";
+  ctx.font = "900 66px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+  const title = clamp(ctx, opts.title, W - 48 - 280);
+  ctx.fillText(title, 48, 138);
+
+  // Title underline (orange gradient bar)
+  const ugrad = ctx.createLinearGradient(48, 0, 48 + 420, 0);
+  ugrad.addColorStop(0, ACCENT); ugrad.addColorStop(1, ACCENT_2);
+  ctx.fillStyle = ugrad; roundRect(ctx, 48, 150, 240, 6, 3); ctx.fill();
+
+  // Datestamp
+  ctx.globalAlpha = 0.85; ctx.font = "500 34px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+  ctx.fillStyle = "#cbd5e1"; ctx.fillText(opts.dateText, 48, 196); ctx.globalAlpha = 1;
+
+  // Metric tiles – glass w/ accent hairline
+  const PILL_W = 560, PILL_H = 190, GAP = 26, TOP = 260, R = 22;
+  const tiles = (opts.pills || []).slice(0, 4);
+  tiles.forEach((p, i) => {
     const x = 48, y = TOP + i * (PILL_H + GAP);
-    ctx.fillStyle = "rgba(255,255,255,0.08)"; roundRect(ctx, x, y, PILL_W, PILL_H, 24); ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.16)"; ctx.lineWidth = 1; roundRect(ctx, x, y, PILL_W, PILL_H, 24); ctx.stroke();
-    ctx.fillStyle = TEXT; ctx.textAlign = "left";
-    ctx.font = "700 76px Inter, system-ui, -apple-system, Segoe UI, Roboto"; ctx.fillText(p.value, x + 30, y + 112);
-    ctx.globalAlpha = 0.85; ctx.font = "600 28px Inter, system-ui, -apple-system, Segoe UI, Roboto"; ctx.fillText(p.label, x + 30, y + 48); ctx.globalAlpha = 1;
+
+    // glass base
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    roundRect(ctx, x, y, PILL_W, PILL_H, R); ctx.fill();
+    // inner shadow
+    ctx.strokeStyle = "rgba(255,255,255,0.10)"; ctx.lineWidth = 1;
+    roundRect(ctx, x, y, PILL_W, PILL_H, R); ctx.stroke();
+    // accent hairline (left)
+    const lgrad = ctx.createLinearGradient(x, y, x + 12, y);
+    lgrad.addColorStop(0, ACCENT); lgrad.addColorStop(1, "rgba(255,138,42,0)");
+    ctx.fillStyle = lgrad; roundRect(ctx, x, y, 6, PILL_H, R); ctx.fill();
+
+    // label small-caps
+    ctx.fillStyle = "#b6c3d7"; ctx.textAlign = "left";
+    ctx.globalAlpha = 0.9;
+    ctx.font = "700 28px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText(p.label.toUpperCase(), x + 28, y + 48);
+    ctx.globalAlpha = 1;
+
+    // value
+    ctx.fillStyle = TEXT;
+    ctx.font = "800 64px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    // Wrap long Top Lift lines gracefully → clamp with ellipsis
+    const value = clamp(ctx, p.value, PILL_W - 56);
+    ctx.fillText(value, x + 28, y + 116);
   });
 
+  // Notes (optional)
   if (opts.notes && opts.notes.trim()) {
-    ctx.globalAlpha = 0.9; ctx.font = "400 30px Inter, system-ui, -apple-system, Segoe UI, Roboto"; ctx.fillStyle = TEXT;
-    ctx.fillText(trimFit(ctx, opts.notes.trim(), 48, W - 96, 30), 48, H - 88); ctx.globalAlpha = 1;
+    ctx.globalAlpha = 0.9; ctx.fillStyle = "#d7e1f0";
+    ctx.font = "400 30px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText(clamp(ctx, opts.notes.trim(), W - 96), 48, H - 94);
+    ctx.globalAlpha = 1;
   }
-  ctx.globalAlpha = 0.75; ctx.font = "600 28px Inter, system-ui, -apple-system, Segoe UI, Roboto"; ctx.fillStyle = TEXT;
-  ctx.fillText("BXKR • Train. Fuel. Repeat.", 48, H - 40); ctx.globalAlpha = 1;
+
+  // Tagline
+  ctx.globalAlpha = 0.75; ctx.fillStyle = "#cbd5e1";
+  ctx.font = "600 28px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+  ctx.fillText("BXKR • Train. Fuel. Repeat.", 48, H - 42);
+  ctx.globalAlpha = 1;
 
   const blob: Blob = await new Promise((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
   const dataUrl = canvas.toDataURL("image/png");
   return { blob, dataUrl };
 }
+
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  const rr = Math.min(r, w / 2, h / 2); ctx.beginPath(); ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr); ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr); ctx.arcTo(x, y, x + w, y, rr); ctx.closePath();
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
 }
-function trimFit(ctx: CanvasRenderingContext2D, s: string, x: number, maxWidth: number, fontSize: number) {
-  if (ctx.measureText(s).width <= maxWidth) return s; let out = s;
+function clamp(ctx: CanvasRenderingContext2D, s: string, maxWidth: number) {
+  if (ctx.measureText(s).width <= maxWidth) return s;
+  let out = s;
   while (out.length > 2 && ctx.measureText(out + "…").width > maxWidth) out = out.slice(0, -1);
   return out + "…";
 }
-async function shareViaSystem(blob: Blob, filename = "bxkr-story.png") {
-  try {
-    const file = new File([blob], filename, { type: blob.type });
-    if ((navigator as any).canShare?.({ files: [file] })) {
-      await (navigator as any).share({ files: [file], title: "BXKR", text: "Train. Fuel. Repeat." });
-      return true;
-    }
-  } catch {}
-  return false;
-}
-function tryDeepLink(uri: string) { try { window.location.href = uri; } catch {} }
 
-// ---- Page ----
+/* ------------ page ------------ */
 export default function CompletedPelotonStylePage() {
   const router = useRouter();
   const { workout_id } = router.query as { workout_id?: string };
   const url = workout_id && typeof workout_id === "string" ? `/api/completions/last?workout_id=${encodeURIComponent(workout_id)}` : null;
 
-  // NOTE: renamed 'data' -> 'swrData' to avoid block-scoped redeclare collisions
   const { data: swrData } = useSWR<LastCompletion | { ok: boolean; last?: LastCompletion }>(url, fetcher, { revalidateOnFocus: false });
   const last: LastCompletion | null = useMemo(
     () => (!swrData ? null : (swrData as any).ok ? ((swrData as any).last ?? null) : (swrData as LastCompletion)),
@@ -209,11 +256,11 @@ export default function CompletedPelotonStylePage() {
   const isGym = (last?.sets || []).length > 0 || (last?.activity_type || "").toLowerCase().includes("strength");
   const isBXKR = !!last?.is_benchmark || !!last?.benchmark_metrics;
 
-  // Gym: Top Lift
+  // Gym metrics
   const topLift = heaviestOverall(last?.sets);
-  const topLiftText = topLift ? `${topLift.exercise_id} ${Math.round(topLift.weight ?? 0)} kg` : "—";
+  const topLiftText = topLift ? `${topLift.exercise_id} · ${Math.round(topLift.weight ?? 0)} kg` : "—";
 
-  // BXKR: Rounds + Load
+  // BXKR metrics
   const bm = last?.benchmark_metrics || null;
   const { rounds, maxLoad } = summariseBenchmark(bm);
   const roundsText = rounds != null ? String(rounds) : (typeof last?.sets_completed === "number" ? String(last.sets_completed) : "—");
@@ -224,22 +271,22 @@ export default function CompletedPelotonStylePage() {
   // Pill stack
   const pills: Pill[] = isGym
     ? [
-        { label: "CALORIES", value: calories != null ? `${calories} kcal` : "—" },
-        { label: "TOP LIFT", value: topLiftText },
-        { label: "TIME", value: duration != null ? `${Math.round(duration)} min` : "—" },
-        { label: "DIFFICULTY", value: difficulty },
+        { label: "Calories", value: calories != null ? `${calories} kcal` : "—" },
+        { label: "Top Lift", value: topLiftText },
+        { label: "Time", value: duration != null ? `${Math.round(duration)} min` : "—" },
+        { label: "Difficulty", value: difficulty },
       ]
     : isBXKR
     ? [
-        { label: "CALORIES", value: calories != null ? `${calories} kcal` : "—" },
-        { label: "ROUNDS", value: roundsText },
-        { label: "TIME", value: duration != null ? `${Math.round(duration)} min` : "—" },
-        { label: "LOAD", value: loadText },
+        { label: "Calories", value: calories != null ? `${calories} kcal` : "—" },
+        { label: "Rounds", value: roundsText },
+        { label: "Time", value: duration != null ? `${Math.round(duration)} min` : "—" },
+        { label: "Load", value: loadText },
       ]
     : [
-        { label: "CALORIES", value: calories != null ? `${calories} kcal` : "—" },
-        { label: "TIME", value: duration != null ? `${Math.round(duration)} min` : "—" },
-        { label: "DIFFICULTY", value: difficulty },
+        { label: "Calories", value: calories != null ? `${calories} kcal` : "—" },
+        { label: "Time", value: duration != null ? `${Math.round(duration)} min` : "—" },
+        { label: "Difficulty", value: difficulty },
         { label: " ", value: " " },
       ];
 
@@ -249,32 +296,67 @@ export default function CompletedPelotonStylePage() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const { dataUrl } = await renderShareImage({ mode: "story", title: TITLE_TEXT, dateText, pills, notes, bgUrl: BG_URL, logoUrl: LOGO_URL });
+      const { dataUrl } = await renderShareImage({
+        mode: "story",
+        title: TITLE_TEXT,
+        dateText,
+        pills,
+        notes,
+        bgUrl: BG_URL,
+        logoUrl: LOGO_URL,
+      });
       if (alive) setPreviewUrl(dataUrl);
     })();
     return () => { alive = false; };
   }, [dateText, JSON.stringify(pills), notes]);
 
   async function renderBlob(mode: "story" | "square") {
-    const { blob } = await renderShareImage({ mode, title: TITLE_TEXT, dateText, pills, notes, bgUrl: BG_URL, logoUrl: LOGO_URL });
+    const { blob } = await renderShareImage({
+      mode,
+      title: TITLE_TEXT,
+      dateText,
+      pills,
+      notes,
+      bgUrl: BG_URL,
+      logoUrl: LOGO_URL,
+    });
     return blob;
   }
   async function download(mode: "story" | "square") {
     setBusy(true);
-    try { const blob = await renderBlob(mode); const a = document.createElement("a"); const u = URL.createObjectURL(blob); a.href = u; a.download = `bxkr-${mode}.png`; a.click(); URL.revokeObjectURL(u); }
-    finally { setBusy(false); }
+    try {
+      const blob = await renderBlob(mode);
+      const a = document.createElement("a");
+      const u = URL.createObjectURL(blob);
+      a.href = u; a.download = `bxkr-${mode}.png`; a.click();
+      URL.revokeObjectURL(u);
+    } finally { setBusy(false); }
   }
   async function shareInstagram() {
     setBusy(true);
-    try { const blob = await renderBlob("story"); const shared = await shareViaSystem(blob, "bxkr-story.png"); tryDeepLink("instagram://story-camera");
-      if (!shared) { const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = "bxkr-story.png"; a.click(); URL.revokeObjectURL(u); } }
-    finally { setBusy(false); }
+    try {
+      const blob = await renderBlob("story");
+      const shared = await shareViaSystem(blob, "bxkr-story.png");
+      tryDeepLink("instagram://story-camera");
+      if (!shared) {
+        const u = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = u; a.download = "bxkr-story.png"; a.click();
+        URL.revokeObjectURL(u);
+      }
+    } finally { setBusy(false); }
   }
   async function shareFacebook() {
     setBusy(true);
-    try { const blob = await renderBlob("story"); const shared = await shareViaSystem(blob, "bxkr-story.png"); tryDeepLink("fb://story-camera");
-      if (!shared) { const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = "bxkr-story.png"; a.click(); URL.revokeObjectURL(u); } }
-    finally { setBusy(false); }
+    try {
+      const blob = await renderBlob("story");
+      const shared = await shareViaSystem(blob, "bxkr-story.png");
+      tryDeepLink("fb://story-camera");
+      if (!shared) {
+        const u = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = u; a.download = "bxkr-story.png"; a.click();
+        URL.revokeObjectURL(u);
+      }
+    } finally { setBusy(false); }
   }
 
   return (
@@ -289,35 +371,93 @@ export default function CompletedPelotonStylePage() {
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <div className="d-flex align-items-center justify-content-between mb-3" style={{ gap: 8 }}>
-          <Link href="/" className="btn btn-bxkr-outline" style={{ borderRadius: 24 }}>← Back</Link>
+          <Link href="/" className="btn btn-bxkr-outline" style={{ borderRadius: 24 }}>
+            ← Back
+          </Link>
           <h1 className="h5 m-0">Share • Completed</h1>
           <div />
         </div>
 
+        {/* Live preview with updated BXKR look */}
         <section className="futuristic-card p-2 mb-3">
-          <div style={{ width: "100%", maxWidth: 380, marginInline: "auto", borderRadius: 20, overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)", boxShadow: "0 0 24px rgba(0,0,0,0.35)" }}>
-            {previewUrl ? <img src={previewUrl} alt="Story preview" style={{ width: "100%", height: "auto", display: "block" }} /> : <div className="p-5 text-center text-dim small">Preparing preview…</div>}
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 380,
+              marginInline: "auto",
+              borderRadius: 24,
+              overflow: "hidden",
+              border: "1px solid rgba(255,255,255,0.14)",
+              boxShadow: "0 8px 28px rgba(0,0,0,0.35)",
+            }}
+          >
+            {previewUrl ? (
+              <img src={previewUrl} alt="Story preview" style={{ width: "100%", height: "auto", display: "block" }} />
+            ) : (
+              <div className="p-5 text-center text-dim small">Preparing preview…</div>
+            )}
           </div>
           <div className="small text-dim text-center mt-2">Story preview (1080×1920)</div>
         </section>
 
         <section className="futuristic-card p-3 mb-3">
           <div className="d-flex flex-wrap align-items-center justify-content-center" style={{ gap: 10 }}>
-            <button className="btn btn-sm" onClick={shareInstagram} disabled={busy} style={{ borderRadius: 24, color: "#0a0a0c", background: `linear-gradient(90deg, ${ACCENT}, #ff7f32)`, border: "none", minWidth: 200, fontWeight: 700 }}>
+            <button
+              className="btn btn-sm"
+              onClick={shareInstagram}
+              disabled={busy}
+              style={{
+                borderRadius: 24,
+                color: "#0a0a0c",
+                background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_2})`,
+                border: "none",
+                minWidth: 200,
+                fontWeight: 700,
+              }}
+            >
               {busy ? "Working…" : "Share to Instagram Stories"}
             </button>
-            <button className="btn btn-sm" onClick={shareFacebook} disabled={busy} style={{ borderRadius: 24, color: "#0a0a0c", background: `linear-gradient(90deg, ${ACCENT}, #ff7f32)`, border: "none", minWidth: 200, fontWeight: 700 }}>
+            <button
+              className="btn btn-sm"
+              onClick={shareFacebook}
+              disabled={busy}
+              style={{
+                borderRadius: 24,
+                color: "#0a0a0c",
+                background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_2})`,
+                border: "none",
+                minWidth: 200,
+                fontWeight: 700,
+              }}
+            >
               {busy ? "Working…" : "Share to Facebook Stories"}
             </button>
+
             <div className="vr" />
-            <button className="btn btn-sm btn-bxkr-outline" onClick={() => download("story")} disabled={busy} style={{ borderRadius: 24, minWidth: 200 }}>
+
+            <button
+              className="btn btn-sm btn-bxkr-outline"
+              onClick={() => download("story")}
+              disabled={busy}
+              style={{ borderRadius: 24, minWidth: 200 }}
+            >
               {busy ? "Preparing…" : "Download Story PNG"}
             </button>
-            <button className="btn btn-sm btn-bxkr-outline" onClick={() => download("square")} disabled={busy} style={{ borderRadius: 24, minWidth: 200 }}>
+            <button
+              className="btn btn-sm btn-bxkr-outline"
+              onClick={() => download("square")}
+              disabled={busy}
+              style={{ borderRadius: 24, minWidth: 200 }}
+            >
               {busy ? "Preparing…" : "Download Square PNG"}
             </button>
           </div>
-          {!last && <div className="alert alert-info mt-3 mb-0">No completion found yet. You can still share this template.</div>}
+
+          {!last && (
+            <div className="alert alert-info mt-3 mb-0">
+              No completion found yet. You can still share this template.
+            </div>
+          )}
         </section>
       </main>
 
@@ -325,4 +465,18 @@ export default function CompletedPelotonStylePage() {
     </>
   );
 }
-``
+
+/* ---- share helpers support ---- */
+async function shareViaSystem(blob: Blob, filename = "bxkr-story.png") {
+  try {
+    const file = new File([blob], filename, { type: blob.type });
+    // @ts-ignore
+    if (navigator?.canShare?.({ files: [file] })) {
+      // @ts-ignore
+      await navigator.share({ files: [file], title: "BXKR", text: "Train. Fuel. Repeat." });
+      return true;
+    }
+  } catch {}
+  return false;
+}
+function tryDeepLink(uri: string) { try { window.location.href = uri; } catch {} }
