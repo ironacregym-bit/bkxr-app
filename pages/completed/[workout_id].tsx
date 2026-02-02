@@ -16,8 +16,8 @@ const TEXT = "#f3f7ff";
 const LOGO_URL = "/BXKRLogoNoBG.jpg";
 const BG_URL = "/brand/share-bg.jpg";
 
-// Title to show in the bottom caption bar
-const TITLE_TEXT = "Workout Complete (Train. Fuel. Repeat.)";
+// Bottom caption left text — empty to remove the "Workout Complete" copy entirely
+const TITLE_TEXT = "";
 
 // ---------------- Types ----------------
 type CompletionSet = { exercise_id: string; set: number; weight: number | null; reps: number | null };
@@ -107,9 +107,38 @@ function percentDelta(now: number, prev: number): number | null {
   if (!isFinite(now) || !isFinite(prev) || prev <= 0) return null;
   return ((now - prev) / prev) * 100;
 }
+
+/**
+ * Sum tonnage across all valid working sets.
+ * Rules:
+ *  - include only sets with finite numbers
+ *  - exclude bodyweight/zero-load: weight <= 0
+ *  - reps must be > 0
+ * Supersets are naturally counted because we just sum every valid set row.
+ */
 function totalVolume(sets: CompletionSet[] | undefined) {
-  return (sets || []).reduce((acc, s) => acc + (s.weight ?? 0) * (s.reps ?? 0), 0);
+  return (sets || []).reduce((acc, s) => {
+    const wRaw = s.weight;
+    const rRaw = s.reps;
+    const w =
+      typeof wRaw === "number" ? wRaw :
+      typeof (wRaw as any) === "string" ? Number(wRaw) : NaN;
+    const r =
+      typeof rRaw === "number" ? rRaw :
+      typeof (rRaw as any) === "string" ? Number(rRaw) : NaN;
+    if (!isFinite(w) || !isFinite(r) || w <= 0 || r <= 0) return acc; // exclude bodyweight/invalid
+    return acc + w * r;
+  }, 0);
 }
+
+/** Compact formatting for volume */
+function formatVolumeKgReps(v: number) {
+  if (!isFinite(v) || v <= 0) return "—";
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M kg·reps`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}k kg·reps`;
+  return `${Math.round(v)} kg·reps`;
+}
+
 function summariseBenchmark(metrics?: BenchmarkMetrics | null) {
   let rounds = 0;
   let maxLoad = 0;
@@ -150,7 +179,7 @@ async function renderShareImage(opts: {
   pills: Pill[]; // up to 4
   bgUrl: string;
   logoUrl: string;
-  captionLeft: string; // "Workout Complete (…)"
+  captionLeft: string; // empty to skip
   captionRightTitle?: string | null; // workout_name
   captionRightDesc?: string | null; // description/notes
 }): Promise<{ blob: Blob; dataUrl: string }> {
@@ -283,11 +312,13 @@ async function renderShareImage(opts: {
   ctx.fillStyle = barGrad;
   ctx.fillRect(0, barY, W, 3);
 
-  // left caption
-  ctx.fillStyle = "#e8eef8";
-  ctx.textAlign = "left";
-  ctx.font = "700 48px Inter, system-ui, -apple-system, Segoe UI, Roboto";
-  ctx.fillText(clamp(ctx, opts.captionLeft, W * 0.55 - 48), 48, barY + 84);
+  // left caption — render only if provided (we pass "")
+  if (opts.captionLeft && opts.captionLeft.trim()) {
+    ctx.fillStyle = "#e8eef8";
+    ctx.textAlign = "left";
+    ctx.font = "700 48px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText(clamp(ctx, opts.captionLeft, W * 0.55 - 48), 48, barY + 84);
+  }
 
   // right caption (workout name + description)
   const rightX = W * 0.55;
@@ -402,12 +433,6 @@ export default function CompletedPelotonStylePage() {
     typeof last?.calories_burned === "number" ? Math.round(last.calories_burned) : null;
   const duration = pickDuration(last);
 
-  // Type detection (legacy compatibility only)
-  const isGym =
-    (last?.sets || []).length > 0 ||
-    (last?.activity_type || "").toLowerCase().includes("strength");
-  const isBXKR = !!last?.is_benchmark || !!last?.benchmark_metrics;
-
   // Most Improved (PB) vs Top Lift
   const currentBest = bestSetByExercise(last?.sets);
   const prevDocs = history.filter((h) => !last?.id || h.id !== last?.id);
@@ -441,6 +466,7 @@ export default function CompletedPelotonStylePage() {
       ? `${topLift.exercise_id} · ${Math.round(topLift.weight ?? 0)} kg`
       : "—";
 
+  // Volume (exclude bodyweight/zero-load sets; supersets are included naturally)
   const vol = totalVolume(last?.sets);
 
   // Pills: Calories • Most Improved/Top Lift • Time • Volume
@@ -448,7 +474,7 @@ export default function CompletedPelotonStylePage() {
     { label: "Calories", value: calories != null ? `${calories} kcal` : "—" },
     { label: "Most Improved", value: mostImprovedText },
     { label: "Time", value: duration != null ? `${Math.round(duration)} min` : "—" },
-    { label: "Volume", value: vol > 0 ? `${Math.round(vol)} kg·reps` : "—" },
+    { label: "Volume", value: formatVolumeKgReps(vol) },
   ];
 
   // Caption right uses workout doc if available; fallback to completion
@@ -469,7 +495,7 @@ export default function CompletedPelotonStylePage() {
         pills,
         bgUrl: BG_URL,
         logoUrl: LOGO_URL,
-        captionLeft: TITLE_TEXT,
+        captionLeft: TITLE_TEXT,            // now empty string -> nothing rendered on left
         captionRightTitle,
         captionRightDesc,
       });
@@ -547,8 +573,8 @@ export default function CompletedPelotonStylePage() {
   return (
     <>
       <Head>
-        <title>{`Workout Complete • Share • BXKR`}</title>
-        <meta property="og:title" content="Workout Complete • BXKR" />
+        <title>{`Good Work On Your Workout • BXKR`}</title>
+        <meta property="og:title" content="Good Work On Your Workout • BXKR" />
         <meta property="og:description" content="Train. Fuel. Repeat." />
         <meta property="og:image" content="/og/share-placeholder.png" />
         <meta name="twitter:card" content="summary_large_image" />
@@ -559,7 +585,7 @@ export default function CompletedPelotonStylePage() {
           <Link href="/" className="btn btn-bxkr-outline" style={{ borderRadius: 24 }}>
             ← Back
           </Link>
-          <h1 className="h5 m-0">Share • Completed</h1>
+          <h1 className="h5 m-0">Good Work On Your Workout</h1>
           <div />
         </div>
 
