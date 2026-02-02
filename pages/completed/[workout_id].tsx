@@ -429,12 +429,14 @@ export default function CompletedPelotonStylePage() {
   });
 
   const topLift = heaviestOverall(last?.sets);
+
+  // Keep union explicit and narrow by typeof to satisfy TS
   const improvedPct: number | null =
     typeof improvedDelta === "number" && isFinite(improvedDelta) ? improvedDelta : null;
-  
+
   const mostImprovedText =
-    improvedLabel && improvedPct !== null
-      ? `${improvedLabel} +${improvedPct.toFixed(1)}% PB`
+    improvedLabel && typeof improvedPct === "number"
+      ? `${improvedLabel} +${(improvedPct as number).toFixed(1)}% PB`
       : topLift
       ? `${topLift.exercise_id} · ${Math.round(topLift.weight ?? 0)} kg`
       : "—";
@@ -673,5 +675,7 @@ async function shareViaSystem(blob: Blob, filename = "bxkr-story.png") {
 function tryDeepLink(uri: string) {
   try {
     window.location.href = uri;
-  } catch
+  } catch {
+    // no-op
+  }
 }
