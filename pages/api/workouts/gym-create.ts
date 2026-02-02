@@ -1,4 +1,3 @@
-
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
@@ -29,13 +28,14 @@ type SupersetItem = {
 };
 
 type GymRound = {
-  name: string;                         // e.g., "Warm Up", "Main Set", "Finisher"
+  name: string; // e.g., "Warm Up", "Main Set", "Finisher"
   order: number;
   items: Array<SingleItem | SupersetItem>;
 };
 
 type DayName = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
 
+/** Payload now supports string | string[] for assigned_to (normalised to string[]). */
 type GymCreatePayload = {
   visibility: "global" | "private";
   owner_email?: string;
@@ -47,12 +47,12 @@ type GymCreatePayload = {
   main: GymRound;
   finisher?: GymRound | null;
 
-  // NEW — Recurrence & assignment
+  // Recurrence & assignment
   recurring?: boolean;
   recurring_day?: DayName | null;
   recurring_start?: string | null; // ISO or parseable date string
   recurring_end?: string | null;   // ISO or parseable date string
-  assigned_to?: string | null;     // email of athlete (lowercased)
+  assigned_to?: string | string[] | null; // CHANGED: accept single/multiple; API will normalise to string[]
 };
 
 const ALLOWED_DAYS: DayName[] = [
@@ -70,6 +70,28 @@ function parseDateToTimestamp(s: string | null | undefined): Timestamp | null {
   // Normalise hour to avoid TZ-midnight drift
   dt.setHours(12, 0, 0, 0);
   return Timestamp.fromDate(dt);
+}
+
+/** NEW: normalise assigned_to into a clean string[] (lowercased, unique). */
+function normaliseAssignedTo(input: string | string[] | null | undefined): string[] {
+  if (Array.isArray(input)) {
+    return Array.from(
+      new Set(
+        input
+          .map((e) => String(e || "").trim().toLowerCase())
+          .filter((e) => e && isEmail(e))
+      )
+    );
+  }
+  if (typeof input === "string") {
+    // accept comma/semicolon/space separated lists
+    const parts = input
+      .split(/[,;\s]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    return Array.from(new Set(parts.filter(isEmail)));
+  }
+  return [];
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -91,19 +113,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: "main must include at least one item" });
   }
 
-  // ----- Recurrence validations (new) -----
+  // ----- Recurrence validations (updated) -----
   const isRecurring = !!p.recurring;
-  let assignedTo: string | null = null;
+
+  // Normalise assigned_to to array for consistent downstream usage
+  const assignedToList = normaliseAssignedTo(p.assigned_to);
+
   let dayName: DayName | null = null;
   let tsStart: Timestamp | null = null;
   let tsEnd: Timestamp | null = null;
 
   if (isRecurring) {
-    const incomingAssigned = (p.assigned_to || "").trim().toLowerCase();
-    if (!incomingAssigned || !isEmail(incomingAssigned)) {
-      return res.status(400).json({ error: "assigned_to must be a valid email when recurring is true" });
+    if (!assignedToList.length) {
+      return res.status(400).json({ error: "assigned_to must include at least one valid email when recurring is true" });
     }
-    assignedTo = incomingAssigned;
 
     const rd = (p.recurring_day || "").trim() as DayName;
     if (!ALLOWED_DAYS.includes(rd)) {
@@ -144,12 +167,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         created_at: now,
         updated_at: now,
 
-        // NEW — recurring fields
+        // Recurring fields
         recurring: isRecurring,
         recurring_day: isRecurring ? dayName : null,
         recurring_start: isRecurring ? tsStart : null,
         recurring_end: isRecurring ? tsEnd : null,
-        assigned_to: isRecurring ? assignedTo : null,
+
+        // CHANGED: store as array always (empty [] if not provided)
+        assigned_to: assignedToList, // array form for legacy/overview compatibility
       },
       { merge: true }
     );
