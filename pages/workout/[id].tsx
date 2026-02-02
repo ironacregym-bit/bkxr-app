@@ -316,7 +316,7 @@ export default function WorkoutPage() {
           </div>
           <div className="d-flex align-items-center" style={{ gap: 8 }}>
             {mounted && <WorkoutViewToggle value={view} onChange={handleViewChange} />}
-            <Link href="/workouts" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
+            <Link href="/" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
               ← Back
             </Link>
           </div>
