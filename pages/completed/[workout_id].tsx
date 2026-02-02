@@ -19,6 +19,13 @@ const BG_URL = "/brand/share-bg.jpg";
 // Bottom caption left text — empty to remove the "Workout Complete" copy entirely
 const TITLE_TEXT = "";
 
+// ------ Typography (shrunk + consistent) ------
+const FONT_LABEL = 20;            // tile label (e.g., CALORIES)
+const FONT_VALUE = 44;            // tile value (smaller for long text fit)
+const FONT_DATE = 28;             // top-left date
+const FONT_CAPTION_TITLE = 36;    // bottom-right title
+const FONT_CAPTION_DESC = 26;     // bottom-right description
+
 // ---------------- Types ----------------
 type CompletionSet = { exercise_id: string; set: number; weight: number | null; reps: number | null };
 type BenchmarkPart = { style?: string; rounds_completed?: number | null; weight_kg?: number | null; notes?: string | null };
@@ -51,7 +58,15 @@ type WorkoutDoc = {
   notes?: string | null;
 };
 
-const fetcher = (u: string) => fetch(u).then((r) => (r.ok ? r.json() : null));
+const fetcher = async (u: string) => {
+  try {
+    const r = await fetch(u);
+    if (!r.ok) return null; // swallow 4xx/5xx into null for safe fallbacks
+    return await r.json();
+  } catch {
+    return null;
+  }
+};
 
 // ---------------- util ----------------
 function toISO(v: any): string | null {
@@ -131,12 +146,11 @@ function totalVolume(sets: CompletionSet[] | undefined) {
   }, 0);
 }
 
-/** Compact formatting for volume */
-function formatVolumeKgReps(v: number) {
+/** Human-readable volume: "6,555 kg lifted" */
+const nf0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+function formatVolumeKgHuman(v: number) {
   if (!isFinite(v) || v <= 0) return "—";
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M kg·reps`;
-  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}k kg·reps`;
-  return `${Math.round(v)} kg·reps`;
+  return `${nf0.format(Math.round(v))} kg lifted`;
 }
 
 function summariseBenchmark(metrics?: BenchmarkMetrics | null) {
@@ -171,7 +185,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  * - left accent rail
  * - vertical metric tiles (glass)
  * - BXKR logo top-right
- * - bottom caption bar: left=TITLE_TEXT, right=workout name + description
+ * - bottom caption bar: left=TITLE_TEXT (suppressed), right=workout name + description
  */
 async function renderShareImage(opts: {
   mode: "story" | "square";
@@ -257,7 +271,7 @@ async function renderShareImage(opts: {
   ctx.fillStyle = "#cbd5e1";
   ctx.textAlign = "left";
   ctx.globalAlpha = 0.9;
-  ctx.font = "500 34px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+  ctx.font = `500 ${FONT_DATE}px Inter, system-ui, -apple-system, Segoe UI, Roboto`;
   ctx.fillText(opts.dateText, 60, 140);
   ctx.globalAlpha = 1;
 
@@ -286,17 +300,17 @@ async function renderShareImage(opts: {
     roundRect(ctx, x, y, 5, PILL_H, R);
     ctx.fill();
 
-    // label (thin)
+    // label (smaller, consistent)
     ctx.fillStyle = "#b6c3d7";
     ctx.textAlign = "left";
-    ctx.font = "600 24px Inter, system-ui, -apple-system, Segoe UI, Roboto";
-    ctx.fillText(p.label.toUpperCase(), x + 24, y + 44);
+    ctx.font = `600 ${FONT_LABEL}px Inter, system-ui, -apple-system, Segoe UI, Roboto`;
+    ctx.fillText(p.label.toUpperCase(), x + 24, y + 40);
 
-    // value (thinner weight)
+    // value (smaller, consistent)
     ctx.fillStyle = TEXT;
-    ctx.font = "600 58px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.font = `600 ${FONT_VALUE}px Inter, system-ui, -apple-system, Segoe UI, Roboto`;
     const value = clamp(ctx, p.value, PILL_W - 52);
-    ctx.fillText(value, x + 24, y + 108);
+    ctx.fillText(value, x + 24, y + 110);
   });
 
   // Bottom caption bar
@@ -310,13 +324,14 @@ async function renderShareImage(opts: {
   barGrad.addColorStop(0, ACCENT);
   barGrad.addColorStop(1, ACCENT_2);
   ctx.fillStyle = barGrad;
+  ctx.fillRect(0, barY, 3, 3); // hairline left
   ctx.fillRect(0, barY, W, 3);
 
   // left caption — render only if provided (we pass "")
   if (opts.captionLeft && opts.captionLeft.trim()) {
     ctx.fillStyle = "#e8eef8";
     ctx.textAlign = "left";
-    ctx.font = "700 48px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.font = `700 ${FONT_CAPTION_TITLE}px Inter, system-ui, -apple-system, Segoe UI, Roboto`;
     ctx.fillText(clamp(ctx, opts.captionLeft, W * 0.55 - 48), 48, barY + 84);
   }
 
@@ -325,13 +340,13 @@ async function renderShareImage(opts: {
   const rightW = W - rightX - 48;
   ctx.textAlign = "right";
   ctx.fillStyle = "#ffffff";
-  ctx.font = "700 40px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+  ctx.font = `700 ${FONT_CAPTION_TITLE}px Inter, system-ui, -apple-system, Segoe UI, Roboto`;
   const title = (opts.captionRightTitle || "").trim() || "BXKR Workout";
   ctx.fillText(clamp(ctx, title, rightW), W - 48, barY + 72);
 
   if (opts.captionRightDesc && opts.captionRightDesc.trim()) {
     ctx.fillStyle = "#d0d8e6";
-    ctx.font = "500 28px Inter, system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.font = `500 ${FONT_CAPTION_DESC}px Inter, system-ui, -apple-system, Segoe UI, Roboto`;
     ctx.fillText(clamp(ctx, opts.captionRightDesc.trim(), rightW), W - 48, barY + 122);
   }
 
@@ -408,7 +423,15 @@ export default function CompletedPelotonStylePage() {
   const { data: histResp } = useSWR<{ results: HistoryItem[]; history: HistoryItem[] }>(
     histUrl,
     fetcher,
-    { revalidateOnFocus: false }
+    {
+      revalidateOnFocus: false,
+      onErrorRetry: (error, key, config, revalidate, { retryCount }) => {
+        // Avoid retry storms on server errors
+        if ((error as any)?.status === 500 || retryCount >= 1) return;
+        setTimeout(() => revalidate({ retryCount }), 2000);
+      },
+      shouldRetryOnError: false,
+    }
   );
   const history = useMemo<HistoryItem[]>(
     () => (histResp?.results || histResp?.history || []) as HistoryItem[],
@@ -474,7 +497,7 @@ export default function CompletedPelotonStylePage() {
     { label: "Calories", value: calories != null ? `${calories} kcal` : "—" },
     { label: "Most Improved", value: mostImprovedText },
     { label: "Time", value: duration != null ? `${Math.round(duration)} min` : "—" },
-    { label: "Volume", value: formatVolumeKgReps(vol) },
+    { label: "Volume", value: formatVolumeKgHuman(vol) },
   ];
 
   // Caption right uses workout doc if available; fallback to completion
@@ -573,8 +596,8 @@ export default function CompletedPelotonStylePage() {
   return (
     <>
       <Head>
-        <title>{`Good Work On Your Workout • BXKR`}</title>
-        <meta property="og:title" content="Good Work On Your Workout • BXKR" />
+        <title>{`You Crushed Today’s Session • BXKR`}</title>
+        <meta property="og:title" content="You Crushed Today’s Session • BXKR" />
         <meta property="og:description" content="Train. Fuel. Repeat." />
         <meta property="og:image" content="/og/share-placeholder.png" />
         <meta name="twitter:card" content="summary_large_image" />
@@ -585,7 +608,7 @@ export default function CompletedPelotonStylePage() {
           <Link href="/" className="btn btn-bxkr-outline" style={{ borderRadius: 24 }}>
             ← Back
           </Link>
-          <h1 className="h5 m-0">Good Work On Your Workout</h1>
+          <h1 className="h5 m-0">You Crushed Today’s Session</h1>
           <div />
         </div>
 
