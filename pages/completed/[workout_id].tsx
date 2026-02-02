@@ -429,9 +429,12 @@ export default function CompletedPelotonStylePage() {
   });
 
   const topLift = heaviestOverall(last?.sets);
+  const improvedPct: number | null =
+    typeof improvedDelta === "number" && isFinite(improvedDelta) ? improvedDelta : null;
+  
   const mostImprovedText =
-    improvedLabel && typeof improvedDelta === "number"
-      ? `${improvedLabel} +${improvedDelta.toFixed(1)}% PB`
+    improvedLabel && improvedPct !== null
+      ? `${improvedLabel} +${improvedPct.toFixed(1)}% PB`
       : topLift
       ? `${topLift.exercise_id} · ${Math.round(topLift.weight ?? 0)} kg`
       : "—";
