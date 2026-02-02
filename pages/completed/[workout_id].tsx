@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import BottomNav from "../../components/BottomNav";
 
 const ACCENT = "#FF8A2A";
@@ -22,6 +23,7 @@ const TITLE_TEXT = "Workout Complete (Train. Fuel. Repeat.)";
 type CompletionSet = { exercise_id: string; set: number; weight: number | null; reps: number | null };
 type BenchmarkPart = { style?: string; rounds_completed?: number | null; weight_kg?: number | null; notes?: string | null };
 type BenchmarkMetrics = Partial<Record<"engine" | "power" | "core" | "ladder" | "load", BenchmarkPart>>;
+
 type LastCompletion = {
   id?: string;
   workout_id?: string;
@@ -41,7 +43,13 @@ type LastCompletion = {
   benchmark_metrics?: BenchmarkMetrics | null;
   sets_completed?: number | null;
 };
+
 type HistoryItem = LastCompletion & { id: string };
+
+type WorkoutDoc = {
+  workout_name: string;
+  notes?: string | null;
+};
 
 const fetcher = (u: string) => fetch(u).then((r) => (r.ok ? r.json() : null));
 
@@ -53,18 +61,29 @@ function toISO(v: any): string | null {
     if (v?.seconds) return new Date(v.seconds * 1000).toISOString();
     if (typeof v === "string") return new Date(v).toISOString();
     return null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 function pickDuration(c: LastCompletion | null): number | null {
   if (!c) return null;
-  return typeof c.duration_minutes === "number" ? c.duration_minutes : typeof c.duration === "number" ? c.duration : null;
+  return typeof c.duration_minutes === "number"
+    ? c.duration_minutes
+    : typeof c.duration === "number"
+    ? c.duration
+    : null;
 }
 function heaviestOverall(sets: CompletionSet[] | undefined): CompletionSet | null {
   let top: CompletionSet | null = null;
   (sets || []).forEach((s) => {
-    if (!top) { top = s; return; }
-    const wt = top.weight ?? 0, wr = s.weight ?? 0;
-    const rt = top.reps ?? 0, rr = s.reps ?? 0;
+    if (!top) {
+      top = s;
+      return;
+    }
+    const wt = top.weight ?? 0,
+      wr = s.weight ?? 0;
+    const rt = top.reps ?? 0,
+      rr = s.reps ?? 0;
     if (wr > wt || (wr === wt && rr > rt)) top = s;
   });
   return top;
@@ -75,8 +94,10 @@ function bestSetByExercise(sets: CompletionSet[] | undefined) {
     const prev = m.get(s.exercise_id);
     if (!prev) m.set(s.exercise_id, s);
     else {
-      const pw = prev.weight ?? 0, pr = prev.reps ?? 0;
-      const w = s.weight ?? 0, r = s.reps ?? 0;
+      const pw = prev.weight ?? 0,
+        pr = prev.reps ?? 0;
+      const w = s.weight ?? 0,
+        r = s.reps ?? 0;
       if (w > pw || (w === pw && r > pr)) m.set(s.exercise_id, s);
     }
   });
@@ -90,11 +111,13 @@ function totalVolume(sets: CompletionSet[] | undefined) {
   return (sets || []).reduce((acc, s) => acc + (s.weight ?? 0) * (s.reps ?? 0), 0);
 }
 function summariseBenchmark(metrics?: BenchmarkMetrics | null) {
-  let rounds = 0; let maxLoad = 0;
+  let rounds = 0;
+  let maxLoad = 0;
   if (metrics && typeof metrics === "object") {
     Object.values(metrics).forEach((p) => {
       if (!p) return;
-      if (typeof p.rounds_completed === "number") rounds += Math.max(0, Math.floor(p.rounds_completed));
+      if (typeof p.rounds_completed === "number")
+        rounds += Math.max(0, Math.floor(p.rounds_completed));
       if (typeof p.weight_kg === "number") maxLoad = Math.max(maxLoad, p.weight_kg);
     });
   }
@@ -106,69 +129,97 @@ type Pill = { label: string; value: string };
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const img = new Image(); img.decoding = "async";
-    img.onload = () => resolve(img); img.onerror = reject; img.src = src;
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
   });
 }
 
 /**
  * Peloton-like composition, BXKR colours:
- * - thin left rail (accent)
- * - metric tiles in a vertical column
+ * - left accent rail
+ * - vertical metric tiles (glass)
  * - BXKR logo top-right
  * - bottom caption bar: left=TITLE_TEXT, right=workout name + description
  */
 async function renderShareImage(opts: {
   mode: "story" | "square";
   dateText: string;
-  pills: Pill[];              // up to 4
-  notes?: string | null;      // optional; we won't show in this design (bottom bar instead)
+  pills: Pill[]; // up to 4
   bgUrl: string;
   logoUrl: string;
-  captionLeft: string;        // "Workout Complete (…)"
+  captionLeft: string; // "Workout Complete (…)"
   captionRightTitle?: string | null; // workout_name
-  captionRightDesc?: string | null;  // description/notes
+  captionRightDesc?: string | null; // description/notes
 }): Promise<{ blob: Blob; dataUrl: string }> {
-  const W = 1080, H = opts.mode === "story" ? 1920 : 1080;
+  const W = 1080,
+    H = opts.mode === "story" ? 1920 : 1080;
 
-  let bgImg: HTMLImageElement | null = null, logoImg: HTMLImageElement | null = null;
-  try { bgImg = await loadImage(opts.bgUrl); } catch {}
-  try { logoImg = await loadImage(opts.logoUrl); } catch {}
+  let bgImg: HTMLImageElement | null = null,
+    logoImg: HTMLImageElement | null = null;
+  try {
+    bgImg = await loadImage(opts.bgUrl);
+  } catch {}
+  try {
+    logoImg = await loadImage(opts.logoUrl);
+  } catch {}
 
   const canvas = document.createElement("canvas");
-  canvas.width = W; canvas.height = H;
+  canvas.width = W;
+  canvas.height = H;
   const ctx = canvas.getContext("2d")!;
 
   // Base + cover image
-  ctx.fillStyle = BG_DARK; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = BG_DARK;
+  ctx.fillRect(0, 0, W, H);
   if (bgImg) {
-    const rC = W / H, rI = bgImg.width / bgImg.height;
-    let dw = W, dh = H, dx = 0, dy = 0;
-    if (rI > rC) { dh = H; dw = (bgImg.width / bgImg.height) * dh; dx = (W - dw) / 2; }
-    else { dw = W; dh = (bgImg.height / bgImg.width) * dw; dy = (H - dh) / 2; }
+    const rC = W / H,
+      rI = bgImg.width / bgImg.height;
+    let dw = W,
+      dh = H,
+      dx = 0,
+      dy = 0;
+    if (rI > rC) {
+      dh = H;
+      dw = (bgImg.width / bgImg.height) * dh;
+      dx = (W - dw) / 2;
+    } else {
+      dw = W;
+      dh = (bgImg.height / bgImg.width) * dw;
+      dy = (H - dh) / 2;
+    }
     ctx.drawImage(bgImg, dx, dy, dw, dh);
   }
 
-  // Vignette / dark overlay for legibility
+  // Vignette overlay
   const grad = ctx.createLinearGradient(0, 0, 0, H);
   grad.addColorStop(0, "rgba(0,0,0,0.55)");
   grad.addColorStop(0.4, "rgba(0,0,0,0.66)");
   grad.addColorStop(1, "rgba(0,0,0,0.80)");
-  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
 
   // Left accent rail
   const railGrad = ctx.createLinearGradient(36, 0, 42, 0);
   railGrad.addColorStop(0, ACCENT);
   railGrad.addColorStop(1, ACCENT_2);
-  ctx.fillStyle = railGrad; roundRect(ctx, 36, 180, 6, H - 420, 3); ctx.fill();
+  ctx.fillStyle = railGrad;
+  roundRect(ctx, 36, 180, 6, H - 420, 3);
+  ctx.fill();
 
   // Logo top-right
   if (logoImg) {
-    const LW = 200, LH = (logoImg.height / logoImg.width) * LW;
+    const LW = 200,
+      LH = (logoImg.height / logoImg.width) * LW;
     ctx.drawImage(logoImg, W - LW - 48, 52, LW, LH);
   } else {
-    ctx.fillStyle = ACCENT; roundRect(ctx, W - 240, 48, 192, 72, 16); ctx.fill();
-    ctx.fillStyle = "#0b0f14"; ctx.textAlign = "center";
+    ctx.fillStyle = ACCENT;
+    roundRect(ctx, W - 240, 48, 192, 72, 16);
+    ctx.fill();
+    ctx.fillStyle = "#0b0f14";
+    ctx.textAlign = "center";
     ctx.font = "800 40px Inter, system-ui, -apple-system, Segoe UI, Roboto";
     ctx.fillText("BXKR", W - 240 + 96, 48 + 50);
   }
@@ -182,42 +233,59 @@ async function renderShareImage(opts: {
   ctx.globalAlpha = 1;
 
   // Metric tiles (left column)
-  const PILL_W = 560, PILL_H = 170, GAP = 24, TOP = 200, R = 20;
+  const PILL_W = 560,
+    PILL_H = 170,
+    GAP = 24,
+    TOP = 200,
+    R = 20;
   (opts.pills || []).slice(0, 4).forEach((p, i) => {
-    const x = 60, y = TOP + i * (PILL_H + GAP);
+    const x = 60,
+      y = TOP + i * (PILL_H + GAP);
     // glass tile
-    ctx.fillStyle = "rgba(255,255,255,0.06)"; roundRect(ctx, x, y, PILL_W, PILL_H, R); ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1; roundRect(ctx, x, y, PILL_W, PILL_H, R); ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    roundRect(ctx, x, y, PILL_W, PILL_H, R);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 1;
+    roundRect(ctx, x, y, PILL_W, PILL_H, R);
+    ctx.stroke();
     // orange hairline at left edge of tile
     const lgrad = ctx.createLinearGradient(x, y, x + 10, y);
-    lgrad.addColorStop(0, ACCENT); lgrad.addColorStop(1, "rgba(255,138,42,0)");
-    ctx.fillStyle = lgrad; roundRect(ctx, x, y, 5, PILL_H, R); ctx.fill();
+    lgrad.addColorStop(0, ACCENT);
+    lgrad.addColorStop(1, "rgba(255,138,42,0)");
+    ctx.fillStyle = lgrad;
+    roundRect(ctx, x, y, 5, PILL_H, R);
+    ctx.fill();
 
     // label (thin)
-    ctx.fillStyle = "#b6c3d7"; ctx.textAlign = "left";
+    ctx.fillStyle = "#b6c3d7";
+    ctx.textAlign = "left";
     ctx.font = "600 24px Inter, system-ui, -apple-system, Segoe UI, Roboto";
     ctx.fillText(p.label.toUpperCase(), x + 24, y + 44);
 
-    // value (thinner than before)
+    // value (thinner weight)
     ctx.fillStyle = TEXT;
     ctx.font = "600 58px Inter, system-ui, -apple-system, Segoe UI, Roboto";
     const value = clamp(ctx, p.value, PILL_W - 52);
     ctx.fillText(value, x + 24, y + 108);
   });
 
-  // Bottom caption bar (replaces old share text)
+  // Bottom caption bar
   const BAR_H = 200;
   const barY = H - BAR_H;
-  // bar background
   ctx.fillStyle = "rgba(0,0,0,0.68)";
-  roundRect(ctx, 0, barY, W, BAR_H, 0); ctx.fill();
+  roundRect(ctx, 0, barY, W, BAR_H, 0);
+  ctx.fill();
   // top accent line
   const barGrad = ctx.createLinearGradient(0, barY, W, barY);
-  barGrad.addColorStop(0, ACCENT); barGrad.addColorStop(1, ACCENT_2);
-  ctx.fillStyle = barGrad; ctx.fillRect(0, barY, W, 3);
+  barGrad.addColorStop(0, ACCENT);
+  barGrad.addColorStop(1, ACCENT_2);
+  ctx.fillStyle = barGrad;
+  ctx.fillRect(0, barY, W, 3);
 
-  // left caption (Workout Complete ...)
-  ctx.fillStyle = "#e8eef8"; ctx.textAlign = "left";
+  // left caption
+  ctx.fillStyle = "#e8eef8";
+  ctx.textAlign = "left";
   ctx.font = "700 48px Inter, system-ui, -apple-system, Segoe UI, Roboto";
   ctx.fillText(clamp(ctx, opts.captionLeft, W * 0.55 - 48), 48, barY + 84);
 
@@ -227,8 +295,8 @@ async function renderShareImage(opts: {
   ctx.textAlign = "right";
   ctx.fillStyle = "#ffffff";
   ctx.font = "700 40px Inter, system-ui, -apple-system, Segoe UI, Roboto";
-  const t = (opts.captionRightTitle || "").trim() || "BXKR Workout";
-  ctx.fillText(clamp(ctx, t, rightW), W - 48, barY + 72);
+  const title = (opts.captionRightTitle || "").trim() || "BXKR Workout";
+  ctx.fillText(clamp(ctx, title, rightW), W - 48, barY + 72);
 
   if (opts.captionRightDesc && opts.captionRightDesc.trim()) {
     ctx.fillStyle = "#d0d8e6";
@@ -236,13 +304,21 @@ async function renderShareImage(opts: {
     ctx.fillText(clamp(ctx, opts.captionRightDesc.trim(), rightW), W - 48, barY + 122);
   }
 
-  // Export
-  const blob: Blob = await new Promise((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
+  const blob: Blob = await new Promise((resolve) =>
+    canvas.toBlob((b) => resolve(b!), "image/png")
+  );
   const dataUrl = canvas.toDataURL("image/png");
   return { blob, dataUrl };
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
   const rr = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
   ctx.moveTo(x + rr, y);
@@ -263,42 +339,73 @@ function clamp(ctx: CanvasRenderingContext2D, s: string, maxWidth: number) {
 // ---------------- Page ----------------
 export default function CompletedPelotonStylePage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const { workout_id } = router.query as { workout_id?: string };
-  const url = workout_id && typeof workout_id === "string" ? `/api/completions/last?workout_id=${encodeURIComponent(workout_id)}` : null;
+  const url =
+    workout_id && typeof workout_id === "string"
+      ? `/api/completions/last?workout_id=${encodeURIComponent(workout_id)}`
+      : null;
 
   // last completion
-  const { data: swrData } = useSWR<LastCompletion | { ok: boolean; last?: LastCompletion }>(url, fetcher, { revalidateOnFocus: false });
+  const { data: swrData } = useSWR<LastCompletion | { ok: boolean; last?: LastCompletion }>(
+    url,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
   const last: LastCompletion | null = useMemo(
-    () => (!swrData ? null : (swrData as any).ok ? ((swrData as any).last ?? null) : (swrData as LastCompletion)),
+    () => (!swrData ? null : (swrData as any).ok ? (swrData as any).last ?? null : (swrData as LastCompletion)),
     [swrData]
   );
 
-  // short history (for "Most Improved")
-  const histUrl =
+  // fetch workout doc for name/description in caption (optional, best-effort)
+  const workoutUrl =
     workout_id && typeof workout_id === "string"
-      ? `/api/completions/history?email=self&workout_id=${encodeURIComponent(workout_id)}&limit=6`
+      ? `/api/workouts/${encodeURIComponent(workout_id)}`
       : null;
-  // NOTE: if your history endpoint expects real email, change `email=self` to the signed‑in user on server (or accept "self")
-  const { data: histResp } = useSWR<{ results: HistoryItem[]; history: HistoryItem[] }>(histUrl, fetcher, {
+  const { data: wData } = useSWR<WorkoutDoc>(workoutUrl, fetcher, {
     revalidateOnFocus: false,
   });
+
+  // short history (for "Most Improved")
+  const email = (session?.user as any)?.email || "";
+  const histUrl =
+    workout_id && typeof workout_id === "string" && email
+      ? `/api/completions/history?email=${encodeURIComponent(email)}&workout_id=${encodeURIComponent(
+          workout_id
+        )}&limit=6`
+      : null;
+  const { data: histResp } = useSWR<{ results: HistoryItem[]; history: HistoryItem[] }>(
+    histUrl,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
   const history = useMemo<HistoryItem[]>(
     () => (histResp?.results || histResp?.history || []) as HistoryItem[],
     [histResp]
   );
 
   // Core fields
-  const iso = toISO(last?.completed_date) || toISO(last?.date_completed) || new Date().toISOString();
+  const iso =
+    toISO(last?.completed_date) || toISO(last?.date_completed) || new Date().toISOString();
   const dateText = useMemo(
-    () => new Date(iso!).toLocaleString(undefined, { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }),
+    () =>
+      new Date(iso!).toLocaleString(undefined, {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
     [iso]
   );
-  const calories = typeof last?.calories_burned === "number" ? Math.round(last.calories_burned) : null;
+  const calories =
+    typeof last?.calories_burned === "number" ? Math.round(last.calories_burned) : null;
   const duration = pickDuration(last);
-  const notes = (last?.notes || "").trim() || null;
 
-  // Detect type (only affects fallback if you still have older benchmark records)
-  const isGym = (last?.sets || []).length > 0 || (last?.activity_type || "").toLowerCase().includes("strength");
+  // Type detection (legacy compatibility only)
+  const isGym =
+    (last?.sets || []).length > 0 ||
+    (last?.activity_type || "").toLowerCase().includes("strength");
   const isBXKR = !!last?.is_benchmark || !!last?.benchmark_metrics;
 
   // Most Improved (PB) vs Top Lift
@@ -323,7 +430,7 @@ export default function CompletedPelotonStylePage() {
 
   const topLift = heaviestOverall(last?.sets);
   const mostImprovedText =
-    improvedLabel && improvedDelta != null
+    improvedLabel && typeof improvedDelta === "number"
       ? `${improvedLabel} +${improvedDelta.toFixed(1)}% PB`
       : topLift
       ? `${topLift.exercise_id} · ${Math.round(topLift.weight ?? 0)} kg`
@@ -339,9 +446,11 @@ export default function CompletedPelotonStylePage() {
     { label: "Volume", value: vol > 0 ? `${Math.round(vol)} kg·reps` : "—" },
   ];
 
-  // Caption right
-  const captionRightTitle = last?.workout_name || null;
-  const captionRightDesc = notes;
+  // Caption right uses workout doc if available; fallback to completion
+  const captionRightTitle = wData?.workout_name || last?.workout_name || null;
+  const captionRightDesc =
+    (wData?.notes && String(wData.notes)) ||
+    null; // prefer workout description (not completion notes)
 
   const [busy, setBusy] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -353,7 +462,6 @@ export default function CompletedPelotonStylePage() {
         mode: "story",
         dateText,
         pills,
-        notes: null, // omit notes in the main body; shown in bottom bar instead
         bgUrl: BG_URL,
         logoUrl: LOGO_URL,
         captionLeft: TITLE_TEXT,
@@ -362,7 +470,9 @@ export default function CompletedPelotonStylePage() {
       });
       if (alive) setPreviewUrl(dataUrl);
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [dateText, JSON.stringify(pills), captionRightTitle, captionRightDesc]);
 
   async function renderBlob(mode: "story" | "square") {
@@ -370,7 +480,6 @@ export default function CompletedPelotonStylePage() {
       mode,
       dateText,
       pills,
-      notes: null,
       bgUrl: BG_URL,
       logoUrl: LOGO_URL,
       captionLeft: TITLE_TEXT,
@@ -385,9 +494,13 @@ export default function CompletedPelotonStylePage() {
       const blob = await renderBlob(mode);
       const a = document.createElement("a");
       const u = URL.createObjectURL(blob);
-      a.href = u; a.download = `bxkr-${mode}.png`; a.click();
+      a.href = u;
+      a.download = `bxkr-${mode}.png`;
+      a.click();
       URL.revokeObjectURL(u);
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
   async function shareInstagram() {
     setBusy(true);
@@ -395,8 +508,17 @@ export default function CompletedPelotonStylePage() {
       const blob = await renderBlob("story");
       const shared = await shareViaSystem(blob, "bxkr-story.png");
       tryDeepLink("instagram://story-camera");
-      if (!shared) { const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = "bxkr-story.png"; a.click(); URL.revokeObjectURL(u); }
-    } finally { setBusy(false); }
+      if (!shared) {
+        const u = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = u;
+        a.download = "bxkr-story.png";
+        a.click();
+        URL.revokeObjectURL(u);
+      }
+    } finally {
+      setBusy(false);
+    }
   }
   async function shareFacebook() {
     setBusy(true);
@@ -404,8 +526,17 @@ export default function CompletedPelotonStylePage() {
       const blob = await renderBlob("story");
       const shared = await shareViaSystem(blob, "bxkr-story.png");
       tryDeepLink("fb://story-camera");
-      if (!shared) { const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = "bxkr-story.png"; a.click(); URL.revokeObjectURL(u); }
-    } finally { setBusy(false); }
+      if (!shared) {
+        const u = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = u;
+        a.download = "bxkr-story.png";
+        a.click();
+        URL.revokeObjectURL(u);
+      }
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -420,7 +551,9 @@ export default function CompletedPelotonStylePage() {
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <div className="d-flex align-items-center justify-content-between mb-3" style={{ gap: 8 }}>
-          <Link href="/" className="btn btn-bxkr-outline" style={{ borderRadius: 24 }}>← Back</Link>
+          <Link href="/" className="btn btn-bxkr-outline" style={{ borderRadius: 24 }}>
+            ← Back
+          </Link>
           <h1 className="h5 m-0">Share • Completed</h1>
           <div />
         </div>
@@ -439,7 +572,11 @@ export default function CompletedPelotonStylePage() {
             }}
           >
             {previewUrl ? (
-              <img src={previewUrl} alt="Story preview" style={{ width: "100%", height: "auto", display: "block" }} />
+              <img
+                src={previewUrl}
+                alt="Story preview"
+                style={{ width: "100%", height: "auto", display: "block" }}
+              />
             ) : (
               <div className="p-5 text-center text-dim small">Preparing preview…</div>
             )}
@@ -449,12 +586,22 @@ export default function CompletedPelotonStylePage() {
 
         {/* Actions */}
         <section className="futuristic-card p-3 mb-3">
-          <div className="d-flex flex-wrap align-items-center justify-content-center" style={{ gap: 10 }}>
+          <div
+            className="d-flex flex-wrap align-items-center justify-content-center"
+            style={{ gap: 10 }}
+          >
             <button
               className="btn btn-sm"
               onClick={shareInstagram}
               disabled={busy}
-              style={{ borderRadius: 24, color: "#0a0a0c", background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_2})`, border: "none", minWidth: 200, fontWeight: 700 }}
+              style={{
+                borderRadius: 24,
+                color: "#0a0a0c",
+                background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_2})`,
+                border: "none",
+                minWidth: 200,
+                fontWeight: 700,
+              }}
             >
               {busy ? "Working…" : "Share to Instagram Stories"}
             </button>
@@ -462,18 +609,43 @@ export default function CompletedPelotonStylePage() {
               className="btn btn-sm"
               onClick={shareFacebook}
               disabled={busy}
-              style={{ borderRadius: 24, color: "#0a0a0c", background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_2})`, border: "none", minWidth: 200, fontWeight: 700 }}
+              style={{
+                borderRadius: 24,
+                color: "#0a0a0c",
+                background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_2})`,
+                border: "none",
+                minWidth: 200,
+                fontWeight: 700,
+              }}
             >
               {busy ? "Working…" : "Share to Facebook Stories"}
             </button>
+
             <div className="vr" />
-            <button className="btn btn-sm btn-bxkr-outline" onClick={() => download("story")} disabled={busy} style={{ borderRadius: 24, minWidth: 200 }}>
+
+            <button
+              className="btn btn-sm btn-bxkr-outline"
+              onClick={() => download("story")}
+              disabled={busy}
+              style={{ borderRadius: 24, minWidth: 200 }}
+            >
               {busy ? "Preparing…" : "Download Story PNG"}
             </button>
-            <button className="btn btn-sm btn-bxkr-outline" onClick={() => download("square")} disabled={busy} style={{ borderRadius: 24, minWidth: 200 }}>
+            <button
+              className="btn btn-sm btn-bxkr-outline"
+              onClick={() => download("square")}
+              disabled={busy}
+              style={{ borderRadius: 24, minWidth: 200 }}
+            >
               {busy ? "Preparing…" : "Download Square PNG"}
             </button>
           </div>
+
+          {!last && (
+            <div className="alert alert-info mt-3 mb-0">
+              No completion found yet. You can still share this template.
+            </div>
+          )}
         </section>
       </main>
 
@@ -495,4 +667,8 @@ async function shareViaSystem(blob: Blob, filename = "bxkr-story.png") {
   } catch {}
   return false;
 }
-function tryDeepLink(uri: string) { try { window.location.href = uri; } catch {} }
+function tryDeepLink(uri: string) {
+  try {
+    window.location.href = uri;
+  } catch
+}
