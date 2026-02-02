@@ -259,7 +259,7 @@ export default async function handler(
         .collection(ASSIGNMENTS_COLLECTION)
         .where("user_email", "==", userEmail)
         .where("status", "==", "active")
-        .where("start_date", "<=", weekEnd);
+        .where("start_date", "<=", endOfAlignedWeek(weekDate));
       const snap = await q.get();
       assignments = snap.docs.map((d: any) => ({ assignment_id: d.id, ...(d.data() || {}) }));
     } catch {
@@ -269,14 +269,12 @@ export default async function handler(
         .filter((a) => String(a?.status || "").toLowerCase() === "active");
     }
 
-    // limit to assignments overlapping the requested week
     const overlapping = assignments.filter((a) => {
       const s = toDate(a.start_date) || new Date(0);
       const e = toDate(a.end_date) || new Date(8640000000000000);
       return !(e < weekStart || s > weekEnd);
     });
 
-    // resolve workout names
     const assignIds = Array.from(new Set(overlapping.map((a) => String(a.workout_id || "").trim()).filter(Boolean)));
     const nameByWorkoutId = new Map<string, string | undefined>();
     if (assignIds.length) {
@@ -292,14 +290,12 @@ export default async function handler(
       });
     }
 
-    // place recurring onto matching day
     for (const a of overlapping) {
       const recDayName = String(a.recurring_day || "").trim();
       const s = toDate(a.start_date) || new Date(0);
       const e = toDate(a.end_date) || new Date(8640000000000000);
       const wid = String(a.workout_id || "").trim();
       const wname = nameByWorkoutId.get(wid);
-
       if (!wid || !recDayName) continue;
 
       weekDays.forEach((d) => {
@@ -314,16 +310,38 @@ export default async function handler(
       });
     }
 
-    /** ===== LEGACY RECURRING (compat) ===== */
+    /** ===== LEGACY RECURRING (now supports assigned_to: string[]) ===== */
     try {
-      const recSnap = await firestore
+      const arrSnap = await firestore
+        .collection(WORKOUTS_COLLECTION)
+        .where("recurring", "==", true)
+        .where("assigned_to", "array-contains", userEmail)
+        .get();
+
+      const strSnap = await firestore
         .collection(WORKOUTS_COLLECTION)
         .where("recurring", "==", true)
         .where("assigned_to", "==", userEmail)
         .get();
 
-      (recSnap.docs || []).forEach((doc: any) => {
+      const seen = new Set<string>();
+      const legacyDocs = [...(arrSnap.docs || []), ...(strSnap.docs || [])].filter((d) => {
+        if (!d) return false;
+        if (seen.has(d.id)) return false;
+        seen.add(d.id);
+        return true;
+      });
+
+      legacyDocs.forEach((doc: any) => {
         const w = doc.data() as any;
+        // Safety filter: include if assigned_to contains user (array) OR equals user (string)
+        const assigned = w?.assigned_to;
+        const isMine = Array.isArray(assigned)
+          ? assigned.map((x: any) => String(x || "").toLowerCase()).includes(userEmail)
+          : String(assigned || "").toLowerCase() === userEmail;
+
+        if (!isMine) return;
+
         const id = String(w.workout_id || w.id || doc.id);
         const name = typeof w.workout_name === "string" ? w.workout_name : undefined;
 
@@ -335,7 +353,6 @@ export default async function handler(
           const ymd = formatYMD(d);
           const dayName = DAY_NAMES[d.getDay()];
           const withinWindow = (!startTs || d >= startTs) && (!endTs || d <= endTs);
-
           if (withinWindow && dayName === recDayName) {
             const arr = recurringByDay.get(ymd) || [];
             arr.push({ id, name });
@@ -344,12 +361,10 @@ export default async function handler(
         });
       });
     } catch {
-      // ignore
+      // Soft‑fail; legacy recurring may not exist or need index. Already covered by assignments model.
     }
 
-    /** ===== COMPLETIONS (THIS WEEK only) =====
-     * We will drive *done* state per-week (not per-day).
-     */
+    /** ===== COMPLETIONS (THIS WEEK only) — per‑week done state ===== */
     let completionsWeek: any[] = [];
     try {
       const c1 = await firestore
@@ -369,7 +384,6 @@ export default async function handler(
         completionsWeek = c1b.docs.map((d: any) => ({ id: d.id, ...(d.data() || {}) }));
       }
     } catch {
-      // Fallback: fetch all by user, filter by requested week
       const allByUser = await firestore.collection(COMPLETIONS_COLLECTION).where("user_email", "==", userEmail).get();
       completionsWeek = allByUser.docs
         .map((d: any) => ({ id: d.id, ...(d.data() || {}) }))
@@ -382,10 +396,7 @@ export default async function handler(
         });
     }
 
-    /** === Per-week completion sets ===
-     * doneInWeek: Set of workout_ids completed anywhere within the week.
-     * latestInWeekById: latest completion within the week per workout_id (for summary).
-     */
+    /** Per-week completion sets (done + latest summary by workout_id) */
     const doneInWeek = new Set<string>();
     const latestInWeekById = new Map<
       string,
@@ -425,7 +436,7 @@ export default async function handler(
       }
     }
 
-    /** ===== Weekly totals from THIS WEEK completions only ===== */
+    /** Build days (done state is per‑week) */
     let totalTasks = 0;
     let completedTasks = 0;
     let totalWorkoutsCompleted = 0;
@@ -438,7 +449,6 @@ export default async function handler(
       totalCaloriesBurned += Number(c.calories_burned || 0);
     });
 
-    /** ===== Build days (done state is per-week) ===== */
     const days: DayOverview[] = weekDays.map((d) => {
       const ymd = formatYMD(d);
       const isFriday = d.getDay() === 5;
@@ -457,21 +467,21 @@ export default async function handler(
       const workoutIds = mandatorySet.map((w) => w.id);
       const hasWorkout = mandatorySet.length > 0;
 
-      // === Per-week DONE state ===
       const recurringDone =
         hasRecurringToday && todaysRecurring.some((w) => doneInWeek.has(w.id));
       const workoutDone =
         hasWorkout && workoutIds.some((id) => doneInWeek.has(id));
 
-      // Per-week summary (latest completion within week among the mandatory IDs)
+      // Per‑week summary (latest completion this week among mandatory IDs)
       let workoutCalories = 0;
       let workoutDuration = 0;
       let weightUsed: string | undefined;
 
       if (workoutDone) {
-        // pick the latest among the available latestInWeekById for these IDs
-        let latest: { calories_burned?: number; duration?: number; weight_completed_with?: string | number; completedAt?: Date } | null =
-          null;
+        let latest:
+          | { calories_burned?: number; duration?: number; weight_completed_with?: string | number; completedAt?: Date }
+          | null = null;
+
         for (const id of workoutIds) {
           const row = latestInWeekById.get(id);
           if (!row) continue;
