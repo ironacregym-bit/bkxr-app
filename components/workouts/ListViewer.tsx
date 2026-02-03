@@ -1,10 +1,10 @@
-
-// components/workouts/ListViewer.tsx
 "use client";
 
 import { useMemo, useState } from "react";
 import TechniqueChips, { BoxingAction } from "./TechniqueChips";
 import ModalMedia from "./ModalMedia";
+import KbRoundTracker from "./KbRoundTracker";
+import { KbTrackingController } from "../..//components/hooks/useKbTracking";
 
 type KBStyle = "EMOM" | "AMRAP" | "LADDER";
 
@@ -40,6 +40,7 @@ export default function ListViewer({
   techVideoByCode,
   gifByExerciseId,
   videoByExerciseId,
+  kbController,
 }: {
   boxingRounds: RoundOut[];
   kbRounds: RoundOut[];
@@ -47,6 +48,7 @@ export default function ListViewer({
   techVideoByCode?: Record<string, string | undefined>;
   gifByExerciseId?: Record<string, string | undefined>;
   videoByExerciseId?: Record<string, string | undefined>;
+  kbController: KbTrackingController;
 }) {
   // Modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -66,6 +68,17 @@ export default function ListViewer({
     setModalGif(gifByExerciseId?.[id]);
     setModalVideo(videoByExerciseId?.[id]);
     setModalOpen(true);
+  };
+
+  // Summary badge for each KB round
+  const kbSummary = (kbIdx: number, style?: KBStyle) => {
+    const row = kbController.state.rounds[kbIdx];
+    if (!row) return null;
+    if (style === "EMOM") {
+      const total = row.totalReps ?? 0;
+      return `${total} reps`;
+    }
+    return `${row.completedRounds ?? 0} rnds`;
   };
 
   return (
@@ -186,25 +199,46 @@ export default function ListViewer({
                 }}
               >
                 <div className="d-flex justify-content-between align-items-center mb-2">
-                  <div className="fw-semibold">{round.name || `Kettlebells Round ${idx + 1}`}</div>
-                  {round.style ? (
-                    <span
-                      className="badge bg-transparent"
-                      style={{ border: "1px solid rgba(255,255,255,0.18)", color: "#cfd7df" }}
-                      title={
-                        round.style === "EMOM"
-                          ? "Every Minute On the Minute: Do the work at each minute, rest the remainder."
-                          : round.style === "AMRAP"
-                          ? "As Many Rounds/Reps As Possible: Cycle movements steadily."
-                          : round.style === "LADDER"
-                          ? "Ladder: Alternate movements while increasing reps."
-                          : String(round.style)
-                      }
-                    >
-                      {round.style}
+                  <div className="fw-semibold">
+                    {round.name || `Kettlebells Round ${idx + 1}`}
+                  </div>
+                  <div className="d-flex align-items-center" style={{ gap: 8 }}>
+                    {round.style ? (
+                      <span
+                        className="badge bg-transparent"
+                        style={{ border: "1px solid rgba(255,255,255,0.18)", color: "#cfd7df" }}
+                        title={
+                          round.style === "EMOM"
+                            ? "Every Minute On the Minute: Do the work at each minute, rest the remainder."
+                            : round.style === "AMRAP"
+                            ? "As Many Rounds/Reps As Possible: Cycle movements steadily."
+                            : round.style === "LADDER"
+                            ? "Ladder: Alternate movements while increasing reps."
+                            : String(round.style)
+                        }
+                      >
+                        {round.style}
+                      </span>
+                    ) : null}
+                    <span className="badge bg-transparent" style={{ border: "1px solid rgba(255,127,50,0.35)", color: "#FF8A2A" }}>
+                      {kbSummary(idx, round.style)}
                     </span>
-                  ) : null}
+                  </div>
                 </div>
+
+                {/* Tracker (compact) */}
+                <KbRoundTracker
+                  styleType={round.style}
+                  compact={true}
+                  rounds={kbController.state.rounds[idx]?.completedRounds ?? 0}
+                  onRoundsChange={(v) => kbController.setRounds(idx, v)}
+                  onIncRounds={(d) => kbController.incRounds(idx, d)}
+                  minuteReps={
+                    (kbController.state.rounds[idx]?.emom?.minuteReps as [number, number, number]) || [0, 0, 0]
+                  }
+                  onMinuteChange={(m, v) => kbController.setEmomMinute(idx, m, v)}
+                  onMinuteInc={(m, d) => kbController.incEmomMinute(idx, m, d)}
+                />
 
                 {(round.items || []).map((it, i) => {
                   const id = it.exercise_id || "";
