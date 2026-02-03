@@ -14,6 +14,7 @@ import ListViewer from "../../components/workouts/ListViewer";
 import FollowAlongViewer from "../../components/workouts/FollowAlongViewer";
 import useExerciseMediaMap from "../../hooks/useExerciseMediaMap";
 import { useKbTracking, KbRoundMeta } from "../../components/hooks/useKbTracking";
+import GlobalNumericFocus from "../../components/GlobalNumericFocus";
 
 type KBStyle = "EMOM" | "AMRAP" | "LADDER";
 type BoxingAction = { kind: "punch" | "defence"; code: string; count?: number; tempo?: string; notes?: string };
@@ -150,8 +151,8 @@ export default function WorkoutPage() {
   );
   const isCompleted = completionData?.completed === true;
 
-  // Media map for KB exercises in this workout
-  const { videoByExerciseId } = useExerciseMediaMap(sortedRounds as any);
+  // Media map for KB exercises in this workout — pass GIFs too
+  const { videoByExerciseId, gifByExerciseId } = useExerciseMediaMap(sortedRounds as any);
 
   /* ---------- View toggle (persist per workout) ---------- */
   type ViewMode = "list" | "follow";
@@ -182,7 +183,6 @@ export default function WorkoutPage() {
     Math.round((totalDurationSec || 1800) / 60)
   );
 
-  // NEW: allow manual calories entry (pre-filled with estimate)
   const [calories, setCalories] = useState<number | "">("");
   const [caloriesTouched, setCaloriesTouched] = useState<boolean>(false);
 
@@ -222,7 +222,7 @@ export default function WorkoutPage() {
     return kbRounds.map((r, i) => ({
       roundId: r.round_id,
       name: r.name || `Kettlebell ${i + 1}`,
-      order: r.order ?? i + 6, // KB rounds usually 6..10 in write order
+      order: r.order ?? i + 6,
       style: r.style,
     }));
   }, [kbRounds]);
@@ -237,30 +237,28 @@ export default function WorkoutPage() {
 
     try {
       const dateKey = formatDateKeyLocal(new Date());
-      const kb_results = kbController.getResultsForApi()
-        // Map 0-based KB index -> absolute BXKR order index 6..10 for clarity downstream
-        .map((r, i) => ({
-          roundIndex: i + 6, // UI uses 0..4; store as 6..10 per spec
-          name: r.name,
-          style: r.style,
-          completedRounds: r.completedRounds,
-          emom: r.emom,
-          totalReps: r.totalReps,
-          notes: r.notes ?? null,
-        }));
+      const kb_results = kbController.getResultsForApi().map((r, i) => ({
+        roundIndex: i + 6,
+        name: r.name,
+        style: r.style,
+        completedRounds: r.completedRounds,
+        emom: r.emom,
+        totalReps: r.totalReps,
+        notes: r.notes ?? null,
+      }));
 
       const payload = {
         workout_id: String(id),
-        is_benchmark: true, // ensure BXKR completion is accepted by API
+        is_benchmark: true,
         activity_type: "Strength training",
         calories_burned: cals,
         duration_minutes: minutes,
         weight_completed_with: kbWeightUsed === "" ? null : Number(kbWeightUsed),
         rpe: Number(rpe),
         notes: notes?.trim() || null,
-        duration: minutes, // legacy compatibility
+        duration: minutes,
         dateKey,
-        kb_results,        // <<< NEW
+        kb_results,
       };
 
       const res = await fetch("/api/completions/create", {
@@ -274,8 +272,9 @@ export default function WorkoutPage() {
         setKbWeightUsed("");
         setNotes("");
         setRpe(7);
-        // keep kbController state in localStorage (so user can revisit), or call kbController.reset()
         mutate();
+        // Navigate to share page:
+        router.push(`/completed/${encodeURIComponent(String(id))}`);
       } else {
         const j = await res.json().catch(() => ({}));
         alert(j?.error || "Failed to log workout.");
@@ -312,6 +311,9 @@ export default function WorkoutPage() {
         <title>{title} • BXKR</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
+
+      {/* Global numeric UX helper */}
+      <GlobalNumericFocus />
 
       <main className="container py-3" style={{ paddingBottom: 80, color: "#fff", borderRadius: 12, minHeight: "100vh" }}>
         {/* Header */}
@@ -414,6 +416,7 @@ export default function WorkoutPage() {
               rounds={sortedRounds as any}
               exerciseNameById={exerciseNameById}
               videoByExerciseId={videoByExerciseId}
+              gifByExerciseId={gifByExerciseId}
               techVideoByCode={techVideoByCode}
               boxRoundsCount={5}
               kbController={kbController}
@@ -424,6 +427,8 @@ export default function WorkoutPage() {
               kbRounds={kbRounds as any}
               exerciseNameById={exerciseNameById}
               techVideoByCode={techVideoByCode}
+              gifByExerciseId={gifByExerciseId}
+              videoByExerciseId={videoByExerciseId}
               kbController={kbController}
             />
           )
@@ -553,7 +558,6 @@ export default function WorkoutPage() {
                     />
                   </div>
 
-                  {/* Manual calories field */}
                   <div className="col-12 col-md-6">
                     <label className="form-label">Calories burned</label>
                     <input
@@ -641,7 +645,7 @@ export default function WorkoutPage() {
         </section>
       </main>
 
-      {/* -------- Global, scoped overrides -------- */}
+      {/* Scoped global tweaks */}
       <style jsx global>{`
         main.container .futuristic-card button.btn.btn-sm.btn-outline-light img,
         main.container .futuristic-card .exercise-thumb,
