@@ -12,7 +12,7 @@ import useWakeLock from "../../hooks/useWakeLock";
 import useFullscreen from "../../hooks/useFullscreen";
 import { pulseSoft, pulseMedium } from "../../hooks/useHaptics";
 import KbRoundTracker from "./KbRoundTracker";
-import { KbTrackingController } from "../..//components/hooks/useKbTracking";
+import { KbTrackingController } from "../../components/hooks/useKbTracking";
 
 type KBStyle = "EMOM" | "AMRAP" | "LADDER";
 type ExerciseItemOut = {
@@ -34,12 +34,19 @@ type RoundOut = {
   name: string;
   order: number;
   category: "Boxing" | "Kettlebell";
-  style?: KBStyle;           // KB style; for boxing treat this as type (Basics/Speed/Power/Defence/Engine)
+  style?: KBStyle;
   duration_s?: number;
   items: ExerciseItemOut[];
 };
 
 const ACCENT = "#FF8A2A";
+
+// Fix for Firestore gif_url containing "public/"
+function fixGifUrl(u?: string) {
+  if (!u) return u;
+  if (u.startsWith("public/")) return "/" + u.replace(/^public\//, "");
+  return u;
+}
 
 export default function FollowAlongViewer({
   rounds,
@@ -76,7 +83,7 @@ export default function FollowAlongViewer({
         name: r.name,
         duration: dur,
         category: r.category,
-        style: r.style, // Boxing type under title; KB style under title
+        style: r.style,
         items: r.items || [],
       });
 
@@ -115,17 +122,21 @@ export default function FollowAlongViewer({
 
   // Fullscreen (tiny icon above)
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(cardRef);
+  const { toggle: toggleFullscreen } = useFullscreen(cardRef);
 
-  // Gesture strip (only in a narrow area, so taps on content open modals cleanly)
+  // Gesture strip
   const stripRef = useRef<HTMLDivElement | null>(null);
-  useGestureControls(stripRef, {
-    onSwipeLeft: () => next(),
-    onSwipeRight: () => prev(),
-    onTap: () => (running ? pause() : play()),
-    onDoubleTap: () => toggleFullscreen(),
-    onLongPress: () => pause(),
-  }, { lockScrollOnSwipe: true });
+  useGestureControls(
+    stripRef,
+    {
+      onSwipeLeft: () => next(),
+      onSwipeRight: () => prev(),
+      onTap: () => (running ? pause() : play()),
+      onDoubleTap: () => toggleFullscreen(),
+      onLongPress: () => pause(),
+    },
+    { lockScrollOnSwipe: true }
+  );
 
   // Modal (punch or exercise)
   const [modalOpen, setModalOpen] = useState(false);
@@ -142,7 +153,7 @@ export default function FollowAlongViewer({
   const openExerciseModal = (id: string) => {
     const title = exerciseNameById[id] || id;
     setModalTitle(title);
-    setModalGif(gifByExerciseId?.[id]);
+    setModalGif(fixGifUrl(gifByExerciseId?.[id]));
     setModalVideo(videoByExerciseId?.[id]);
     setModalOpen(true);
   };
@@ -177,9 +188,7 @@ export default function FollowAlongViewer({
 
     return (
       <div>
-        {/* Boxing round name */}
         <div className="fw-semibold">{current?.name}</div>
-        {/* Boxing type */}
         {current?.style ? (
           <div className="text-dim mb-2" style={{ fontSize: 12 }}>{current.style}</div>
         ) : null}
@@ -211,7 +220,6 @@ export default function FollowAlongViewer({
           </div>
         </div>
 
-        {/* Punch chips: tap -> modal */}
         {activeCombo?.actions?.length ? (
           <div className="mt-2">
             <TechniqueChips actions={activeCombo.actions} techVideoByCode={techVideoByCode} onActionClick={openPunchModal} />
@@ -236,12 +244,9 @@ export default function FollowAlongViewer({
   function KettlebellPane() {
     const items = current?.items || [];
 
-    // Map current KB round to kb index within kbController.state
+    // KB index within KB rounds
     const kbIndex = useMemo(() => {
-      // Identify the KB index by counting Kettlebell rounds up to current index within ordered rounds
-      const kbOrderWithinAll = ordered.filter(r => r.category === "Kettlebell").map(r => r.round_id);
-      const currentId = current?.id || current?.name; // timeline keeps id as round_id; fallback name
-      const idxInAll = ordered.findIndex(r => r.round_id === current?.id);
+      const idxInAll = ordered.findIndex(r => r.round_id === (current as any)?.id);
       if (idxInAll < 0) {
         const byName = ordered.findIndex(r => r.name === current?.name && r.category === "Kettlebell");
         if (byName >= 0) {
@@ -257,10 +262,16 @@ export default function FollowAlongViewer({
     const row = kbController.state.rounds[kbIndex];
     const minuteReps = (row?.emom?.minuteReps as [number, number, number]) || [0, 0, 0];
 
+    // Fix GIF URLs for the composite grid
+    const fixedGifById = useMemo(() => {
+      const out: Record<string, string | undefined> = {};
+      Object.keys(gifByExerciseId || {}).forEach((k) => (out[k] = fixGifUrl(gifByExerciseId?.[k])));
+      return out;
+    }, [gifByExerciseId]);
+
     return (
       <div>
         <div className="fw-semibold">{current?.name || "Kettlebell Round"}</div>
-        {/* KB style badge on the right with tooltip */}
         {current?.style ? (
           <div className="d-flex align-items-center justify-content-end mb-2">
             <span
@@ -284,12 +295,12 @@ export default function FollowAlongViewer({
         {/* Composite grid of all exercise GIFs */}
         <KbCompositeMedia
           items={items}
-          gifByExerciseId={gifByExerciseId}
+          gifByExerciseId={fixedGifById}
           exerciseNameById={exerciseNameById}
           aspect="16x9"
         />
 
-        {/* Tracker (expanded on active round) */}
+        {/* Tracker (expanded on active round, responsive) */}
         <KbRoundTracker
           styleType={current?.style as KBStyle | undefined}
           compact={false}
@@ -309,7 +320,6 @@ export default function FollowAlongViewer({
           onOpenMedia={openExerciseModal}
         />
 
-        {/* Next up */}
         {nextRound ? (
           <div className="mt-3 d-flex align-items-center justify-content-between">
             <div className="text-dim" style={{ fontSize: 12 }}>Next up</div>
