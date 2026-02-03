@@ -1,4 +1,3 @@
-
 import { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]";
@@ -29,10 +28,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!body || !body.food) return res.status(400).json({ error: "Missing payload" });
 
     const date = body.date || todayKey;
+
+    // grams is OPTIONAL now — store null when absent
+    const gramsVal =
+      body.grams == null || body.grams === ""
+        ? null
+        : Number.isFinite(Number(body.grams))
+        ? Number(body.grams)
+        : null;
+
     const payload = {
       food: body.food,
-      grams: Number(body.grams || 100),
-      portionLabel: body.portionLabel || null,
+      grams: gramsVal, // can be null
+      portionLabel: null, // removed from UI; keep for backward compatibility as null
       meal: body.meal || "Other",
       calories: Number(body.calories || 0),
       protein: Number(body.protein || 0),
