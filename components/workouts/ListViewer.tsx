@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import TechniqueChips, { BoxingAction } from "./TechniqueChips";
 import ModalMedia from "./ModalMedia";
 import KbRoundTracker from "./KbRoundTracker";
-import { KbTrackingController } from "../..//components/hooks/useKbTracking";
+import { KbTrackingController } from "../../components/hooks/useKbTracking";
 
 type KBStyle = "EMOM" | "AMRAP" | "LADDER";
 
@@ -32,6 +32,13 @@ type RoundOut = {
   duration_s?: number;
   items: ExerciseItemOut[];
 };
+
+// Fix for Firestore gif_url containing "public/"
+function fixGifUrl(u?: string) {
+  if (!u) return u;
+  if (u.startsWith("public/")) return "/" + u.replace(/^public\//, "");
+  return u;
+}
 
 export default function ListViewer({
   boxingRounds,
@@ -65,12 +72,11 @@ export default function ListViewer({
   const openExerciseModal = (id: string) => {
     const title = exerciseNameById[id] || id;
     setModalTitle(title);
-    setModalGif(gifByExerciseId?.[id]);
+    setModalGif(fixGifUrl(gifByExerciseId?.[id]));
     setModalVideo(videoByExerciseId?.[id]);
     setModalOpen(true);
   };
 
-  // Summary badge for each KB round
   const kbSummary = (kbIdx: number, style?: KBStyle) => {
     const row = kbController.state.rounds[kbIdx];
     if (!row) return null;
@@ -226,7 +232,7 @@ export default function ListViewer({
                   </div>
                 </div>
 
-                {/* Tracker (compact) */}
+                {/* Tracker (compact, responsive) */}
                 <KbRoundTracker
                   styleType={round.style}
                   compact={true}
