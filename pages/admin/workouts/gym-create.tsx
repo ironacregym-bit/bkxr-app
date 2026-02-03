@@ -1,4 +1,3 @@
-
 "use client";
 
 import Head from "next/head";
@@ -12,7 +11,7 @@ import BottomNav from "../../../components/BottomNav";
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const ACCENT = "#FF8A2A";
 
-const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"] as const;
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 type DayName = typeof DAYS[number];
 
 type SingleItem = {
@@ -50,14 +49,23 @@ type GymRound = {
   items: Array<SingleItem | SupersetItem>;
 };
 
+type ExerciseRow = { id: string; exercise_name: string; type?: string };
+
+type QuickTarget =
+  | { kind: "single"; round: "warmup" | "main" | "finisher"; idx: number }
+  | { kind: "superset"; round: "warmup" | "main" | "finisher"; idx: number; subIdx: number };
+
 export default function GymCreateWorkoutPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const ownerEmail = (session?.user?.email || "").toLowerCase();
   const role = (session?.user as any)?.role || "user";
 
-  const { data } = useSWR("/api/exercises?limit=1000", fetcher, { revalidateOnFocus: false });
-  const exercises = Array.isArray(data?.exercises) ? data!.exercises : [];
+  const {
+    data,
+    mutate: mutateExercises,
+  } = useSWR("/api/exercises?limit=1000", fetcher, { revalidateOnFocus: false });
+  const exercises: ExerciseRow[] = Array.isArray(data?.exercises) ? data!.exercises : [];
 
   // Base form + assignment/recurrence
   const [meta, setMeta] = useState({
@@ -71,7 +79,7 @@ export default function GymCreateWorkoutPage() {
     recurring: false,
     recurring_day: "Monday" as DayName,
     recurring_start: "" as string, // YYYY-MM-DD
-    recurring_end: "" as string,   // YYYY-MM-DD
+    recurring_end: "" as string, // YYYY-MM-DD
     assigned_to: ownerEmail || "",
   });
 
@@ -81,6 +89,82 @@ export default function GymCreateWorkoutPage() {
 
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // Quick Add Exercise modal
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickBusy, setQuickBusy] = useState(false);
+  const [quickErr, setQuickErr] = useState<string | null>(null);
+  const [quickForm, setQuickForm] = useState({
+    exercise_name: "",
+    type: "",
+    equipment: "",
+    video_url: "",
+    met_value: "" as string | number,
+    description: "",
+  });
+  const [quickTarget, setQuickTarget] = useState<QuickTarget | null>(null);
+
+  const openQuickFor = (target: QuickTarget) => {
+    setQuickTarget(target);
+    setQuickForm({
+      exercise_name: "",
+      type: "",
+      equipment: "",
+      video_url: "",
+      met_value: "",
+      description: "",
+    });
+    setQuickErr(null);
+    setQuickOpen(true);
+  };
+
+  const applyQuickToSelection = (newId: string) => {
+    if (!quickTarget) return;
+    if (quickTarget.kind === "single") {
+      updateSingle(quickTarget.round, quickTarget.idx, { exercise_id: newId });
+    } else {
+      setSupersetExercise(quickTarget.round, quickTarget.idx, quickTarget.subIdx, newId);
+    }
+  };
+
+  async function createQuickExercise() {
+    try {
+      setQuickBusy(true);
+      setQuickErr(null);
+      const body = {
+        // ID defaults to name server-side per your API spec; we keep it simple:
+        exercise_name: quickForm.exercise_name.trim(),
+        type: quickForm.type.trim(),
+        equipment: quickForm.equipment.trim(),
+        video_url: quickForm.video_url.trim(),
+        met_value:
+          quickForm.met_value === "" ? null : Number.isFinite(Number(quickForm.met_value)) ? Number(quickForm.met_value) : null,
+        description: quickForm.description.trim(),
+      };
+      if (!body.exercise_name) {
+        setQuickErr("Exercise name is required");
+        return;
+      }
+      const res = await fetch("/api/exercises/create?upsert=true", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Failed to create exercise");
+
+      // Refresh the exercises list and select the created one
+      await mutateExercises();
+      const newId: string = json?.exercise_id || body.exercise_name;
+      applyQuickToSelection(newId);
+
+      setQuickOpen(false);
+    } catch (e: any) {
+      setQuickErr(e?.message || "Failed to create exercise");
+    } finally {
+      setQuickBusy(false);
+    }
+  }
 
   if (status === "loading") return <div className="container py-4">Checking access…</div>;
   if (!session || (role !== "admin" && role !== "gym")) {
@@ -92,50 +176,76 @@ export default function GymCreateWorkoutPage() {
     );
   }
 
-  /** ---------- Helpers for Single Items ---------- */
+  /* ---------- Utilities to keep item orders clean ---------- */
+  function renumber(items: Array<SingleItem | SupersetItem>): Array<SingleItem | SupersetItem> {
+    return items.map((it, i) => ({ ...it, order: i + 1 }));
+  }
+  function notEmpty<T>(v: T | null | undefined): v is T {
+    return v != null;
+  }
+
+  /* ---------- Helpers for Single Items ---------- */
   function addSingle(round: "warmup" | "main" | "finisher") {
     const newItem: SingleItem = { type: "Single", order: 1, exercise_id: "", reps: "", sets: 3 };
     if (round === "warmup")
-      setWarmup((prev) => (prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : prev));
-    if (round === "main")
-      setMain((prev) => ({ ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] }));
+      setWarmup((prev) => (prev ? { ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) } : prev));
+    if (round === "main") setMain((prev) => ({ ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) }));
     if (round === "finisher")
       setFinisher((prev) =>
-        prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : { name: "Finisher", order: 3, items: [newItem] }
+        prev
+          ? { ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) }
+          : { name: "Finisher", order: 3, items: [newItem] }
       );
   }
 
   function updateSingle(round: "warmup" | "main" | "finisher", idx: number, patch: Partial<SingleItem>) {
-    const up = (r: GymRound | null) =>
-      r ? { ...r, items: r.items.map((it, i) => (i === idx ? { ...(it as SingleItem), ...patch } : it)) } : r;
+    const up = (r: GymRound | null) => (r ? { ...r, items: r.items.map((it, i) => (i === idx ? { ...(it as SingleItem), ...patch } : it)) } : r);
     if (round === "warmup") setWarmup((prev) => up(prev));
     if (round === "main") setMain((prev) => up(prev) as GymRound);
     if (round === "finisher") setFinisher((prev) => up(prev));
   }
 
-  /** ---------- Helpers for Supersets (unlimited items + sets at superset level) ---------- */
+  function removeItem(round: "warmup" | "main" | "finisher", idx: number) {
+    const dropFrom = (r: GymRound | null): GymRound | null => {
+      if (!r) return r;
+      const next = r.items.filter((_, i) => i !== idx);
+      if (next.length === 0 && r.name === "Finisher") {
+        // If finisher becomes empty, hide the whole section
+        return null;
+      }
+      return { ...r, items: renumber(next) };
+    };
+    if (round === "warmup") setWarmup((prev) => dropFrom(prev));
+    if (round === "main") setMain((prev) => dropFrom(prev) as GymRound);
+    if (round === "finisher") setFinisher((prev) => dropFrom(prev));
+  }
+
+  /* ---------- Helpers for Supersets (unlimited items + sets at superset level) ---------- */
   function addSuperset(round: "warmup" | "main" | "finisher") {
     const newItem: SupersetItem = {
       type: "Superset",
       order: 1,
       name: "",
-      items: [{ exercise_id: "", reps: "" }, { exercise_id: "", reps: "" }],
+      items: [
+        { exercise_id: "", reps: "" },
+        { exercise_id: "", reps: "" },
+      ],
       sets: 3,
       rest_s: null,
     };
     if (round === "warmup")
-      setWarmup((prev) => (prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : prev));
-    if (round === "main")
-      setMain((prev) => ({ ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] }));
+      setWarmup((prev) => (prev ? { ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) } : prev));
+    if (round === "main") setMain((prev) => ({ ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) }));
     if (round === "finisher")
       setFinisher((prev) =>
-        prev ? { ...prev, items: [...prev.items, { ...newItem, order: prev.items.length + 1 }] } : { name: "Finisher", order: 3, items: [newItem] }
+        prev
+          ? { ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) }
+          : { name: "Finisher", order: 3, items: [newItem] }
       );
   }
 
   function updateSuperset(round: "warmup" | "main" | "finisher", idx: number, patch: Partial<SupersetItem>) {
-    const up = (r: GymRound | null) =>
-      r ? { ...r, items: r.items.map((it, i) => (i === idx ? { ...(it as SupersetItem), ...patch } : it)) } : r;
+    const up = (r: GymRound | null) => (r ? { ...r, items: r.items.map((it, i) => (i === idx ? { ...(it as SupersetItem), ...patch } : it)) } : r);
     if (round === "warmup") setWarmup((prev) => up(prev));
     if (round === "main") setMain((prev) => up(prev) as GymRound);
     if (round === "finisher") setFinisher((prev) => up(prev));
@@ -235,7 +345,7 @@ export default function GymCreateWorkoutPage() {
     if (round === "finisher") setFinisher((prev) => up(prev));
   }
 
-  /** ---------- Save ---------- */
+  /* ---------- Save ---------- */
   function toISODateOrNull(s: string): string | null {
     if (!s) return null;
     const dt = new Date(s);
@@ -304,6 +414,43 @@ export default function GymCreateWorkoutPage() {
 
   /** ---------- UI ---------- */
 
+  function ExerciseSelect({
+    value,
+    onChange,
+    label = "Exercise",
+    quickTarget,
+  }: {
+    value: string;
+    onChange: (id: string) => void;
+    label?: string;
+    quickTarget: QuickTarget;
+  }) {
+    return (
+      <div className="d-flex align-items-end gap-2">
+        <div className="flex-fill">
+          <label className="form-label">{label}</label>
+          <select className="form-select" value={value} onChange={(e) => onChange(e.target.value)}>
+            <option value="">— Select —</option>
+            {exercises.map((e: any) => (
+              <option key={e.id} value={e.id}>
+                {e.exercise_name} {e.type ? `• ${e.type}` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="button"
+          className="btn btn-sm btn-outline-light"
+          style={{ borderRadius: 24, whiteSpace: "nowrap" }}
+          onClick={() => openQuickFor(quickTarget)}
+          title="Quick add exercise"
+        >
+          ＋ Quick add
+        </button>
+      </div>
+    );
+  }
+
   function SupersetBlock({
     round,
     it,
@@ -317,11 +464,7 @@ export default function GymCreateWorkoutPage() {
       <>
         <div className="col-12 col-md-4">
           <label className="form-label">Superset name</label>
-          <input
-            className="form-control"
-            value={it.name ?? ""}
-            onChange={(e) => updateSuperset(round, idx, { name: e.target.value })}
-          />
+          <input className="form-control" value={it.name ?? ""} onChange={(e) => updateSuperset(round, idx, { name: e.target.value })} />
           <div className="row mt-2 g-2">
             <div className="col-6">
               <label className="form-label">Sets (rounds)</label>
@@ -344,6 +487,19 @@ export default function GymCreateWorkoutPage() {
               />
             </div>
           </div>
+
+          {/* Delete superset */}
+          <div className="mt-3">
+            <button
+              type="button"
+              className="btn btn-outline-danger"
+              onClick={() => removeItem(round, idx)}
+              title="Remove this superset"
+              style={{ borderRadius: 12 }}
+            >
+              Delete superset
+            </button>
+          </div>
         </div>
 
         {/* Dynamic list of sub-exercises */}
@@ -352,27 +508,16 @@ export default function GymCreateWorkoutPage() {
             it.items.map((s, sidx) => (
               <div key={`${idx}-${sidx}`} className="row g-2 align-items-end mb-2">
                 <div className="col-12 col-md-5">
-                  <label className="form-label">Exercise</label>
-                  <select
-                    className="form-select"
+                  <ExerciseSelect
+                    label="Exercise"
                     value={s.exercise_id}
-                    onChange={(e) => setSupersetExercise(round, idx, sidx, e.target.value)}
-                  >
-                    <option value="">— Select —</option>
-                    {exercises.map((e: any) => (
-                      <option key={e.id} value={e.id}>
-                        {e.exercise_name} {e.type ? `• ${e.type}` : ""}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(id) => setSupersetExercise(round, idx, sidx, id)}
+                    quickTarget={{ kind: "superset", round, idx, subIdx: sidx }}
+                  />
                 </div>
                 <div className="col-6 col-md-3">
                   <label className="form-label">Reps</label>
-                  <input
-                    className="form-control"
-                    value={s.reps ?? ""}
-                    onChange={(e) => setSupersetReps(round, idx, sidx, e.target.value)}
-                  />
+                  <input className="form-control" value={s.reps ?? ""} onChange={(e) => setSupersetReps(round, idx, sidx, e.target.value)} />
                 </div>
                 <div className="col-4 col-md-2">
                   <label className="form-label">Weight (kg)</label>
@@ -431,7 +576,9 @@ export default function GymCreateWorkoutPage() {
                 Recurring (weekly)
               </label>
             </div>
-            <small className="text-dim d-block mt-1">When on: this session repeats weekly and becomes the user’s mandatory workout for that weekday.</small>
+            <small className="text-dim d-block mt-1">
+              When on: this session repeats weekly and becomes the user’s mandatory workout for that weekday.
+            </small>
           </div>
 
           <div className="col-12 col-md-4">
@@ -456,7 +603,9 @@ export default function GymCreateWorkoutPage() {
               disabled={!meta.recurring}
             >
               {DAYS.map((d) => (
-                <option key={d} value={d}>{d}</option>
+                <option key={d} value={d}>
+                  {d}
+                </option>
               ))}
             </select>
           </div>
@@ -488,10 +637,14 @@ export default function GymCreateWorkoutPage() {
 
   return (
     <>
-      <Head><title>Create Gym Workout • Admin</title></Head>
+      <Head>
+        <title>Create Gym Workout • Admin</title>
+      </Head>
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <div className="mb-3">
-          <Link href="/admin" className="btn btn-outline-secondary">← Back to Admin</Link>
+          <Link href="/admin" className="btn btn-outline-secondary">
+            ← Back to Admin
+          </Link>
         </div>
 
         <h2 className="mb-3">Create Gym Workout</h2>
@@ -502,19 +655,11 @@ export default function GymCreateWorkoutPage() {
           <div className="row g-2">
             <div className="col-12 col-md-6">
               <label className="form-label">Workout Name</label>
-              <input
-                className="form-control"
-                value={meta.workout_name}
-                onChange={(e) => setMeta({ ...meta, workout_name: e.target.value })}
-              />
+              <input className="form-control" value={meta.workout_name} onChange={(e) => setMeta({ ...meta, workout_name: e.target.value })} />
             </div>
             <div className="col-6 col-md-3">
               <label className="form-label">Visibility</label>
-              <select
-                className="form-select"
-                value={meta.visibility}
-                onChange={(e) => setMeta({ ...meta, visibility: e.target.value as any })}
-              >
+              <select className="form-select" value={meta.visibility} onChange={(e) => setMeta({ ...meta, visibility: e.target.value as any })}>
                 <option value="global">Global</option>
                 <option value="private">Private</option>
               </select>
@@ -522,29 +667,15 @@ export default function GymCreateWorkoutPage() {
             </div>
             <div className="col-6 col-md-3">
               <label className="form-label">Focus</label>
-              <input
-                className="form-control"
-                value={meta.focus}
-                onChange={(e) => setMeta({ ...meta, focus: e.target.value })}
-                placeholder="e.g., Upper Body"
-              />
+              <input className="form-control" value={meta.focus} onChange={(e) => setMeta({ ...meta, focus: e.target.value })} placeholder="e.g., Upper Body" />
             </div>
             <div className="col-12">
               <label className="form-label">Notes</label>
-              <textarea
-                className="form-control"
-                value={meta.notes}
-                onChange={(e) => setMeta({ ...meta, notes: e.target.value })}
-              />
+              <textarea className="form-control" value={meta.notes} onChange={(e) => setMeta({ ...meta, notes: e.target.value })} />
             </div>
             <div className="col-12 col-md-6">
               <label className="form-label">Video URL</label>
-              <input
-                className="form-control"
-                value={meta.video_url}
-                onChange={(e) => setMeta({ ...meta, video_url: e.target.value })}
-                placeholder="https://…"
-              />
+              <input className="form-control" value={meta.video_url} onChange={(e) => setMeta({ ...meta, video_url: e.target.value })} placeholder="https://…" />
             </div>
           </div>
         </section>
@@ -557,18 +688,10 @@ export default function GymCreateWorkoutPage() {
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h6 className="m-0">Warm Up</h6>
             <div className="d-flex gap-2">
-              <button
-                className="btn btn-sm"
-                style={{ background: ACCENT, color: "#0b0f14", borderRadius: 24 }}
-                onClick={() => addSingle("warmup")}
-              >
+              <button className="btn btn-sm" style={{ background: ACCENT, color: "#0b0f14", borderRadius: 24 }} onClick={() => addSingle("warmup")}>
                 + Single
               </button>
-              <button
-                className="btn btn-sm btn-outline-light"
-                style={{ borderRadius: 24 }}
-                onClick={() => addSuperset("warmup")}
-              >
+              <button className="btn btn-sm btn-outline-light" style={{ borderRadius: 24 }} onClick={() => addSuperset("warmup")}>
                 + Superset
               </button>
             </div>
@@ -579,19 +702,11 @@ export default function GymCreateWorkoutPage() {
                 {it.type === "Single" ? (
                   <>
                     <div className="col-12 col-md-4">
-                      <label className="form-label">Exercise</label>
-                      <select
-                        className="form-select"
+                      <ExerciseSelect
                         value={(it as SingleItem).exercise_id}
-                        onChange={(e) => updateSingle("warmup", idx, { exercise_id: e.target.value })}
-                      >
-                        <option value="">— Select —</option>
-                        {exercises.map((e: any) => (
-                          <option key={e.id} value={e.id}>
-                            {e.exercise_name} {e.type ? `• ${e.type}` : ""}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(id) => updateSingle("warmup", idx, { exercise_id: id })}
+                        quickTarget={{ kind: "single", round: "warmup", idx }}
+                      />
                     </div>
                     <div className="col-4 col-md-2">
                       <label className="form-label">Sets</label>
@@ -632,6 +747,17 @@ export default function GymCreateWorkoutPage() {
                         onChange={(e) => updateSingle("warmup", idx, { rest_s: Number(e.target.value) || null })}
                       />
                     </div>
+                    <div className="col-12 d-flex">
+                      <button
+                        type="button"
+                        className="btn btn-outline-danger ms-auto"
+                        onClick={() => removeItem("warmup", idx)}
+                        title="Remove exercise"
+                        style={{ borderRadius: 12 }}
+                      >
+                        Delete item
+                      </button>
+                    </div>
                   </>
                 ) : (
                   <SupersetBlock round="warmup" it={it as SupersetItem} idx={idx} />
@@ -648,18 +774,10 @@ export default function GymCreateWorkoutPage() {
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h6 className="m-0">Main Set</h6>
             <div className="d-flex gap-2">
-              <button
-                className="btn btn-sm"
-                style={{ background: ACCENT, color: "#0b0f14", borderRadius: 24 }}
-                onClick={() => addSingle("main")}
-              >
+              <button className="btn btn-sm" style={{ background: ACCENT, color: "#0b0f14", borderRadius: 24 }} onClick={() => addSingle("main")}>
                 + Single
               </button>
-              <button
-                className="btn btn-sm btn-outline-light"
-                style={{ borderRadius: 24 }}
-                onClick={() => addSuperset("main")}
-              >
+              <button className="btn btn-sm btn-outline-light" style={{ borderRadius: 24 }} onClick={() => addSuperset("main")}>
                 + Superset
               </button>
             </div>
@@ -670,19 +788,11 @@ export default function GymCreateWorkoutPage() {
                 {it.type === "Single" ? (
                   <>
                     <div className="col-12 col-md-4">
-                      <label className="form-label">Exercise</label>
-                      <select
-                        className="form-select"
+                      <ExerciseSelect
                         value={(it as SingleItem).exercise_id}
-                        onChange={(e) => updateSingle("main", idx, { exercise_id: e.target.value })}
-                      >
-                        <option value="">— Select —</option>
-                        {exercises.map((e: any) => (
-                          <option key={e.id} value={e.id}>
-                            {e.exercise_name} {e.type ? `• ${e.type}` : ""}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(id) => updateSingle("main", idx, { exercise_id: id })}
+                        quickTarget={{ kind: "single", round: "main", idx }}
+                      />
                     </div>
                     <div className="col-4 col-md-2">
                       <label className="form-label">Sets</label>
@@ -696,11 +806,7 @@ export default function GymCreateWorkoutPage() {
                     </div>
                     <div className="col-8 col-md-3">
                       <label className="form-label">Reps</label>
-                      <input
-                        className="form-control"
-                        value={(it as SingleItem).reps ?? ""}
-                        onChange={(e) => updateSingle("main", idx, { reps: e.target.value })}
-                      />
+                      <input className="form-control" value={(it as SingleItem).reps ?? ""} onChange={(e) => updateSingle("main", idx, { reps: e.target.value })} />
                     </div>
                     <div className="col-6 col-md-2">
                       <label className="form-label">Weight (kg)</label>
@@ -722,6 +828,17 @@ export default function GymCreateWorkoutPage() {
                         onChange={(e) => updateSingle("main", idx, { rest_s: Number(e.target.value) || null })}
                       />
                     </div>
+                    <div className="col-12 d-flex">
+                      <button
+                        type="button"
+                        className="btn btn-outline-danger ms-auto"
+                        onClick={() => removeItem("main", idx)}
+                        title="Remove exercise"
+                        style={{ borderRadius: 12 }}
+                      >
+                        Delete item
+                      </button>
+                    </div>
                   </>
                 ) : (
                   <SupersetBlock round="main" it={it as SupersetItem} idx={idx} />
@@ -738,18 +855,10 @@ export default function GymCreateWorkoutPage() {
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h6 className="m-0">Finisher</h6>
             <div className="d-flex gap-2">
-              <button
-                className="btn btn-sm"
-                style={{ background: ACCENT, color: "#0b0f14", borderRadius: 24 }}
-                onClick={() => addSingle("finisher")}
-              >
+              <button className="btn btn-sm" style={{ background: ACCENT, color: "#0b0f14", borderRadius: 24 }} onClick={() => addSingle("finisher")}>
                 + Single
               </button>
-              <button
-                className="btn btn-sm btn-outline-light"
-                style={{ borderRadius: 24 }}
-                onClick={() => addSuperset("finisher")}
-              >
+              <button className="btn btn-sm btn-outline-light" style={{ borderRadius: 24 }} onClick={() => addSuperset("finisher")}>
                 + Superset
               </button>
             </div>
@@ -762,19 +871,11 @@ export default function GymCreateWorkoutPage() {
                 {it.type === "Single" ? (
                   <>
                     <div className="col-12 col-md-4">
-                      <label className="form-label">Exercise</label>
-                      <select
-                        className="form-select"
+                      <ExerciseSelect
                         value={(it as SingleItem).exercise_id}
-                        onChange={(e) => updateSingle("finisher", idx, { exercise_id: e.target.value })}
-                      >
-                        <option value="">— Select —</option>
-                        {exercises.map((e: any) => (
-                          <option key={e.id} value={e.id}>
-                            {e.exercise_name} {e.type ? `• ${e.type}` : ""}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(id) => updateSingle("finisher", idx, { exercise_id: id })}
+                        quickTarget={{ kind: "single", round: "finisher", idx }}
+                      />
                     </div>
                     <div className="col-4 col-md-2">
                       <label className="form-label">Sets</label>
@@ -788,11 +889,7 @@ export default function GymCreateWorkoutPage() {
                     </div>
                     <div className="col-8 col-md-3">
                       <label className="form-label">Reps</label>
-                      <input
-                        className="form-control"
-                        value={(it as SingleItem).reps ?? ""}
-                        onChange={(e) => updateSingle("finisher", idx, { reps: e.target.value })}
-                      />
+                      <input className="form-control" value={(it as SingleItem).reps ?? ""} onChange={(e) => updateSingle("finisher", idx, { reps: e.target.value })} />
                     </div>
                     <div className="col-6 col-md-2">
                       <label className="form-label">Weight (kg)</label>
@@ -814,6 +911,17 @@ export default function GymCreateWorkoutPage() {
                         onChange={(e) => updateSingle("finisher", idx, { rest_s: Number(e.target.value) || null })}
                       />
                     </div>
+                    <div className="col-12 d-flex">
+                      <button
+                        type="button"
+                        className="btn btn-outline-danger ms-auto"
+                        onClick={() => removeItem("finisher", idx)}
+                        title="Remove exercise"
+                        style={{ borderRadius: 12 }}
+                      >
+                        Delete item
+                      </button>
+                    </div>
                   </>
                 ) : (
                   <SupersetBlock round="finisher" it={it as SupersetItem} idx={idx} />
@@ -823,15 +931,114 @@ export default function GymCreateWorkoutPage() {
           )}
         </section>
 
-        <button
-          className="btn btn-primary w-100 mt-2"
-          onClick={save}
-          disabled={saving}
-          style={{ borderRadius: 24, background: ACCENT, border: "none" }}
-        >
+        <button className="btn btn-primary w-100 mt-2" onClick={save} disabled={saving} style={{ borderRadius: 24, background: ACCENT, border: "none" }}>
           {saving ? "Saving…" : "Create Gym Workout"}
         </button>
       </main>
+
+      {/* Quick Add Exercise Modal */}
+      {quickOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="position-fixed top-0 start-0 w-100 h-100"
+          style={{ background: "rgba(0,0,0,0.6)", zIndex: 1050 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setQuickOpen(false);
+          }}
+        >
+          <div className="position-absolute top-50 start-50 translate-middle" style={{ width: "92vw", maxWidth: 680 }}>
+            <div className="futuristic-card p-3" onClick={(e) => e.stopPropagation()}>
+              <div className="d-flex align-items-center justify-content-between mb-2">
+                <h5 className="m-0">Quick add exercise</h5>
+                <button className="btn btn-sm btn-outline-light" style={{ borderRadius: 999 }} onClick={() => setQuickOpen(false)}>
+                  ✕
+                </button>
+              </div>
+
+              {quickErr && <div className="alert alert-danger py-2">{quickErr}</div>}
+
+              <div className="row g-2">
+                <div className="col-12 col-md-6">
+                  <label className="form-label">Exercise name</label>
+                  <input
+                    className="form-control"
+                    value={quickForm.exercise_name}
+                    onChange={(e) => setQuickForm((f) => ({ ...f, exercise_name: e.target.value }))}
+                    placeholder="e.g., Barbell Row"
+                  />
+                </div>
+                <div className="col-6 col-md-3">
+                  <label className="form-label">Type</label>
+                  <input className="form-control" value={quickForm.type} onChange={(e) => setQuickForm((f) => ({ ...f, type: e.target.value }))} placeholder="e.g., Pull" />
+                </div>
+                <div className="col-6 col-md-3">
+                  <label className="form-label">Equipment</label>
+                  <input
+                    className="form-control"
+                    value={quickForm.equipment}
+                    onChange={(e) => setQuickForm((f) => ({ ...f, equipment: e.target.value }))}
+                    placeholder="e.g., Barbell"
+                  />
+                </div>
+
+                <div className="col-12 col-md-6">
+                  <label className="form-label">Video URL</label>
+                  <input
+                    className="form-control"
+                    value={quickForm.video_url}
+                    onChange={(e) => setQuickForm((f) => ({ ...f, video_url: e.target.value }))}
+                    placeholder="https://…"
+                  />
+                </div>
+                <div className="col-6 col-md-3">
+                  <label className="form-label">MET value (optional)</label>
+                  <input
+                    className="form-control"
+                    type="number"
+                    step="0.1"
+                    value={quickForm.met_value}
+                    onChange={(e) => setQuickForm((f) => ({ ...f, met_value: e.target.value }))}
+                    placeholder="e.g., 6.0"
+                  />
+                </div>
+                <div className="col-12">
+                  <label className="form-label">Description (optional)</label>
+                  <textarea
+                    className="form-control"
+                    rows={2}
+                    value={quickForm.description}
+                    onChange={(e) => setQuickForm((f) => ({ ...f, description: e.target.value }))}
+                    placeholder="Coaching cues, setup, safety…"
+                  />
+                </div>
+              </div>
+
+              <div className="d-flex justify-content-end gap-2 mt-3">
+                <button className="btn btn-outline-light" style={{ borderRadius: 24 }} onClick={() => setQuickOpen(false)} disabled={quickBusy}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{ borderRadius: 24, background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, border: "none" }}
+                  onClick={createQuickExercise}
+                  disabled={quickBusy}
+                >
+                  {quickBusy ? "Saving…" : "Save & select"}
+                </button>
+              </div>
+
+              <div className="small text-dim mt-2">
+                Need the full editor instead?{" "}
+                <Link href="/admin/exercises/create" className="link-light">
+                  Open Create Exercise
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <BottomNav />
     </>
   );
