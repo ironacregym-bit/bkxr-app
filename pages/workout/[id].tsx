@@ -1,3 +1,4 @@
+// pages/workouts/[id].tsx
 "use client";
 
 import Head from "next/head";
@@ -12,8 +13,8 @@ import RoundTimer from "../../components/RoundTimer";
 import WorkoutViewToggle from "../../components/workouts/WorkoutViewToggle";
 import ListViewer from "../../components/workouts/ListViewer";
 import FollowAlongViewer from "../../components/workouts/FollowAlongViewer";
-import useExerciseMediaMap from "../../hooks/useExerciseMediaMap";
 import { useKbTracking, KbRoundMeta } from "../../components/hooks/useKbTracking";
+import useGymExerciseMedia, { GymRound as MediaRound } from "../../hooks/useGymExerciseMedia";
 import GlobalNumericFocus from "../../components/GlobalNumericFocus";
 
 type KBStyle = "EMOM" | "AMRAP" | "LADDER";
@@ -66,6 +67,13 @@ function formatDateKeyLocal(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+// Same fix as gym-workout: normalise "public/..." GIF paths
+function fixGifUrl(u?: string) {
+  if (!u) return u;
+  if (u.startsWith("public/")) return "/" + u.replace(/^public\//, "");
+  return u;
+}
+
 export default function WorkoutPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -91,7 +99,7 @@ export default function WorkoutPage() {
     return map;
   }, [techData]);
 
-  // Exercise names
+  // Exercise names (best-effort; media hook also returns names)
   const { data: exData } = useSWR<{ exercises: Array<{ id: string; exercise_name: string }> }>(
     "/api/exercises?limit=500",
     fetcher,
@@ -151,8 +159,37 @@ export default function WorkoutPage() {
   );
   const isCompleted = completionData?.completed === true;
 
-  // Media map for KB exercises in this workout — (hook exposes only videos)
-  const { videoByExerciseId } = useExerciseMediaMap(sortedRounds as any);
+  /* ---------- Media (use the SAME hook as gym-workout) ---------- */
+  // Adapt BXKR KB rounds into the minimal MediaRound[] shape (Single items only)
+  const kbMediaRounds: MediaRound[] = useMemo(() => {
+    return (kbRounds || []).map((r, idx) => ({
+      name: r.name || `Kettlebell ${idx + 1}`,
+      order: r.order ?? idx + 6,
+      items: (r.items || [])
+        .filter((it) => it.exercise_id)
+        .map((it) => ({ type: "Single" as const, exercise_id: String(it.exercise_id) })),
+    }));
+  }, [kbRounds]);
+
+  const { mediaById } = useGymExerciseMedia(kbMediaRounds);
+
+  // Build maps for viewers
+  const gifByExerciseId: Record<string, string | undefined> = useMemo(() => {
+    const out: Record<string, string | undefined> = {};
+    Object.keys(mediaById || {}).forEach((k) => {
+      const u = mediaById[k]?.gif_url;
+      out[k] = fixGifUrl(u);
+    });
+    return out;
+  }, [mediaById]);
+
+  const videoByExerciseId: Record<string, string | undefined> = useMemo(() => {
+    const out: Record<string, string | undefined> = {};
+    Object.keys(mediaById || {}).forEach((k) => {
+      out[k] = mediaById[k]?.video_url;
+    });
+    return out;
+  }, [mediaById]);
 
   /* ---------- View toggle (persist per workout) ---------- */
   type ViewMode = "list" | "follow";
@@ -217,9 +254,9 @@ export default function WorkoutPage() {
     if (!caloriesTouched) setCalories(estimateCalories(mins));
   }, [durationMins, totalDurationSec, showComplete, caloriesTouched]);
 
-  /* ---------- Build KB meta and controller ---------- */
+  /* ---------- KB tracking ---------- */
   const kbMeta: KbRoundMeta[] = useMemo(() => {
-    return kbRounds.map((r, i) => ({
+    return (kbRounds || []).map((r, i) => ({
       roundId: r.round_id,
       name: r.name || `Kettlebell ${i + 1}`,
       order: r.order ?? i + 6,
@@ -238,7 +275,7 @@ export default function WorkoutPage() {
     try {
       const dateKey = formatDateKeyLocal(new Date());
       const kb_results = kbController.getResultsForApi().map((r, i) => ({
-        roundIndex: i + 6,
+        roundIndex: i + 6, // store 6..10 per spec
         name: r.name,
         style: r.style,
         completedRounds: r.completedRounds,
@@ -256,7 +293,7 @@ export default function WorkoutPage() {
         weight_completed_with: kbWeightUsed === "" ? null : Number(kbWeightUsed),
         rpe: Number(rpe),
         notes: notes?.trim() || null,
-        duration: minutes,
+        duration: minutes, // legacy
         dateKey,
         kb_results,
       };
@@ -273,7 +310,7 @@ export default function WorkoutPage() {
         setNotes("");
         setRpe(7);
         mutate();
-        // Navigate to share page:
+        // Go to share page
         router.push(`/completed/${encodeURIComponent(String(id))}`);
       } else {
         const j = await res.json().catch(() => ({}));
@@ -416,10 +453,10 @@ export default function WorkoutPage() {
               rounds={sortedRounds as any}
               exerciseNameById={exerciseNameById}
               videoByExerciseId={videoByExerciseId}
+              gifByExerciseId={gifByExerciseId}
               techVideoByCode={techVideoByCode}
               boxRoundsCount={5}
               kbController={kbController}
-              // NOTE: gifByExerciseId is optional in the component and we omit it here
             />
           ) : (
             <ListViewer
@@ -427,8 +464,9 @@ export default function WorkoutPage() {
               kbRounds={kbRounds as any}
               exerciseNameById={exerciseNameById}
               techVideoByCode={techVideoByCode}
+              gifByExerciseId={gifByExerciseId}
+              videoByExerciseId={videoByExerciseId}
               kbController={kbController}
-              // NOTE: gifByExerciseId / videoByExerciseId props are optional in ListViewer; we omit GIFs
             />
           )
         ) : (
