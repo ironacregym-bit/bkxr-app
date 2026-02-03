@@ -1,4 +1,6 @@
 // pages/completed/[workout_id].tsx
+"use client";
+
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -31,6 +33,17 @@ type CompletionSet = { exercise_id: string; set: number; weight: number | null; 
 type BenchmarkPart = { style?: string; rounds_completed?: number | null; weight_kg?: number | null; notes?: string | null };
 type BenchmarkMetrics = Partial<Record<"engine" | "power" | "core" | "ladder" | "load", BenchmarkPart>>;
 
+// NEW: BXKR kettlebell results from viewers
+type KbResult = {
+  roundIndex: number;                                // typically 6..10 for KB rounds, but treat as number
+  name: string;
+  style?: "AMRAP" | "EMOM" | "LADDER" | string;
+  completedRounds?: number | null;                   // AMRAP/LADDER
+  emom?: { minuteReps: [number, number, number] } | null; // EMOM
+  totalReps?: number | null;                         // optional convenience
+  notes?: string | null;
+};
+
 type LastCompletion = {
   id?: string;
   workout_id?: string;
@@ -49,6 +62,9 @@ type LastCompletion = {
   is_benchmark?: boolean;
   benchmark_metrics?: BenchmarkMetrics | null;
   sets_completed?: number | null;
+
+  // NEW
+  kb_results?: KbResult[] | null;
 };
 
 type HistoryItem = LastCompletion & { id: string };
@@ -165,6 +181,46 @@ function summariseBenchmark(metrics?: BenchmarkMetrics | null) {
     });
   }
   return { rounds: rounds || null, maxLoad: maxLoad || null };
+}
+
+/* ---------- BXKR helpers ---------- */
+function isBxkrCompletion(last: LastCompletion | null): boolean {
+  if (!last) return false;
+  if (last.is_benchmark === true) return true;
+  if (Array.isArray(last.kb_results) && last.kb_results.length > 0) return true;
+  return false;
+}
+
+function sumKbRounds(last: LastCompletion | null): number | null {
+  if (!last?.kb_results || !Array.isArray(last.kb_results)) return null;
+  let rounds = 0;
+  let emomReps = 0;
+  for (const r of last.kb_results) {
+    const style = (r.style || "").toString().toUpperCase();
+    if (style === "AMRAP" || style === "LADDER") {
+      const v = Number(r.completedRounds || 0);
+      if (Number.isFinite(v) && v > 0) rounds += v;
+    } else if (style === "EMOM") {
+      // For share we’ll display EMOM reps separately (sum of minute reps)
+      const mins = r.emom?.minuteReps || [0, 0, 0];
+      emomReps += (Number(mins[0] || 0) + Number(mins[1] || 0) + Number(mins[2] || 0));
+    }
+  }
+  // Return rounds count; EMOM reps will be shown in a separate pill.
+  return rounds;
+}
+
+function sumKbEmomReps(last: LastCompletion | null): number | null {
+  if (!last?.kb_results || !Array.isArray(last.kb_results)) return null;
+  let reps = 0;
+  for (const r of last.kb_results) {
+    const style = (r.style || "").toString().toUpperCase();
+    if (style === "EMOM") {
+      const mins = r.emom?.minuteReps || [0, 0, 0];
+      reps += (Number(mins[0] || 0) + Number(mins[1] || 0) + Number(mins[2] || 0));
+    }
+  }
+  return reps;
 }
 
 // ---------------- canvas renderer ----------------
@@ -456,7 +512,7 @@ export default function CompletedPelotonStylePage() {
     typeof last?.calories_burned === "number" ? Math.round(last.calories_burned) : null;
   const duration = pickDuration(last);
 
-  // Most Improved (PB) vs Top Lift
+  // Most Improved (PB) vs Top Lift (Gym)
   const currentBest = bestSetByExercise(last?.sets);
   const prevDocs = history.filter((h) => !last?.id || h.id !== last?.id);
   const prevBest = bestSetByExercise(prevDocs.flatMap((h) => h.sets || []));
@@ -492,13 +548,47 @@ export default function CompletedPelotonStylePage() {
   // Volume (exclude bodyweight/zero-load sets; supersets are included naturally)
   const vol = totalVolume(last?.sets);
 
-  // Pills: Calories • Most Improved/Top Lift • Time • Volume
-  const pills: Pill[] = [
-    { label: "Calories", value: calories != null ? `${calories} kcal` : "—" },
-    { label: "Most Improved", value: mostImprovedText },
-    { label: "Time", value: duration != null ? `${Math.round(duration)} min` : "—" },
-    { label: "Volume", value: formatVolumeKgHuman(vol) },
-  ];
+  /* ---------- BXKR / Gym pill logic ---------- */
+  const isBxkr = isBxkrCompletion(last);
+
+  // BXKR summaries
+  const kbRoundsTotal = sumKbRounds(last);           // AMRAP/LADDER rounds only
+  const kbEmomReps = sumKbEmomReps(last);           // sum of EMOM reps
+  const kbWeight =
+    last?.weight_completed_with != null && last.weight_completed_with !== ""
+      ? Number(last.weight_completed_with)
+      : null;
+
+  // Build pills conditionally
+  const pills: Pill[] = useMemo(() => {
+    if (isBxkr) {
+      // BXKR: Calories • Rounds • EMOM Reps • KB Weight (or Time if no weight)
+      const arr: Pill[] = [];
+      arr.push({ label: "Calories", value: calories != null ? `${calories} kcal` : "—" });
+
+      // Rounds (AMRAP/LADDER)
+      arr.push({ label: "Rounds", value: kbRoundsTotal != null ? `${kbRoundsTotal}` : "—" });
+
+      // EMOM reps (sum)
+      arr.push({ label: "EMOM Reps", value: kbEmomReps != null ? `${kbEmomReps}` : "—" });
+
+      // Prefer KB weight if present, otherwise show Time
+      if (kbWeight != null && Number.isFinite(kbWeight)) {
+        arr.push({ label: "KB Weight", value: `${Math.round(kbWeight)} kg` });
+      } else {
+        arr.push({ label: "Time", value: duration != null ? `${Math.round(duration)} min` : "—" });
+      }
+      return arr;
+    }
+
+    // Gym (unchanged)
+    return [
+      { label: "Calories", value: calories != null ? `${calories} kcal` : "—" },
+      { label: "Most Improved", value: mostImprovedText },
+      { label: "Time", value: duration != null ? `${Math.round(duration)} min` : "—" },
+      { label: "Volume", value: formatVolumeKgHuman(vol) },
+    ];
+  }, [isBxkr, calories, kbRoundsTotal, kbEmomReps, kbWeight, duration, mostImprovedText, vol]);
 
   // Caption right uses workout doc if available; fallback to completion
   const captionRightTitle = wData?.workout_name || last?.workout_name || null;
@@ -518,7 +608,7 @@ export default function CompletedPelotonStylePage() {
         pills,
         bgUrl: BG_URL,
         logoUrl: LOGO_URL,
-        captionLeft: TITLE_TEXT,            // now empty string -> nothing rendered on left
+        captionLeft: TITLE_TEXT,            // still empty string — nothing rendered on left
         captionRightTitle,
         captionRightDesc,
       });
