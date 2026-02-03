@@ -1,4 +1,4 @@
-
+// components/DailyTasksCard.tsx
 import React from "react";
 import Link from "next/link";
 
@@ -13,7 +13,7 @@ type Props = {
   nutritionSummary?: { calories: number; protein: number };
   nutritionLogged: boolean;
 
-  // Mandatory workout (when no recurring: BXKR/programmed; when recurring: the recurring set)
+  // Mandatory workout
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
   hasWorkout: boolean;
   workoutDone: boolean;
@@ -26,35 +26,37 @@ type Props = {
   checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number };
   checkinComplete: boolean;
 
-  // NEW — Recurring vs Optional split
-  hasRecurringToday?: boolean; // true if there is at least one recurring workout today
-  recurringDone?: boolean;     // completion state of the recurring (mandatory) set
-  recurringWorkouts?: SimpleWorkoutRef[]; // recurring workouts for the day (first is primary)
-  optionalWorkouts?: SimpleWorkoutRef[];  // BXKR/programmed shown as optional when recurring exists
+  // Recurring vs Optional split
+  hasRecurringToday?: boolean;
+  recurringDone?: boolean;
+  recurringWorkouts?: SimpleWorkoutRef[];
+  optionalWorkouts?: SimpleWorkoutRef[];
 
-  // Hrefs (use "#" to lock)
+  // NEW: Optional completion state/summary
+  optionalDone?: boolean;
+  optionalSummary?: { calories: number; duration: number; weightUsed?: string };
+
+  // Hrefs
   hrefs: {
     nutrition: string;
-    workout: string;   // used only when no recurring (mandatory BXKR case)
+    workout: string;   // used only when no recurring
     habit: string;
     checkin: string;
-    freestyle?: string; // optional, defaults to /workouts/freestyle
-
-    // NEW — optional, auto-derived if omitted:
-    recurring?: string;       // e.g. /gymworkout/[id]
-    optionalWorkout?: string; // e.g. /workouts/[id]
+    freestyle?: string;
+    recurring?: string;
+    optionalWorkout?: string;
   };
 
   // Targets
   userCalorieTarget?: number;
   userProteinTarget?: number;
 
-  // Freestyle (from /api/completions?summary=day)
+  // Freestyle
   freestyleLogged?: boolean;
   freestyleSummary?: {
     activity_type?: string | null;
-    duration?: number | null;           // minutes
-    calories_burned?: number | null;    // kcal
+    duration?: number | null;
+    calories_burned?: number | null;
     weight_completed_with?: number | null;
   };
 };
@@ -64,33 +66,29 @@ export default function DailyTasksCard({
   nutritionSummary,
   nutritionLogged,
 
-  // Mandatory (legacy)
   workoutSummary,
   hasWorkout,
   workoutDone,
 
-  // Habits
   habitSummary,
   habitAllDone,
 
-  // Check-in
   checkinSummary,
   checkinComplete,
 
-  // NEW split
   hasRecurringToday = false,
   recurringDone = false,
   recurringWorkouts = [],
   optionalWorkouts = [],
 
-  // Links
+  optionalDone = false,
+  optionalSummary,
+
   hrefs,
 
-  // Targets
   userCalorieTarget = 2000,
   userProteinTarget = 150,
 
-  // Freestyle
   freestyleLogged = false,
   freestyleSummary
 }: Props) {
@@ -98,19 +96,13 @@ export default function DailyTasksCard({
   const workoutLocked = hrefs.workout === "#";
   const habitsLocked = hrefs.habit === "#";
 
-  // Derive links for new rows if not provided
   const firstRecurring = Array.isArray(recurringWorkouts) && recurringWorkouts[0] ? recurringWorkouts[0] : null;
   const firstOptional = Array.isArray(optionalWorkouts) && optionalWorkouts[0] ? optionalWorkouts[0] : null;
 
   const recurringHref = hrefs.recurring ?? (firstRecurring ? `/gymworkout/${encodeURIComponent(firstRecurring.id)}` : "#");
   const optionalHref = hrefs.optionalWorkout ?? (firstOptional ? `/workout/${encodeURIComponent(firstOptional.id)}` : "#");
 
-  // Row styles
-  const rowStyle = (
-    done: boolean,
-    accent: string,
-    locked?: boolean
-  ): React.CSSProperties => ({
+  const rowStyle = (done: boolean, accent: string, locked?: boolean): React.CSSProperties => ({
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
@@ -218,10 +210,10 @@ export default function DailyTasksCard({
         </div>
       </RowWrapper>
 
-      {/* Recurring Workout (MANDATORY) — shown when hasRecurringToday */}
+      {/* Recurring Workout (MANDATORY) */}
       {hasRecurringToday && firstRecurring && (
         <RowWrapper href={recurringHref} ariaLabel="Open recurring workout (mandatory)">
-          <div style={rowStyle(recurringDone, "#5b7c99")} aria-label="Recurring workout (mandatory)" aria-live="polite">
+          <div style={rowStyle(Boolean(recurringDone), "#5b7c99")} aria-label="Recurring workout (mandatory)" aria-live="polite">
             <span style={iconWrap}>
               <i className="fas fa-dumbbell" style={{ color: "#5b7c99" }} />
               <span>{recurringWorkoutLabel}</span>
@@ -252,10 +244,10 @@ export default function DailyTasksCard({
         </RowWrapper>
       )}
 
-      {/* When NO recurring today: show the original mandatory Workout row (BXKR/programmed) */}
+      {/* Planned Workout when NO recurring */}
       {!hasRecurringToday && hasWorkout && (
         <RowWrapper href={hrefs.workout} locked={workoutLocked} ariaLabel="Open planned workout">
-          <div style={rowStyle(workoutDone, "#5b7c99", workoutLocked)} aria-label="Planned workout" aria-live="polite">
+          <div style={rowStyle(Boolean(workoutDone), "#5b7c99", workoutLocked)} aria-label="Planned workout" aria-live="polite">
             <span style={iconWrap}>
               {workoutLocked ? (
                 <i className="fas fa-lock" style={{ color: "#5b7c99" }} />
@@ -278,11 +270,11 @@ export default function DailyTasksCard({
         </RowWrapper>
       )}
 
-      {/* BXKR Optional Workout — only when recurring exists */}
+      {/* BXKR Optional Workout — now reflects completion */}
       {hasRecurringToday && firstOptional && (
         <RowWrapper href={optionalHref} ariaLabel="Open optional BXKR workout">
           <div
-            style={rowStyle(false, "#7a8793")}
+            style={rowStyle(Boolean(optionalDone), "#7a8793")}
             aria-label="Optional BXKR workout"
             aria-live="polite"
             title="Optional session — does not affect your daily task count"
@@ -304,12 +296,18 @@ export default function DailyTasksCard({
                 Optional
               </span>
             </span>
-            <span style={valueStyle}>Optional · Pending</span>
+            <span style={valueStyle}>
+              {optionalDone
+                ? `${optionalSummary?.calories || 0} kcal${
+                    optionalSummary?.duration ? ` · ${Math.round(optionalSummary.duration)} min` : ""
+                  }${optionalSummary?.weightUsed ? ` · ${optionalSummary.weightUsed}` : ""}`
+                : "Optional · Pending"}
+            </span>
           </div>
         </RowWrapper>
       )}
 
-      {/* Freestyle Session — always available; never streak-gated */}
+      {/* Freestyle */}
       <RowWrapper href={freestyleHref} ariaLabel="Open freestyle session">
         <div style={rowStyle(!!freestyleLogged, "#ff7f32")} aria-label="Freestyle session" aria-live="polite">
           <span style={iconWrap}>
@@ -338,7 +336,7 @@ export default function DailyTasksCard({
         </div>
       </RowWrapper>
 
-      {/* Weekly Check‑In (Friday) */}
+      {/* Check‑In */}
       {isFriday && (
         <RowWrapper href={hrefs.checkin} ariaLabel="Open check-in">
           <div style={rowStyle(checkinComplete, "#c9a34e")} aria-label="Weekly check-in" aria-live="polite">
