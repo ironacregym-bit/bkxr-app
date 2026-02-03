@@ -1,5 +1,3 @@
-
-// components/workouts/FollowAlongViewer.tsx
 "use client";
 
 import { useMemo, useRef, useState } from "react";
@@ -13,6 +11,8 @@ import useGestureControls from "../../hooks/useGestureControls";
 import useWakeLock from "../../hooks/useWakeLock";
 import useFullscreen from "../../hooks/useFullscreen";
 import { pulseSoft, pulseMedium } from "../../hooks/useHaptics";
+import KbRoundTracker from "./KbRoundTracker";
+import { KbTrackingController } from "../..//components/hooks/useKbTracking";
 
 type KBStyle = "EMOM" | "AMRAP" | "LADDER";
 type ExerciseItemOut = {
@@ -48,6 +48,7 @@ export default function FollowAlongViewer({
   gifByExerciseId,
   techVideoByCode,
   boxRoundsCount = 5,
+  kbController,
 }: {
   rounds: RoundOut[];
   exerciseNameById: Record<string, string>;
@@ -55,6 +56,7 @@ export default function FollowAlongViewer({
   gifByExerciseId?: Record<string, string | undefined>;
   techVideoByCode?: Record<string, string | undefined>;
   boxRoundsCount?: number;
+  kbController: KbTrackingController;
 }) {
   // Sorted by order
   const ordered = useMemo(
@@ -177,7 +179,7 @@ export default function FollowAlongViewer({
       <div>
         {/* Boxing round name */}
         <div className="fw-semibold">{current?.name}</div>
-        {/* Boxing type (Basics/Speed/Power/Defence/Engine) below */}
+        {/* Boxing type */}
         {current?.style ? (
           <div className="text-dim mb-2" style={{ fontSize: 12 }}>{current.style}</div>
         ) : null}
@@ -197,7 +199,7 @@ export default function FollowAlongViewer({
           ))}
         </div>
 
-        {/* Simple media card (if later you store combo GIF/video, pass here) */}
+        {/* Simple media card */}
         <div className="futuristic-card p-2" style={{ overflow: "hidden" }}>
           <div className="ratio ratio-16x9" style={{ borderRadius: 12, overflow: "hidden" }}>
             <div className="d-flex align-items-center justify-content-center text-center px-3">
@@ -233,10 +235,32 @@ export default function FollowAlongViewer({
   /* ---------------- Kettlebell content ---------------- */
   function KettlebellPane() {
     const items = current?.items || [];
+
+    // Map current KB round to kb index within kbController.state
+    const kbIndex = useMemo(() => {
+      // Identify the KB index by counting Kettlebell rounds up to current index within ordered rounds
+      const kbOrderWithinAll = ordered.filter(r => r.category === "Kettlebell").map(r => r.round_id);
+      const currentId = current?.id || current?.name; // timeline keeps id as round_id; fallback name
+      const idxInAll = ordered.findIndex(r => r.round_id === current?.id);
+      if (idxInAll < 0) {
+        const byName = ordered.findIndex(r => r.name === current?.name && r.category === "Kettlebell");
+        if (byName >= 0) {
+          const nthKb = ordered.slice(0, byName + 1).filter(r => r.category === "Kettlebell").length - 1;
+          return Math.max(0, nthKb);
+        }
+        return 0;
+      }
+      const nthKb = ordered.slice(0, idxInAll + 1).filter(r => r.category === "Kettlebell").length - 1;
+      return Math.max(0, nthKb);
+    }, [ordered, current]);
+
+    const row = kbController.state.rounds[kbIndex];
+    const minuteReps = (row?.emom?.minuteReps as [number, number, number]) || [0, 0, 0];
+
     return (
       <div>
         <div className="fw-semibold">{current?.name || "Kettlebell Round"}</div>
-        {/* KB style badge on the right with tooltip (no expander) */}
+        {/* KB style badge on the right with tooltip */}
         {current?.style ? (
           <div className="d-flex align-items-center justify-content-end mb-2">
             <span
@@ -265,6 +289,19 @@ export default function FollowAlongViewer({
           aspect="16x9"
         />
 
+        {/* Tracker (expanded on active round) */}
+        <KbRoundTracker
+          styleType={current?.style as KBStyle | undefined}
+          compact={false}
+          activeMinute={minuteIndex}
+          rounds={row?.completedRounds ?? 0}
+          onRoundsChange={(v) => kbController.setRounds(kbIndex, v)}
+          onIncRounds={(d) => kbController.incRounds(kbIndex, d)}
+          minuteReps={minuteReps}
+          onMinuteChange={(m, v) => kbController.setEmomMinute(kbIndex, m, v)}
+          onMinuteInc={(m, d) => kbController.incEmomMinute(kbIndex, m, d)}
+        />
+
         {/* Chips for all exercises (tap -> modal) */}
         <RoundMediaRail
           items={items}
@@ -272,7 +309,7 @@ export default function FollowAlongViewer({
           onOpenMedia={openExerciseModal}
         />
 
-        {/* Next up (usually rest/next round) */}
+        {/* Next up */}
         {nextRound ? (
           <div className="mt-3 d-flex align-items-center justify-content-between">
             <div className="text-dim" style={{ fontSize: 12 }}>Next up</div>
@@ -345,7 +382,7 @@ export default function FollowAlongViewer({
         }
       </div>
 
-      {/* Swipe strip (dedicated gesture area so taps on content open modals) */}
+      {/* Swipe strip */}
       <div
         ref={stripRef}
         className="mt-2 d-flex align-items-center justify-content-center"
