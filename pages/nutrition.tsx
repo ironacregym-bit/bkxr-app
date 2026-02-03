@@ -10,6 +10,7 @@ import MacrosCard, { type MacroGoals, type MacroProgress, type MacroTotals } fro
 import FoodEditor, { type Food } from "../components/nutrition/FoodEditor";
 import BarcodeScannerGate from "../components/nutrition/BarcodeScannerGate";
 import BarcodeScannerClient from "../components/nutrition/BarcodeScannerClient";
+import GlobalNumericFocus from "../components/GlobalNumericFocus";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const meals = ["Breakfast", "Lunch", "Dinner", "Snack"] as const;
