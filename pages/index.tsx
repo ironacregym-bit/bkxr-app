@@ -308,7 +308,7 @@ export default function Home() {
 
   const optionalWorkoutHref = firstOptional
     ? `/workout/${encodeURIComponent(firstOptional.id)}`
-    : "#`;
+    : "#";
 
   const roundedNutrition = selectedDayData?.nutritionSummary
     ? {
