@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { KBStyle } from "/useKbTracking";
+import { KBStyle } from "../..//components/hooks/useKbTracking";
 
 const ACCENT = "#FF8A2A";
 
