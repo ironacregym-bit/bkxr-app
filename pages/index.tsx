@@ -688,11 +688,22 @@ export default function Home() {
                 </>
               ) : null}
 
+
               <div className="mt-3 d-flex gap-2">
-                /onboarding
+                <a
+                  href="/onboarding"
+                  className="btn btn-bxkr"
+                  style={{ borderRadius: 24 }}
+                  aria-label="Continue onboarding"
+                >
                   Continue onboarding
                 </a>
-                /landing
+                <a
+                  href="/landing"
+                  className="btn btn-outline-light"
+                  style={{ borderRadius: 24 }}
+                  aria-label="Learn more about BXKR"
+                >
                   Learn more
                 </a>
               </div>
