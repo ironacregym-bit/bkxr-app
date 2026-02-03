@@ -9,6 +9,7 @@ import useSWR from "swr";
 import Link from "next/link";
 import useGymExerciseMedia, { GymRound as MediaRound } from "../../hooks/useGymExerciseMedia";
 import BottomNav from "../../components/BottomNav";
+import GlobalNumericFocus from "../../components/GlobalNumericFocus";
 
 const ACCENT = "#FF8A2A";
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
