@@ -31,7 +31,7 @@ type NutritionEntry = {
   date: string;
   meal: string;
   food: Food;
-  grams: number;
+  grams?: number | null;      // <-- now optional
   calories: number;
   protein: number;
   carbs: number;
@@ -77,8 +77,7 @@ export default function NutritionPage() {
   const [results, setResults] = useState<Food[]>([]);
   const [loadingSearch, setLoadingSearch] = useState<boolean>(false);
   const [selectedFood, setSelectedFood] = useState<Food | null>(null);
-  const [grams, setGrams] = useState<number>(100);
-  const [usingServing, setUsingServing] = useState<"per100" | "serving">("per100");
+  const [usingServing, setUsingServing] = useState<"per100" | "serving">("per100"); // still used for scanned foods
   const [adding, setAdding] = useState<boolean>(false);
 
   // Favourites (localStorage, per-user)
@@ -197,17 +196,15 @@ export default function NutritionPage() {
     doSearch(query);
   }, [query, doSearch]);
 
-  // Utility: extract grams from serving string
-  function extractGramAmount(text?: string | null): number | null {
-    if (!text) return null;
-    const match = text.match(/(\d+(?:\.\d+)?)\s*g/i) || text.match(/\((\d+(?:\.\d+)?)\s*g\)/i);
-    return match && match[1] ? Number(match[1]) : null;
-  }
-
-  // Compute scaled nutrition for the current selection
+  // Compute scaled nutrition for scanned/searched foods (unchanged)
   const scaledSelected: Food | null = useMemo(() => {
     if (!selectedFood) return null;
 
+    // For manual entries we do not scale — return as-is
+    if (selectedFood.id?.startsWith("manual-")) return selectedFood;
+
+    // For database foods we keep your per100/serving logic if present
+    const grams = 100; // not used anymore in UI; keep factor 1.0 on per100
     if (usingServing === "serving" && selectedFood.servingSize) {
       const hasPerServing =
         selectedFood.caloriesPerServing != null ||
@@ -224,41 +221,28 @@ export default function NutritionPage() {
           fat: +(Number(selectedFood.fatPerServing ?? 0)).toFixed(2),
         };
       }
-      const servingGrams = extractGramAmount(selectedFood.servingSize) ?? grams;
-      const factor = servingGrams / 100;
-      return {
-        ...selectedFood,
-        calories: +(selectedFood.calories * factor).toFixed(2),
-        protein: +(selectedFood.protein * factor).toFixed(2),
-        carbs: +(selectedFood.carbs * factor).toFixed(2),
-        fat: +(selectedFood.fat * factor).toFixed(2),
-      };
     }
+    // default: per 100g already in object
+    return selectedFood;
+  }, [selectedFood, usingServing]);
 
-    const factor = grams / 100;
-    return {
-      ...selectedFood,
-      calories: +(selectedFood.calories * factor).toFixed(2),
-      protein: +(selectedFood.protein * factor).toFixed(2),
-      carbs: +(selectedFood.carbs * factor).toFixed(2),
-      fat: +(selectedFood.fat * factor).toFixed(2),
-    };
-  }, [selectedFood, grams, usingServing]);
-
+  // Add entry — for manual, we send macros exactly as typed; grams omitted
   const addEntry = async (meal: string, food: Food | null) => {
     if (!session?.user?.email || !food) return signIn("google");
-    const chosenGrams = usingServing === "serving" ? extractGramAmount(food.servingSize) ?? grams : grams;
 
-    const payload = {
+    const payload: any = {
       date: formattedDate,
       meal,
       food,
-      grams: chosenGrams,
+      // For manual food, use the macros as-is (no scaling, no grams)
       calories: (scaledSelected || food).calories,
       protein: (scaledSelected || food).protein,
       carbs: (scaledSelected || food).carbs,
       fat: (scaledSelected || food).fat,
     };
+
+    // For searched/scanned foods, you may still include grams in the future; right now we omit
+    // payload.grams = null;
 
     setAdding(true);
     try {
@@ -280,7 +264,6 @@ export default function NutritionPage() {
       setSelectedFood(null);
       setQuery("");
       setResults([]);
-      setGrams(100);
       setUsingServing("per100");
     } finally {
       setAdding(false);
@@ -303,13 +286,11 @@ export default function NutritionPage() {
     setSelectedFood(found);
     setQuery(found.name || found.code || "");
     setUsingServing("per100");
-    const g = extractGramAmount(found.servingSize);
-    setGrams(g ?? 100);
     setOpenMeal((prev) => prev || "Breakfast");
     return found;
   }
 
-  // For FoodEditor manual editing
+  // Pass patches from the editor
   const onChangeSelectedFood = (patch: Partial<Food>) => {
     setSelectedFood((prev) => (prev ? { ...prev, ...patch } : prev));
   };
@@ -355,26 +336,6 @@ export default function NutritionPage() {
             { calories: 0, protein: 0, carbs: 0, fat: 0 }
           );
 
-          const favouriteStrip =
-            favourites.length > 0 && (
-              <div className="mb-2" style={{ overflowX: "auto", whiteSpace: "nowrap" }}>
-                {favourites.map((fav) => (
-                  <button
-                    key={fav.id ?? fav.code ?? fav.name}
-                    className="bxkr-chip me-1"
-                    onClick={() => {
-                      setSelectedFood(fav);
-                      setUsingServing("per100");
-                      const g = extractGramAmount(fav.servingSize);
-                      setGrams(g ?? 100);
-                    }}
-                  >
-                    ⭐ {fav.name}
-                  </button>
-                ))}
-              </div>
-            );
-
           return (
             <div key={meal} className="mb-3">
               <button
@@ -391,9 +352,6 @@ export default function NutritionPage() {
 
               {isOpen && (
                 <div className="px-2">
-                  {/* Favourites strip */}
-                  {favouriteStrip}
-
                   {/* Search */}
                   <div className="d-flex gap-2 mb-2">
                     <input
@@ -409,13 +367,11 @@ export default function NutritionPage() {
 
                   {loadingSearch && <div>Searching…</div>}
 
-                  {/* Editor fallback for selected item with no list showing */}
-                  {selectedFood && results.length === 0 && (
+                  {/* Editor for selected item */}
+                  {selectedFood && (
                     <FoodEditor
                       meal={meal}
                       food={selectedFood}
-                      grams={grams}
-                      setGrams={setGrams}
                       usingServing={usingServing}
                       setUsingServing={setUsingServing}
                       scaledSelected={scaledSelected}
@@ -426,87 +382,42 @@ export default function NutritionPage() {
                     />
                   )}
 
-                  {results.length > 0 &&
-                    results.slice(0, 5).map((f) => (
-                      <div key={f.id ?? f.code ?? f.name} className="mb-1">
-                        {selectedFood?.id === f.id ? (
-                          <FoodEditor
-                            meal={meal}
-                            food={selectedFood}
-                            grams={grams}
-                            setGrams={setGrams}
-                            usingServing={usingServing}
-                            setUsingServing={setUsingServing}
-                            scaledSelected={scaledSelected}
-                            addEntry={addEntry}
-                            isFavourite={isFavourite(selectedFood)}
-                            onToggleFavourite={() => toggleFavourite(selectedFood!)}
-                            onChangeFood={onChangeSelectedFood}
-                          />
-                        ) : (
-                          <div
-                            className="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                            style={{ background: "rgba(255,255,255,0.05)", color: "#fff" }}
-                            onClick={() => {
-                              setSelectedFood(f);
-                              setUsingServing("per100");
-                              const g = extractGramAmount(f.servingSize);
-                              setGrams(g ?? 100);
-                            }}
-                          >
-                            <span>
-                              {f.name} ({f.brand}) — {round2(f.calories)} kcal/100g
-                            </span>
-                            <button
-                              type="button"
-                              className="btn btn-link p-0 ms-2"
-                              onClick={(ev) => {
-                                ev.stopPropagation();
-                                toggleFavourite(f);
-                              }}
-                              title={isFavourite(f) ? "Unfavourite" : "Favourite"}
-                            >
-                              <i className={isFavourite(f) ? "fas fa-star text-warning" : "far fa-star text-dim"} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-
                   {/* Manual food opener */}
-                  <button
-                    className="btn btn-bxkr-outline w-100 mb-2"
-                    style={{ borderRadius: "12px" }}
-                    onClick={() => {
-                      setSelectedFood({
-                        id: `manual-${Date.now()}`,
-                        code: "",
-                        name: "",
-                        brand: "",
-                        image: null,
-                        calories: 0,
-                        protein: 0,
-                        carbs: 0,
-                        fat: 0,
-                        servingSize: "",
-                        caloriesPerServing: null,
-                        proteinPerServing: null,
-                        carbsPerServing: null,
-                        fatPerServing: null,
-                      });
-                      setUsingServing("per100");
-                      setGrams(100);
-                      setResults([]); // ensure editor shows immediately
-                    }}
-                  >
-                    Add manual food
-                  </button>
+                  {!selectedFood && (
+                    <button
+                      className="btn btn-bxkr-outline w-100 mb-2"
+                      style={{ borderRadius: "12px" }}
+                      onClick={() => {
+                        setSelectedFood({
+                          id: `manual-${Date.now()}`,
+                          code: "",
+                          name: "",
+                          brand: "",            // kept for shape; not shown in editor
+                          image: null,
+                          calories: 0,
+                          protein: 0,
+                          carbs: 0,
+                          fat: 0,
+                          servingSize: "",      // kept for shape; not shown in editor
+                          caloriesPerServing: null,
+                          proteinPerServing: null,
+                          carbsPerServing: null,
+                          fatPerServing: null,
+                        });
+                        setUsingServing("per100");
+                        setResults([]); // ensure the editor shows
+                      }}
+                    >
+                      Add manual food / meal totals
+                    </button>
+                  )}
 
+                  {/* Logged entries */}
                   {mealEntries.map((e) => (
                     <div key={e.id} className="futuristic-card p-3 mb-2 d-flex justify-content-between align-items-center">
                       <div>
                         <div className="fw-bold d-flex align-items-center">
-                          {e.food.name} ({e.food.brand})
+                          {e.food.name || "Manual item"}
                           <button
                             type="button"
                             className="btn btn-link p-0 ms-2"
@@ -516,7 +427,6 @@ export default function NutritionPage() {
                             <i className={isFavourite(e.food) ? "fas fa-star text-warning" : "far fa-star text-dim"} />
                           </button>
                         </div>
-                        <div className="small text-dim">{e.grams} g</div>
                         <div className="small">
                           <span style={{ color: COLORS.calories }}>{round2(e.calories)} kcal</span> |{" "}
                           <span style={{ color: COLORS.protein }}>{round2(e.protein)}p</span> |{" "}
