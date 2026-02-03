@@ -1,4 +1,3 @@
-
 "use client";
 
 import Head from "next/head";
@@ -14,6 +13,7 @@ import WorkoutViewToggle from "../../components/workouts/WorkoutViewToggle";
 import ListViewer from "../../components/workouts/ListViewer";
 import FollowAlongViewer from "../../components/workouts/FollowAlongViewer";
 import useExerciseMediaMap from "../../hooks/useExerciseMediaMap";
+import { useKbTracking, KbRoundMeta } from "../../components/hooks/useKbTracking";
 
 type KBStyle = "EMOM" | "AMRAP" | "LADDER";
 type BoxingAction = { kind: "punch" | "defence"; code: string; count?: number; tempo?: string; notes?: string };
@@ -193,9 +193,7 @@ export default function WorkoutPage() {
     setDurationMins(Math.round((totalDurationSec || 1800) / 60));
   }, [totalDurationSec]);
 
-  // Prefill calories when opening modal or when duration changes (only if user hasn't edited)
   function estimateCalories(minutes: number): number {
-    // Simple estimate, editable by user
     const assumedWeightKg = 70;
     const avgMET = 8;
     return Math.round(avgMET * assumedWeightKg * (minutes / 60) * 1.05);
@@ -219,6 +217,19 @@ export default function WorkoutPage() {
     if (!caloriesTouched) setCalories(estimateCalories(mins));
   }, [durationMins, totalDurationSec, showComplete, caloriesTouched]);
 
+  /* ---------- Build KB meta and controller ---------- */
+  const kbMeta: KbRoundMeta[] = useMemo(() => {
+    return kbRounds.map((r, i) => ({
+      roundId: r.round_id,
+      name: r.name || `Kettlebell ${i + 1}`,
+      order: r.order ?? i + 6, // KB rounds usually 6..10 in write order
+      style: r.style,
+    }));
+  }, [kbRounds]);
+
+  const userEmail = session?.user?.email || "anon@bxkr";
+  const kbController = useKbTracking(String(id || ""), userEmail, kbMeta);
+
   async function submitCompletion() {
     if (!id) return;
     const minutes = Number(durationMins) > 0 ? Number(durationMins) : Math.round((totalDurationSec || 1800) / 60);
@@ -226,11 +237,18 @@ export default function WorkoutPage() {
 
     try {
       const dateKey = formatDateKeyLocal(new Date());
-      // IMPORTANT:
-      // The unified /api/completions/create handler expects either:
-      //  - gym { sets: [] } OR
-      //  - benchmark mode. We trigger benchmark mode by setting is_benchmark: true
-      //    so BXKR sessions without detailed per-part metrics can still be saved.
+      const kb_results = kbController.getResultsForApi()
+        // Map 0-based KB index -> absolute BXKR order index 6..10 for clarity downstream
+        .map((r, i) => ({
+          roundIndex: i + 6, // UI uses 0..4; store as 6..10 per spec
+          name: r.name,
+          style: r.style,
+          completedRounds: r.completedRounds,
+          emom: r.emom,
+          totalReps: r.totalReps,
+          notes: r.notes ?? null,
+        }));
+
       const payload = {
         workout_id: String(id),
         is_benchmark: true, // ensure BXKR completion is accepted by API
@@ -242,6 +260,7 @@ export default function WorkoutPage() {
         notes: notes?.trim() || null,
         duration: minutes, // legacy compatibility
         dateKey,
+        kb_results,        // <<< NEW
       };
 
       const res = await fetch("/api/completions/create", {
@@ -255,6 +274,7 @@ export default function WorkoutPage() {
         setKbWeightUsed("");
         setNotes("");
         setRpe(7);
+        // keep kbController state in localStorage (so user can revisit), or call kbController.reset()
         mutate();
       } else {
         const j = await res.json().catch(() => ({}));
@@ -396,6 +416,7 @@ export default function WorkoutPage() {
               videoByExerciseId={videoByExerciseId}
               techVideoByCode={techVideoByCode}
               boxRoundsCount={5}
+              kbController={kbController}
             />
           ) : (
             <ListViewer
@@ -403,6 +424,7 @@ export default function WorkoutPage() {
               kbRounds={kbRounds as any}
               exerciseNameById={exerciseNameById}
               techVideoByCode={techVideoByCode}
+              kbController={kbController}
             />
           )
         ) : (
@@ -531,7 +553,7 @@ export default function WorkoutPage() {
                     />
                   </div>
 
-                  {/* NEW: Manual calories field (prefilled, editable) */}
+                  {/* Manual calories field */}
                   <div className="col-12 col-md-6">
                     <label className="form-label">Calories burned</label>
                     <input
@@ -619,9 +641,8 @@ export default function WorkoutPage() {
         </section>
       </main>
 
-      {/* -------- Global, scoped overrides to enforce 64px thumbs + compact inputs -------- */}
+      {/* -------- Global, scoped overrides -------- */}
       <style jsx global>{`
-        /* Keep exercise thumbnails 64x64 no matter what (buttons with image inside) */
         main.container .futuristic-card button.btn.btn-sm.btn-outline-light img,
         main.container .futuristic-card .exercise-thumb,
         main.container .futuristic-card .kb-thumb img {
@@ -631,13 +652,11 @@ export default function WorkoutPage() {
           display: block;
         }
 
-        /* On small screens, keep inputs compact so thumbs are never squeezed */
         @media (max-width: 560px) {
           main.container .futuristic-card input[type="number"] {
             max-width: 80px;
             font-size: 0.9rem;
           }
-          /* Make reps even narrower */
           main.container .futuristic-card input[type="number"][placeholder="Reps"],
           main.container .futuristic-card input[aria-label*="reps"],
           main.container .futuristic-card input[aria-label*="Reps"] {
