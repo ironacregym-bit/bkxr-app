@@ -151,8 +151,8 @@ export default function WorkoutPage() {
   );
   const isCompleted = completionData?.completed === true;
 
-  // Media map for KB exercises in this workout — pass GIFs too
-  const { videoByExerciseId, gifByExerciseId } = useExerciseMediaMap(sortedRounds as any);
+  // Media map for KB exercises in this workout — (hook exposes only videos)
+  const { videoByExerciseId } = useExerciseMediaMap(sortedRounds as any);
 
   /* ---------- View toggle (persist per workout) ---------- */
   type ViewMode = "list" | "follow";
@@ -416,10 +416,10 @@ export default function WorkoutPage() {
               rounds={sortedRounds as any}
               exerciseNameById={exerciseNameById}
               videoByExerciseId={videoByExerciseId}
-              gifByExerciseId={gifByExerciseId}
               techVideoByCode={techVideoByCode}
               boxRoundsCount={5}
               kbController={kbController}
+              // NOTE: gifByExerciseId is optional in the component and we omit it here
             />
           ) : (
             <ListViewer
@@ -427,9 +427,8 @@ export default function WorkoutPage() {
               kbRounds={kbRounds as any}
               exerciseNameById={exerciseNameById}
               techVideoByCode={techVideoByCode}
-              gifByExerciseId={gifByExerciseId}
-              videoByExerciseId={videoByExerciseId}
               kbController={kbController}
+              // NOTE: gifByExerciseId / videoByExerciseId props are optional in ListViewer; we omit GIFs
             />
           )
         ) : (
