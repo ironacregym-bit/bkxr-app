@@ -1,10 +1,18 @@
-// pages/api/completions/history.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 
 type CompletionSet = { exercise_id: string; set: number; weight: number | null; reps: number | null };
-type BenchmarkPart = { style?: string; rounds_completed?: number | null; weight_kg?: number | null; notes?: string | null };
-type BenchmarkMetrics = Partial<Record<"engine" | "power" | "core" | "ladder" | "load", BenchmarkPart>>;
+
+// BXKR kettlebell results (from viewers)
+type KbResult = {
+  roundIndex: number;
+  name: string;
+  style?: "AMRAP" | "EMOM" | "LADDER" | string;
+  completedRounds?: number | null;
+  emom?: { minuteReps: [number, number, number] } | null;
+  totalReps?: number | null;
+  notes?: string | null;
+};
 
 function toJSDate(v: any): Date | null {
   try {
@@ -25,9 +33,9 @@ function numOrNull(x: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 function difficultyFromRPE(rpe?: number | null) {
-  if (rpe == null || isNaN(rpe)) return "—";
-  if (rpe <= 4) return "Easy";
-  if (rpe <= 7) return "Medium";
+  if (rpe == null || isNaN(rpe as any)) return "—";
+  if ((rpe as number) <= 4) return "Easy";
+  if ((rpe as number) <= 7) return "Medium";
   return "Hard";
 }
 function bestSetByExercise(sets: CompletionSet[] | undefined) {
@@ -50,29 +58,84 @@ function heaviestOverall(sets: CompletionSet[] | undefined): CompletionSet | nul
   (sets || []).forEach((s) => {
     if (!top) top = s;
     else {
-      const wt = top.weight ?? 0, wr = s.weight ?? 0;
-      const rt = top.reps ?? 0, rr = s.reps ?? 0;
+      const wt = top.weight ?? 0,
+        wr = s.weight ?? 0;
+      const rt = top.reps ?? 0,
+        rr = s.reps ?? 0;
       if (wr > wt || (wr === wt && rr > rt)) top = s;
     }
   });
   return top;
 }
 function totalVolume(sets: CompletionSet[] | undefined) {
-  return (sets || []).reduce((acc, s) => acc + (s.weight ?? 0) * (s.reps ?? 0), 0);
-}
-function summariseBenchmark(metrics?: BenchmarkMetrics | null) {
-  let rounds = 0;
-  let maxLoad = 0;
-  if (metrics && typeof metrics === "object") {
-    Object.values(metrics).forEach((p) => {
-      if (!p) return;
-      if (typeof p.rounds_completed === "number") rounds += Math.max(0, Math.floor(p.rounds_completed));
-      if (typeof p.weight_kg === "number") maxLoad = Math.max(maxLoad, p.weight_kg);
-    });
-  }
-  return { rounds_completed: rounds || null, load_kg: maxLoad || null };
+  return (sets || []).reduce((acc, s) => acc + (Math.max(0, s.weight ?? 0) * Math.max(0, s.reps ?? 0)), 0);
 }
 
+/* ----- BXKR helpers (kb_results only; ignore benchmark fields) ----- */
+function sanitiseKbResults(rows: any): KbResult[] | null {
+  if (!Array.isArray(rows)) return null;
+  const out: KbResult[] = [];
+  for (const r of rows) {
+    try {
+      const roundIndex = Number(r?.roundIndex);
+      const name = String(r?.name || "");
+      if (!name || !Number.isFinite(roundIndex)) continue;
+
+      const style = r?.style ? String(r.style) : undefined;
+      const completedRounds =
+        r?.completedRounds != null ? Math.max(0, Math.floor(Number(r.completedRounds))) : null;
+
+      let emom: { minuteReps: [number, number, number] } | null = null;
+      if (r?.emom?.minuteReps && Array.isArray(r.emom.minuteReps)) {
+        const a = r.emom.minuteReps;
+        const repA: [number, number, number] = [
+          Math.max(0, Math.floor(Number(a[0] || 0))),
+          Math.max(0, Math.floor(Number(a[1] || 0))),
+          Math.max(0, Math.floor(Number(a[2] || 0))),
+        ];
+        emom = { minuteReps: repA };
+      }
+
+      const totalReps =
+        r?.totalReps != null ? Math.max(0, Math.floor(Number(r.totalReps))) : null;
+
+      const notes = typeof r?.notes === "string" ? r.notes : null;
+
+      out.push({ roundIndex, name, style, completedRounds, emom, totalReps, notes });
+    } catch {
+      // skip row
+    }
+  }
+  return out.length ? out : null;
+}
+
+function sumKbRounds(kb: KbResult[] | null): number | null {
+  if (!kb) return null;
+  let rounds = 0;
+  for (const r of kb) {
+    const st = String(r.style || "").toUpperCase();
+    if (st === "AMRAP" || st === "LADDER") {
+      const v = Number(r.completedRounds || 0);
+      if (Number.isFinite(v) && v > 0) rounds += v;
+    }
+  }
+  return rounds;
+}
+
+function sumKbEmomReps(kb: KbResult[] | null): number | null {
+  if (!kb) return null;
+  let reps = 0;
+  for (const r of kb) {
+    const st = String(r.style || "").toUpperCase();
+    if (st === "EMOM") {
+      const mins = r.emom?.minuteReps || [0, 0, 0];
+      reps += (Number(mins[0] || 0) + Number(mins[1] || 0) + Number(mins[2] || 0));
+    }
+  }
+  return reps;
+}
+
+/* ----- Handler ----- */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { email, range, limit, workout_id, type } = req.query as {
     email?: string;
@@ -124,6 +187,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         toJSDate(d.completed_at) ||
         toJSDate(d.started_at);
 
+      // Sets (gym)
       const sets: CompletionSet[] = Array.isArray(d.sets)
         ? d.sets.map((s: any) => ({
             exercise_id: String(s?.exercise_id || ""),
@@ -133,10 +197,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }))
         : [];
 
+      // KB results (bxkr)
+      const kbResults: KbResult[] | null = sanitiseKbResults(d.kb_results);
+
+      // Classification
       const activity = String(d.activity_type || "");
       const isGym = sets.length > 0 || activity.toLowerCase().includes("strength");
-      const isBXKR = d.is_benchmark === true || (!isGym && (d.duration != null || d.rating != null));
+      const isBXKR = !isGym && !!kbResults && kbResults.length > 0; // ignore is_benchmark entirely
 
+      // Duration
       const duration_minutes =
         typeof d.duration_minutes === "number"
           ? d.duration_minutes
@@ -151,14 +220,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const topLift = heaviestOverall(sets);
       const vol = totalVolume(sets);
 
-      // BXKR derived
-      const bm = (d.benchmark_metrics && typeof d.benchmark_metrics === "object" ? d.benchmark_metrics : null) as BenchmarkMetrics | null;
-      const bench = summariseBenchmark(bm);
+      // BXKR derived (from kb_results only)
+      const rounds_completed = sumKbRounds(kbResults);
+      const emom_reps = sumKbEmomReps(kbResults);
       const weight_completed_with =
         typeof d.weight_completed_with === "number"
           ? d.weight_completed_with
           : typeof d.weight_completed_with === "string"
-          ? Number(d.weight_completed_with) || d.weight_completed_with
+          ? (Number(d.weight_completed_with) || d.weight_completed_with)
           : null;
 
       return {
@@ -202,9 +271,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         bxkr: isBXKR
           ? {
-              rounds_completed: bench.rounds_completed ?? (d.sets_completed != null ? Number(d.sets_completed) : null),
-              load_kg: bench.load_kg ?? (typeof weight_completed_with === "number" ? weight_completed_with : null),
-              metrics: bm || null,
+              rounds_completed,
+              emom_reps,
+              weight_kg: typeof weight_completed_with === "number" ? weight_completed_with : null,
+              kb_results: kbResults, // pass-through for client detail if needed
             }
           : null,
       };
