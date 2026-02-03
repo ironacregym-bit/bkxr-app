@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -310,8 +309,16 @@ export default function NutritionPage() {
     return found;
   }
 
+  // For FoodEditor manual editing
+  const onChangeSelectedFood = (patch: Partial<Food>) => {
+    setSelectedFood((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
   return (
     <>
+      {/* Global select-on-focus for number inputs to prevent "020" */}
+      <GlobalNumericFocus />
+
       <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff", borderRadius: "12px" }}>
         {/* Date Navigation */}
         <div className="d-flex justify-content-between align-items-center mb-3">
@@ -402,7 +409,7 @@ export default function NutritionPage() {
 
                   {loadingSearch && <div>Searching…</div>}
 
-                  {/* Editor fallback */}
+                  {/* Editor fallback for selected item with no list showing */}
                   {selectedFood && results.length === 0 && (
                     <FoodEditor
                       meal={meal}
@@ -415,6 +422,7 @@ export default function NutritionPage() {
                       addEntry={addEntry}
                       isFavourite={isFavourite(selectedFood)}
                       onToggleFavourite={() => toggleFavourite(selectedFood)}
+                      onChangeFood={onChangeSelectedFood}
                     />
                   )}
 
@@ -433,6 +441,7 @@ export default function NutritionPage() {
                             addEntry={addEntry}
                             isFavourite={isFavourite(selectedFood)}
                             onToggleFavourite={() => toggleFavourite(selectedFood!)}
+                            onChangeFood={onChangeSelectedFood}
                           />
                         ) : (
                           <div
@@ -464,6 +473,7 @@ export default function NutritionPage() {
                       </div>
                     ))}
 
+                  {/* Manual food opener */}
                   <button
                     className="btn btn-bxkr-outline w-100 mb-2"
                     style={{ borderRadius: "12px" }}
@@ -478,9 +488,15 @@ export default function NutritionPage() {
                         protein: 0,
                         carbs: 0,
                         fat: 0,
+                        servingSize: "",
+                        caloriesPerServing: null,
+                        proteinPerServing: null,
+                        carbsPerServing: null,
+                        fatPerServing: null,
                       });
                       setUsingServing("per100");
                       setGrams(100);
+                      setResults([]); // ensure editor shows immediately
                     }}
                   >
                     Add manual food
