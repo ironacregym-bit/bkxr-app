@@ -1,3 +1,4 @@
+// pages/api/foods/upsert-barcode.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]";
@@ -67,6 +68,8 @@ function validateAndNormalise(raw: string) {
  * Rules:
  *   - admin/gym can write scope="global" -> collection("barcode_foods").doc(code)
  *   - others write to user scope -> collection("user_barcode_foods/{email}/foods/{code}")
+ * Response:
+ *   { ok: true, code, scope, food: { id, code, name, brand, image, calories, protein, carbs, fat, servingSize } }
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -91,7 +94,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       carbs = 0,
       fat = 0,
       servingSize = null,
-      scope = "user", // default: user-owned entry
+      scope = "user",
     } = req.body || {};
 
     if (!code || !name) return res.status(400).json({ error: "code and name are required" });
@@ -125,7 +128,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         { merge: true }
       );
-      return res.status(200).json({ ok: true, code: norm, scope: "global" });
+
+      return res.status(200).json({
+        ok: true,
+        code: norm,
+        scope: "global",
+        food: {
+          id: norm,
+          code: norm,
+          name: record.name,
+          brand: record.brand,
+          image: record.image,
+          calories: record.calories,
+          protein: record.protein,
+          carbs: record.carbs,
+          fat: record.fat,
+          servingSize: record.servingSize || "",
+          caloriesPerServing: null,
+          proteinPerServing: null,
+          carbsPerServing: null,
+          fatPerServing: null,
+        },
+      });
     }
 
     // user scoped
@@ -143,7 +167,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
       { merge: true }
     );
-    return res.status(200).json({ ok: true, code: norm, scope: "user" });
+
+    return res.status(200).json({
+      ok: true,
+      code: norm,
+      scope: "user",
+      food: {
+        id: norm,
+        code: norm,
+        name: record.name,
+        brand: record.brand,
+        image: record.image,
+        calories: record.calories,
+        protein: record.protein,
+        carbs: record.carbs,
+        fat: record.fat,
+        servingSize: record.servingSize || "",
+        caloriesPerServing: null,
+        proteinPerServing: null,
+        carbsPerServing: null,
+        fatPerServing: null,
+      },
+    });
   } catch (e: any) {
     console.error("[foods/upsert-barcode] error:", e?.message || e);
     return res.status(500).json({ error: "Failed to upsert barcode food" });
