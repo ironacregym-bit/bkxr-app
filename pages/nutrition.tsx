@@ -534,18 +534,14 @@ export default function NutritionPage() {
           const mealEntries =
             logsData?.entries?.filter((e) => e.meal === meal) || [];
           const isOpen = openMeal === meal;
-          const mealTotals = mealEntries.reduce(
-            (acc: MacroTotals, e: NutritionEntry) => {
-              acc.calories += e.calories || 0;
-              acc.protein += e.protein || 0;
-              acc.carbs += e.carbs || 0;
-              return acc;
-            },
-            { calories: 0, protein: 0, carbs: 0 }
-          ) as MacroTotals & { fat: number };
-          (mealTotals as any).fat = mealEntries.reduce(
-            (s, e) => s + (e.fat || 0),
-            0
+          const mealTotals: MacroTotals = mealEntries.reduce(
+            (acc: MacroTotals, e: NutritionEntry) => ({
+              calories: acc.calories + (e.calories || 0),
+              protein:  acc.protein  + (e.protein  || 0),
+              carbs:    acc.carbs    + (e.carbs    || 0),
+              fat:      acc.fat      + (e.fat      || 0),
+            }),
+            { calories: 0, protein: 0, carbs: 0, fat: 0 }
           );
 
           return (
