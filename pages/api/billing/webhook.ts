@@ -78,6 +78,18 @@ function hasTrialExpired(trialEndIso: string | null): boolean {
   return Date.now() >= t;
 }
 
+// Small helper
+function groupBy<T, K extends string | number>(arr: T[], keyFn: (x: T) => K) {
+  const map = new Map<K, T[]>();
+  for (const item of arr) {
+    const k = keyFn(item);
+    const list = map.get(k) || [];
+    list.push(item);
+    map.set(k, list);
+  }
+  return [...map.entries()].map(([key, items]) => ({ key, items }));
+}
+
 // ---- WEBHOOK HANDLER ----
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
@@ -106,6 +118,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     switch (event.type) {
+      /* =========================
+       *  SUBSCRIPTIONS & INVOICES
+       * ========================= */
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
@@ -160,7 +175,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           { merge: true }
         );
 
-        // Referral commission processing (unchanged, with duplicate-invoice guard)
+        // Referral commission processing (duplicate-invoice guard)
         try {
           const refSnap = await firestore
             .collection("referrals")
@@ -279,8 +294,163 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
+      /* =========================
+       *  REFERRAL PAYOUTS via CONNECT
+       *  - We created Transfers in /api/referrals/payout/request-connect
+       *  - Handle transfer.created/failed/reversed here
+       * ========================= */
+      case "transfer.created": {
+        const transfer = event.data.object as Stripe.Transfer; // from platform -> connected account
+        const transferId = transfer.id;
+
+        // Match the payout by transfer_id
+        const paySnap = await firestore
+          .collection("referral_payouts")
+          .where("transfer_id", "==", transferId)
+          .limit(1)
+          .get();
+        if (paySnap.empty) break;
+
+        const payoutRef = paySnap.docs[0].ref;
+        const payout = paySnap.docs[0].data() || {};
+        if (payout.status === "paid") break; // idempotent
+
+        const entries: Array<{ referral_doc_id: string; invoice_id: string; amount: number }> =
+          Array.isArray(payout.entries) ? payout.entries : [];
+
+        // Mark payout "paid" and flip included entries "requested" -> "paid"
+        await firestore.runTransaction(async (tx) => {
+          // update referral entries
+          for (const group of groupBy(entries, (e) => e.referral_doc_id)) {
+            const docRef = firestore.collection("referrals").doc(group.key);
+            const snap = await tx.get(docRef);
+            if (!snap.exists) continue;
+            const d = snap.data() || {};
+            const arr: any[] = Array.isArray(d.commission_entries) ? d.commission_entries : [];
+
+            const updated = arr.map((e) => {
+              const match = group.items.find((m) => m.invoice_id === e?.invoice_id);
+              if (!match) return e;
+              // Only entries for this payout that are still 'requested'
+              if (String(e?.payout_id || "") !== payoutRef.id || e?.status !== "requested") return e;
+              return { ...e, status: "paid", paid_at: new Date().toISOString() };
+            });
+
+            tx.set(docRef, { commission_entries: updated }, { merge: true });
+          }
+
+          // update payout
+          tx.set(
+            payoutRef,
+            { status: "paid", paid_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { merge: true }
+          );
+        });
+
+        break;
+      }
+
+      case "transfer.failed": {
+        const transfer = event.data.object as Stripe.Transfer;
+        const transferId = transfer.id;
+
+        const paySnap = await firestore
+          .collection("referral_payouts")
+          .where("transfer_id", "==", transferId)
+          .limit(1)
+          .get();
+        if (paySnap.empty) break;
+
+        const payoutRef = paySnap.docs[0].ref;
+        const payout = paySnap.docs[0].data() || {};
+        const entries: Array<{ referral_doc_id: string; invoice_id: string; amount: number }> =
+          Array.isArray(payout.entries) ? payout.entries : [];
+
+        // Mark payout "rejected" and flip entries back to "unpaid"
+        await firestore.runTransaction(async (tx) => {
+          for (const group of groupBy(entries, (e) => e.referral_doc_id)) {
+            const docRef = firestore.collection("referrals").doc(group.key);
+            const snap = await tx.get(docRef);
+            if (!snap.exists) continue;
+            const d = snap.data() || {};
+            const arr: any[] = Array.isArray(d.commission_entries) ? d.commission_entries : [];
+
+            const updated = arr.map((e) => {
+              const match = group.items.find((m) => m.invoice_id === e?.invoice_id);
+              if (!match) return e;
+              // Only revert entries that belong to this payout and are in requested/paid state
+              if (String(e?.payout_id || "") !== payoutRef.id) return e;
+              if (e?.status === "requested" || e?.status === "paid") {
+                const { payout_id: _a, requested_at: _b, transfer_id: _c, paid_at: _d, ...rest } = e || {};
+                return { ...rest, status: "unpaid", reverted_at: new Date().toISOString() };
+              }
+              return e;
+            });
+
+            tx.set(docRef, { commission_entries: updated }, { merge: true });
+          }
+
+          tx.set(
+            payoutRef,
+            { status: "rejected", rejected_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { merge: true }
+          );
+        });
+
+        break;
+      }
+
+      case "transfer.reversed": {
+        const transfer = event.data.object as Stripe.Transfer;
+        const transferId = transfer.id;
+
+        const paySnap = await firestore
+          .collection("referral_payouts")
+          .where("transfer_id", "==", transferId)
+          .limit(1)
+          .get();
+        if (paySnap.empty) break;
+
+        const payoutRef = paySnap.docs[0].ref;
+        const payout = paySnap.docs[0].data() || {};
+        const entries: Array<{ referral_doc_id: string; invoice_id: string; amount: number }> =
+          Array.isArray(payout.entries) ? payout.entries : [];
+
+        // Mark payout "reversed" and revert entries to "unpaid"
+        await firestore.runTransaction(async (tx) => {
+          for (const group of groupBy(entries, (e) => e.referral_doc_id)) {
+            const docRef = firestore.collection("referrals").doc(group.key);
+            const snap = await tx.get(docRef);
+            if (!snap.exists) continue;
+            const d = snap.data() || {};
+            const arr: any[] = Array.isArray(d.commission_entries) ? d.commission_entries : [];
+
+            const updated = arr.map((e) => {
+              const match = group.items.find((m) => m.invoice_id === e?.invoice_id);
+              if (!match) return e;
+              if (String(e?.payout_id || "") !== payoutRef.id) return e;
+              if (e?.status === "requested" || e?.status === "paid") {
+                const { payout_id: _a, requested_at: _b, transfer_id: _c, paid_at: _d, ...rest } = e || {};
+                return { ...rest, status: "unpaid", reversed_at: new Date().toISOString() };
+              }
+              return e;
+            });
+
+            tx.set(docRef, { commission_entries: updated }, { merge: true });
+          }
+
+          tx.set(
+            payoutRef,
+            { status: "reversed", updated_at: new Date().toISOString() },
+            { merge: true }
+          );
+        });
+
+        break;
+      }
+
       case "checkout.session.completed": {
-        // Optional: you can handle analytics here
+        // Optional analytics; nothing required
         break;
       }
 
