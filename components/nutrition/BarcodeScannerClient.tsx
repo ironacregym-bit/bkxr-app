@@ -29,7 +29,7 @@ export default function BarcodeScannerClient({
   const [lookupLoading, setLookupLoading] = useState(false);
   const [restartTick, setRestartTick] = useState(0);
 
-  // Quick-add inline state
+  // Quick-add inline state (futuristic styling, scrollable)
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
   const [quickMsg, setQuickMsg] = useState<string | null>(null);
@@ -54,18 +54,22 @@ export default function BarcodeScannerClient({
       }
     } catch {}
   }
+
   async function teardown() {
-    try { controlsRef.current?.stop?.(); } catch {}
-    try { readerRef.current?.reset?.(); } catch {}
+    try {
+      controlsRef.current?.stop?.();
+    } catch {}
+    try {
+      readerRef.current?.reset?.();
+    } catch {}
     stopTracks();
   }
 
   async function startScanner(mountedRef: { current: boolean }) {
+    // reset transient state each start
     setScanError(null);
     setBarcodeInput("");
     setLastCode("");
-    setQuickOpen(false);
-    setQuickMsg(null);
     scannedOnce.current = false;
 
     if (videoRef.current) {
@@ -85,14 +89,15 @@ export default function BarcodeScannerClient({
       const reader = new BrowserMultiFormatReader();
       readerRef.current = reader;
 
-      const videoInputs = await BrowserMultiFormatReader.listVideoInputDevices();
-      if (!videoInputs || videoInputs.length === 0) {
+      // Prefer back/rear camera
+      const devices = await BrowserMultiFormatReader.listVideoInputDevices();
+      if (!devices || devices.length === 0) {
         setHasCamera(false);
         setScanning(false);
         return;
       }
-      const backLike = videoInputs.find((d) => /back|rear|environment/i.test(d.label || ""));
-      const chosen = backLike || videoInputs[videoInputs.length - 1];
+      const backLike = devices.find((d) => /back|rear|environment/i.test(d.label || ""));
+      const chosen = backLike || devices[devices.length - 1];
 
       const controls = await reader.decodeFromVideoDevice(
         chosen.deviceId,
@@ -108,8 +113,8 @@ export default function BarcodeScannerClient({
               setLookupLoading(true);
               const found = await onLookupBarcode(code);
               if (!found) {
+                // Not found -> stop camera and open Quick Add
                 setScanError("No product found for this barcode.");
-                // Prefill quick form for fastest add
                 setQuickForm((f) => ({
                   ...f,
                   code: String(code || "").replace(/\D/g, ""),
@@ -123,17 +128,16 @@ export default function BarcodeScannerClient({
                   fat: "",
                 }));
                 setQuickOpen(true);
-                // allow another try without forcing restart
-                scannedOnce.current = false;
               } else {
                 onFoundFood(found);
                 onClose();
               }
             } catch {
               setScanError("Barcode lookup failed. Please try again or enter manually.");
-              scannedOnce.current = false;
             } finally {
               setLookupLoading(false);
+              // allow another scan only if quickOpen didn't trigger
+              scannedOnce.current = false;
             }
           }
         }
@@ -156,6 +160,7 @@ export default function BarcodeScannerClient({
     }
   }
 
+  // Start/teardown lifecycle
   useEffect(() => {
     if (!isOpen) return;
 
@@ -165,7 +170,7 @@ export default function BarcodeScannerClient({
     const onVisibility = async () => {
       if (document.visibilityState === "hidden") {
         await teardown();
-      } else if (document.visibilityState === "visible" && mountedRef.current) {
+      } else if (document.visibilityState === "visible" && mountedRef.current && !quickOpen) {
         setRestartTick((t) => t + 1);
       }
     };
@@ -176,7 +181,19 @@ export default function BarcodeScannerClient({
       document.removeEventListener("visibilitychange", onVisibility);
       teardown();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, onClose, onFoundFood, onLookupBarcode, restartTick]);
+
+  // When Quick Add opens, close the camera (hide video; free memory)
+  useEffect(() => {
+    if (quickOpen) {
+      teardown();
+    } else if (isOpen) {
+      // If user goes back to scanner, restart it
+      setRestartTick((t) => t + 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quickOpen]);
 
   async function lookupManualBarcode() {
     const code = (barcodeInput || "").trim();
@@ -194,7 +211,7 @@ export default function BarcodeScannerClient({
           ...f,
           code: String(code || "").replace(/\D/g, ""),
         }));
-        setQuickOpen(true);
+        setQuickOpen(true); // close camera and show Quick Add
       } else {
         onFoundFood(found);
         onClose();
@@ -210,7 +227,7 @@ export default function BarcodeScannerClient({
     setQuickMsg(null);
 
     const payload = {
-      scope: "user", // user-level by default; admin page handles global
+      scope: "user", // user-level quick add
       code: String(quickForm.code || "").replace(/\D/g, ""),
       name: String(quickForm.name || "").trim(),
       brand: String(quickForm.brand || "").trim(),
@@ -269,302 +286,259 @@ export default function BarcodeScannerClient({
   return (
     <div className="bxkr-modal">
       <div className="bxkr-modal-backdrop" onClick={onClose} />
-      <div className="bxkr-modal-dialog bxkr-card">
-        <div className="d-flex justify-content-between align-items-center mb-2">
-          <h5 className="mb-0">Scan barcode</h5>
-          <div className="d-flex gap-2">
-            <button
-              className="btn btn-outline-secondary btn-sm"
-              onClick={() => setRestartTick((t) => t + 1)}
-              title="Restart camera"
-            >
-              Restart
-            </button>
-            <button className="btn btn-bxkr-outline" onClick={onClose}>
-              Close
-            </button>
-          </div>
-        </div>
-
-        {hasCamera ? (
-          <>
-            <div className="scanner-box mb-2">
-              <video ref={videoRef} className="scanner-video" autoPlay playsInline muted />
-              <div className="scanner-hint text-dim">
-                Align the barcode within the frame. {scanning ? "Scanning…" : "Initialising…"}
-              </div>
-            </div>
-
-            {/* Manual entry row */}
+      {/* Use futuristic card and make content scrollable */}
+      <div className="bxkr-modal-dialog futuristic-card" role="dialog" aria-modal="true" aria-label="Barcode scanner">
+        <div
+          className="w-100"
+          style={{
+            maxHeight: "80vh",
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <h5 className="mb-0">Scan barcode</h5>
             <div className="d-flex gap-2">
-              <input
-                className="form-control"
-                placeholder="e.g. 5051234567890"
-                value={barcodeInput}
-                onChange={(e) => setBarcodeInput(e.target.value)}
-                inputMode="numeric"
-              />
-              <button className="btn btn-bxkr" onClick={lookupManualBarcode} disabled={lookupLoading}>
-                {lookupLoading ? "Looking up…" : "Lookup"}
-              </button>
-            </div>
-
-            {/* Error + Quick-add CTA */}
-            {scanError && (
-              <div className="mt-2">
-                <div className="text-danger">{scanError}</div>
-                {!quickOpen && (
-                  <button
-                    className="btn btn-sm btn-bxkr-outline mt-2"
-                    style={{ borderRadius: 24 }}
-                    onClick={() => {
-                      setQuickOpen(true);
-                      setQuickMsg(null);
-                      setQuickForm((f) => ({
-                        ...f,
-                        code: String(lastCode || barcodeInput || "").replace(/\D/g, ""),
-                      }));
-                    }}
-                  >
-                    + Quick add this barcode
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Inline Quick Add Form (no navigation) */}
-            {quickOpen && (
-              <div className="futuristic-card p-3 mt-3">
-                <h6 className="m-0 mb-2">Add barcode item</h6>
-                {quickMsg && <div className={`alert ${quickMsg.includes("Failed") ? "alert-danger" : "alert-info"} py-2`}>{quickMsg}</div>}
-
-                <form onSubmit={saveQuickAdd}>
-                  <div className="row g-2">
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-dim mb-1">Barcode</label>
-                      <input
-                        className="form-control"
-                        value={quickForm.code}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, code: e.target.value.replace(/\D/g, "") }))}
-                        inputMode="numeric"
-                        placeholder="digits only"
-                      />
-                    </div>
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-dim mb-1">Name</label>
-                      <input
-                        className="form-control"
-                        value={quickForm.name}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, name: e.target.value }))}
-                        placeholder="e.g. Protein Bar – Peanut"
-                      />
-                    </div>
-
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-dim mb-1">Brand (optional)</label>
-                      <input
-                        className="form-control"
-                        value={quickForm.brand}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, brand: e.target.value }))}
-                        placeholder="e.g. Grenade"
-                      />
-                    </div>
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-dim mb-1">Serving (optional)</label>
-                      <input
-                        className="form-control"
-                        value={quickForm.servingSize}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, servingSize: e.target.value }))}
-                        placeholder="e.g. 1 bar (45g)"
-                      />
-                    </div>
-
-                    <div className="col-12">
-                      <label className="form-label small text-dim mb-1">Image URL (optional)</label>
-                      <input
-                        className="form-control"
-                        value={quickForm.image}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, image: e.target.value }))}
-                        placeholder="https://…"
-                      />
-                    </div>
-
-                    <div className="col-6 col-md-3">
-                      <label className="form-label small text-dim mb-1">Calories</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        inputMode="decimal"
-                        value={quickForm.calories}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, calories: e.target.value }))}
-                      />
-                    </div>
-                    <div className="col-6 col-md-3">
-                      <label className="form-label small text-dim mb-1">Protein (g)</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        inputMode="decimal"
-                        value={quickForm.protein}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, protein: e.target.value }))}
-                      />
-                    </div>
-                    <div className="col-6 col-md-3">
-                      <label className="form-label small text-dim mb-1">Carbs (g)</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        inputMode="decimal"
-                        value={quickForm.carbs}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, carbs: e.target.value }))}
-                      />
-                    </div>
-                    <div className="col-6 col-md-3">
-                      <label className="form-label small text-dim mb-1">Fat (g)</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        inputMode="decimal"
-                        value={quickForm.fat}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, fat: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="d-flex justify-content-end gap-2 mt-3">
-                    <button
-                      type="button"
-                      className="btn btn-outline-light"
-                      style={{ borderRadius: 24 }}
-                      onClick={() => setQuickOpen(false)}
-                      disabled={quickBusy}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn btn-bxkr"
-                      style={{ borderRadius: 24 }}
-                      disabled={quickBusy}
-                    >
-                      {quickBusy ? "Saving…" : "Save & use"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="mb-2">
-            <div className="mb-2 text-dim">Camera not available. Enter the barcode manually:</div>
-            <div className="d-flex gap-2">
-              <input
-                className="form-control"
-                placeholder="e.g. 5051234567890"
-                value={barcodeInput}
-                onChange={(e) => setBarcodeInput(e.target.value)}
-                inputMode="numeric"
-              />
-              <button className="btn btn-bxkr" onClick={lookupManualBarcode} disabled={lookupLoading}>
-                {lookupLoading ? "Looking up…" : "Lookup"}
-              </button>
-            </div>
-            {scanError && !quickOpen && (
-              <div className="mt-2">
-                <div className="text-danger">{scanError}</div>
+              {!quickOpen && (
                 <button
-                  className="btn btn-sm btn-bxkr-outline mt-2"
-                  style={{ borderRadius: 24 }}
-                  onClick={() => setQuickOpen(true)}
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => setRestartTick((t) => t + 1)}
+                  title="Restart camera"
                 >
-                  + Quick add this barcode
+                  Restart
+                </button>
+              )}
+              <button className="btn btn-outline-light" onClick={onClose}>
+                Close
+              </button>
+            </div>
+          </div>
+
+          {/* When Quick Add is open, hide camera UI and show only the form */}
+          {quickOpen ? (
+            <div>
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <h6 className="m-0">Add barcode item</h6>
+                <button
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => {
+                    setQuickOpen(false); // will restart camera via effect
+                    setScanError(null);
+                  }}
+                  title="Back to scanner"
+                >
+                  ← Back to Scanner
                 </button>
               </div>
-            )}
-            {quickOpen && (
-              // Reuse the same quick form block when no camera
-              <div className="futuristic-card p-3 mt-3">
-                <h6 className="m-0 mb-2">Add barcode item</h6>
-                {quickMsg && <div className={`alert ${quickMsg.includes("Failed") ? "alert-danger" : "alert-info"} py-2`}>{quickMsg}</div>}
-                <form onSubmit={saveQuickAdd}>
-                  {/* Compact version uses the same fields */}
-                  <div className="row g-2">
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-dim mb-1">Barcode</label>
-                      <input
-                        className="form-control"
-                        value={quickForm.code}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, code: e.target.value.replace(/\D/g, "") }))}
-                        inputMode="numeric"
-                        placeholder="digits only"
-                      />
-                    </div>
-                    <div className="col-12 col-md-6">
-                      <label className="form-label small text-dim mb-1">Name</label>
-                      <input
-                        className="form-control"
-                        value={quickForm.name}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, name: e.target.value }))}
-                        placeholder="e.g. Protein Bar – Peanut"
-                      />
-                    </div>
+
+              {quickMsg && (
+                <div className={`alert ${quickMsg.includes("Failed") ? "alert-danger" : "alert-info"} py-2`}>
+                  {quickMsg}
+                </div>
+              )}
+
+              <form onSubmit={saveQuickAdd}>
+                <div className="row g-2">
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small text-dim mb-1">Barcode</label>
+                    <input
+                      className="form-control"
+                      value={quickForm.code}
+                      onChange={(e) =>
+                        setQuickForm((f) => ({ ...f, code: e.target.value.replace(/\D/g, "") }))
+                      }
+                      inputMode="numeric"
+                      placeholder="digits only"
+                    />
                   </div>
-                  <div className="row g-2 mt-1">
-                    <div className="col-6 col-md-3">
-                      <label className="form-label small text-dim mb-1">Calories</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        inputMode="decimal"
-                        value={quickForm.calories}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, calories: e.target.value }))}
-                      />
-                    </div>
-                    <div className="col-6 col-md-3">
-                      <label className="form-label small text-dim mb-1">Protein (g)</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        inputMode="decimal"
-                        value={quickForm.protein}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, protein: e.target.value }))}
-                      />
-                    </div>
-                    <div className="col-6 col-md-3">
-                      <label className="form-label small text-dim mb-1">Carbs (g)</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        inputMode="decimal"
-                        value={quickForm.carbs}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, carbs: e.target.value }))}
-                      />
-                    </div>
-                    <div className="col-6 col-md-3">
-                      <label className="form-label small text-dim mb-1">Fat (g)</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        inputMode="decimal"
-                        value={quickForm.fat}
-                        onChange={(e) => setQuickForm((f) => ({ ...f, fat: e.target.value }))}
-                      />
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small text-dim mb-1">Name</label>
+                    <input
+                      className="form-control"
+                      value={quickForm.name}
+                      onChange={(e) => setQuickForm((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="e.g. Protein Bar – Peanut"
+                    />
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small text-dim mb-1">Brand (optional)</label>
+                    <input
+                      className="form-control"
+                      value={quickForm.brand}
+                      onChange={(e) => setQuickForm((f) => ({ ...f, brand: e.target.value }))}
+                      placeholder="e.g. Grenade"
+                    />
+                  </div>
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small text-dim mb-1">Serving (optional)</label>
+                    <input
+                      className="form-control"
+                      value={quickForm.servingSize}
+                      onChange={(e) => setQuickForm((f) => ({ ...f, servingSize: e.target.value }))}
+                      placeholder="e.g. 1 bar (45g)"
+                    />
+                  </div>
+
+                  <div className="col-12">
+                    <label className="form-label small text-dim mb-1">Image URL (optional)</label>
+                    <input
+                      className="form-control"
+                      value={quickForm.image}
+                      onChange={(e) => setQuickForm((f) => ({ ...f, image: e.target.value }))}
+                      placeholder="https://…"
+                    />
+                  </div>
+
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small text-dim mb-1">Calories</label>
+                    <input
+                      className="form-control"
+                      type="number"
+                      inputMode="decimal"
+                      value={quickForm.calories}
+                      onChange={(e) => setQuickForm((f) => ({ ...f, calories: e.target.value }))}
+                    />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small text-dim mb-1">Protein (g)</label>
+                    <input
+                      className="form-control"
+                      type="number"
+                      inputMode="decimal"
+                      value={quickForm.protein}
+                      onChange={(e) => setQuickForm((f) => ({ ...f, protein: e.target.value }))}
+                    />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small text-dim mb-1">Carbs (g)</label>
+                    <input
+                      className="form-control"
+                      type="number"
+                      inputMode="decimal"
+                      value={quickForm.carbs}
+                      onChange={(e) => setQuickForm((f) => ({ ...f, carbs: e.target.value }))}
+                    />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small text-dim mb-1">Fat (g)</label>
+                    <input
+                      className="form-control"
+                      type="number"
+                      inputMode="decimal"
+                      value={quickForm.fat}
+                      onChange={(e) => setQuickForm((f) => ({ ...f, fat: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="d-flex justify-content-end gap-2 mt-3">
+                  <button
+                    type="button"
+                    className="btn btn-outline-light"
+                    style={{ borderRadius: 24 }}
+                    onClick={() => setQuickOpen(false)}
+                    disabled={quickBusy}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-outline-light"
+                    style={{ borderRadius: 24 }}
+                    disabled={quickBusy}
+                  >
+                    {quickBusy ? "Saving…" : "Save & use"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            // Scanner UI (only when not in Quick Add)
+            <div>
+              {hasCamera ? (
+                <>
+                  <div className="scanner-box mb-2">
+                    <video ref={videoRef} className="scanner-video" autoPlay playsInline muted />
+                    <div className="scanner-hint text-dim">
+                      Align the barcode within the frame. {scanning ? "Scanning…" : "Initialising…"}
                     </div>
                   </div>
 
-                  <div className="d-flex justify-content-end gap-2 mt-3">
-                    <button type="button" className="btn btn-outline-light" style={{ borderRadius: 24 }} onClick={() => setQuickOpen(false)} disabled={quickBusy}>
-                      Cancel
-                    </button>
-                    <button type="submit" className="btn btn-bxkr" style={{ borderRadius: 24 }} disabled={quickBusy}>
-                      {quickBusy ? "Saving…" : "Save & use"}
+                  <div className="d-flex gap-2">
+                    <input
+                      className="form-control"
+                      placeholder="e.g. 5051234567890"
+                      value={barcodeInput}
+                      onChange={(e) => setBarcodeInput(e.target.value)}
+                      inputMode="numeric"
+                    />
+                    <button
+                      className="btn btn-outline-light"
+                      onClick={lookupManualBarcode}
+                      disabled={lookupLoading}
+                      title="Lookup barcode"
+                    >
+                      {lookupLoading ? "Looking up…" : "Lookup"}
                     </button>
                   </div>
-                </form>
-              </div>
-            )}
-          </div>
-        )}
+
+                  {scanError && (
+                    <div className="mt-2">
+                      <div className="text-danger">{scanError}</div>
+                      <button
+                        className="btn btn-sm btn-outline-light mt-2"
+                        style={{ borderRadius: 24 }}
+                        onClick={() => {
+                          setQuickOpen(true);
+                          setQuickMsg(null);
+                          setQuickForm((f) => ({
+                            ...f,
+                            code: String(lastCode || barcodeInput || "").replace(/\D/g, ""),
+                          }));
+                        }}
+                      >
+                        + Quick add this barcode
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="mb-2">
+                  <div className="mb-2 text-dim">Camera not available. Enter the barcode manually:</div>
+                  <div className="d-flex gap-2">
+                    <input
+                      className="form-control"
+                      placeholder="e.g. 5051234567890"
+                      value={barcodeInput}
+                      onChange={(e) => setBarcodeInput(e.target.value)}
+                      inputMode="numeric"
+                    />
+                    <button
+                      className="btn btn-outline-light"
+                      onClick={lookupManualBarcode}
+                      disabled={lookupLoading}
+                    >
+                      {lookupLoading ? "Looking up…" : "Lookup"}
+                    </button>
+                  </div>
+                  {scanError && (
+                    <div className="mt-2">
+                      <div className="text-danger">{scanError}</div>
+                      <button
+                        className="btn btn-sm btn-outline-light mt-2"
+                        style={{ borderRadius: 24 }}
+                        onClick={() => setQuickOpen(true)}
+                      >
+                        + Quick add this barcode
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
