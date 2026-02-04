@@ -22,7 +22,7 @@ export default function App({ Component, pageProps }: AppProps) {
     <SessionProvider session={(pageProps as any).session}>
       {/* Headless initialiser: asks permission, subscribes to push, posts subscription to server */}
       <NotificationsInit />
-
+      <BillingTrialBanner />
       <Component {...pageProps} />
     </SessionProvider>
   );
