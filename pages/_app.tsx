@@ -6,6 +6,7 @@ import type { AppProps } from "next/app";
 import "../styles/bootstrap.css";
 
 import NotificationsInit from "../components/NotificationsInit";
+import BillingTrialBanner from "../components/BillingTrialBanner";
 
 export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
