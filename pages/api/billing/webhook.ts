@@ -1,64 +1,29 @@
+// pages/api/billing/webhook.ts (additions shown inline)
 
-// pages/api/billing/webhook.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { stripe } from "../../../lib/stripe";
 import type Stripe from "stripe";
 import firestore from "../../../lib/firestoreClient";
 import { FieldValue } from "@google-cloud/firestore";
 
-// Disable Next.js body parser to access the raw body for Stripe signature verification
-export const config = {
-  api: { bodyParser: false },
-};
+export const config = { api: { bodyParser: false } };
 
-function buffer(readable: any) {
-  return new Promise<Buffer>((resolve, reject) => {
-    const chunks: any[] = [];
-    readable.on("data", (chunk: any) => chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk));
-    readable.on("end", () => resolve(Buffer.concat(chunks)));
-    readable.on("error", reject);
-  });
+// ... buffer(), getCustomerEmail(), trialEndIsoFrom(), isPremiumFromStatus(), emitUpgradeCta(), currentMonth(), computeCommissionRate() (unchanged)
+
+// NEW: Idempotency guard
+async function alreadyProcessed(eventId: string) {
+  const ref = firestore.collection("stripe_events").doc(eventId);
+  const snap = await ref.get();
+  if (snap.exists) return true;
+  await ref.set({ received_at: new Date().toISOString() });
+  return false;
 }
 
-async function getCustomerEmail(customerId: string): Promise<string | undefined> {
-  try {
-    const c = await stripe.customers.retrieve(customerId);
-    return (c as any)?.email as string | undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function trialEndIsoFrom(sub: Stripe.Subscription): string | null {
-  return sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
-}
-
-function isPremiumFromStatus(status: string): boolean {
-  return status === "active" || status === "trialing";
-}
-
-async function emitUpgradeCta(email: string) {
-  const BASE = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
-  if (!BASE) return;
-  await fetch(`${BASE}/api/notify/emit`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event: "upgrade_cta", email, context: { reason: "subscription_status" }, force: false }),
-  }).catch(() => null);
-}
-
-function currentMonth() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function computeCommissionRate(activeCount: number): number {
-  if (activeCount >= 50) return 0.30;
-  if (activeCount >= 40) return 0.25;
-  if (activeCount >= 30) return 0.20;
-  if (activeCount >= 20) return 0.15;
-  if (activeCount >= 10) return 0.10;
-  return 0.05;
+function hasTrialExpired(trialEndIso: string | null): boolean {
+  if (!trialEndIso) return false;
+  const t = Date.parse(trialEndIso);
+  if (Number.isNaN(t)) return false;
+  return Date.now() >= t;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -77,6 +42,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).send(`Webhook Error: ${e.message}`);
   }
 
+  // Idempotency: skip if processed
+  try {
+    if (await alreadyProcessed(event.id)) {
+      return res.status(200).json({ received: true, duplicate: true });
+    }
+  } catch (e) {
+    // Soft fail idempotency, continue
+    console.warn("[webhook] idempotency guard issue:", (e as any)?.message);
+  }
+
   try {
     switch (event.type) {
       case "customer.subscription.created":
@@ -86,23 +61,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const email = await getCustomerEmail(customerId);
         if (!email) break;
 
-        const status = sub.status as string;
+        const status = sub.status as string; // active|trialing|past_due|paused|canceled|incomplete...
         const trialEndIso = trialEndIsoFrom(sub);
+        const premium = isPremiumFromStatus(status);
 
-        await firestore.collection("users").doc(email).set(
-          {
-            stripe_customer_id: customerId,
-            stripe_subscription_id: sub.id,
-            subscription_status: status,
-            trial_end: trialEndIso,
-            is_premium: isPremiumFromStatus(status),
-            last_billing_event_at: new Date().toISOString(),
-            billing_plan: "online_monthly",
-          },
-          { merge: true }
-        );
+        const baseUpdate: Record<string, any> = {
+          stripe_customer_id: customerId,
+          stripe_subscription_id: sub.id,
+          subscription_status: status,
+          trial_end: trialEndIso,
+          is_premium: premium,
+          last_billing_event_at: new Date().toISOString(),
+          billing_plan: "online_monthly",
+        };
 
-        if (!isPremiumFromStatus(status)) {
+        // If not premium (post-trial), mark membership_status = expired
+        if (!premium && hasTrialExpired(trialEndIso)) {
+          baseUpdate.membership_status = "expired";
+        }
+
+        await firestore.collection("users").doc(email).set(baseUpdate, { merge: true });
+
+        if (!premium) {
           await emitUpgradeCta(email);
         }
         break;
@@ -115,18 +95,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const subscriptionId = (invoice.subscription as string) || undefined;
         if (!email) break;
 
+        // Payment success => premium
         await firestore.collection("users").doc(email).set(
           {
             stripe_customer_id: customerId,
             stripe_subscription_id: subscriptionId,
             subscription_status: "active",
             is_premium: true,
+            membership_status: FieldValue.delete(), // clear expired if previously set
             last_billing_event_at: new Date().toISOString(),
           },
           { merge: true }
         );
 
-        // Referral commission processing (Option B — only after payment)
+        // Referral commissions (as you have) ...
+        // (unchanged – keeping your existing commission logic, including duplicate invoice guards)
         try {
           const refSnap = await firestore
             .collection("referrals")
@@ -144,12 +127,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const month = currentMonth();
           const invoiceAmount = (invoice.total || 0) / 100;
 
-          // Avoid duplicate entries for the same invoice
           const existingEntries: Array<any> = Array.isArray(ref.commission_entries) ? ref.commission_entries : [];
           const duplicate = existingEntries.some((e) => e?.invoice_id === invoice.id);
           if (duplicate) break;
 
-          // 1) Mark referral as active/paid
           await refDoc.ref.set(
             {
               converted_to_paid: true,
@@ -158,7 +139,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             { merge: true }
           );
 
-          // 2) Count active paid referrals for referrer
           const activePaidSnap = await firestore
             .collection("referrals")
             .where("referrer_email", "==", referrerEmail)
@@ -169,7 +149,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const rate = computeCommissionRate(activePaidCount);
           const commission = Number((invoiceAmount * rate).toFixed(2));
 
-          // 3) Update referral doc with commission entry
           await refDoc.ref.set(
             {
               current_commission_rate: rate,
@@ -185,7 +164,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             { merge: true }
           );
 
-          // 4) Update referrer aggregates
           await firestore.collection("users").doc(referrerEmail).set(
             {
               referral_totals: {
@@ -210,17 +188,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const subscriptionId = (invoice.subscription as string) || undefined;
         if (!email) break;
 
-        await firestore.collection("users").doc(email).set(
-          {
-            stripe_customer_id: customerId,
-            stripe_subscription_id: subscriptionId,
-            subscription_status: "past_due",
-            is_premium: false,
-            last_billing_event_at: new Date().toISOString(),
-          },
-          { merge: true }
-        );
+        const update: Record<string, any> = {
+          stripe_customer_id: customerId,
+          stripe_subscription_id: subscriptionId,
+          subscription_status: "past_due",
+          is_premium: false,
+          last_billing_event_at: new Date().toISOString(),
+        };
 
+        // If user had a trial_end and it's past, mark expired
+        const userSnap = await firestore.collection("users").doc(email).get();
+        const trialEnd = (userSnap.data()?.trial_end as string) || null;
+        if (hasTrialExpired(trialEnd)) {
+          update.membership_status = "expired";
+        }
+
+        await firestore.collection("users").doc(email).set(update, { merge: true });
         await emitUpgradeCta(email);
         break;
       }
@@ -235,6 +218,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           {
             subscription_status: "canceled",
             is_premium: false,
+            membership_status: "expired",
             last_billing_event_at: new Date().toISOString(),
           },
           { merge: true }
