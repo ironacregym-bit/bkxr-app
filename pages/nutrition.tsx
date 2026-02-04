@@ -25,6 +25,8 @@ const COLORS = {
   fat: "#ff4fa3",
 };
 
+const ACCENT = "#ff8a2a"; // neon orange
+
 function round2(n: number | undefined | null) {
   return n !== undefined && n !== null ? Number(n).toFixed(2) : "-";
 }
@@ -38,9 +40,6 @@ function dayMinus(d: Date, days: number) {
 }
 function yesterday(d: Date) {
   return dayMinus(d, 1);
-}
-function lastWeekSameWeekday(d: Date) {
-  return dayMinus(d, 7);
 }
 
 type NutritionEntry = {
@@ -429,13 +428,6 @@ export default function NutritionPage() {
     setSelectedFood((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
-  // Friendly weekday label for “Copy last [weekday]”
-  const weekdayLabel = useMemo(() => {
-    return new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(
-      selectedDate
-    );
-  }, [selectedDate]);
-
   return (
     <>
       {/* Global select-on-focus for number inputs */}
@@ -465,90 +457,75 @@ export default function NutritionPage() {
         {/* Macros */}
         <MacrosCard totals={totals} goals={goals} progress={progress} />
 
-        {/* ===== Day actions (expert UX, no extra APIs) ===== */}
+        {/* ===== Day actions (inline, compact) ===== */}
         <section className="futuristic-card p-3 mb-3">
+          {/* Row 1: Datepicker + Copy (single line) */}
           <div
-            className="d-flex flex-wrap align-items-end justify-content-between"
-            style={{ gap: 10 }}
+            className="d-flex flex-wrap align-items-end"
+            style={{ gap: 8 }}
           >
-            <div className="small text-dim">
-              Manage entries for <strong>{formattedDate}</strong>
-            </div>
+            <input
+              className="form-control"
+              type="date"
+              value={copyDate}
+              onChange={(e) => setCopyDate(e.target.value)}
+              max={ymd(new Date())}
+              aria-label="Select a date to copy from"
+              style={{ minWidth: 175, width: 190 }}
+              placeholder="Copy from date"
+              // Some browsers ignore placeholder on type=date; it's okay since you asked to keep it inline.
+            />
+            <button
+              className="btn btn-sm btn-bxkr"
+              style={{ borderRadius: 24, height: 38 }}
+              onClick={() => copyFromDateKey(copyDate)}
+              disabled={copyBusy || !copyDate}
+              aria-label={`Copy entries from ${copyDate} to ${formattedDate}`}
+              title={`Copy entries from ${copyDate}`}
+            >
+              {copyBusy ? (
+                "Copying…"
+              ) : (
+                <>
+                  <i className="fas fa-copy me-1" aria-hidden="true" />
+                  Copy
+                </>
+              )}
+            </button>
+          </div>
 
-            <div className="d-flex flex-wrap align-items-end" style={{ gap: 8 }}>
-              {/* Copy Yesterday */}
-              <button
-                className="btn btn-sm btn-outline-light"
-                style={{ borderRadius: 24 }}
-                onClick={() => copyFromDateKey(ymd(yesterday(selectedDate)))}
-                disabled={copyBusy}
-                title={`Copy all entries from ${ymd(yesterday(selectedDate))}`}
-              >
-                <i className="fas fa-arrow-left me-1" aria-hidden="true" />
-                {copyBusy ? "Copying…" : "Copy Yesterday"}
-              </button>
+          {/* Row 2: Copy Yesterday (neon orange outline) + Clear This Day (same line) */}
+          <div
+            className="d-flex flex-wrap align-items-center mt-2"
+            style={{ gap: 8 }}
+          >
+            <button
+              className="btn btn-sm"
+              style={{
+                borderRadius: 24,
+                border: `1px solid ${ACCENT}`,
+                color: ACCENT,
+                background: "transparent",
+                boxShadow: `0 0 10px ${ACCENT}55`,
+              }}
+              onClick={() => copyFromDateKey(ymd(yesterday(selectedDate)))}
+              disabled={copyBusy}
+              title={`Copy all entries from ${ymd(yesterday(selectedDate))}`}
+            >
+              <i className="fas fa-arrow-left me-1" aria-hidden="true" />
+              {copyBusy ? "Copying…" : "Copy Yesterday"}
+            </button>
 
-              {/* Copy last weekday (7 days ago) */}
-              <button
-                className="btn btn-sm btn-outline-light"
-                style={{ borderRadius: 24 }}
-                onClick={() =>
-                  copyFromDateKey(ymd(lastWeekSameWeekday(selectedDate)))
-                }
-                disabled={copyBusy}
-                title={`Copy last ${weekdayLabel} (${ymd(
-                  lastWeekSameWeekday(selectedDate)
-                )})`}
-              >
-                <i className="fas fa-redo me-1" aria-hidden="true" />
-                {copyBusy ? "Copying…" : `Copy last ${weekdayLabel}`}
-              </button>
-
-              {/* Copy from specific date (datepicker + button) */}
-              <div className="d-flex align-items-end" style={{ gap: 8 }}>
-                <div>
-                  <label className="form-label small mb-1">Copy from date</label>
-                  <input
-                    className="form-control"
-                    type="date"
-                    value={copyDate}
-                    onChange={(e) => setCopyDate(e.target.value)}
-                    max={ymd(new Date())}
-                    aria-label="Select a date to copy from"
-                    style={{ minWidth: 175 }}
-                  />
-                </div>
-                <button
-                  className="btn btn-sm btn-bxkr"
-                  style={{ borderRadius: 24, height: 38, alignSelf: "flex-end" }}
-                  onClick={() => copyFromDateKey(copyDate)}
-                  disabled={copyBusy || !copyDate}
-                  aria-label={`Copy entries from ${copyDate} to ${formattedDate}`}
-                  title={`Copy entries from ${copyDate}`}
-                >
-                  {copyBusy ? (
-                    "Copying…"
-                  ) : (
-                    <>
-                      <i className="fas fa-copy me-1" aria-hidden="true" />
-                      Copy
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Clear this day */}
-              <button
-                className="btn btn-sm btn-outline-danger"
-                style={{ borderRadius: 24 }}
-                onClick={clearThisDay}
-                title="Remove all entries on this date"
-                disabled={!logsData?.entries?.length}
-              >
-                <i className="fas fa-trash-alt me-1" aria-hidden="true" />
-                Clear This Day
-              </button>
-            </div>
+            <button
+              className="btn btn-sm btn-outline-danger"
+              style={{ borderRadius: 24 }}
+              onClick={clearThisDay}
+              title="Remove all entries on this date"
+              disabled={!logsData?.entries?.length}
+            >
+              <i className="fas fa-trash-alt me-1" aria-hidden="true" />
+              Clear This Day
+            </button>
           </div>
         </section>
 
@@ -562,10 +539,13 @@ export default function NutritionPage() {
               acc.calories += e.calories || 0;
               acc.protein += e.protein || 0;
               acc.carbs += e.carbs || 0;
-              acc.fat += e.fat || 0;
               return acc;
             },
-            { calories: 0, protein: 0, carbs: 0, fat: 0 }
+            { calories: 0, protein: 0, carbs: 0 }
+          ) as MacroTotals & { fat: number };
+          (mealTotals as any).fat = mealEntries.reduce(
+            (s, e) => s + (e.fat || 0),
+            0
           );
 
           return (
@@ -589,7 +569,7 @@ export default function NutritionPage() {
                 </span>{" "}
                 |{" "}
                 <span style={{ color: COLORS.fat }}>
-                  {round2(mealTotals.fat)}f
+                  {round2((mealTotals as any).fat)}f
                 </span>
               </button>
 
