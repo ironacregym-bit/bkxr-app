@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -23,6 +22,7 @@ export default function BarcodeScannerClient({
   const scannedOnce = useRef(false);
 
   const [scanError, setScanError] = useState<string | null>(null);
+  const [lastCode, setLastCode] = useState<string>("");
   const [barcodeInput, setBarcodeInput] = useState("");
   const [scanning, setScanning] = useState(false);
   const [hasCamera, setHasCamera] = useState(true);
@@ -40,19 +40,15 @@ export default function BarcodeScannerClient({
   }
 
   async function teardown() {
-    try {
-      controlsRef.current?.stop?.();
-    } catch {}
-    try {
-      readerRef.current?.reset?.();
-    } catch {}
+    try { controlsRef.current?.stop?.(); } catch {}
+    try { readerRef.current?.reset?.(); } catch {}
     stopTracks();
   }
 
   async function startScanner(mountedRef: { current: boolean }) {
-    // Reset transient state each start
     setScanError(null);
     setBarcodeInput("");
+    setLastCode("");
     scannedOnce.current = false;
 
     if (videoRef.current) {
@@ -72,7 +68,6 @@ export default function BarcodeScannerClient({
       const reader = new BrowserMultiFormatReader();
       readerRef.current = reader;
 
-      // Prefer back/rear/environment camera when available
       const videoInputs = await BrowserMultiFormatReader.listVideoInputDevices();
       if (!videoInputs || videoInputs.length === 0) {
         setHasCamera(false);
@@ -90,13 +85,14 @@ export default function BarcodeScannerClient({
           if (result && !scannedOnce.current) {
             scannedOnce.current = true;
             const code = result.getText();
+            setLastCode(code);
 
             try {
               setLookupLoading(true);
               const found = await onLookupBarcode(code);
               if (!found) {
-                setScanError("No product found for this barcode. You can add a manual food.");
-                scannedOnce.current = false; // allow another attempt without restart
+                setScanError("No product found for this barcode.");
+                scannedOnce.current = false;
               } else {
                 onFoundFood(found);
                 onClose();
@@ -135,7 +131,6 @@ export default function BarcodeScannerClient({
     startScanner(mountedRef);
 
     const onVisibility = async () => {
-      // If tab lost visibility, reset to avoid locked tracks; restart on refocus
       if (document.visibilityState === "hidden") {
         await teardown();
       } else if (document.visibilityState === "visible" && mountedRef.current) {
@@ -149,19 +144,20 @@ export default function BarcodeScannerClient({
       document.removeEventListener("visibilitychange", onVisibility);
       teardown();
     };
-    // Also restart when Restart button increments restartTick
   }, [isOpen, onClose, onFoundFood, onLookupBarcode, restartTick]);
 
   async function lookupManualBarcode() {
-    if (!barcodeInput || barcodeInput.trim().length < 6) {
+    const code = (barcodeInput || "").trim();
+    if (!code || code.length < 6) {
       setScanError("Enter a valid barcode (at least 6 digits).");
       return;
     }
     try {
       setLookupLoading(true);
-      const found = await onLookupBarcode(barcodeInput.trim());
+      const found = await onLookupBarcode(code);
       if (!found) {
-        setScanError("No product found for this barcode. You can add a manual food.");
+        setLastCode(code);
+        setScanError("No product found for this barcode.");
       } else {
         onFoundFood(found);
         onClose();
@@ -215,7 +211,19 @@ export default function BarcodeScannerClient({
               </button>
             </div>
 
-            {scanError && <div className="mt-2 text-danger">{scanError}</div>}
+            {scanError && (
+              <div className="mt-2">
+                <div className="text-danger">{scanError}</div>
+                {/* NEW: fast path to admin add form with code prefilled */}
+                <a
+                  href={`/admin/foods/barcodes?code=${encodeURIComponent(lastCode || barcodeInput)}`}
+                  className="btn btn-sm btn-bxkr-outline mt-2"
+                  style={{ borderRadius: 24 }}
+                >
+                  + Add this barcode
+                </a>
+              </div>
+            )}
           </>
         ) : (
           <div className="mb-2">
@@ -232,7 +240,18 @@ export default function BarcodeScannerClient({
                 {lookupLoading ? "Looking up…" : "Lookup"}
               </button>
             </div>
-            {scanError && <div className="mt-2 text-danger">{scanError}</div>}
+            {scanError && (
+              <div className="mt-2">
+                <div className="text-danger">{scanError}</div>
+                <a
+                  href={`/admin/foods/barcodes?code=${encodeURIComponent(lastCode || barcodeInput)}`}
+                  className="btn btn-sm btn-bxkr-outline mt-2"
+                  style={{ borderRadius: 24 }}
+                >
+                  + Add this barcode
+                </a>
+              </div>
+            )}
           </div>
         )}
       </div>
