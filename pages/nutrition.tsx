@@ -5,7 +5,11 @@ import { useRouter } from "next/router";
 import useSWR, { mutate } from "swr";
 import { useSession, signIn } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
-import MacrosCard, { type MacroGoals, type MacroProgress, type MacroTotals } from "../components/nutrition/MacrosCard";
+import MacrosCard, {
+  type MacroGoals,
+  type MacroProgress,
+  type MacroTotals,
+} from "../components/nutrition/MacrosCard";
 import FoodEditor, { type Food } from "../components/nutrition/FoodEditor";
 import BarcodeScannerGate from "../components/nutrition/BarcodeScannerGate";
 import BarcodeScannerClient from "../components/nutrition/BarcodeScannerClient";
@@ -24,6 +28,20 @@ const COLORS = {
 function round2(n: number | undefined | null) {
   return n !== undefined && n !== null ? Number(n).toFixed(2) : "-";
 }
+function ymd(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+function dayMinus(d: Date, days: number) {
+  const x = new Date(d);
+  x.setDate(d.getDate() - days);
+  return x;
+}
+function yesterday(d: Date) {
+  return dayMinus(d, 1);
+}
+function lastWeekSameWeekday(d: Date) {
+  return dayMinus(d, 7);
+}
 
 type NutritionEntry = {
   id: string;
@@ -31,7 +49,7 @@ type NutritionEntry = {
   date: string;
   meal: string;
   food: Food;
-  grams?: number | null;      // <-- now optional
+  grams?: number | null;
   calories: number;
   protein: number;
   carbs: number;
@@ -45,7 +63,14 @@ type UserProfile = {
   protein_target?: number;
   carb_target?: number;
   fat_target?: number;
-  subscription_status?: "active" | "trialing" | "canceled" | "incomplete" | "past_due" | string | null;
+  subscription_status?:
+    | "active"
+    | "trialing"
+    | "canceled"
+    | "incomplete"
+    | "past_due"
+    | string
+    | null;
   membership_status?: "gym_member" | "none" | string | null;
   email?: string;
 };
@@ -65,25 +90,29 @@ export default function NutritionPage() {
     }
   }, [router.query.date]);
 
-  const formattedDate = useMemo(() => selectedDate.toISOString().slice(0, 10), [selectedDate]);
-  const goPrevDay = () => setSelectedDate((d) => new Date(d.getTime() - 86400000));
+  const formattedDate = useMemo(() => ymd(selectedDate), [selectedDate]);
+  const goPrevDay = () => setSelectedDate((d) => dayMinus(d, 1));
   const goNextDay = () => {
     const tomorrow = new Date(selectedDate.getTime() + 86400000);
     if (tomorrow <= new Date()) setSelectedDate(tomorrow);
   };
 
-  // Search state
+  // Search + editor state
   const [query, setQuery] = useState<string>("");
   const [results, setResults] = useState<Food[]>([]);
   const [loadingSearch, setLoadingSearch] = useState<boolean>(false);
   const [selectedFood, setSelectedFood] = useState<Food | null>(null);
-  const [usingServing, setUsingServing] = useState<"per100" | "serving">("per100"); // still used for scanned foods
+  const [usingServing, setUsingServing] =
+    useState<"per100" | "serving">("per100");
   const [adding, setAdding] = useState<boolean>(false);
 
   // Favourites (localStorage, per-user)
   const [favourites, setFavourites] = useState<Food[]>([]);
   const favKey = useMemo(
-    () => (session?.user?.email ? `bxkr:favs:${session.user.email as string}` : `bxkr:favs:anon`),
+    () =>
+      session?.user?.email
+        ? `bxkr:favs:${session.user.email as string}`
+        : `bxkr:favs:anon`,
     [session?.user?.email]
   );
 
@@ -99,7 +128,9 @@ export default function NutritionPage() {
 
   const isFavourite = (food: Food | null) => {
     if (!food) return false;
-    return favourites.some((f) => f.id === food.id || (food.code && f.code === food.code));
+    return favourites.some(
+      (f) => f.id === food.id || (food.code && f.code === food.code)
+    );
   };
   const saveFavourites = (arr: Food[]) => {
     setFavourites(arr);
@@ -118,20 +149,25 @@ export default function NutritionPage() {
   // Scanner gate
   const [scannerOpen, setScannerOpen] = useState<boolean>(false);
 
-  // Logs
-  const { data: logsData } = useSWR<LogsResponse>(
-    session?.user?.email ? `/api/nutrition/logs?date=${formattedDate}` : null,
-    fetcher
-  );
+  // Logs (for selected date)
+  const swrKey = session?.user?.email
+    ? `/api/nutrition/logs?date=${formattedDate}`
+    : null;
+  const { data: logsData } = useSWR<LogsResponse>(swrKey, fetcher);
 
   // Profile goals
   const { data: profile } = useSWR<UserProfile>(
-    session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email as string)}` : null,
+    session?.user?.email
+      ? `/api/profile?email=${encodeURIComponent(
+          session.user.email as string
+        )}`
+      : null,
     fetcher
   );
 
   const isPremium =
-    (profile?.subscription_status === "active" || profile?.subscription_status === "trialing") ||
+    profile?.subscription_status === "active" ||
+    profile?.subscription_status === "trialing" ||
     profile?.membership_status === "gym_member";
 
   const goals: MacroGoals = {
@@ -163,7 +199,7 @@ export default function NutritionPage() {
     fat: Math.min(100, (totals.fat / goals.fat) * 100),
   };
 
-  // Debounce search
+  // Debounced search
   function debounce<T extends (...args: any[]) => void>(fn: T, delay: number) {
     let timer: ReturnType<typeof setTimeout>;
     return (...args: Parameters<T>) => {
@@ -181,7 +217,9 @@ export default function NutritionPage() {
         }
         setLoadingSearch(true);
         try {
-          const res = await fetch(`/api/foods/search?query=${encodeURIComponent(q)}`);
+          const res = await fetch(
+            `/api/foods/search?query=${encodeURIComponent(q)}`
+          );
           const json = await res.json();
           setResults((json.foods || []) as Food[]);
         } catch {
@@ -196,15 +234,10 @@ export default function NutritionPage() {
     doSearch(query);
   }, [query, doSearch]);
 
-  // Compute scaled nutrition for scanned/searched foods (unchanged)
+  // Scaled macros for non-manual entries (serving/per100 preserved if you still use it)
   const scaledSelected: Food | null = useMemo(() => {
     if (!selectedFood) return null;
-
-    // For manual entries we do not scale — return as-is
     if (selectedFood.id?.startsWith("manual-")) return selectedFood;
-
-    // For database foods we keep your per100/serving logic if present
-    const grams = 100; // not used anymore in UI; keep factor 1.0 on per100
     if (usingServing === "serving" && selectedFood.servingSize) {
       const hasPerServing =
         selectedFood.caloriesPerServing != null ||
@@ -215,18 +248,19 @@ export default function NutritionPage() {
       if (hasPerServing) {
         return {
           ...selectedFood,
-          calories: +(Number(selectedFood.caloriesPerServing ?? 0)).toFixed(2),
+          calories: +(
+            Number(selectedFood.caloriesPerServing ?? 0)
+          ).toFixed(2),
           protein: +(Number(selectedFood.proteinPerServing ?? 0)).toFixed(2),
           carbs: +(Number(selectedFood.carbsPerServing ?? 0)).toFixed(2),
           fat: +(Number(selectedFood.fatPerServing ?? 0)).toFixed(2),
         };
       }
     }
-    // default: per 100g already in object
     return selectedFood;
   }, [selectedFood, usingServing]);
 
-  // Add entry — for manual, we send macros exactly as typed; grams omitted
+  // Add entry
   const addEntry = async (meal: string, food: Food | null) => {
     if (!session?.user?.email || !food) return signIn("google");
 
@@ -234,22 +268,24 @@ export default function NutritionPage() {
       date: formattedDate,
       meal,
       food,
-      // For manual food, use the macros as-is (no scaling, no grams)
       calories: (scaledSelected || food).calories,
       protein: (scaledSelected || food).protein,
       carbs: (scaledSelected || food).carbs,
       fat: (scaledSelected || food).fat,
     };
 
-    // For searched/scanned foods, you may still include grams in the future; right now we omit
-    // payload.grams = null;
-
     setAdding(true);
     try {
-      const optimistic = { id: `temp-${Date.now()}`, created_at: new Date().toISOString(), ...payload };
+      const optimistic = {
+        id: `temp-${Date.now()}`,
+        created_at: new Date().toISOString(),
+        ...payload,
+      };
       mutate(
-        `/api/nutrition/logs?date=${formattedDate}`,
-        (data: LogsResponse | undefined) => ({ entries: [optimistic as NutritionEntry, ...(data?.entries || [])] }),
+        swrKey!,
+        (data: LogsResponse | undefined) => ({
+          entries: [optimistic as NutritionEntry, ...(data?.entries || [])],
+        }),
         false
       );
 
@@ -260,7 +296,7 @@ export default function NutritionPage() {
       });
       if (!res.ok) throw new Error("Failed to save");
 
-      mutate(`/api/nutrition/logs?date=${formattedDate}`);
+      mutate(swrKey!);
       setSelectedFood(null);
       setQuery("");
       setResults([]);
@@ -272,35 +308,143 @@ export default function NutritionPage() {
 
   const removeEntry = async (id: string) => {
     if (!confirm("Remove this entry?")) return;
-    await fetch(`/api/nutrition/logs?id=${encodeURIComponent(id)}&date=${formattedDate}`, { method: "DELETE" });
-    mutate(`/api/nutrition/logs?date=${formattedDate}`);
+    await fetch(
+      `/api/nutrition/logs?id=${encodeURIComponent(id)}&date=${formattedDate}`,
+      { method: "DELETE" }
+    );
+    mutate(swrKey!);
   };
 
-  // Scanner lookup (preserves your API)
-  async function handleBarcodeLookup(code: string) {
-    const res = await fetch(`/api/foods/search?barcode=${encodeURIComponent(code)}`);
-    const json = await res.json();
-    const found: Food | undefined = (json.foods || [])[0] as Food | undefined;
-    if (!found) return undefined;
-    setResults([found]);
-    setSelectedFood(found);
-    setQuery(found.name || found.code || "");
-    setUsingServing("per100");
-    setOpenMeal((prev) => prev || "Breakfast");
-    return found;
+  // ---------- Day actions: Copy (whole day) / Clear day ----------
+  const [copyBusy, setCopyBusy] = useState(false);
+  const [copyDate, setCopyDate] = useState<string>(() => ymd(yesterday(selectedDate)));
+  useEffect(() => {
+    // Reset default copy source when user changes selected date
+    setCopyDate(ymd(yesterday(selectedDate)));
+  }, [selectedDate]);
+
+  async function copyFromDateKey(sourceKey: string) {
+    if (!session?.user?.email) return signIn("google");
+    if (!sourceKey) return;
+
+    try {
+      setCopyBusy(true);
+
+      if (sourceKey === formattedDate) {
+        alert("You can’t copy from the same day.");
+        setCopyBusy(false);
+        return;
+      }
+
+      // Fetch source entries
+      const r = await fetch(
+        `/api/nutrition/logs?date=${encodeURIComponent(sourceKey)}`
+      );
+      const j = (await r.json()) as LogsResponse | null;
+      const srcEntries = j?.entries || [];
+      if (srcEntries.length === 0) {
+        alert("No entries found for that date.");
+        setCopyBusy(false);
+        return;
+      }
+
+      // Prevent exact duplicates (same meal + food id/code/name + macros)
+      const existingSigs = (logsData?.entries || []).map(
+        (e) =>
+          `${e.meal}|${e.food?.id || e.food?.code || e.food?.name}|${e.calories}|${e.protein}|${e.carbs}|${e.fat}`
+      );
+      const toCreate = srcEntries.filter((e) => {
+        const sig = `${e.meal}|${
+          e.food?.id || e.food?.code || e.food?.name
+        }|${e.calories}|${e.protein}|${e.carbs}|${e.fat}`;
+        return !existingSigs.includes(sig);
+      });
+
+      if (toCreate.length === 0) {
+        alert("Everything from that day is already on this date.");
+        setCopyBusy(false);
+        return;
+      }
+
+      // Sequential POSTs with your existing API
+      for (const e of toCreate) {
+        const payload: any = {
+          date: formattedDate,
+          meal: e.meal,
+          food: e.food,
+          calories: Number(e.calories || 0),
+          protein: Number(e.protein || 0),
+          carbs: Number(e.carbs || 0),
+          fat: Number(e.fat || 0),
+        };
+
+        const res = await fetch("/api/nutrition/logs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(
+            `Failed to add an entry (${res.status}): ${txt || res.statusText}`
+          );
+        }
+      }
+
+      await mutate(swrKey!);
+    } catch (e: any) {
+      alert(e?.message || "Failed to copy entries");
+    } finally {
+      setCopyBusy(false);
+    }
   }
 
-  // Pass patches from the editor
+  async function clearThisDay() {
+    if (!logsData?.entries?.length) {
+      alert("There are no entries to clear on this date.");
+      return;
+    }
+    const ok = confirm(
+      `Remove all ${logsData.entries.length} entries logged on ${formattedDate}?`
+    );
+    if (!ok) return;
+
+    // Simple sequential delete using your existing DELETE endpoint
+    for (const e of logsData.entries) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await fetch(
+          `/api/nutrition/logs?id=${encodeURIComponent(e.id)}&date=${formattedDate}`,
+          { method: "DELETE" }
+        );
+      } catch {
+        // continue on error
+      }
+    }
+    mutate(swrKey!);
+  }
+
+  // For manual editor: patch function
   const onChangeSelectedFood = (patch: Partial<Food>) => {
     setSelectedFood((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
+  // Friendly weekday label for “Copy last [weekday]”
+  const weekdayLabel = useMemo(() => {
+    return new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(
+      selectedDate
+    );
+  }, [selectedDate]);
+
   return (
     <>
-      {/* Global select-on-focus for number inputs to prevent "020" */}
+      {/* Global select-on-focus for number inputs */}
       <GlobalNumericFocus />
 
-      <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff", borderRadius: "12px" }}>
+      <main
+        className="container py-3"
+        style={{ paddingBottom: "90px", color: "#fff", borderRadius: "12px" }}
+      >
         {/* Date Navigation */}
         <div className="d-flex justify-content-between align-items-center mb-3">
           <button className="btn btn-bxkr-outline" onClick={goPrevDay}>
@@ -312,7 +456,7 @@ export default function NutritionPage() {
           <button
             className="btn btn-bxkr-outline"
             onClick={goNextDay}
-            disabled={formattedDate === new Date().toISOString().slice(0, 10)}
+            disabled={formattedDate === ymd(new Date())}
           >
             Next →
           </button>
@@ -321,9 +465,97 @@ export default function NutritionPage() {
         {/* Macros */}
         <MacrosCard totals={totals} goals={goals} progress={progress} />
 
-        {/* Meals */}
+        {/* ===== Day actions (expert UX, no extra APIs) ===== */}
+        <section className="futuristic-card p-3 mb-3">
+          <div
+            className="d-flex flex-wrap align-items-end justify-content-between"
+            style={{ gap: 10 }}
+          >
+            <div className="small text-dim">
+              Manage entries for <strong>{formattedDate}</strong>
+            </div>
+
+            <div className="d-flex flex-wrap align-items-end" style={{ gap: 8 }}>
+              {/* Copy Yesterday */}
+              <button
+                className="btn btn-sm btn-outline-light"
+                style={{ borderRadius: 24 }}
+                onClick={() => copyFromDateKey(ymd(yesterday(selectedDate)))}
+                disabled={copyBusy}
+                title={`Copy all entries from ${ymd(yesterday(selectedDate))}`}
+              >
+                <i className="fas fa-arrow-left me-1" aria-hidden="true" />
+                {copyBusy ? "Copying…" : "Copy Yesterday"}
+              </button>
+
+              {/* Copy last weekday (7 days ago) */}
+              <button
+                className="btn btn-sm btn-outline-light"
+                style={{ borderRadius: 24 }}
+                onClick={() =>
+                  copyFromDateKey(ymd(lastWeekSameWeekday(selectedDate)))
+                }
+                disabled={copyBusy}
+                title={`Copy last ${weekdayLabel} (${ymd(
+                  lastWeekSameWeekday(selectedDate)
+                )})`}
+              >
+                <i className="fas fa-redo me-1" aria-hidden="true" />
+                {copyBusy ? "Copying…" : `Copy last ${weekdayLabel}`}
+              </button>
+
+              {/* Copy from specific date (datepicker + button) */}
+              <div className="d-flex align-items-end" style={{ gap: 8 }}>
+                <div>
+                  <label className="form-label small mb-1">Copy from date</label>
+                  <input
+                    className="form-control"
+                    type="date"
+                    value={copyDate}
+                    onChange={(e) => setCopyDate(e.target.value)}
+                    max={ymd(new Date())}
+                    aria-label="Select a date to copy from"
+                    style={{ minWidth: 175 }}
+                  />
+                </div>
+                <button
+                  className="btn btn-sm btn-bxkr"
+                  style={{ borderRadius: 24, height: 38, alignSelf: "flex-end" }}
+                  onClick={() => copyFromDateKey(copyDate)}
+                  disabled={copyBusy || !copyDate}
+                  aria-label={`Copy entries from ${copyDate} to ${formattedDate}`}
+                  title={`Copy entries from ${copyDate}`}
+                >
+                  {copyBusy ? (
+                    "Copying…"
+                  ) : (
+                    <>
+                      <i className="fas fa-copy me-1" aria-hidden="true" />
+                      Copy
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Clear this day */}
+              <button
+                className="btn btn-sm btn-outline-danger"
+                style={{ borderRadius: 24 }}
+                onClick={clearThisDay}
+                title="Remove all entries on this date"
+                disabled={!logsData?.entries?.length}
+              >
+                <i className="fas fa-trash-alt me-1" aria-hidden="true" />
+                Clear This Day
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ===== Meals / Logs ===== */}
         {meals.map((meal) => {
-          const mealEntries = logsData?.entries?.filter((e) => e.meal === meal) || [];
+          const mealEntries =
+            logsData?.entries?.filter((e) => e.meal === meal) || [];
           const isOpen = openMeal === meal;
           const mealTotals = mealEntries.reduce(
             (acc: MacroTotals, e: NutritionEntry) => {
@@ -344,10 +576,21 @@ export default function NutritionPage() {
                 onClick={() => setOpenMeal(isOpen ? null : meal)}
               >
                 {meal} ({mealEntries.length}) —{" "}
-                <span style={{ color: COLORS.calories }}>{round2(mealTotals.calories)} kcal</span> |{" "}
-                <span style={{ color: COLORS.protein }}>{round2(mealTotals.protein)}p</span> |{" "}
-                <span style={{ color: COLORS.carbs }}>{round2(mealTotals.carbs)}c</span> |{" "}
-                <span style={{ color: COLORS.fat }}>{round2(mealTotals.fat)}f</span>
+                <span style={{ color: COLORS.calories }}>
+                  {round2(mealTotals.calories)} kcal
+                </span>{" "}
+                |{" "}
+                <span style={{ color: COLORS.protein }}>
+                  {round2(mealTotals.protein)}p
+                </span>{" "}
+                |{" "}
+                <span style={{ color: COLORS.carbs }}>
+                  {round2(mealTotals.carbs)}c
+                </span>{" "}
+                |{" "}
+                <span style={{ color: COLORS.fat }}>
+                  {round2(mealTotals.fat)}f
+                </span>
               </button>
 
               {isOpen && (
@@ -363,7 +606,10 @@ export default function NutritionPage() {
                   </div>
 
                   {/* Scanner gate */}
-                  <BarcodeScannerGate isPremium={Boolean(isPremium)} onScanRequested={() => setScannerOpen(true)} />
+                  <BarcodeScannerGate
+                    isPremium={Boolean(isPremium)}
+                    onScanRequested={() => setScannerOpen(true)}
+                  />
 
                   {loadingSearch && <div>Searching…</div>}
 
@@ -382,39 +628,12 @@ export default function NutritionPage() {
                     />
                   )}
 
-                  {/* Manual food opener */}
-                  {!selectedFood && (
-                    <button
-                      className="btn btn-bxkr-outline w-100 mb-2"
-                      style={{ borderRadius: "12px" }}
-                      onClick={() => {
-                        setSelectedFood({
-                          id: `manual-${Date.now()}`,
-                          code: "",
-                          name: "",
-                          brand: "",            // kept for shape; not shown in editor
-                          image: null,
-                          calories: 0,
-                          protein: 0,
-                          carbs: 0,
-                          fat: 0,
-                          servingSize: "",      // kept for shape; not shown in editor
-                          caloriesPerServing: null,
-                          proteinPerServing: null,
-                          carbsPerServing: null,
-                          fatPerServing: null,
-                        });
-                        setUsingServing("per100");
-                        setResults([]); // ensure the editor shows
-                      }}
-                    >
-                      Add manual food / meal totals
-                    </button>
-                  )}
-
                   {/* Logged entries */}
                   {mealEntries.map((e) => (
-                    <div key={e.id} className="futuristic-card p-3 mb-2 d-flex justify-content-between align-items-center">
+                    <div
+                      key={e.id}
+                      className="futuristic-card p-3 mb-2 d-flex justify-content-between align-items-center"
+                    >
                       <div>
                         <div className="fw-bold d-flex align-items-center">
                           {e.food.name || "Manual item"}
@@ -422,19 +641,41 @@ export default function NutritionPage() {
                             type="button"
                             className="btn btn-link p-0 ms-2"
                             onClick={() => toggleFavourite(e.food)}
-                            title={isFavourite(e.food) ? "Unfavourite" : "Favourite"}
+                            title={
+                              isFavourite(e.food) ? "Unfavourite" : "Favourite"
+                            }
                           >
-                            <i className={isFavourite(e.food) ? "fas fa-star text-warning" : "far fa-star text-dim"} />
+                            <i
+                              className={
+                                isFavourite(e.food)
+                                  ? "fas fa-star text-warning"
+                                  : "far fa-star text-dim"
+                              }
+                            />
                           </button>
                         </div>
                         <div className="small">
-                          <span style={{ color: COLORS.calories }}>{round2(e.calories)} kcal</span> |{" "}
-                          <span style={{ color: COLORS.protein }}>{round2(e.protein)}p</span> |{" "}
-                          <span style={{ color: COLORS.carbs }}>{round2(e.carbs)}c</span> |{" "}
-                          <span style={{ color: COLORS.fat }}>{round2(e.fat)}f</span>
+                          <span style={{ color: COLORS.calories }}>
+                            {round2(e.calories)} kcal
+                          </span>{" "}
+                          |{" "}
+                          <span style={{ color: COLORS.protein }}>
+                            {round2(e.protein)}p
+                          </span>{" "}
+                          |{" "}
+                          <span style={{ color: COLORS.carbs }}>
+                            {round2(e.carbs)}c
+                          </span>{" "}
+                          |{" "}
+                          <span style={{ color: COLORS.fat }}>
+                            {round2(e.fat)}f
+                          </span>
                         </div>
                       </div>
-                      <button className="btn btn-link text-danger" onClick={() => removeEntry(e.id)}>
+                      <button
+                        className="btn btn-link text-danger"
+                        onClick={() => removeEntry(e.id)}
+                      >
                         Remove
                       </button>
                     </div>
@@ -454,7 +695,20 @@ export default function NutritionPage() {
           setResults([food]);
           setSelectedFood(food);
         }}
-        onLookupBarcode={async (code: string) => await handleBarcodeLookup(code)}
+        onLookupBarcode={async (code: string) => {
+          const res = await fetch(
+            `/api/foods/search?barcode=${encodeURIComponent(code)}`
+          );
+          const json = await res.json();
+          const found: Food | undefined = (json.foods || [])[0] as Food | undefined;
+          if (!found) return undefined;
+          setResults([found]);
+          setSelectedFood(found);
+          setQuery(found.name || found.code || "");
+          setUsingServing("per100");
+          setOpenMeal((prev) => prev || "Breakfast");
+          return found;
+        }}
       />
 
       <BottomNav />
