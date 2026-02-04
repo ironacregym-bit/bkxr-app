@@ -473,7 +473,7 @@ export default function NutritionPage() {
               aria-label="Select a date to copy from"
               style={{ minWidth: 175, width: 190 }}
               placeholder="Copy from date"
-              // Some browsers ignore placeholder on type=date; it's okay since you asked to keep it inline.
+              // Some browsers ignore placeholder on type=date; inline layout still holds.
             />
             <button
               className="btn btn-sm btn-bxkr"
@@ -537,9 +537,9 @@ export default function NutritionPage() {
           const mealTotals: MacroTotals = mealEntries.reduce(
             (acc: MacroTotals, e: NutritionEntry) => ({
               calories: acc.calories + (e.calories || 0),
-              protein:  acc.protein  + (e.protein  || 0),
-              carbs:    acc.carbs    + (e.carbs    || 0),
-              fat:      acc.fat      + (e.fat      || 0),
+              protein: acc.protein + (e.protein || 0),
+              carbs: acc.carbs + (e.carbs || 0),
+              fat: acc.fat + (e.fat || 0),
             }),
             { calories: 0, protein: 0, carbs: 0, fat: 0 }
           );
@@ -565,7 +565,7 @@ export default function NutritionPage() {
                 </span>{" "}
                 |{" "}
                 <span style={{ color: COLORS.fat }}>
-                  {round2((mealTotals as any).fat)}f
+                  {round2(mealTotals.fat)}f
                 </span>
               </button>
 
@@ -668,12 +668,17 @@ export default function NutritionPage() {
         isOpen={scannerOpen && Boolean(isPremium)}
         onClose={() => setScannerOpen(false)}
         onFoundFood={(food) => {
+          // When quick-add returns a new item, use it immediately
           setResults([food]);
           setSelectedFood(food);
+          setQuery(food.name || food.code || "");
+          setUsingServing("per100");
+          setOpenMeal((prev) => prev || "Breakfast");
         }}
         onLookupBarcode={async (code: string) => {
+          // Use the new lookup endpoint that checks user->global barcode catalogues
           const res = await fetch(
-            `/api/foods/search?barcode=${encodeURIComponent(code)}`
+            `/api/foods/lookup-barcode?barcode=${encodeURIComponent(code)}`
           );
           const json = await res.json();
           const found: Food | undefined = (json.foods || [])[0] as Food | undefined;
