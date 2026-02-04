@@ -1,3 +1,4 @@
+// pages/api/foods/lookup-barcode.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]";
@@ -9,16 +10,15 @@ function digits(s: string) {
 
 /**
  * GET /api/foods/lookup-barcode?barcode=CODE
- * Search order:
- *   1) user override: user_barcode_foods/{email}/foods/{code}
- *   2) global:        barcode_foods/{code}
- * Response: { foods: Array<Food> } matching your FoodEditor shape
+ * Response:
+ *   { foods: Food[], normalized?: string }
+ *   - normalized: digits-only code echo, for prefilling quick-add
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const raw = String(req.query.barcode || "");
     const code = digits(raw);
-    if (!code) return res.status(400).json({ foods: [] });
+    if (!code) return res.status(400).json({ foods: [], normalized: "" });
 
     const session = await getServerSession(req, res, authOptions);
     const email = String(session?.user?.email || "").toLowerCase();
@@ -34,6 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (us.exists) {
         const d = us.data()!;
         return res.status(200).json({
+          normalized: code,
           foods: [
             {
               id: code,
@@ -61,6 +62,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (gs.exists) {
       const d = gs.data()!;
       return res.status(200).json({
+        normalized: code,
         foods: [
           {
             id: code,
@@ -83,9 +85,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Not found
-    return res.status(200).json({ foods: [] });
+    return res.status(200).json({ foods: [], normalized: code });
   } catch (e: any) {
     console.error("[foods/lookup-barcode] error:", e?.message || e);
-    return res.status(500).json({ foods: [] });
+    return res.status(500).json({ foods: [], normalized: "" });
   }
 }
