@@ -9,7 +9,7 @@ import BottomNav from "../components/BottomNav";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const ACCENT = "#FF8A2A";
-const MIN_PAYOUT_UI_GBP = 20; // Mirrors server default (MIN_PAYOUT_GBP) to guide button state
+const MIN_PAYOUT_UI_GBP = 20; // mirror server default; only for button state
 
 type MyReferralsResponse = {
   referral_code: string;
@@ -17,7 +17,7 @@ type MyReferralsResponse = {
   stats: {
     total_signups: number;
     active_paid: number;
-    commission_rate: number; // decimal e.g. 0.05
+    commission_rate: number; // decimal e.g., 0.05
     total_earned: number;    // GBP
   };
   referrals: Array<{
@@ -34,6 +34,13 @@ export default function ReferralsPage() {
   const isAuthed = status === "authenticated";
 
   const [backfillComplete, setBackfillComplete] = useState(false);
+  const [connectBusy, setConnectBusy] = useState(false);
+  const [hasConnect, setHasConnect] = useState<boolean>(false);
+  const [payout, setPayout] = useState<{ total?: number; loading?: boolean; error?: string | null }>({
+    total: 0,
+    loading: false,
+    error: null,
+  });
 
   // Auto‑backfill referral code if the user does not have one
   useEffect(() => {
@@ -63,15 +70,23 @@ export default function ReferralsPage() {
   );
 
   const link = data?.referral_link || "";
-  const code = data?.referral_code || "";
 
-  // Payout eligibility + request
-  const [payout, setPayout] = useState<{ total?: number; loading?: boolean; error?: string | null }>({
-    total: 0,
-    loading: false,
-    error: null,
-  });
+  // Detect if user already has a Stripe Connect account
+  useEffect(() => {
+    (async () => {
+      if (!isAuthed || !session?.user?.email) return;
+      try {
+        const r = await fetch(`/api/profile?email=${encodeURIComponent(session.user.email)}`);
+        const j = await r.json();
+        const id = j?.profile?.stripe_connect_id || j?.stripe_connect_id;
+        setHasConnect(Boolean(id));
+      } catch {
+        setHasConnect(false);
+      }
+    })();
+  }, [isAuthed, session?.user?.email]);
 
+  // Payout eligibility
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -91,20 +106,35 @@ export default function ReferralsPage() {
     };
   }, [isAuthed]);
 
-  async function requestPayout() {
+  async function startConnectOnboarding() {
+    try {
+      setConnectBusy(true);
+      // Ensure account exists
+      await fetch("/api/connect/create-account", { method: "POST" });
+      // Get onboarding link
+      const r = await fetch("/api/connect/account-link", { method: "POST" });
+      const j = await r.json();
+      if (!r.ok || !j?.url) throw new Error(j?.error || "Failed to start onboarding");
+      window.location.href = j.url;
+    } catch (e: any) {
+      alert(e?.message || "Failed to start payouts onboarding");
+    } finally {
+      setConnectBusy(false);
+    }
+  }
+
+  async function requestPayoutConnect() {
     setPayout((p) => ({ ...p, loading: true, error: null }));
     try {
-      const r = await fetch("/api/referrals/payout/request", { method: "POST" });
+      const r = await fetch("/api/referrals/payout/request-connect", { method: "POST" });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "Failed to request payout");
-
-      // Refresh eligibility and dashboard stats
+      // refresh eligibility and dashboard stats
       const r2 = await fetch("/api/referrals/payout/eligibility");
       const j2 = await r2.json();
       setPayout({ total: Number(j2?.total || 0), loading: false, error: null });
-      mutate(); // refresh /my in case totals change
-
-      alert(`Payout requested for £${Number(j?.amount_gbp || 0).toFixed(2)} (ID: ${j?.payout_id}).`);
+      mutate();
+      alert(`Payout requested for £${Number(j?.amount_gbp || 0).toFixed(2)} (Transfer: ${j?.transfer_id}).`);
     } catch (e: any) {
       setPayout((p) => ({ ...p, loading: false, error: e?.message || "Failed" }));
     }
@@ -121,18 +151,14 @@ export default function ReferralsPage() {
         <h1 className="fw-bold mb-3">Referrals</h1>
 
         {/* Loading / Preparing */}
-        {!isAuthed && (
-          <div className="text-dim">Please sign in to view your referral dashboard.</div>
-        )}
+        {!isAuthed && <div className="text-dim">Please sign in to view your referral dashboard.</div>}
         {isAuthed && (!backfillComplete || isLoading) && (
           <div className="text-center mt-5">
             <span className="inline-spinner mb-2" />
             <div className="small text-dim mt-2">Preparing your referral dashboard…</div>
           </div>
         )}
-        {error && (
-          <div className="alert alert-danger">Failed to load referrals. Please try again.</div>
-        )}
+        {error && <div className="alert alert-danger">Failed to load referrals. Please try again.</div>}
 
         {/* Content */}
         {isAuthed && data && (
@@ -172,7 +198,7 @@ export default function ReferralsPage() {
 
             {/* Stats + Payout */}
             <section className="futuristic-card p-3 mb-3">
-              <h5 className="mb-2">Stats</h5>
+              <h5 className="mb-2">Stats & Payouts</h5>
               <div className="small text-dim mb-2">
                 Commission increases with paid active referrals: 5% → 10% → 15% → 20% → 25% → 30%
               </div>
@@ -183,26 +209,36 @@ export default function ReferralsPage() {
                 <span className="bxkr-chip">Total Earned: £{Number(data?.stats?.total_earned ?? 0).toFixed(2)}</span>
               </div>
 
-              {/* Payout Row */}
+              {/* Payout Actions */}
               <div className="d-flex flex-wrap align-items-center gap-2 mt-3">
-                <span className="bxkr-chip">
-                  Eligible for payout: £{Number(payout?.total || 0).toFixed(2)}
-                </span>
-                <button
-                  className="btn btn-bxkr-outline"
-                  style={{ borderRadius: 24 }}
-                  onClick={requestPayout}
-                  disabled={
-                    payout.loading ||
-                    Number(payout?.total || 0) < MIN_PAYOUT_UI_GBP
-                  }
-                  title={`Request payout of unpaid commission (min £${MIN_PAYOUT_UI_GBP.toFixed(2)})`}
-                >
-                  {payout.loading ? "Requesting…" : `Request Payout`}
-                </button>
+                {!hasConnect ? (
+                  <button
+                    className="btn btn-bxkr"
+                    style={{ borderRadius: 24 }}
+                    onClick={startConnectOnboarding}
+                    disabled={connectBusy}
+                  >
+                    {connectBusy ? "Starting…" : "Set up payouts"}
+                  </button>
+                ) : (
+                  <>
+                    <span className="bxkr-chip">
+                      Eligible for payout: £{Number(payout?.total || 0).toFixed(2)}
+                    </span>
+                    <button
+                      className="btn btn-bxkr-outline"
+                      style={{ borderRadius: 24 }}
+                      onClick={requestPayoutConnect}
+                      disabled={payout.loading || Number(payout?.total || 0) < MIN_PAYOUT_UI_GBP}
+                      title={`Request payout (min £${MIN_PAYOUT_UI_GBP.toFixed(2)})`}
+                    >
+                      {payout.loading ? "Requesting…" : `Request Payout`}
+                    </button>
+                  </>
+                )}
                 {payout.error && <div className="text-danger small">{payout.error}</div>}
                 <div className="small text-dim ms-auto">
-                  Minimum payout is £{MIN_PAYOUT_UI_GBP.toFixed(2)}. Payouts are reviewed before payment.
+                  Minimum payout is £{MIN_PAYOUT_UI_GBP.toFixed(2)}. Payouts are processed via Stripe Connect.
                 </div>
               </div>
             </section>
