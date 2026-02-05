@@ -1,7 +1,5 @@
 // pages/api/foods/lookup-barcode.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../auth/[...nextauth]";
 import firestore from "../../../lib/firestoreClient";
 
 function digits(s: string) {
@@ -13,12 +11,35 @@ function toNum(n: any): number {
   return Number.isFinite(v) ? v : 0;
 }
 
+/** Tolerant grams parser:
+ * - "40"           -> 40
+ * - "40g" / "40 g" -> 40
+ * - "1 bar (40g)"  -> 40
+ */
 function parseServingGrams(servingSize?: string | null): number | null {
-  if (!servingSize) return null;
-  const m = String(servingSize).match(/(\d+(?:\.\d+)?)\s*g/i);
-  if (!m) return null;
-  const g = Number(m[1]);
-  return Number.isFinite(g) && g > 0 ? g : null;
+  if (servingSize == null) return null;
+  const raw = String(servingSize).trim();
+  if (!raw) return null;
+
+  // Pure numeric
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  // "... 40g" or "... 40 g"
+  const m1 = raw.match(/(\d+(?:\.\d+)?)\s*g\b/i);
+  if (m1) {
+    const n = Number(m1[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  // "(40g)" / "(40 g)"
+  const m2 = raw.match(/\((\d+(?:\.\d+)?)\s*g\)/i);
+  if (m2) {
+    const n = Number(m2[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  return null;
 }
 
 type FoodDTO = {
@@ -38,12 +59,8 @@ type FoodDTO = {
   fatPerServing?: number | null;
 };
 
+/** Normalise a Firestore doc (global) into a per-100g baseline + optional per-serving. */
 function fromFirestoreDoc(code: string, d: any): FoodDTO {
-  // Accept multiple schema variants:
-  // - Explicit per100: d.per100 = { calories, protein, carbs, fat } OR *_100g fields
-  // - Explicit perServing: d.perServing = {...} OR *PerServing flat fields
-  // - Legacy/ambiguous: d.calories/protein/... + servingSize "40g" (assume those are per-serving)
-  // - Legacy per100 only: d.calories/protein/... with no serving grams (assume per-100g)
   const name = String(d?.name || code);
   const brand = String(d?.brand || "");
   const image = d?.image ? String(d.image) : null;
@@ -51,30 +68,29 @@ function fromFirestoreDoc(code: string, d: any): FoodDTO {
 
   const g = parseServingGrams(servingSize);
 
-  // Detect explicit per100
+  // Explicit blocks (preferred if present)
   const per100 = d?.per100 || {};
+  const perServing = d?.perServing || {};
+
   const hasPer100Block =
     per100 && (per100.calories != null || per100.protein != null || per100.carbs != null || per100.fat != null);
-  const hasPer100Flat =
-    d?.calories_100g != null || d?.protein_100g != null || d?.carbs_100g != null || d?.fat_100g != null;
-  const hasPer100Flag = d?.basis === "per100" || d?.per100g === true;
-
-  // Detect explicit perServing
-  const perServing = d?.perServing || {};
   const hasPerServingBlock =
     perServing && (perServing.calories != null || perServing.protein != null || perServing.carbs != null || perServing.fat != null);
+
+  // Legacy explicit flags/fields
+  const hasPer100Flat =
+    d?.calories_100g != null || d?.protein_100g != null || d?.carbs_100g != null || d?.fat_100g != null;
   const hasPerServingFlat =
     d?.caloriesPerServing != null || d?.proteinPerServing != null || d?.carbsPerServing != null || d?.fatPerServing != null;
-  const hasServingFlag = d?.basis === "perServing" || d?.perServing === true; // tolerate boolean
-
-  // Legacy base fields
+  const hasPer100Flag = d?.basis === "per100" || d?.per100g === true;
+  const hasServingFlag = d?.basis === "perServing" || d?.perServing === true;
   const hasBase = d?.calories != null || d?.protein != null || d?.carbs != null || d?.fat != null;
 
-  // Prepare holders
+  // Holders
   let c100 = 0, p100 = 0, ch100 = 0, f100 = 0;
   let cServ: number | null = null, pServ: number | null = null, chServ: number | null = null, fServ: number | null = null;
 
-  // Priority 1: explicit per100
+  // Priority 1: explicit per100 (block/flat/flag)
   if (hasPer100Block || hasPer100Flat || hasPer100Flag) {
     c100 = toNum(per100.calories ?? d?.calories_100g ?? (hasPer100Flag ? d?.calories : undefined));
     p100 = toNum(per100.protein ?? d?.protein_100g ?? (hasPer100Flag ? d?.protein : undefined));
@@ -82,7 +98,7 @@ function fromFirestoreDoc(code: string, d: any): FoodDTO {
     f100 = toNum(per100.fat ?? d?.fat_100g ?? (hasPer100Flag ? d?.fat : undefined));
   }
 
-  // Priority 2: explicit perServing
+  // Priority 2: explicit perServing (block/flat/flag)
   if (hasPerServingBlock || hasPerServingFlat || hasServingFlag) {
     cServ = toNum(perServing.calories ?? d?.caloriesPerServing ?? (hasServingFlag ? d?.calories : undefined));
     pServ = toNum(perServing.protein ?? d?.proteinPerServing ?? (hasServingFlag ? d?.protein : undefined));
@@ -90,10 +106,9 @@ function fromFirestoreDoc(code: string, d: any): FoodDTO {
     fServ = toNum(perServing.fat ?? d?.fatPerServing ?? (hasServingFlag ? d?.fat : undefined));
   }
 
-  // Priority 3: legacy ambiguous (base fields + parseable serving grams)
+  // Priority 3: legacy ambiguous (flat base + parseable grams) => treat base as per-serving
   if (!hasPer100Block && !hasPer100Flat && !hasPer100Flag && !hasPerServingBlock && !hasPerServingFlat && !hasServingFlag) {
     if (hasBase && g && g > 0) {
-      // Interpret base as per-serving; derive per-100g
       cServ = toNum(d?.calories);
       pServ = toNum(d?.protein);
       chServ = toNum(d?.carbs);
@@ -105,7 +120,7 @@ function fromFirestoreDoc(code: string, d: any): FoodDTO {
       ch100 = +(toNum(d?.carbs) * scale).toFixed(2);
       f100 = +(toNum(d?.fat) * scale).toFixed(2);
     } else if (hasBase) {
-      // Treat base as per-100g (no serving grams available)
+      // Base with no serving grams => assume per-100g legacy
       c100 = toNum(d?.calories);
       p100 = toNum(d?.protein);
       ch100 = toNum(d?.carbs);
@@ -113,7 +128,7 @@ function fromFirestoreDoc(code: string, d: any): FoodDTO {
     }
   }
 
-  // If we have per-serving and grams but no per100 yet, derive it now
+  // If we have per-serving & grams but no per100 yet, derive it
   if ((cServ != null || pServ != null || chServ != null || fServ != null) && g && g > 0) {
     if (c100 === 0 && p100 === 0 && ch100 === 0 && f100 === 0) {
       c100 = +((toNum(cServ) * 100) / g).toFixed(2);
@@ -123,8 +138,7 @@ function fromFirestoreDoc(code: string, d: any): FoodDTO {
     }
   }
 
-  // Build DTO
-  const dto: FoodDTO = {
+  return {
     id: code,
     code,
     name,
@@ -140,8 +154,6 @@ function fromFirestoreDoc(code: string, d: any): FoodDTO {
     carbsPerServing: chServ ?? null,
     fatPerServing: fServ ?? null,
   };
-
-  return dto;
 }
 
 /**
@@ -156,33 +168,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const code = digits(raw);
     if (!code) return res.status(400).json({ foods: [], normalized: "" });
 
-    const session = await getServerSession(req, res, authOptions);
-    const email = String(session?.user?.email || "").toLowerCase();
-
-    // 1) user override
-    if (email) {
-      const us = await firestore
-        .collection("user_barcode_foods")
-        .doc(email)
-        .collection("foods")
-        .doc(code)
-        .get();
-      if (us.exists) {
-        const d = us.data() || {};
-        const dto = fromFirestoreDoc(code, d);
-        return res.status(200).json({ normalized: code, foods: [dto] });
-      }
-    }
-
-    // 2) global
-    const gs = await firestore.collection("barcode_foods").doc(code).get();
-    if (gs.exists) {
-      const d = gs.data() || {};
+    // GLOBAL ONLY
+    const snap = await firestore.collection("barcode_foods").doc(code).get();
+    if (snap.exists) {
+      const d = snap.data() || {};
       const dto = fromFirestoreDoc(code, d);
       return res.status(200).json({ normalized: code, foods: [dto] });
     }
 
-    // Not found
     return res.status(200).json({ foods: [], normalized: code });
   } catch (e: any) {
     console.error("[foods/lookup-barcode] error:", e?.message || e);
