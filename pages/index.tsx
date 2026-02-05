@@ -666,11 +666,11 @@ export default function Home() {
             })}`}
             nutritionSummary={roundedNutrition}
             nutritionLogged={Boolean(selectedStatus.nutritionLogged)}
-            workoutSummary={workoutSummaryForCard}        {/* <-- use recurring summary on recurring days */}
+            workoutSummary={workoutSummaryForCard}       
             hasWorkout={Boolean(selectedStatus.hasWorkout)}
-            workoutDone={Boolean(selectedStatus.workoutDone)}  {/* used only for non-recurring row */}
+            workoutDone={Boolean(selectedStatus.workoutDone)}  
             hasRecurringToday={Boolean(selectedDayData.hasRecurringToday)}
-            recurringDone={recurringDoneResolved}         {/* <-- boolean resolved via completions */}
+            recurringDone={recurringDoneResolved}         
             recurringWorkouts={selectedDayData.recurringWorkouts || []}
             optionalWorkouts={selectedDayData.optionalWorkouts || []}
             optionalDone={optionalDone}
