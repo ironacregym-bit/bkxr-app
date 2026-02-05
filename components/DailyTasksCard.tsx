@@ -1,4 +1,3 @@
-// components/DailyTasksCard.tsx
 import React from "react";
 import Link from "next/link";
 
@@ -189,6 +188,20 @@ export default function DailyTasksCard({
     return base + extra;
   })();
 
+  // ---------- NEW: resolve "done" from either the boolean or the summary presence ----------
+  const hasWorkoutSummary =
+    typeof workoutSummary?.calories === "number" ||
+    typeof workoutSummary?.duration === "number" ||
+    (workoutSummary?.weightUsed && workoutSummary.weightUsed.length > 0);
+
+  const hasOptionalSummary =
+    typeof optionalSummary?.calories === "number" ||
+    typeof optionalSummary?.duration === "number" ||
+    (optionalSummary?.weightUsed && optionalSummary.weightUsed.length > 0);
+
+  const recurringDoneResolved = Boolean(recurringDone || hasWorkoutSummary);
+  const optionalDoneResolved  = Boolean(optionalDone  || hasOptionalSummary);
+
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ fontWeight: 800, fontSize: "1.15rem", marginBottom: 12 }}>
@@ -213,7 +226,7 @@ export default function DailyTasksCard({
       {/* Recurring Workout (MANDATORY) */}
       {hasRecurringToday && firstRecurring && (
         <RowWrapper href={recurringHref} ariaLabel="Open recurring workout (mandatory)">
-          <div style={rowStyle(Boolean(recurringDone), "#5b7c99")} aria-label="Recurring workout (mandatory)" aria-live="polite">
+          <div style={rowStyle(recurringDoneResolved, "#5b7c99")} aria-label="Recurring workout (mandatory)" aria-live="polite">
             <span style={iconWrap}>
               <i className="fas fa-dumbbell" style={{ color: "#5b7c99" }} />
               <span>{recurringWorkoutLabel}</span>
@@ -234,7 +247,7 @@ export default function DailyTasksCard({
               </span>
             </span>
             <span style={valueStyle}>
-              {recurringDone
+              {recurringDoneResolved
                 ? `${workoutSummary?.calories || 0} kcal${
                     workoutSummary?.duration ? ` · ${Math.round(workoutSummary.duration)} min` : ""
                   }${workoutSummary?.weightUsed ? ` · ${workoutSummary.weightUsed}` : ""}`
@@ -274,7 +287,7 @@ export default function DailyTasksCard({
       {hasRecurringToday && firstOptional && (
         <RowWrapper href={optionalHref} ariaLabel="Open optional BXKR workout">
           <div
-            style={rowStyle(Boolean(optionalDone), "#7a8793")}
+            style={rowStyle(optionalDoneResolved, "#7a8793")}
             aria-label="Optional BXKR workout"
             aria-live="polite"
             title="Optional session — does not affect your daily task count"
@@ -297,7 +310,7 @@ export default function DailyTasksCard({
               </span>
             </span>
             <span style={valueStyle}>
-              {optionalDone
+              {optionalDoneResolved
                 ? `${optionalSummary?.calories || 0} kcal${
                     optionalSummary?.duration ? ` · ${Math.round(optionalSummary.duration)} min` : ""
                   }${optionalSummary?.weightUsed ? ` · ${optionalSummary.weightUsed}` : ""}`
