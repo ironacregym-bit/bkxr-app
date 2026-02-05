@@ -5,50 +5,35 @@ import { authOptions } from "../auth/[...nextauth]";
 import firestore from "../../../lib/firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
 
-/** Normalise digits only */
+/** Digits only */
 function digits(s: string) {
   return String(s || "").replace(/\D/g, "");
 }
 
-/** EAN/UPC checksum validators */
+/** EAN/UPC checksum validators (GTIN-8/12/13/14) */
 function isValidEAN13(d: string) {
   if (d.length !== 13) return false;
-  const sum = d
-    .slice(0, 12)
-    .split("")
-    .reduce((acc, ch, i) => acc + Number(ch) * (i % 2 === 0 ? 1 : 3), 0);
+  const sum = d.slice(0, 12).split("").reduce((acc, ch, i) => acc + Number(ch) * (i % 2 === 0 ? 1 : 3), 0);
   const check = (10 - (sum % 10)) % 10;
   return check === Number(d[12]);
 }
 function isValidEAN8(d: string) {
   if (d.length !== 8) return false;
-  const sum = d
-    .slice(0, 7)
-    .split("")
-    .reduce((acc, ch, i) => acc + Number(ch) * (i % 2 === 0 ? 3 : 1), 0);
+  const sum = d.slice(0, 7).split("").reduce((acc, ch, i) => acc + Number(ch) * (i % 2 === 0 ? 3 : 1), 0);
   const check = (10 - (sum % 10)) % 10;
   return check === Number(d[7]);
 }
 function isValidUPCA(d: string) {
   if (d.length !== 12) return false;
-  const odds = d
-    .slice(0, 11)
-    .split("")
-    .reduce((acc, ch, i) => acc + (i % 2 === 0 ? Number(ch) : 0), 0);
-  const evens = d
-    .slice(0, 11)
-    .split("")
-    .reduce((acc, ch, i) => acc + (i % 2 === 1 ? Number(ch) : 0), 0);
+  const odds = d.slice(0, 11).split("").reduce((acc, ch, i) => acc + (i % 2 === 0 ? Number(ch) : 0), 0);
+  const evens = d.slice(0, 11).split("").reduce((acc, ch, i) => acc + (i % 2 === 1 ? Number(ch) : 0), 0);
   const sum = odds * 3 + evens;
   const check = (10 - (sum % 10)) % 10;
   return check === Number(d[11]);
 }
 function isValidEAN14(d: string) {
   if (d.length !== 14) return false;
-  const sum = d
-    .slice(0, 13)
-    .split("")
-    .reduce((acc, ch, i) => acc + Number(ch) * (i % 2 === 0 ? 3 : 1), 0);
+  const sum = d.slice(0, 13).split("").reduce((acc, ch, i) => acc + Number(ch) * (i % 2 === 0 ? 3 : 1), 0);
   const check = (10 - (sum % 10)) % 10;
   return check === Number(d[13]);
 }
@@ -61,16 +46,63 @@ function validateAndNormalise(raw: string) {
   return null;
 }
 
-/**
- * POST /api/foods/upsert-barcode
- * Body:
- *   { code, name, brand?, image?, calories, protein, carbs, fat, servingSize?, scope?: "global"|"user" }
- * Rules:
- *   - admin/gym can write scope="global" -> collection("barcode_foods").doc(code)
- *   - others write to user scope -> collection("user_barcode_foods/{email}/foods/{code}")
- * Response:
- *   { ok: true, code, scope, food: { id, code, name, brand, image, calories, protein, carbs, fat, servingSize } }
- */
+function toNum(n: any): number {
+  const v = Number(n);
+  return Number.isFinite(v) ? v : 0;
+}
+
+/** Tolerant grams parser */
+function parseServingGrams(servingSize?: string | null): number | null {
+  if (servingSize == null) return null;
+  const raw = String(servingSize).trim();
+  if (!raw) return null;
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  const m1 = raw.match(/(\d+(?:\.\d+)?)\s*g\b/i);
+  if (m1) {
+    const n = Number(m1[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  const m2 = raw.match(/\((\d+(?:\.\d+)?)\s*g\)/i);
+  if (m2) {
+    const n = Number(m2[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  return null;
+}
+
+type FoodDTO = {
+  id: string;
+  code: string;
+  name: string;
+  brand: string;
+  image: string | null;
+  calories: number; // per-100g baseline
+  protein: number;
+  carbs: number;
+  fat: number;
+  servingSize?: string | null;
+  caloriesPerServing?: number | null;
+  proteinPerServing?: number | null;
+  carbsPerServing?: number | null;
+  fatPerServing?: number | null;
+};
+
+type Incoming = {
+  code: string;
+  name: string;
+  brand?: string | null;
+  image?: string | null;
+  servingSize?: string | null;
+  // ambiguous: treat as per-serving iff serving grams present, else per-100g
+  calories?: number | null;
+  protein?: number | null;
+  carbs?: number | null;
+  fat?: number | null;
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -81,114 +113,102 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const session = await getServerSession(req, res, authOptions);
     if (!session?.user?.email) return res.status(401).json({ error: "Unauthorized" });
 
-    const role = (session.user as any)?.role || "user";
-    const email = String(session.user.email).toLowerCase();
+    const email = String(session.user.email || "").toLowerCase();
 
-    const {
-      code,
-      name,
-      brand = "",
-      image = null,
-      calories = 0,
-      protein = 0,
-      carbs = 0,
-      fat = 0,
-      servingSize = null,
-      scope = "user",
-    } = req.body || {};
+    const body = (req.body || {}) as Incoming;
+    if (!body.code || !body.name) return res.status(400).json({ error: "code and name are required" });
 
-    if (!code || !name) return res.status(400).json({ error: "code and name are required" });
-
-    const norm = validateAndNormalise(code);
-    if (!norm) return res.status(400).json({ error: "Invalid barcode or checksum failed" });
+    const code = validateAndNormalise(body.code);
+    if (!code) return res.status(400).json({ error: "Invalid barcode or checksum failed" });
 
     const now = Timestamp.now();
-    const record = {
-      name: String(name).trim(),
-      brand: String(brand || "").trim(),
-      image: image || null,
-      calories: Number(calories) || 0,
-      protein: Number(protein) || 0,
-      carbs: Number(carbs) || 0,
-      fat: Number(fat) || 0,
-      servingSize: servingSize ? String(servingSize) : null,
-      updated_at: now,
-    };
+    const servingSize = body.servingSize ? String(body.servingSize) : null;
+    const g = parseServingGrams(servingSize);
 
-    const allowGlobal = role === "admin" || role === "gym";
+    // Interpret incoming numbers
+    const aC = toNum(body.calories);
+    const aP = toNum(body.protein);
+    const aCh = toNum(body.carbs);
+    const aF = toNum(body.fat);
 
-    if (scope === "global" && allowGlobal) {
-      const ref = firestore.collection("barcode_foods").doc(norm);
-      const snap = await ref.get();
-      await ref.set(
-        {
-          ...record,
-          source: snap.exists ? snap.get("source") || "admin" : "admin",
-          created_at: snap.exists ? snap.get("created_at") || now : now,
-        },
-        { merge: true }
-      );
+    let c100 = 0, p100 = 0, ch100 = 0, f100 = 0;
+    let cServ: number | null = null, pServ: number | null = null, chServ: number | null = null, fServ: number | null = null;
 
-      return res.status(200).json({
-        ok: true,
-        code: norm,
-        scope: "global",
-        food: {
-          id: norm,
-          code: norm,
-          name: record.name,
-          brand: record.brand,
-          image: record.image,
-          calories: record.calories,
-          protein: record.protein,
-          carbs: record.carbs,
-          fat: record.fat,
-          servingSize: record.servingSize || "",
-          caloriesPerServing: null,
-          proteinPerServing: null,
-          carbsPerServing: null,
-          fatPerServing: null,
-        },
-      });
+    if (g && g > 0) {
+      // Treat incoming as per-serving if grams are provided
+      cServ = aC;
+      pServ = aP;
+      chServ = aCh;
+      fServ = aF;
+
+      c100 = +((aC * 100) / g).toFixed(2);
+      p100 = +((aP * 100) / g).toFixed(2);
+      ch100 = +((aCh * 100) / g).toFixed(2);
+      f100 = +((aF * 100) / g).toFixed(2);
+    } else {
+      // No grams => treat incoming as per-100g baseline
+      c100 = aC;
+      p100 = aP;
+      ch100 = aCh;
+      f100 = aF;
+
+      // If grams arrive later (edits), perServing can be derived then
+      cServ = null; pServ = null; chServ = null; fServ = null;
     }
 
-    // user scoped
-    const ref = firestore
-      .collection("user_barcode_foods")
-      .doc(email)
-      .collection("foods")
-      .doc(norm);
+    const ref = firestore.collection("barcode_foods").doc(code);
     const snap = await ref.get();
+
     await ref.set(
       {
-        ...record,
-        source: "user",
+        name: String(body.name).trim(),
+        brand: String(body.brand || "").trim(),
+        image: body.image ? String(body.image) : null,
+        servingSize: servingSize,
+
+        // Explicit blocks (clarity & future-proof)
+        per100: { calories: c100, protein: p100, carbs: ch100, fat: f100 },
+        ...(cServ != null || pServ != null || chServ != null || fServ != null
+          ? { perServing: { calories: cServ ?? 0, protein: pServ ?? 0, carbs: chServ ?? 0, fat: fServ ?? 0 } }
+          : { perServing: null }),
+
+        // Flat fields for back-compat (baseline = per-100g)
+        calories: c100,
+        protein: p100,
+        carbs: ch100,
+        fat: f100,
+        caloriesPerServing: cServ ?? null,
+        proteinPerServing: pServ ?? null,
+        carbsPerServing: chServ ?? null,
+        fatPerServing: fServ ?? null,
+
+        basis: "per100", // baseline choice for flat fields
+        source: snap.exists ? snap.get("source") || "user" : "user",
         created_at: snap.exists ? snap.get("created_at") || now : now,
+        created_by: snap.exists ? snap.get("created_by") || email : email,
+        updated_at: now,
       },
       { merge: true }
     );
 
-    return res.status(200).json({
-      ok: true,
-      code: norm,
-      scope: "user",
-      food: {
-        id: norm,
-        code: norm,
-        name: record.name,
-        brand: record.brand,
-        image: record.image,
-        calories: record.calories,
-        protein: record.protein,
-        carbs: record.carbs,
-        fat: record.fat,
-        servingSize: record.servingSize || "",
-        caloriesPerServing: null,
-        proteinPerServing: null,
-        carbsPerServing: null,
-        fatPerServing: null,
-      },
-    });
+    const dto: FoodDTO = {
+      id: code,
+      code,
+      name: String(body.name).trim(),
+      brand: String(body.brand || "").trim(),
+      image: body.image ? String(body.image) : null,
+      calories: c100,
+      protein: p100,
+      carbs: ch100,
+      fat: f100,
+      servingSize: servingSize || "",
+      caloriesPerServing: cServ ?? null,
+      proteinPerServing: pServ ?? null,
+      carbsPerServing: chServ ?? null,
+      fatPerServing: fServ ?? null,
+    };
+
+    return res.status(200).json({ ok: true, code, scope: "global", food: dto });
   } catch (e: any) {
     console.error("[foods/upsert-barcode] error:", e?.message || e);
     return res.status(500).json({ error: "Failed to upsert barcode food" });
