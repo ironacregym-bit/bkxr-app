@@ -1,6 +1,10 @@
 import React from "react";
 import Link from "next/link";
 import dayjs from "dayjs";
+import isBetween from "dayjs/plugin/isBetween";
+
+// Extend dayjs
+dayjs.extend(isBetween);
 
 const ACCENT = "#FF8A2A";
 
