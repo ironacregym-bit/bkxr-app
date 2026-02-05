@@ -14,7 +14,20 @@ const ACCENT = "#FF8A2A";
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 type DayName = typeof DAYS[number];
 
+/** ---------- Utilities ---------- */
+const mkUid = () => {
+  // Prefer crypto if available; fallback to Math.random
+  try {
+    // @ts-ignore
+    return crypto?.randomUUID ? crypto.randomUUID() : `uid_${Math.random().toString(36).slice(2)}`;
+  } catch {
+    return `uid_${Math.random().toString(36).slice(2)}`;
+  }
+};
+
+/** ---------- Types (add uid for stable keys) ---------- */
 type SingleItem = {
+  uid: string; // stable key
   type: "Single";
   order: number;
   exercise_id: string;
@@ -26,12 +39,14 @@ type SingleItem = {
 };
 
 type SupersetSubItem = {
+  uid: string; // stable key
   exercise_id: string;
   reps?: string;
   weight_kg?: number | null;
 };
 
 type SupersetItem = {
+  uid: string; // stable key
   type: "Superset";
   order: number;
   name?: string | null;
@@ -83,6 +98,7 @@ export default function GymCreateWorkoutPage() {
     assigned_to: ownerEmail || "",
   });
 
+  // Initialise with stable uids
   const [warmup, setWarmup] = useState<GymRound | null>({ name: "Warm Up", order: 1, items: [] });
   const [main, setMain] = useState<GymRound>({ name: "Main Set", order: 2, items: [] });
   const [finisher, setFinisher] = useState<GymRound | null>(null);
@@ -186,7 +202,7 @@ export default function GymCreateWorkoutPage() {
 
   /* ---------- Helpers for Single Items ---------- */
   function addSingle(round: "warmup" | "main" | "finisher") {
-    const newItem: SingleItem = { type: "Single", order: 1, exercise_id: "", reps: "", sets: 3 };
+    const newItem: SingleItem = { uid: mkUid(), type: "Single", order: 1, exercise_id: "", reps: "", sets: 3 };
     if (round === "warmup")
       setWarmup((prev) => (prev ? { ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) } : prev));
     if (round === "main") setMain((prev) => ({ ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) }));
@@ -221,15 +237,17 @@ export default function GymCreateWorkoutPage() {
   }
 
   /* ---------- Helpers for Supersets (unlimited items + sets at superset level) ---------- */
+  function newSupersetSub(): SupersetSubItem {
+    return { uid: mkUid(), exercise_id: "", reps: "" };
+  }
+
   function addSuperset(round: "warmup" | "main" | "finisher") {
     const newItem: SupersetItem = {
+      uid: mkUid(),
       type: "Superset",
       order: 1,
       name: "",
-      items: [
-        { exercise_id: "", reps: "" },
-        { exercise_id: "", reps: "" },
-      ],
+      items: [newSupersetSub(), newSupersetSub()],
       sets: 3,
       rest_s: null,
     };
@@ -316,7 +334,7 @@ export default function GymCreateWorkoutPage() {
             items: r.items.map((it, i) => {
               if (i !== idx) return it;
               const ss = it as SupersetItem;
-              const next = [...ss.items, { exercise_id: "", reps: "" } as SupersetSubItem];
+              const next = [...ss.items, newSupersetSub()];
               return { ...ss, items: next };
             }),
           }
@@ -377,6 +395,7 @@ export default function GymCreateWorkoutPage() {
         }
       }
 
+      // We keep uid fields; your API can simply ignore them or strip server-side
       const body = {
         visibility: meta.visibility,
         owner_email: meta.visibility === "private" ? ownerEmail : undefined,
@@ -506,7 +525,7 @@ export default function GymCreateWorkoutPage() {
         <div className="col-12 col-md-8">
           {Array.isArray(it.items) && it.items.length > 0 ? (
             it.items.map((s, sidx) => (
-              <div key={`${idx}-${sidx}`} className="row g-2 align-items-end mb-2">
+              <div key={s.uid} className="row g-2 align-items-end mb-2">
                 <div className="col-12 col-md-5">
                   <ExerciseSelect
                     label="Exercise"
@@ -698,7 +717,7 @@ export default function GymCreateWorkoutPage() {
           </div>
           {warmup?.items.length ? (
             warmup.items.map((it, idx) => (
-              <div key={`wu-${idx}`} className="row g-2 mb-2">
+              <div key={it.uid} className="row g-2 mb-2">
                 {it.type === "Single" ? (
                   <>
                     <div className="col-12 col-md-4">
@@ -784,7 +803,7 @@ export default function GymCreateWorkoutPage() {
           </div>
           {main.items.length ? (
             main.items.map((it, idx) => (
-              <div key={`main-${idx}`} className="row g-2 mb-2">
+              <div key={it.uid} className="row g-2 mb-2">
                 {it.type === "Single" ? (
                   <>
                     <div className="col-12 col-md-4">
@@ -867,7 +886,7 @@ export default function GymCreateWorkoutPage() {
             <div className="small text-dim">Optional finisher.</div>
           ) : (
             finisher.items.map((it, idx) => (
-              <div key={`fin-${idx}`} className="row g-2 mb-2">
+              <div key={it.uid} className="row g-2 mb-2">
                 {it.type === "Single" ? (
                   <>
                     <div className="col-12 col-md-4">
