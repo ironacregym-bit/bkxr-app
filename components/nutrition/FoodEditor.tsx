@@ -40,6 +40,7 @@ export default function FoodEditor({
   isFavourite,
   onToggleFavourite,
   onChangeFood,
+  onCancel, // NEW: allow closing the editor
 }: {
   meal: string;
   food: Food;
@@ -50,6 +51,7 @@ export default function FoodEditor({
   isFavourite: boolean;
   onToggleFavourite: () => void;
   onChangeFood: (patch: Partial<Food>) => void;
+  onCancel?: () => void;
 }) {
   const manualMode = useMemo(() => food.id?.startsWith("manual-") || (!food.code && !food.name), [food]);
 
@@ -57,10 +59,37 @@ export default function FoodEditor({
     try { e.currentTarget.select(); } catch {}
   };
 
-  // Manual mode: just Name (optional) + macros
+  // Manual mode: Name (optional) + macros (editable)
   if (manualMode) {
     return (
-      <div className="futuristic-card p-3">
+      <div className="futuristic-card p-3" style={{ scrollMarginTop: 12 }}>
+        {/* Header row with cancel + favourite */}
+        <div className="d-flex justify-content-between align-items-center mb-2">
+          <div className="fw-semibold">Add item</div>
+          <div className="d-flex align-items-center" style={{ gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-light"
+              onClick={onToggleFavourite}
+              title={isFavourite ? "Unfavourite" : "Favourite"}
+              style={{ borderRadius: 999 }}
+            >
+              <i className={isFavourite ? "fas fa-star text-warning" : "far fa-star"} />
+            </button>
+            {onCancel && (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-light"
+                onClick={onCancel}
+                aria-label="Cancel"
+                style={{ borderRadius: 999 }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="mb-2">
           <label className="form-label small text-dim mb-1">Name (optional)</label>
           <input
@@ -134,26 +163,52 @@ export default function FoodEditor({
           <button
             className="btn btn-bxkr w-100"
             onClick={() => addEntry(meal, food)}
-            disabled={Number(food.calories) <= 0 && Number(food.protein) <= 0 && Number(food.carbs) <= 0 && Number(food.fat) <= 0}
+            disabled={
+              Number(food.calories) <= 0 &&
+              Number(food.protein) <= 0 &&
+              Number(food.carbs) <= 0 &&
+              Number(food.fat) <= 0
+            }
           >
             Add to {meal}
           </button>
-          <button
-            type="button"
-            className="btn btn-bxkr-outline"
-            onClick={onToggleFavourite}
-            title={isFavourite ? "Unfavourite" : "Favourite"}
-          >
-            <i className={isFavourite ? "fas fa-star text-warning" : "far fa-star"} />
-          </button>
+          {/* Favourite already at top; keep a second icon for convenience if you want */}
         </div>
       </div>
     );
   }
 
-  // Non-manual (searched/scanned) — keep your existing compact viewer (no grams UI shown here)
+  // Non-manual (searched/scanned) — compact viewer (no macro inputs here)
   return (
-    <div className="futuristic-card p-3">
+    <div className="futuristic-card p-3" style={{ scrollMarginTop: 12 }}>
+      <div className="d-flex justify-content-between align-items-center mb-2">
+        <div className="fw-semibold" style={{ lineHeight: 1.1 }}>
+          {food.name} {/* brand intentionally hidden per your spec */}
+        </div>
+        <div className="d-flex align-items-center" style={{ gap: 8 }}>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-light"
+            onClick={onToggleFavourite}
+            title={isFavourite ? "Unfavourite" : "Favourite"}
+            style={{ borderRadius: 999 }}
+          >
+            <i className={isFavourite ? "fas fa-star text-warning" : "far fa-star"} />
+          </button>
+          {onCancel && (
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-light"
+              onClick={onCancel}
+              aria-label="Cancel"
+              style={{ borderRadius: 999 }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="d-flex justify-content-between small mb-2">
         <span style={{ color: COLORS.calories }}>{round2(scaledSelected?.calories)} kcal</span>
         <span style={{ color: COLORS.protein }}>{round2(scaledSelected?.protein)}p</span>
@@ -161,25 +216,17 @@ export default function FoodEditor({
         <span style={{ color: COLORS.fat }}>{round2(scaledSelected?.fat)}f</span>
       </div>
 
-      <div className="d-flex gap-2 mb-2">
+      <div className="d-flex gap-2 mb-1">
         <button
           className="btn btn-bxkr w-100"
           onClick={() => addEntry(meal, (scaledSelected || food) as Food)}
         >
           Add to {meal}
         </button>
-        <button
-          type="button"
-          className="btn btn-bxkr-outline"
-          onClick={onToggleFavourite}
-          title={isFavourite ? "Unfavourite" : "Favourite"}
-        >
-          <i className={isFavourite ? "fas fa-star text-warning" : "far fa-star"} />
-        </button>
       </div>
 
-      <div className="fw-bold">
-        {food.name} — {round2(food.calories)} kcal
+      <div className="small text-dim">
+        Uses {usingServing === "serving" ? "per serving" : "per 100g"} values (auto‑selected).
       </div>
     </div>
   );
