@@ -6,6 +6,26 @@ import firestore from "../../../../lib/firestoreClient";
 
 type Action = "paid" | "rejected";
 
+function origin() {
+  return process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+}
+async function emitEmail(event: string, email: string, context: Record<string, any> = {}, force = false) {
+  const BASE = origin();
+  if (!BASE || !email) return;
+  await fetch(`${BASE}/api/notify/emit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event, email, context, force }),
+  }).catch(() => null);
+}
+async function notifyAdmins(event: string, context: Record<string, any> = {}) {
+  const list = (process.env.NOTIFY_ADMIN_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  await Promise.all(list.map((email) => emitEmail(event, email, context)));
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") { res.setHeader("Allow", "POST"); return res.status(405).json({ error: "Method not allowed" }); }
 
@@ -27,6 +47,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const payout = payoutSnap.data() || {};
     const entries: Array<{ referral_doc_id: string; invoice_id: string; amount: number }> = Array.isArray(payout.entries) ? payout.entries : [];
+    const referrerEmail = String(payout.referrer_email || "");
+    const amountGBP = Number(payout.amount_gbp || 0);
 
     await firestore.runTransaction(async (tx) => {
       // Update referral docs' commission_entries according to action
@@ -40,17 +62,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const updated = arr.map((e) => {
           const match = group.items.find((m) => m.invoice_id === e?.invoice_id);
           if (!match) return e;
+          if (String(e?.payout_id || "") !== payoutRef.id) return e;
 
-          // Only change entries that are still 'requested' for this payout
-          if (String(e?.payout_id || "") !== payoutRef.id || e?.status !== "requested") return e;
-
-          if (action === "paid") {
+          if (action === "paid" && e?.status === "requested") {
             return { ...e, status: "paid", paid_at: new Date().toISOString() };
-          } else {
-            // rejected -> revert to unpaid
-            const { payout_id: _omit, requested_at: _omit2, transfer_id: _omit3, ...rest } = e || {};
-            return { ...rest, status: "unpaid" };
           }
+          if (action === "rejected" && (e?.status === "requested" || e?.status === "paid")) {
+            const { payout_id: _omit, requested_at: _omit2, paid_at: _omit3, transfer_id: _omit4, ...rest } = e || {};
+            return { ...rest, status: "unpaid", reverted_at: new Date().toISOString() };
+          }
+          return e;
         });
 
         tx.set(docRef, { commission_entries: updated }, { merge: true });
@@ -63,6 +84,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       tx.set(payoutRef, base, { merge: true });
     });
+
+    // Notify referrer + admins
+    if (referrerEmail) {
+      await emitEmail(
+        action === "paid" ? "referral_payout_marked_paid" : "referral_payout_rejected",
+        referrerEmail,
+        { payout_id, amount_gbp: amountGBP }
+      );
+    }
+    await notifyAdmins(
+      action === "paid" ? "admin_referral_payout_marked_paid" : "admin_referral_payout_rejected",
+      { payout_id, referrer_email: referrerEmail, amount_gbp: amountGBP }
+    );
 
     return res.status(200).json({ ok: true });
   } catch (e: any) {
