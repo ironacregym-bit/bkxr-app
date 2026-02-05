@@ -21,6 +21,26 @@ function buffer(readable: any): Promise<Buffer> {
 }
 
 // ---- UTILITIES ----
+function origin() {
+  return process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+}
+async function emitEmail(event: string, email: string, context: Record<string, any> = {}, force = false) {
+  const BASE = origin();
+  if (!BASE || !email) return;
+  await fetch(`${BASE}/api/notify/emit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event, email, context, force }),
+  }).catch(() => null);
+}
+async function notifyAdmins(event: string, context: Record<string, any> = {}) {
+  const list = (process.env.NOTIFY_ADMIN_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  await Promise.all(list.map((email) => emitEmail(event, email, context)));
+}
+
 async function getCustomerEmail(customerId: string): Promise<string | undefined> {
   try {
     const c = await stripe.customers.retrieve(customerId);
@@ -39,7 +59,8 @@ function isPremiumFromStatus(status: string): boolean {
 }
 
 async function emitUpgradeCta(email: string) {
-  const BASE = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+  // Keep your existing CTA emitter; complements explicit emails below
+  const BASE = origin();
   if (!BASE) return;
   await fetch(`${BASE}/api/notify/emit`, {
     method: "POST",
@@ -78,7 +99,6 @@ function hasTrialExpired(trialEndIso: string | null): boolean {
   return Date.now() >= t;
 }
 
-// Small helper
 function groupBy<T, K extends string | number>(arr: T[], keyFn: (x: T) => K) {
   const map = new Map<K, T[]>();
   for (const item of arr) {
@@ -142,7 +162,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           billing_plan: "online_monthly",
         };
 
-        // If not premium (post-trial), mark membership_status = expired
+        // If not premium (post-trial), mark membership_status = expired and email the user
         if (!premium && hasTrialExpired(trialEndIso)) {
           baseUpdate.membership_status = "expired";
         }
@@ -150,7 +170,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await firestore.collection("users").doc(email).set(baseUpdate, { merge: true });
 
         if (!premium) {
+          // Gentle CTA (existing)
           await emitUpgradeCta(email);
+          // Explicit email about expiry (optional; disable if too chatty)
+          if (hasTrialExpired(trialEndIso)) {
+            await emitEmail("trial_expired", email, {
+              trial_end: trialEndIso,
+            });
+          }
         }
         break;
       }
@@ -162,7 +189,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const subscriptionId = (invoice.subscription as string) || undefined;
         if (!email) break;
 
-        // Payment success => premium on
         await firestore.collection("users").doc(email).set(
           {
             stripe_customer_id: customerId,
@@ -175,7 +201,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           { merge: true }
         );
 
-        // Referral commission processing (duplicate-invoice guard)
+        // Commission accrual (unchanged)
         try {
           const refSnap = await firestore
             .collection("referrals")
@@ -262,11 +288,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           last_billing_event_at: new Date().toISOString(),
         };
 
-        // If user had a trial_end and it's past, mark expired
+        // If user had a trial_end and it's past, mark expired and email
         const userSnap = await firestore.collection("users").doc(email).get();
         const trialEnd = (userSnap.data()?.trial_end as string) || null;
         if (hasTrialExpired(trialEnd)) {
           update.membership_status = "expired";
+          await emitEmail("trial_expired", email, { trial_end: trialEnd });
         }
 
         await firestore.collection("users").doc(email).set(update, { merge: true });
@@ -291,19 +318,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
 
         await emitUpgradeCta(email);
+        await emitEmail("trial_expired", email, { reason: "subscription_canceled" });
         break;
       }
 
       /* =========================
        *  REFERRAL PAYOUTS via CONNECT
-       *  - We created Transfers in /api/referrals/payout/request-connect
-       *  - Handle transfer.created/failed/reversed here
        * ========================= */
       case "transfer.created": {
-        const transfer = event.data.object as Stripe.Transfer; // from platform -> connected account
+        const transfer = event.data.object as Stripe.Transfer; // platform -> connected account
         const transferId = transfer.id;
 
-        // Match the payout by transfer_id
         const paySnap = await firestore
           .collection("referral_payouts")
           .where("transfer_id", "==", transferId)
@@ -318,9 +343,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const entries: Array<{ referral_doc_id: string; invoice_id: string; amount: number }> =
           Array.isArray(payout.entries) ? payout.entries : [];
 
-        // Mark payout "paid" and flip included entries "requested" -> "paid"
         await firestore.runTransaction(async (tx) => {
-          // update referral entries
           for (const group of groupBy(entries, (e) => e.referral_doc_id)) {
             const docRef = firestore.collection("referrals").doc(group.key);
             const snap = await tx.get(docRef);
@@ -331,7 +354,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const updated = arr.map((e) => {
               const match = group.items.find((m) => m.invoice_id === e?.invoice_id);
               if (!match) return e;
-              // Only entries for this payout that are still 'requested'
               if (String(e?.payout_id || "") !== payoutRef.id || e?.status !== "requested") return e;
               return { ...e, status: "paid", paid_at: new Date().toISOString() };
             });
@@ -339,12 +361,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tx.set(docRef, { commission_entries: updated }, { merge: true });
           }
 
-          // update payout
           tx.set(
             payoutRef,
             { status: "paid", paid_at: new Date().toISOString(), updated_at: new Date().toISOString() },
             { merge: true }
           );
+        });
+
+        // Email referrer and admins
+        if (payout.referrer_email) {
+          await emitEmail("referral_payout_paid", payout.referrer_email as string, {
+            payout_id: payoutRef.id,
+            transfer_id: transferId,
+            amount_gbp: payout.amount_gbp || 0,
+          });
+        }
+        await notifyAdmins("admin_referral_payout_paid", {
+          payout_id: payoutRef.id,
+          transfer_id: transferId,
+          referrer_email: payout.referrer_email || "",
+          amount_gbp: payout.amount_gbp || 0,
         });
 
         break;
@@ -366,7 +402,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const entries: Array<{ referral_doc_id: string; invoice_id: string; amount: number }> =
           Array.isArray(payout.entries) ? payout.entries : [];
 
-        // Mark payout "rejected" and flip entries back to "unpaid"
         await firestore.runTransaction(async (tx) => {
           for (const group of groupBy(entries, (e) => e.referral_doc_id)) {
             const docRef = firestore.collection("referrals").doc(group.key);
@@ -378,7 +413,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const updated = arr.map((e) => {
               const match = group.items.find((m) => m.invoice_id === e?.invoice_id);
               if (!match) return e;
-              // Only revert entries that belong to this payout and are in requested/paid state
               if (String(e?.payout_id || "") !== payoutRef.id) return e;
               if (e?.status === "requested" || e?.status === "paid") {
                 const { payout_id: _a, requested_at: _b, transfer_id: _c, paid_at: _d, ...rest } = e || {};
@@ -395,6 +429,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             { status: "rejected", rejected_at: new Date().toISOString(), updated_at: new Date().toISOString() },
             { merge: true }
           );
+        });
+
+        if (payout.referrer_email) {
+          await emitEmail("referral_payout_failed", payout.referrer_email as string, {
+            payout_id: payoutRef.id,
+            transfer_id: transferId,
+            amount_gbp: payout.amount_gbp || 0,
+          });
+        }
+        await notifyAdmins("admin_referral_payout_failed", {
+          payout_id: payoutRef.id,
+          transfer_id: transferId,
+          referrer_email: payout.referrer_email || "",
+          amount_gbp: payout.amount_gbp || 0,
         });
 
         break;
@@ -416,7 +464,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const entries: Array<{ referral_doc_id: string; invoice_id: string; amount: number }> =
           Array.isArray(payout.entries) ? payout.entries : [];
 
-        // Mark payout "reversed" and revert entries to "unpaid"
         await firestore.runTransaction(async (tx) => {
           for (const group of groupBy(entries, (e) => e.referral_doc_id)) {
             const docRef = firestore.collection("referrals").doc(group.key);
@@ -444,6 +491,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             { status: "reversed", updated_at: new Date().toISOString() },
             { merge: true }
           );
+        });
+
+        if (payout.referrer_email) {
+          await emitEmail("referral_payout_reversed", payout.referrer_email as string, {
+            payout_id: payoutRef.id,
+            transfer_id: transferId,
+            amount_gbp: payout.amount_gbp || 0,
+          });
+        }
+        await notifyAdmins("admin_referral_payout_reversed", {
+          payout_id: payoutRef.id,
+          transfer_id: transferId,
+          referrer_email: payout.referrer_email || "",
+          amount_gbp: payout.amount_gbp || 0,
         });
 
         break;
