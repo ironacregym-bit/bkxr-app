@@ -1,9 +1,18 @@
 import React from "react";
 import Link from "next/link";
+import dayjs from "dayjs";
 
 const ACCENT = "#FF8A2A";
 
 type SimpleWorkoutRef = { id: string; name?: string };
+
+type CompletedWorkout = {
+  workout_id: string;
+  completedAt: string; // ISO string
+  calories?: number;
+  duration?: number;
+  weightUsed?: string;
+};
 
 type Props = {
   dayLabel: string;
@@ -11,11 +20,6 @@ type Props = {
   // Nutrition
   nutritionSummary?: { calories: number; protein: number };
   nutritionLogged: boolean;
-
-  // Mandatory workout
-  workoutSummary?: { calories: number; duration: number; weightUsed?: string };
-  hasWorkout: boolean;
-  workoutDone: boolean;
 
   // Habits
   habitSummary?: { completed: number; total: number };
@@ -25,23 +29,16 @@ type Props = {
   checkinSummary?: { weight: number; bodyFat: number; weightChange?: number; bfChange?: number };
   checkinComplete: boolean;
 
-  // Recurring vs Optional split
-  hasRecurringToday?: boolean;
-  recurringDone?: boolean;
+  // Workouts
   recurringWorkouts?: SimpleWorkoutRef[];
   optionalWorkouts?: SimpleWorkoutRef[];
-
-  // NEW: Optional completion state/summary
-  optionalDone?: boolean;
-  optionalSummary?: { calories: number; duration?: number; weightUsed?: string };
+  completedWorkouts?: CompletedWorkout[];
 
   // Hrefs
   hrefs: {
     nutrition: string;
-    workout: string;   // used only when no recurring
     habit: string;
     checkin: string;
-    freestyle?: string;
     recurring?: string;
     optionalWorkout?: string;
   };
@@ -49,57 +46,37 @@ type Props = {
   // Targets
   userCalorieTarget?: number;
   userProteinTarget?: number;
-
-  // Freestyle
-  freestyleLogged?: boolean;
-  freestyleSummary?: {
-    activity_type?: string | null;
-    duration?: number | null;
-    calories_burned?: number | null;
-    weight_completed_with?: number | null;
-  };
 };
 
 export default function DailyTasksCard({
   dayLabel,
   nutritionSummary,
   nutritionLogged,
-
-  workoutSummary,
-  hasWorkout,
-  workoutDone,
-
   habitSummary,
   habitAllDone,
-
   checkinSummary,
   checkinComplete,
-
-  hasRecurringToday = false,
-  recurringDone = false,
   recurringWorkouts = [],
   optionalWorkouts = [],
-
-  optionalDone = false,
-  optionalSummary,
-
+  completedWorkouts = [],
   hrefs,
-
   userCalorieTarget = 2000,
   userProteinTarget = 150,
-
-  freestyleLogged = false,
-  freestyleSummary
 }: Props) {
   const isFriday = dayLabel.toLowerCase().startsWith("fri");
-  const workoutLocked = hrefs.workout === "#";
-  const habitsLocked = hrefs.habit === "#";
 
-  const firstRecurring = Array.isArray(recurringWorkouts) && recurringWorkouts[0] ? recurringWorkouts[0] : null;
-  const firstOptional = Array.isArray(optionalWorkouts) && optionalWorkouts[0] ? optionalWorkouts[0] : null;
+  // ---------- Utility: check if a workout is completed this week ----------
+  const isCompletedThisWeek = (workoutId: string): CompletedWorkout | undefined => {
+    const startOfWeek = dayjs().startOf("week");
+    const endOfWeek = dayjs().endOf("week");
 
-  const recurringHref = hrefs.recurring ?? (firstRecurring ? `/gymworkout/${encodeURIComponent(firstRecurring.id)}` : "#");
-  const optionalHref = hrefs.optionalWorkout ?? (firstOptional ? `/workout/${encodeURIComponent(firstOptional.id)}` : "#");
+    return completedWorkouts?.find(cw => {
+      return (
+        cw.workout_id === workoutId &&
+        dayjs(cw.completedAt).isBetween(startOfWeek, endOfWeek, null, "[]")
+      );
+    });
+  };
 
   const rowStyle = (done: boolean, accent: string, locked?: boolean): React.CSSProperties => ({
     display: "flex",
@@ -128,80 +105,26 @@ export default function DailyTasksCard({
 
   const valueStyle: React.CSSProperties = { opacity: 0.9, fontWeight: 600 };
 
-  const premiumTag = (accent: string): JSX.Element => (
-    <span
-      style={{
-        marginLeft: 8,
-        padding: "2px 8px",
-        borderRadius: 999,
-        fontSize: "0.7rem",
-        fontWeight: 700,
-        color: "#0a0a0c",
-        background: accent,
-        boxShadow: `0 0 8px ${accent}77`,
-      }}
-    >
-      Premium
-    </span>
-  );
+  const badgeStyle = (bg: string): React.CSSProperties => ({
+    marginLeft: 8,
+    padding: "2px 8px",
+    borderRadius: 999,
+    fontSize: "0.7rem",
+    fontWeight: 600, // tone down font weight to match optional
+    color: "#0a0a0c",
+    background: bg,
+  });
 
-  const RowWrapper: React.FC<{ href: string; locked?: boolean; children: React.ReactNode; ariaLabel?: string }> = ({
+  const RowWrapper: React.FC<{ href: string; locked?: boolean; children: React.ReactNode }> = ({
     href,
     locked,
     children,
-    ariaLabel
   }) => {
     if (locked || href === "#") {
-      return (
-        <div aria-disabled="true" role="button" tabIndex={-1} aria-label={ariaLabel}>
-          {children}
-        </div>
-      );
+      return <div aria-disabled="true">{children}</div>;
     }
-    return (
-      <Link href={href} aria-label={ariaLabel ?? "Open task"}>
-        {children as any}
-      </Link>
-    );
+    return <Link href={href}>{children as any}</Link>;
   };
-
-  const freestyleHref = hrefs.freestyle ?? "/workouts/freestyle";
-
-  const freestyleValue = (() => {
-    if (!freestyleLogged) return "Optional · Not logged";
-    const parts: string[] = [];
-    if (freestyleSummary?.activity_type) parts.push(freestyleSummary.activity_type);
-    if (typeof freestyleSummary?.duration === "number") parts.push(`${freestyleSummary.duration} min`);
-    if (typeof freestyleSummary?.calories_burned === "number") parts.push(`${freestyleSummary.calories_burned} kcal`);
-    return parts.join(" · ") || "Logged";
-  })();
-
-  const optionalWorkoutLabel = (() => {
-    const base = firstOptional?.name?.trim() || "BXKR Workout";
-    const extra = optionalWorkouts.length > 1 ? ` (+${optionalWorkouts.length - 1} more)` : "";
-    return base + extra;
-  })();
-
-  const recurringWorkoutLabel = (() => {
-    const base = firstRecurring?.name?.trim() || "Recurring Workout";
-    const extra = recurringWorkouts.length > 1 ? ` (+${recurringWorkouts.length - 1} more)` : "";
-    return base + extra;
-  })();
-
-  // ---------- NEW: resolve "done" from each task independently ----------
-  const hasWorkoutSummary =
-    typeof workoutSummary?.calories === "number" ||
-    typeof workoutSummary?.duration === "number" ||
-    (workoutSummary?.weightUsed && workoutSummary.weightUsed.length > 0);
-
-  const hasOptionalSummary =
-    typeof optionalSummary?.calories === "number" ||
-    typeof optionalSummary?.duration === "number" ||
-    (optionalSummary?.weightUsed && optionalSummary.weightUsed.length > 0);
-
-  const recurringDoneResolved = Boolean(recurringDone); // independent
-  const mandatoryDoneResolved = Boolean(workoutDone || hasWorkoutSummary); // mandatory only
-  const optionalDoneResolved  = Boolean(optionalDone  || hasOptionalSummary); // optional only
 
   return (
     <div style={{ marginBottom: 20 }}>
@@ -210,8 +133,8 @@ export default function DailyTasksCard({
       </div>
 
       {/* Nutrition */}
-      <RowWrapper href={hrefs.nutrition} ariaLabel="Open nutrition">
-        <div style={rowStyle(nutritionLogged, "#4fa3a5")} aria-live="polite" aria-label="Nutrition">
+      <RowWrapper href={hrefs.nutrition}>
+        <div style={rowStyle(nutritionLogged, "#4fa3a5")}>
           <span style={iconWrap}>
             <i className="fas fa-utensils" style={{ color: "#4fa3a5" }} />
             <span>Nutrition</span>
@@ -224,136 +147,71 @@ export default function DailyTasksCard({
         </div>
       </RowWrapper>
 
-      {/* Recurring Workout (MANDATORY) */}
-      {hasRecurringToday && firstRecurring && (
-        <RowWrapper href={recurringHref} ariaLabel="Open recurring workout (mandatory)">
-          <div style={rowStyle(recurringDoneResolved, "#5b7c99")} aria-label="Recurring workout (mandatory)" aria-live="polite">
-            <span style={iconWrap}>
-              <i className="fas fa-dumbbell" style={{ color: "#5b7c99" }} />
-              <span>{recurringWorkoutLabel}</span>
-              <span
-                className="ms-2"
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: 999,
-                  fontSize: "0.7rem",
-                  fontWeight: 800,
-                  color: "#0a0a0c",
-                  background: ACCENT,
-                  boxShadow: `0 0 8px ${ACCENT}77`,
-                }}
-                title="Counts towards your daily tasks"
-              >
-                Mandatory
-              </span>
-            </span>
-            <span style={valueStyle}>
-              {recurringDoneResolved
-                ? `${workoutSummary?.calories || 0} kcal${
-                    workoutSummary?.duration ? ` · ${Math.round(workoutSummary.duration)} min` : ""
-                  }${workoutSummary?.weightUsed ? ` · ${workoutSummary.weightUsed}` : ""}`
-                : "Pending"}
-            </span>
-          </div>
-        </RowWrapper>
-      )}
-
-      {/* Planned Workout when NO recurring */}
-      {!hasRecurringToday && hasWorkout && (
-        <RowWrapper href={hrefs.workout} locked={workoutLocked} ariaLabel="Open planned workout">
-          <div style={rowStyle(mandatoryDoneResolved, "#5b7c99", workoutLocked)} aria-label="Planned workout" aria-live="polite">
-            <span style={iconWrap}>
-              {workoutLocked ? (
-                <i className="fas fa-lock" style={{ color: "#5b7c99" }} />
-              ) : (
+      {/* Recurring Workouts */}
+      {recurringWorkouts.map(workout => {
+        const completed = isCompletedThisWeek(workout.id);
+        const href = hrefs.recurring ?? "#";
+        return (
+          <RowWrapper key={workout.id} href={href}>
+            <div style={rowStyle(!!completed, "#5b7c99")}>
+              <span style={iconWrap}>
                 <i className="fas fa-dumbbell" style={{ color: "#5b7c99" }} />
-              )}
-              <span>Workout</span>
-              {workoutLocked && premiumTag("#5b7c99")}
-            </span>
-            <span style={valueStyle}>
-              {mandatoryDoneResolved
-                ? `${workoutSummary?.calories || 0} kcal${
-                    workoutSummary?.duration ? ` · ${Math.round(workoutSummary.duration)} min` : ""
-                  }${workoutSummary?.weightUsed ? ` · ${workoutSummary.weightUsed}` : ""}`
-                : workoutLocked
-                ? "Locked"
-                : "Pending"}
-            </span>
-          </div>
-        </RowWrapper>
-      )}
-
-      {/* Optional Workout */}
-      {hasRecurringToday && firstOptional && (
-        <RowWrapper href={optionalHref} ariaLabel="Open optional BXKR workout">
-          <div
-            style={rowStyle(optionalDoneResolved, "#7a8793")}
-            aria-label="Optional BXKR workout"
-            aria-live="polite"
-            title="Optional session — does not affect your daily task count"
-          >
-            <span style={iconWrap}>
-              <i className="fas fa-dumbbell" style={{ color: "#7a8793" }} />
-              <span>{optionalWorkoutLabel}</span>
-              <span
-                className="ms-2"
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: 999,
-                  fontSize: "0.7rem",
-                  fontWeight: 700,
-                  color: "#0a0a0c",
-                  background: "rgba(255,255,255,0.65)",
-                }}
-              >
-                Optional
+                <span>{workout.name || "Recurring Workout"}</span>
+                <span style={badgeStyle(ACCENT)}>Mandatory</span>
               </span>
-            </span>
-            <span style={valueStyle}>
-              {optionalDoneResolved
-                ? `${optionalSummary?.calories || 0} kcal${
-                    optionalSummary?.duration ? ` · ${Math.round(optionalSummary.duration)} min` : ""
-                  }${optionalSummary?.weightUsed ? ` · ${optionalSummary.weightUsed}` : ""}`
-                : "Optional · Pending"}
-            </span>
-          </div>
-        </RowWrapper>
-      )}
+              <span style={valueStyle}>
+                {completed
+                  ? `${completed.calories || 0} kcal${completed.duration ? ` · ${Math.round(completed.duration)} min` : ""}${
+                      completed.weightUsed ? ` · ${completed.weightUsed}` : ""
+                    }`
+                  : "Pending"}
+              </span>
+            </div>
+          </RowWrapper>
+        );
+      })}
 
-      {/* Freestyle */}
-      <RowWrapper href={freestyleHref} ariaLabel="Open freestyle session">
-        <div style={rowStyle(!!freestyleLogged, "#ff7f32")} aria-label="Freestyle session" aria-live="polite">
-          <span style={iconWrap}>
-            <i className="fas fa-stopwatch" style={{ color: "#ff7f32" }} />
-            <span>Freestyle Session</span>
-          </span>
-          <span style={valueStyle}>{freestyleValue}</span>
-        </div>
-      </RowWrapper>
+      {/* Optional Workouts */}
+      {optionalWorkouts.map(workout => {
+        const completed = isCompletedThisWeek(workout.id);
+        const href = hrefs.optionalWorkout ?? "#";
+        return (
+          <RowWrapper key={workout.id} href={href}>
+            <div style={rowStyle(!!completed, "#7a8793")}>
+              <span style={iconWrap}>
+                <i className="fas fa-dumbbell" style={{ color: "#7a8793" }} />
+                <span>{workout.name || "BXKR Workout"}</span>
+                <span style={badgeStyle("rgba(255,255,255,0.65)")}>Optional</span>
+              </span>
+              <span style={valueStyle}>
+                {completed
+                  ? `${completed.calories || 0} kcal${completed.duration ? ` · ${Math.round(completed.duration)} min` : ""}${
+                      completed.weightUsed ? ` · ${completed.weightUsed}` : ""
+                    }`
+                  : "Pending"}
+              </span>
+            </div>
+          </RowWrapper>
+        );
+      })}
 
       {/* Habits */}
-      <RowWrapper href={hrefs.habit} locked={habitsLocked} ariaLabel="Open daily habit">
-        <div style={rowStyle(habitAllDone, "#9b6fa3", habitsLocked)} aria-label="Daily habit" aria-live="polite">
+      <RowWrapper href={hrefs.habit}>
+        <div style={rowStyle(habitAllDone, "#9b6fa3")}>
           <span style={iconWrap}>
-            {habitsLocked ? (
-              <i className="fas fa-lock" style={{ color: "#9b6fa3" }} />
-            ) : (
-              <i className="fas fa-check-circle" style={{ color: "#9b6fa3" }} />
-            )}
+            <i className="fas fa-check-circle" style={{ color: "#9b6fa3" }} />
             <span>Daily Habit</span>
-            {habitsLocked && premiumTag("#9b6fa3")}
           </span>
           <span style={valueStyle}>
-            {habitSummary ? `${habitSummary.completed}/${habitSummary.total} tasks` : habitsLocked ? "Locked" : "Not started"}
+            {habitSummary ? `${habitSummary.completed}/${habitSummary.total} tasks` : "Not started"}
           </span>
         </div>
       </RowWrapper>
 
-      {/* Check‑In */}
+      {/* Weekly Check‑In */}
       {isFriday && (
-        <RowWrapper href={hrefs.checkin} ariaLabel="Open check-in">
-          <div style={rowStyle(checkinComplete, "#c9a34e")} aria-label="Weekly check-in" aria-live="polite">
+        <RowWrapper href={hrefs.checkin}>
+          <div style={rowStyle(checkinComplete, "#c9a34e")}>
             <span style={iconWrap}>
               <i className="fas fa-clipboard-list" style={{ color: "#c9a34e" }} />
               <span>Check‑In</span>
