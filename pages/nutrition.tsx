@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/router";
 import useSWR, { mutate } from "swr";
 import { useSession, signIn } from "next-auth/react";
@@ -93,7 +93,8 @@ export default function NutritionPage() {
   const goPrevDay = () => setSelectedDate((d) => dayMinus(d, 1));
   const goNextDay = () => {
     const tomorrow = new Date(selectedDate.getTime() + 86400000);
-    if (tomorrow <= new Date()) setSelectedDate(tomorrow);
+    // Prevent moving into future
+    if (ymd(tomorrow) <= ymd(new Date())) setSelectedDate(tomorrow);
   };
 
   // Search + editor state
@@ -115,21 +116,48 @@ export default function NutritionPage() {
     [session?.user?.email]
   );
 
+  // Hydration-safe mounted flag for localStorage access
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // ---- Favourites load + legacy migration ----
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!mounted) return;
     try {
-      const raw = localStorage.getItem(favKey);
-      setFavourites(raw ? JSON.parse(raw) : []);
+      const existing = localStorage.getItem(favKey);
+      const parsed: Food[] = existing ? JSON.parse(existing) : [];
+
+      // Migrate from legacy key once (non-destructive merge)
+      const legacyKey = "bxkr:favs";
+      const legacyRaw = localStorage.getItem(legacyKey);
+      const legacy: Food[] = legacyRaw ? JSON.parse(legacyRaw) : [];
+      let merged = parsed;
+
+      if (legacy.length) {
+        const sig = (f: Food) => f.id || f.code || f.name || "";
+        const seen = new Set(parsed.map(sig));
+        const additions = legacy.filter((f) => !seen.has(sig(f)));
+        if (additions.length) {
+          merged = [...additions, ...parsed].slice(0, 50);
+          try {
+            localStorage.setItem(favKey, JSON.stringify(merged));
+          } catch {}
+        }
+        // Optional: clear legacy only after merge
+        try {
+          localStorage.removeItem(legacyKey);
+        } catch {}
+      }
+
+      setFavourites(merged);
     } catch {
       setFavourites([]);
     }
-  }, [favKey]);
+  }, [favKey, mounted]);
 
   const isFavourite = (food: Food | null) => {
     if (!food) return false;
-    return favourites.some(
-      (f) => f.id === food.id || (food.code && f.code === food.code)
-    );
+    return favourites.some((f) => f.id === food.id || (food.code && f.code === food.code));
   };
   const saveFavourites = (arr: Food[]) => {
     setFavourites(arr);
@@ -428,6 +456,13 @@ export default function NutritionPage() {
     setSelectedFood((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
+  // ----- UI helpers -----
+  function selectFoodForMeal(food: Food, meal: typeof meals[number]) {
+    setSelectedFood(food);
+    setOpenMeal(meal);
+    setUsingServing("per100");
+  }
+
   return (
     <>
       {/* Global select-on-focus for number inputs */}
@@ -473,7 +508,6 @@ export default function NutritionPage() {
               aria-label="Select a date to copy from"
               style={{ minWidth: 175, width: 190 }}
               placeholder="Copy from date"
-              // Some browsers ignore placeholder on type=date; inline layout still holds.
             />
             <button
               className="btn btn-sm btn-bxkr"
@@ -581,13 +615,99 @@ export default function NutritionPage() {
                     />
                   </div>
 
+                  {/* Favourites rail (shown when no selected food) */}
+                  {!selectedFood && favourites.length > 0 && (
+                    <div className="mb-2">
+                      <div className="text-dim small mb-1">Your favourites</div>
+                      <div className="d-flex flex-wrap" style={{ gap: 8 }}>
+                        {favourites.map((f) => (
+                          <button
+                            key={(f.id || f.code || f.name) + "-fav"}
+                            className="btn btn-sm"
+                            style={{
+                              borderRadius: 999,
+                              border: `1px solid ${ACCENT}55`,
+                              color: "#fff",
+                              background: "rgba(255,255,255,0.04)",
+                            }}
+                            onClick={() => selectFoodForMeal(f, meal)}
+                            title="Use this favourite"
+                          >
+                            <i className="fas fa-star me-1" style={{ color: "#ffc107" }} />
+                            {f.name || f.code || "Food"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Results list */}
+                  {query.trim().length >= 2 && (
+                    <div className="mb-2">
+                      {loadingSearch ? (
+                        <div className="text-dim small">Searching…</div>
+                      ) : results.length === 0 ? (
+                        <div className="text-dim small">No foods found.</div>
+                      ) : (
+                        <div className="d-flex flex-column" style={{ gap: 8 }}>
+                          {results.map((food) => (
+                            <div
+                              key={(food.id || food.code || food.name) + "-res"}
+                              className="futuristic-card p-2 d-flex align-items-center justify-content-between"
+                            >
+                              <div className="me-2">
+                                <div className="fw-semibold" style={{ lineHeight: 1.2 }}>
+                                  {food.name || food.code || "Food"}
+                                </div>
+                                <div className="small text-dim">
+                                  <span style={{ color: COLORS.calories }}>
+                                    {round2(food.calories)} kcal
+                                  </span>{" "}
+                                  | <span style={{ color: COLORS.protein }}>{round2(food.protein)}p</span>{" "}
+                                  | <span style={{ color: COLORS.carbs }}>{round2(food.carbs)}c</span>{" "}
+                                  | <span style={{ color: COLORS.fat }}>{round2(food.fat)}f</span>
+                                </div>
+                              </div>
+                              <div className="d-flex align-items-center" style={{ gap: 8 }}>
+                                <button
+                                  className="btn btn-sm btn-outline-light"
+                                  style={{ borderRadius: 999 }}
+                                  onClick={() => toggleFavourite(food)}
+                                  title={isFavourite(food) ? "Unfavourite" : "Favourite"}
+                                >
+                                  <i
+                                    className={
+                                      isFavourite(food)
+                                        ? "fas fa-star text-warning"
+                                        : "far fa-star text-dim"
+                                    }
+                                  />
+                                </button>
+                                <button
+                                  className="btn btn-sm"
+                                  style={{
+                                    borderRadius: 999,
+                                    border: `1px solid ${ACCENT}88`,
+                                    color: ACCENT,
+                                    background: "transparent",
+                                  }}
+                                  onClick={() => selectFoodForMeal(food, meal)}
+                                >
+                                  Select
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Scanner gate */}
                   <BarcodeScannerGate
                     isPremium={Boolean(isPremium)}
                     onScanRequested={() => setScannerOpen(true)}
                   />
-
-                  {loadingSearch && <div>Searching…</div>}
 
                   {/* Editor for selected item */}
                   {selectedFood && (
