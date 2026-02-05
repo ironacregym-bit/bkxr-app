@@ -84,7 +84,7 @@ type ApiDay = {
   checkinSummary?: { weight: number; body_fat_pct: number; weightChange?: number; bfChange?: number };
   workoutIds?: string[];
 
-  // NEW (from /api/weekly/overview)
+  // From /api/weekly/overview
   hasRecurringToday?: boolean;
   recurringDone?: boolean;
   recurringWorkouts?: SimpleWorkoutRef[];
@@ -118,6 +118,22 @@ type Completion = {
   calories_burned?: number | null;
   weight_completed_with?: number | null;
   completed_date?: string | { toDate?: () => Date };
+
+  // other possible IDs that might be present for recurring/gym workouts
+  // (we don't change schemas; we only *read* if they exist)
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  gym_workout_id?: string;
+  // @ts-ignore
+  recurring_workout_id?: string;
+  // @ts-ignore
+  recurring_id?: string;
+  // @ts-ignore
+  assigned_workout_id?: string;
+  // @ts-ignore
+  plan_workout_id?: string;
+  // @ts-ignore
+  rx_id?: string;
 };
 
 type OnboardingStatus = {
@@ -191,7 +207,7 @@ export default function Home() {
   const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
   const [weekLoading, setWeekLoading] = useState(false);
 
-  // ----- UPDATED: make recurring behave like single-workout days -----
+  // Treat recurring like single-workout days
   const deriveDayBooleans = (o: any) => {
     const isFriday = Boolean(o.isFriday ?? new Date(o.dateKey + "T00:00:00").getDay() === 5);
 
@@ -387,6 +403,27 @@ export default function Home() {
     return Array.isArray(src) ? (src as Completion[]) : [];
   }, [dayCompletions]);
 
+  // Helper: robust matching by many possible completion ID fields
+  function matchByIds(c: Completion, ids: string[]): boolean {
+    if (!ids.length) return false;
+    const set = new Set<string>(ids.map(String));
+    const candidates = [
+      (c as any).workout_id,
+      (c as any).gym_workout_id,
+      (c as any).recurring_workout_id,
+      (c as any).recurring_id,
+      (c as any).assigned_workout_id,
+      (c as any).plan_workout_id,
+      (c as any).rx_id,
+    ]
+      .map((v) => (v != null ? String(v) : ""))
+      .filter(Boolean);
+    for (const cid of candidates) {
+      if (set.has(cid)) return true;
+    }
+    return false;
+  }
+
   // Day summary (freestyle)
   const daySummaryKey = useMemo(() => {
     if (!mounted) return null;
@@ -451,12 +488,12 @@ export default function Home() {
     };
   }, [daySummary, dayCompletionList, selectedDateKey]);
 
-  // ---------- Optional BXKR completion (unchanged) ----------
+  // Optional BXKR completion (now also uses robust matcher)
   const { optionalDone, optionalSummary } = useMemo(() => {
     const ids = (selectedDayData?.optionalWorkouts || []).map((w) => String(w.id));
     if (!ids.length) return { optionalDone: false, optionalSummary: undefined as undefined };
 
-    const matches = dayCompletionList.filter((c) => ids.includes(String(c.workout_id || "")));
+    const matches = dayCompletionList.filter((c) => matchByIds(c, ids));
     if (!matches.length) return { optionalDone: false, optionalSummary: undefined as undefined };
 
     const calories = matches.reduce((sum, c) => sum + (Number(c.calories_burned) || 0), 0);
@@ -478,12 +515,12 @@ export default function Home() {
     };
   }, [selectedDayData?.optionalWorkouts, dayCompletionList]);
 
-  // ---------- NEW: Recurring completion via completions (same concept as optional) ----------
+  // Recurring completion via completions (robust matcher)
   const { recurringDoneFromCompletions, recurringSummary } = useMemo(() => {
     const ids = (selectedDayData?.recurringWorkouts || []).map((w) => String(w.id));
     if (!ids.length) return { recurringDoneFromCompletions: false, recurringSummary: undefined as undefined };
 
-    const matches = dayCompletionList.filter((c) => ids.includes(String(c.workout_id || "")));
+    const matches = dayCompletionList.filter((c) => matchByIds(c, ids));
     if (!matches.length) return { recurringDoneFromCompletions: false, recurringSummary: undefined as undefined };
 
     const calories = matches.reduce((sum, c) => sum + (Number(c.calories_burned) || 0), 0);
@@ -666,11 +703,11 @@ export default function Home() {
             })}`}
             nutritionSummary={roundedNutrition}
             nutritionLogged={Boolean(selectedStatus.nutritionLogged)}
-            workoutSummary={workoutSummaryForCard}       
+            workoutSummary={workoutSummaryForCard}
             hasWorkout={Boolean(selectedStatus.hasWorkout)}
-            workoutDone={Boolean(selectedStatus.workoutDone)}  
+            workoutDone={Boolean(selectedStatus.workoutDone)}
             hasRecurringToday={Boolean(selectedDayData.hasRecurringToday)}
-            recurringDone={recurringDoneResolved}         
+            recurringDone={recurringDoneResolved}
             recurringWorkouts={selectedDayData.recurringWorkouts || []}
             optionalWorkouts={selectedDayData.optionalWorkouts || []}
             optionalDone={optionalDone}
