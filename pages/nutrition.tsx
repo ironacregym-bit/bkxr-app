@@ -163,7 +163,7 @@ export default function NutritionPage() {
   };
   const toggleFavourite = (food: Food) => {
     const exists = isFavourite(food);
-    the next = exists
+    const next = exists
       ? favourites.filter((f) => f.id !== food.id && f.code !== food.code)
       : [{ ...food }, ...favourites].slice(0, 30);
     saveFavourites(next);
