@@ -25,7 +25,7 @@ const COLORS = {
   fat: "#ff4fa3",
 };
 
-const ACCENT = "#ff8a2a"; // neon orange
+const ACCENT = "#ff8a2a";
 
 function round2(n: number | undefined | null) {
   return n !== undefined && n !== null ? Number(n).toFixed(2) : "-";
@@ -54,7 +54,6 @@ type NutritionEntry = {
   carbs: number;
   fat: number;
 };
-
 type LogsResponse = { entries: NutritionEntry[] };
 
 type UserProfile = {
@@ -105,31 +104,27 @@ export default function NutritionPage() {
     useState<"per100" | "serving">("per100");
   const [adding, setAdding] = useState<boolean>(false);
 
-  // A scroll anchor so editor moves into view when a food is selected
+  // Keep editor in view
   const editorTopRef = useRef<HTMLDivElement | null>(null);
 
   // Favourites (localStorage, per-user)
   const [favourites, setFavourites] = useState<Food[]>([]);
   const favKey = useMemo(
     () =>
-      session?.user?.email
-        ? `bxkr:favs:${session.user.email as string}`
-        : `bxkr:favs:anon`,
+      session?.user?.email ? `bxkr:favs:${session.user.email as string}` : `bxkr:favs:anon`,
     [session?.user?.email]
   );
 
-  // Hydration-safe mounted flag for localStorage access
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // ---- Favourites load + legacy migration ----
+  // Favourites load + legacy migration
   useEffect(() => {
     if (!mounted) return;
     try {
       const existing = localStorage.getItem(favKey);
       const parsed: Food[] = existing ? JSON.parse(existing) : [];
 
-      // Migrate from legacy key once (non-destructive merge)
       const legacyKey = "bxkr:favs";
       const legacyRaw = localStorage.getItem(legacyKey);
       const legacy: Food[] = legacyRaw ? JSON.parse(legacyRaw) : [];
@@ -170,7 +165,7 @@ export default function NutritionPage() {
     const exists = isFavourite(food);
     const next = exists
       ? favourites.filter((f) => f.id !== food.id && f.code !== food.code)
-      : [{ ...food }, ...favourites].slice(0, 30); // cap to 30
+      : [{ ...food }, ...favourites].slice(0, 30);
     saveFavourites(next);
   };
 
@@ -178,17 +173,13 @@ export default function NutritionPage() {
   const [scannerOpen, setScannerOpen] = useState<boolean>(false);
 
   // Logs (for selected date)
-  const swrKey = session?.user?.email
-    ? `/api/nutrition/logs?date=${formattedDate}`
-    : null;
+  const swrKey = session?.user?.email ? `/api/nutrition/logs?date=${formattedDate}` : null;
   const { data: logsData } = useSWR<LogsResponse>(swrKey, fetcher);
 
   // Profile goals
   const { data: profile } = useSWR<UserProfile>(
     session?.user?.email
-      ? `/api/profile?email=${encodeURIComponent(
-          session.user.email as string
-        )}`
+      ? `/api/profile?email=${encodeURIComponent(session.user.email as string)}`
       : null,
     fetcher
   );
@@ -245,9 +236,7 @@ export default function NutritionPage() {
         }
         setLoadingSearch(true);
         try {
-          const res = await fetch(
-            `/api/foods/search?query=${encodeURIComponent(q)}`
-          );
+          const res = await fetch(`/api/foods/search?query=${encodeURIComponent(q)}`);
           const json = await res.json();
           setResults((json.foods || []) as Food[]);
         } catch {
@@ -262,10 +251,12 @@ export default function NutritionPage() {
     doSearch(query);
   }, [query, doSearch]);
 
-  // Scaled macros for non-manual entries (serving/per100 preserved if you still use it)
+  // Compute scaled macros for non-manual using serving/per100
   const scaledSelected: Food | null = useMemo(() => {
     if (!selectedFood) return null;
     if (selectedFood.id?.startsWith("manual-")) return selectedFood;
+
+    // Auto-select per serving if available; otherwise per100 (existing fields)
     if (usingServing === "serving" && selectedFood.servingSize) {
       const hasPerServing =
         selectedFood.caloriesPerServing != null ||
@@ -276,9 +267,7 @@ export default function NutritionPage() {
       if (hasPerServing) {
         return {
           ...selectedFood,
-          calories: +(
-            Number(selectedFood.caloriesPerServing ?? 0)
-          ).toFixed(2),
+          calories: +(Number(selectedFood.caloriesPerServing ?? 0)).toFixed(2),
           protein: +(Number(selectedFood.proteinPerServing ?? 0)).toFixed(2),
           carbs: +(Number(selectedFood.carbsPerServing ?? 0)).toFixed(2),
           fat: +(Number(selectedFood.fatPerServing ?? 0)).toFixed(2),
@@ -325,6 +314,7 @@ export default function NutritionPage() {
       if (!res.ok) throw new Error("Failed to save");
 
       mutate(swrKey!);
+      // Reset editor
       setSelectedFood(null);
       setQuery("");
       setResults([]);
@@ -343,11 +333,10 @@ export default function NutritionPage() {
     mutate(swrKey!);
   };
 
-  // ---------- Day actions: Copy (whole day) / Clear day ----------
+  // Copy / Clear day
   const [copyBusy, setCopyBusy] = useState(false);
   const [copyDate, setCopyDate] = useState<string>(() => ymd(yesterday(selectedDate)));
   useEffect(() => {
-    // Reset default copy source when user changes selected date
     setCopyDate(ymd(yesterday(selectedDate)));
   }, [selectedDate]);
 
@@ -364,10 +353,7 @@ export default function NutritionPage() {
         return;
       }
 
-      // Fetch source entries
-      const r = await fetch(
-        `/api/nutrition/logs?date=${encodeURIComponent(sourceKey)}`
-      );
+      const r = await fetch(`/api/nutrition/logs?date=${encodeURIComponent(sourceKey)}`);
       const j = (await r.json()) as LogsResponse | null;
       const srcEntries = j?.entries || [];
       if (srcEntries.length === 0) {
@@ -376,7 +362,6 @@ export default function NutritionPage() {
         return;
       }
 
-      // Prevent exact duplicates (same meal + food id/code/name + macros)
       const existingSigs = (logsData?.entries || []).map(
         (e) =>
           `${e.meal}|${e.food?.id || e.food?.code || e.food?.name}|${e.calories}|${e.protein}|${e.carbs}|${e.fat}`
@@ -394,7 +379,6 @@ export default function NutritionPage() {
         return;
       }
 
-      // Sequential POSTs with your existing API
       for (const e of toCreate) {
         const payload: any = {
           date: formattedDate,
@@ -413,9 +397,7 @@ export default function NutritionPage() {
         });
         if (!res.ok) {
           const txt = await res.text().catch(() => "");
-          throw new Error(
-            `Failed to add an entry (${res.status}): ${txt || res.statusText}`
-          );
+          throw new Error(`Failed to add an entry (${res.status}): ${txt || res.statusText}`);
         }
       }
 
@@ -432,12 +414,9 @@ export default function NutritionPage() {
       alert("There are no entries to clear on this date.");
       return;
     }
-    const ok = confirm(
-      `Remove all ${logsData.entries.length} entries logged on ${formattedDate}?`
-    );
+    const ok = confirm(`Remove all ${logsData.entries.length} entries logged on ${formattedDate}?`);
     if (!ok) return;
 
-    // Simple sequential delete using your existing DELETE endpoint
     for (const e of logsData.entries) {
       try {
         // eslint-disable-next-line no-await-in-loop
@@ -445,19 +424,17 @@ export default function NutritionPage() {
           `/api/nutrition/logs?id=${encodeURIComponent(e.id)}&date=${formattedDate}`,
           { method: "DELETE" }
         );
-      } catch {
-        // continue on error
-      }
+      } catch {}
     }
     mutate(swrKey!);
   }
 
-  // For manual editor: patch function
+  // Update selectedFood fields (manual mode)
   const onChangeSelectedFood = (patch: Partial<Food>) => {
     setSelectedFood((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
-  // ----- UI helpers -----
+  // Centralised select logic (cards & favourites & scanner)
   function selectFoodForMeal(food: Food, meal: typeof meals[number]) {
     setSelectedFood(food);
     setOpenMeal(meal);
@@ -470,37 +447,27 @@ export default function NutritionPage() {
       food.fatPerServing != null;
     setUsingServing(hasPerServing ? "serving" : "per100");
 
-    // Move editor into view on next paint
+    // Keep editor visible
     requestAnimationFrame(() => {
-      editorTopRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
+      editorTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
+  }
+
+  function cancelEditor() {
+    setSelectedFood(null);
+    setUsingServing("per100");
   }
 
   return (
     <>
-      {/* Global select-on-focus for number inputs */}
       <GlobalNumericFocus />
 
-      <main
-        className="container py-3"
-        style={{ paddingBottom: "90px", color: "#fff", borderRadius: "12px" }}
-      >
-        {/* Date Navigation */}
+      <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff", borderRadius: "12px" }}>
+        {/* Date Nav */}
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <button className="btn btn-bxkr-outline" onClick={goPrevDay}>
-            ← Previous
-          </button>
-          <h2 className="text-center mb-0" style={{ fontWeight: 700 }}>
-            Nutrition ({formattedDate})
-          </h2>
-          <button
-            className="btn btn-bxkr-outline"
-            onClick={goNextDay}
-            disabled={formattedDate === ymd(new Date())}
-          >
+          <button className="btn btn-bxkr-outline" onClick={goPrevDay}>← Previous</button>
+          <h2 className="text-center mb-0" style={{ fontWeight: 700 }}>Nutrition ({formattedDate})</h2>
+          <button className="btn btn-bxkr-outline" onClick={goNextDay} disabled={formattedDate === ymd(new Date())}>
             Next →
           </button>
         </div>
@@ -508,13 +475,9 @@ export default function NutritionPage() {
         {/* Macros */}
         <MacrosCard totals={totals} goals={goals} progress={progress} />
 
-        {/* ===== Day actions (inline, compact) ===== */}
+        {/* Day actions */}
         <section className="futuristic-card p-3 mb-3">
-          {/* Row 1: Datepicker + Copy (single line) */}
-          <div
-            className="d-flex flex-wrap align-items-end"
-            style={{ gap: 8 }}
-          >
+          <div className="d-flex flex-wrap align-items-end" style={{ gap: 8 }}>
             <input
               className="form-control"
               type="date"
@@ -533,22 +496,11 @@ export default function NutritionPage() {
               aria-label={`Copy entries from ${copyDate} to ${formattedDate}`}
               title={`Copy entries from ${copyDate}`}
             >
-              {copyBusy ? (
-                "Copying…"
-              ) : (
-                <>
-                  <i className="fas fa-copy me-1" aria-hidden="true" />
-                  Copy
-                </>
-              )}
+              {copyBusy ? "Copying…" : (<><i className="fas fa-copy me-1" />Copy</>)}
             </button>
           </div>
 
-          {/* Row 2: Copy Yesterday (neon orange outline) + Clear This Day (same line) */}
-          <div
-            className="d-flex flex-wrap align-items-center mt-2"
-            style={{ gap: 8 }}
-          >
+          <div className="d-flex flex-wrap align-items-center mt-2" style={{ gap: 8 }}>
             <button
               className="btn btn-sm"
               style={{
@@ -562,7 +514,7 @@ export default function NutritionPage() {
               disabled={copyBusy}
               title={`Copy all entries from ${ymd(yesterday(selectedDate))}`}
             >
-              <i className="fas fa-arrow-left me-1" aria-hidden="true" />
+              <i className="fas fa-arrow-left me-1" />
               {copyBusy ? "Copying…" : "Copy Yesterday"}
             </button>
 
@@ -573,16 +525,15 @@ export default function NutritionPage() {
               title="Remove all entries on this date"
               disabled={!logsData?.entries?.length}
             >
-              <i className="fas fa-trash-alt me-1" aria-hidden="true" />
+              <i className="fas fa-trash-alt me-1" />
               Clear This Day
             </button>
           </div>
         </section>
 
-        {/* ===== Meals / Logs ===== */}
+        {/* Meals */}
         {meals.map((meal) => {
-          const mealEntries =
-            logsData?.entries?.filter((e) => e.meal === meal) || [];
+          const mealEntries = logsData?.entries?.filter((e) => e.meal === meal) || [];
           const isOpen = openMeal === meal;
           const mealTotals: MacroTotals = mealEntries.reduce(
             (acc: MacroTotals, e: NutritionEntry) => ({
@@ -602,29 +553,18 @@ export default function NutritionPage() {
                 onClick={() => setOpenMeal(isOpen ? null : meal)}
               >
                 {meal} ({mealEntries.length}) —{" "}
-                <span style={{ color: COLORS.calories }}>
-                  {round2(mealTotals.calories)} kcal
-                </span>{" "}
-                |{" "}
-                <span style={{ color: COLORS.protein }}>
-                  {round2(mealTotals.protein)}p
-                </span>{" "}
-                |{" "}
-                <span style={{ color: COLORS.carbs }}>
-                  {round2(mealTotals.carbs)}c
-                </span>{" "}
-                |{" "}
-                <span style={{ color: COLORS.fat }}>
-                  {round2(mealTotals.fat)}f
-                </span>
+                <span style={{ color: COLORS.calories }}>{round2(mealTotals.calories)} kcal</span> |{" "}
+                <span style={{ color: COLORS.protein }}>{round2(mealTotals.protein)}p</span> |{" "}
+                <span style={{ color: COLORS.carbs }}>{round2(mealTotals.carbs)}c</span> |{" "}
+                <span style={{ color: COLORS.fat }}>{round2(mealTotals.fat)}f</span>
               </button>
 
               {isOpen && (
                 <div className="px-2">
-                  {/* Anchor used to scroll FoodEditor into view */}
+                  {/* Anchor for editor scroll */}
                   <div ref={editorTopRef} />
 
-                  {/* If a food is selected: ONLY show the editor */}
+                  {/* If an item is selected: ONLY show the FoodEditor */}
                   {selectedFood ? (
                     <FoodEditor
                       meal={meal}
@@ -636,6 +576,7 @@ export default function NutritionPage() {
                       isFavourite={isFavourite(selectedFood)}
                       onToggleFavourite={() => toggleFavourite(selectedFood)}
                       onChangeFood={onChangeSelectedFood}
+                      onCancel={cancelEditor}
                     />
                   ) : (
                     <>
@@ -649,7 +590,7 @@ export default function NutritionPage() {
                         />
                       </div>
 
-                      {/* Favourites rail (visible when no item selected) */}
+                      {/* Favourites rail */}
                       {favourites.length > 0 && (
                         <div className="mb-2">
                           <div className="text-dim small mb-1">Your favourites</div>
@@ -675,7 +616,7 @@ export default function NutritionPage() {
                         </div>
                       )}
 
-                      {/* Results list */}
+                      {/* Results list - whole card clickable */}
                       {query.trim().length >= 2 && (
                         <div className="mb-2">
                           {loadingSearch ? (
@@ -688,25 +629,33 @@ export default function NutritionPage() {
                                 <div
                                   key={(food.id || food.code || food.name) + "-res"}
                                   className="futuristic-card p-2 d-flex align-items-center justify-content-between"
+                                  onClick={() => selectFoodForMeal(food, meal)}
+                                  style={{ cursor: "pointer" }}
+                                  role="button"
+                                  tabIndex={0}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") selectFoodForMeal(food, meal);
+                                  }}
                                 >
                                   <div className="me-2">
                                     <div className="fw-semibold" style={{ lineHeight: 1.2 }}>
                                       {food.name || food.code || "Food"}
                                     </div>
                                     <div className="small text-dim">
-                                      <span style={{ color: COLORS.calories }}>
-                                        {round2(food.calories)} kcal
-                                      </span>{" "}
-                                      | <span style={{ color: COLORS.protein }}>{round2(food.protein)}p</span>{" "}
-                                      | <span style={{ color: COLORS.carbs }}>{round2(food.carbs)}c</span>{" "}
-                                      | <span style={{ color: COLORS.fat }}>{round2(food.fat)}f</span>
+                                      <span style={{ color: COLORS.calories }}>{round2((food as any).calories)} kcal</span>{" "}
+                                      | <span style={{ color: COLORS.protein }}>{round2((food as any).protein)}p</span>{" "}
+                                      | <span style={{ color: COLORS.carbs }}>{round2((food as any).carbs)}c</span>{" "}
+                                      | <span style={{ color: COLORS.fat }}>{round2((food as any).fat)}f</span>
                                     </div>
                                   </div>
                                   <div className="d-flex align-items-center" style={{ gap: 8 }}>
                                     <button
                                       className="btn btn-sm btn-outline-light"
                                       style={{ borderRadius: 999 }}
-                                      onClick={() => toggleFavourite(food)}
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // don't trigger select
+                                        toggleFavourite(food);
+                                      }}
                                       title={isFavourite(food) ? "Unfavourite" : "Favourite"}
                                     >
                                       <i
@@ -717,18 +666,6 @@ export default function NutritionPage() {
                                         }
                                       />
                                     </button>
-                                    <button
-                                      className="btn btn-sm"
-                                      style={{
-                                        borderRadius: 999,
-                                        border: `1px solid ${ACCENT}88`,
-                                        color: ACCENT,
-                                        background: "transparent",
-                                      }}
-                                      onClick={() => selectFoodForMeal(food, meal)}
-                                    >
-                                      Select
-                                    </button>
                                   </div>
                                 </div>
                               ))}
@@ -737,7 +674,7 @@ export default function NutritionPage() {
                         </div>
                       )}
 
-                      {/* Scanner gate (hidden once an item is selected) */}
+                      {/* Scanner gate (hidden once item selected) */}
                       <BarcodeScannerGate
                         isPremium={Boolean(isPremium)}
                         onScanRequested={() => setScannerOpen(true)}
@@ -756,9 +693,7 @@ export default function NutritionPage() {
                                 type="button"
                                 className="btn btn-link p-0 ms-2"
                                 onClick={() => toggleFavourite(e.food)}
-                                title={
-                                  isFavourite(e.food) ? "Unfavourite" : "Favourite"
-                                }
+                                title={isFavourite(e.food) ? "Unfavourite" : "Favourite"}
                               >
                                 <i
                                   className={
@@ -770,27 +705,13 @@ export default function NutritionPage() {
                               </button>
                             </div>
                             <div className="small">
-                              <span style={{ color: COLORS.calories }}>
-                                {round2(e.calories)} kcal
-                              </span>{" "}
-                              |{" "}
-                              <span style={{ color: COLORS.protein }}>
-                                {round2(e.protein)}p
-                              </span>{" "}
-                              |{" "}
-                              <span style={{ color: COLORS.carbs }}>
-                                {round2(e.carbs)}c
-                              </span>{" "}
-                              |{" "}
-                              <span style={{ color: COLORS.fat }}>
-                                {round2(e.fat)}f
-                              </span>
+                              <span style={{ color: COLORS.calories }}>{round2(e.calories)} kcal</span> |{" "}
+                              <span style={{ color: COLORS.protein }}>{round2(e.protein)}p</span> |{" "}
+                              <span style={{ color: COLORS.carbs }}>{round2(e.carbs)}c</span> |{" "}
+                              <span style={{ color: COLORS.fat }}>{round2(e.fat)}f</span>
                             </div>
                           </div>
-                          <button
-                            className="btn btn-link text-danger"
-                            onClick={() => removeEntry(e.id)}
-                          >
+                          <button className="btn btn-link text-danger" onClick={() => removeEntry(e.id)}>
                             Remove
                           </button>
                         </div>
@@ -806,55 +727,24 @@ export default function NutritionPage() {
 
       {/* Scanner Modal */}
       <BarcodeScannerClient
-        isOpen={scannerOpen && Boolean(isPremium)}
+        isOpen={scannerOpen && Boolean(isPremium))}
         onClose={() => setScannerOpen(false)}
         onFoundFood={(food) => {
-          // When quick-add returns a new item, use it immediately
+          // Close scanner and open editor with the found item
+          setScannerOpen(false);
           setResults([food]);
-          setSelectedFood(food);
-
-          // Default to per serving if available
-          const hasPerServing =
-            food.caloriesPerServing != null ||
-            food.proteinPerServing != null ||
-            food.carbsPerServing != null ||
-            food.fatPerServing != null;
-          setUsingServing(hasPerServing ? "serving" : "per100");
-
+          selectFoodForMeal(food, (openMeal as any) || "Breakfast");
           setQuery(food.name || food.code || "");
-          setOpenMeal((prev) => prev || "Breakfast");
-
-          // Bring editor into view
-          requestAnimationFrame(() => {
-            editorTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-          });
         }}
         onLookupBarcode={async (code: string) => {
-          // Use the new lookup endpoint that checks user->global barcode catalogues
-          const res = await fetch(
-            `/api/foods/lookup-barcode?barcode=${encodeURIComponent(code)}`
-          );
+          const res = await fetch(`/api/foods/lookup-barcode?barcode=${encodeURIComponent(code)}`);
           const json = await res.json();
           const found: Food | undefined = (json.foods || [])[0] as Food | undefined;
           if (!found) return undefined;
 
           setResults([found]);
-          setSelectedFood(found);
-
-          const hasPerServing =
-            found.caloriesPerServing != null ||
-            found.proteinPerServing != null ||
-            found.carbsPerServing != null ||
-            found.fatPerServing != null;
-          setUsingServing(hasPerServing ? "serving" : "per100");
-
+          selectFoodForMeal(found, (openMeal as any) || "Breakfast");
           setQuery(found.name || found.code || "");
-          setOpenMeal((prev) => prev || "Breakfast");
-
-          requestAnimationFrame(() => {
-            editorTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-          });
-
           return found;
         }}
       />
