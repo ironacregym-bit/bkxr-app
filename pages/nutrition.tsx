@@ -93,7 +93,6 @@ export default function NutritionPage() {
   const goPrevDay = () => setSelectedDate((d) => dayMinus(d, 1));
   const goNextDay = () => {
     const tomorrow = new Date(selectedDate.getTime() + 86400000);
-    // Prevent moving into future
     if (ymd(tomorrow) <= ymd(new Date())) setSelectedDate(tomorrow);
   };
 
@@ -105,6 +104,9 @@ export default function NutritionPage() {
   const [usingServing, setUsingServing] =
     useState<"per100" | "serving">("per100");
   const [adding, setAdding] = useState<boolean>(false);
+
+  // A scroll anchor so editor moves into view when a food is selected
+  const editorTopRef = useRef<HTMLDivElement | null>(null);
 
   // Favourites (localStorage, per-user)
   const [favourites, setFavourites] = useState<Food[]>([]);
@@ -143,7 +145,6 @@ export default function NutritionPage() {
             localStorage.setItem(favKey, JSON.stringify(merged));
           } catch {}
         }
-        // Optional: clear legacy only after merge
         try {
           localStorage.removeItem(legacyKey);
         } catch {}
@@ -460,7 +461,22 @@ export default function NutritionPage() {
   function selectFoodForMeal(food: Food, meal: typeof meals[number]) {
     setSelectedFood(food);
     setOpenMeal(meal);
-    setUsingServing("per100");
+
+    // Auto-select per serving if available
+    const hasPerServing =
+      food.caloriesPerServing != null ||
+      food.proteinPerServing != null ||
+      food.carbsPerServing != null ||
+      food.fatPerServing != null;
+    setUsingServing(hasPerServing ? "serving" : "per100");
+
+    // Move editor into view on next paint
+    requestAnimationFrame(() => {
+      editorTopRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
   }
 
   return (
@@ -605,112 +621,11 @@ export default function NutritionPage() {
 
               {isOpen && (
                 <div className="px-2">
-                  {/* Search */}
-                  <div className="d-flex gap-2 mb-2">
-                    <input
-                      className="form-control"
-                      placeholder={`Search foods for ${meal}…`}
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
-                  </div>
+                  {/* Anchor used to scroll FoodEditor into view */}
+                  <div ref={editorTopRef} />
 
-                  {/* Favourites rail (shown when no selected food) */}
-                  {!selectedFood && favourites.length > 0 && (
-                    <div className="mb-2">
-                      <div className="text-dim small mb-1">Your favourites</div>
-                      <div className="d-flex flex-wrap" style={{ gap: 8 }}>
-                        {favourites.map((f) => (
-                          <button
-                            key={(f.id || f.code || f.name) + "-fav"}
-                            className="btn btn-sm"
-                            style={{
-                              borderRadius: 999,
-                              border: `1px solid ${ACCENT}55`,
-                              color: "#fff",
-                              background: "rgba(255,255,255,0.04)",
-                            }}
-                            onClick={() => selectFoodForMeal(f, meal)}
-                            title="Use this favourite"
-                          >
-                            <i className="fas fa-star me-1" style={{ color: "#ffc107" }} />
-                            {f.name || f.code || "Food"}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Results list */}
-                  {query.trim().length >= 2 && (
-                    <div className="mb-2">
-                      {loadingSearch ? (
-                        <div className="text-dim small">Searching…</div>
-                      ) : results.length === 0 ? (
-                        <div className="text-dim small">No foods found.</div>
-                      ) : (
-                        <div className="d-flex flex-column" style={{ gap: 8 }}>
-                          {results.map((food) => (
-                            <div
-                              key={(food.id || food.code || food.name) + "-res"}
-                              className="futuristic-card p-2 d-flex align-items-center justify-content-between"
-                            >
-                              <div className="me-2">
-                                <div className="fw-semibold" style={{ lineHeight: 1.2 }}>
-                                  {food.name || food.code || "Food"}
-                                </div>
-                                <div className="small text-dim">
-                                  <span style={{ color: COLORS.calories }}>
-                                    {round2(food.calories)} kcal
-                                  </span>{" "}
-                                  | <span style={{ color: COLORS.protein }}>{round2(food.protein)}p</span>{" "}
-                                  | <span style={{ color: COLORS.carbs }}>{round2(food.carbs)}c</span>{" "}
-                                  | <span style={{ color: COLORS.fat }}>{round2(food.fat)}f</span>
-                                </div>
-                              </div>
-                              <div className="d-flex align-items-center" style={{ gap: 8 }}>
-                                <button
-                                  className="btn btn-sm btn-outline-light"
-                                  style={{ borderRadius: 999 }}
-                                  onClick={() => toggleFavourite(food)}
-                                  title={isFavourite(food) ? "Unfavourite" : "Favourite"}
-                                >
-                                  <i
-                                    className={
-                                      isFavourite(food)
-                                        ? "fas fa-star text-warning"
-                                        : "far fa-star text-dim"
-                                    }
-                                  />
-                                </button>
-                                <button
-                                  className="btn btn-sm"
-                                  style={{
-                                    borderRadius: 999,
-                                    border: `1px solid ${ACCENT}88`,
-                                    color: ACCENT,
-                                    background: "transparent",
-                                  }}
-                                  onClick={() => selectFoodForMeal(food, meal)}
-                                >
-                                  Select
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Scanner gate */}
-                  <BarcodeScannerGate
-                    isPremium={Boolean(isPremium)}
-                    onScanRequested={() => setScannerOpen(true)}
-                  />
-
-                  {/* Editor for selected item */}
-                  {selectedFood && (
+                  {/* If a food is selected: ONLY show the editor */}
+                  {selectedFood ? (
                     <FoodEditor
                       meal={meal}
                       food={selectedFood}
@@ -722,60 +637,166 @@ export default function NutritionPage() {
                       onToggleFavourite={() => toggleFavourite(selectedFood)}
                       onChangeFood={onChangeSelectedFood}
                     />
-                  )}
+                  ) : (
+                    <>
+                      {/* Search */}
+                      <div className="d-flex gap-2 mb-2">
+                        <input
+                          className="form-control"
+                          placeholder={`Search foods for ${meal}…`}
+                          value={query}
+                          onChange={(e) => setQuery(e.target.value)}
+                        />
+                      </div>
 
-                  {/* Logged entries */}
-                  {mealEntries.map((e) => (
-                    <div
-                      key={e.id}
-                      className="futuristic-card p-3 mb-2 d-flex justify-content-between align-items-center"
-                    >
-                      <div>
-                        <div className="fw-bold d-flex align-items-center">
-                          {e.food.name || "Manual item"}
+                      {/* Favourites rail (visible when no item selected) */}
+                      {favourites.length > 0 && (
+                        <div className="mb-2">
+                          <div className="text-dim small mb-1">Your favourites</div>
+                          <div className="d-flex flex-wrap" style={{ gap: 8 }}>
+                            {favourites.map((f) => (
+                              <button
+                                key={(f.id || f.code || f.name) + "-fav"}
+                                className="btn btn-sm"
+                                style={{
+                                  borderRadius: 999,
+                                  border: `1px solid ${ACCENT}55`,
+                                  color: "#fff",
+                                  background: "rgba(255,255,255,0.04)",
+                                }}
+                                onClick={() => selectFoodForMeal(f, meal)}
+                                title="Use this favourite"
+                              >
+                                <i className="fas fa-star me-1" style={{ color: "#ffc107" }} />
+                                {f.name || f.code || "Food"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Results list */}
+                      {query.trim().length >= 2 && (
+                        <div className="mb-2">
+                          {loadingSearch ? (
+                            <div className="text-dim small">Searching…</div>
+                          ) : results.length === 0 ? (
+                            <div className="text-dim small">No foods found.</div>
+                          ) : (
+                            <div className="d-flex flex-column" style={{ gap: 8 }}>
+                              {results.map((food) => (
+                                <div
+                                  key={(food.id || food.code || food.name) + "-res"}
+                                  className="futuristic-card p-2 d-flex align-items-center justify-content-between"
+                                >
+                                  <div className="me-2">
+                                    <div className="fw-semibold" style={{ lineHeight: 1.2 }}>
+                                      {food.name || food.code || "Food"}
+                                    </div>
+                                    <div className="small text-dim">
+                                      <span style={{ color: COLORS.calories }}>
+                                        {round2(food.calories)} kcal
+                                      </span>{" "}
+                                      | <span style={{ color: COLORS.protein }}>{round2(food.protein)}p</span>{" "}
+                                      | <span style={{ color: COLORS.carbs }}>{round2(food.carbs)}c</span>{" "}
+                                      | <span style={{ color: COLORS.fat }}>{round2(food.fat)}f</span>
+                                    </div>
+                                  </div>
+                                  <div className="d-flex align-items-center" style={{ gap: 8 }}>
+                                    <button
+                                      className="btn btn-sm btn-outline-light"
+                                      style={{ borderRadius: 999 }}
+                                      onClick={() => toggleFavourite(food)}
+                                      title={isFavourite(food) ? "Unfavourite" : "Favourite"}
+                                    >
+                                      <i
+                                        className={
+                                          isFavourite(food)
+                                            ? "fas fa-star text-warning"
+                                            : "far fa-star text-dim"
+                                        }
+                                      />
+                                    </button>
+                                    <button
+                                      className="btn btn-sm"
+                                      style={{
+                                        borderRadius: 999,
+                                        border: `1px solid ${ACCENT}88`,
+                                        color: ACCENT,
+                                        background: "transparent",
+                                      }}
+                                      onClick={() => selectFoodForMeal(food, meal)}
+                                    >
+                                      Select
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Scanner gate (hidden once an item is selected) */}
+                      <BarcodeScannerGate
+                        isPremium={Boolean(isPremium)}
+                        onScanRequested={() => setScannerOpen(true)}
+                      />
+
+                      {/* Logged entries */}
+                      {mealEntries.map((e) => (
+                        <div
+                          key={e.id}
+                          className="futuristic-card p-3 mb-2 d-flex justify-content-between align-items-center"
+                        >
+                          <div>
+                            <div className="fw-bold d-flex align-items-center">
+                              {e.food.name || "Manual item"}
+                              <button
+                                type="button"
+                                className="btn btn-link p-0 ms-2"
+                                onClick={() => toggleFavourite(e.food)}
+                                title={
+                                  isFavourite(e.food) ? "Unfavourite" : "Favourite"
+                                }
+                              >
+                                <i
+                                  className={
+                                    isFavourite(e.food)
+                                      ? "fas fa-star text-warning"
+                                      : "far fa-star text-dim"
+                                  }
+                                />
+                              </button>
+                            </div>
+                            <div className="small">
+                              <span style={{ color: COLORS.calories }}>
+                                {round2(e.calories)} kcal
+                              </span>{" "}
+                              |{" "}
+                              <span style={{ color: COLORS.protein }}>
+                                {round2(e.protein)}p
+                              </span>{" "}
+                              |{" "}
+                              <span style={{ color: COLORS.carbs }}>
+                                {round2(e.carbs)}c
+                              </span>{" "}
+                              |{" "}
+                              <span style={{ color: COLORS.fat }}>
+                                {round2(e.fat)}f
+                              </span>
+                            </div>
+                          </div>
                           <button
-                            type="button"
-                            className="btn btn-link p-0 ms-2"
-                            onClick={() => toggleFavourite(e.food)}
-                            title={
-                              isFavourite(e.food) ? "Unfavourite" : "Favourite"
-                            }
+                            className="btn btn-link text-danger"
+                            onClick={() => removeEntry(e.id)}
                           >
-                            <i
-                              className={
-                                isFavourite(e.food)
-                                  ? "fas fa-star text-warning"
-                                  : "far fa-star text-dim"
-                              }
-                            />
+                            Remove
                           </button>
                         </div>
-                        <div className="small">
-                          <span style={{ color: COLORS.calories }}>
-                            {round2(e.calories)} kcal
-                          </span>{" "}
-                          |{" "}
-                          <span style={{ color: COLORS.protein }}>
-                            {round2(e.protein)}p
-                          </span>{" "}
-                          |{" "}
-                          <span style={{ color: COLORS.carbs }}>
-                            {round2(e.carbs)}c
-                          </span>{" "}
-                          |{" "}
-                          <span style={{ color: COLORS.fat }}>
-                            {round2(e.fat)}f
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        className="btn btn-link text-danger"
-                        onClick={() => removeEntry(e.id)}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -791,9 +812,22 @@ export default function NutritionPage() {
           // When quick-add returns a new item, use it immediately
           setResults([food]);
           setSelectedFood(food);
+
+          // Default to per serving if available
+          const hasPerServing =
+            food.caloriesPerServing != null ||
+            food.proteinPerServing != null ||
+            food.carbsPerServing != null ||
+            food.fatPerServing != null;
+          setUsingServing(hasPerServing ? "serving" : "per100");
+
           setQuery(food.name || food.code || "");
-          setUsingServing("per100");
           setOpenMeal((prev) => prev || "Breakfast");
+
+          // Bring editor into view
+          requestAnimationFrame(() => {
+            editorTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
         }}
         onLookupBarcode={async (code: string) => {
           // Use the new lookup endpoint that checks user->global barcode catalogues
@@ -803,11 +837,24 @@ export default function NutritionPage() {
           const json = await res.json();
           const found: Food | undefined = (json.foods || [])[0] as Food | undefined;
           if (!found) return undefined;
+
           setResults([found]);
           setSelectedFood(found);
+
+          const hasPerServing =
+            found.caloriesPerServing != null ||
+            found.proteinPerServing != null ||
+            found.carbsPerServing != null ||
+            found.fatPerServing != null;
+          setUsingServing(hasPerServing ? "serving" : "per100");
+
           setQuery(found.name || found.code || "");
-          setUsingServing("per100");
           setOpenMeal((prev) => prev || "Breakfast");
+
+          requestAnimationFrame(() => {
+            editorTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+
           return found;
         }}
       />
