@@ -202,29 +202,33 @@ export default function Home() {
     return Array.isArray(src) ? src : [];
   }, [dayCompletions]);
 
-  // ------------------- Map to CompletedWorkout -------------------
+  // ------------------- Map to CompletedWorkout safely -------------------
   const completedWorkoutsForCard: CompletedWorkout[] = useMemo(() => {
-    if (!dayCompletionList || !dayCompletionList.length) return [];
+    return dayCompletionList.flatMap((c) => {
+      const workoutId =
+        c.workout_id ||
+        c.gym_workout_id ||
+        c.recurring_workout_id ||
+        c.recurring_id ||
+        c.assigned_workout_id ||
+        c.plan_workout_id ||
+        c.rx_id;
 
-    return dayCompletionList
-      .map((c) => {
-        let dateStr: string;
-        if (typeof c.completed_date === "string") dateStr = c.completed_date;
-        else if (c.completed_date?.toDate instanceof Function) dateStr = c.completed_date.toDate().toISOString();
-        else dateStr = new Date().toISOString();
+      if (!workoutId) return []; // skip nulls
 
-        const workoutId = c.workout_id || c.gym_workout_id || c.recurring_workout_id || c.recurring_id || c.assigned_workout_id || c.plan_workout_id || c.rx_id;
-        if (!workoutId) return null;
+      let dateStr: string;
+      if (typeof c.completed_date === "string") dateStr = c.completed_date;
+      else if (c.completed_date?.toDate instanceof Function) dateStr = c.completed_date.toDate().toISOString();
+      else dateStr = new Date().toISOString();
 
-        return {
-          workout_id: workoutId,
-          date: dateStr,
-          calories: c.calories_burned ?? undefined,
-          duration: c.duration ?? c.duration_minutes ?? undefined,
-          weightUsed: typeof c.weight_completed_with === "number" ? `${Math.round(c.weight_completed_with)} kg` : undefined,
-        };
-      })
-      .filter((v): v is CompletedWorkout => v !== null);
+      return [{
+        workout_id: workoutId,
+        date: dateStr,
+        calories: c.calories_burned ?? undefined,
+        duration: c.duration ?? c.duration_minutes ?? undefined,
+        weightUsed: typeof c.weight_completed_with === "number" ? `${Math.round(c.weight_completed_with)} kg` : undefined,
+      }];
+    });
   }, [dayCompletionList]);
 
   // ------------------- Hrefs -------------------
@@ -354,7 +358,6 @@ export default function Home() {
             checkinComplete={Boolean(selectedStatus.checkinComplete)}
           />
         )}
-
       </main>
 
       {mounted && onboarding?.complete === true && <AddToHomeScreen />}
