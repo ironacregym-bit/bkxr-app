@@ -33,7 +33,7 @@ type Props = {
 
   // NEW: Optional completion state/summary
   optionalDone?: boolean;
-  optionalSummary?: { calories: number; duration: number; weightUsed?: string };
+  optionalSummary?: { calories: number; duration?: number; weightUsed?: string };
 
   // Hrefs
   hrefs: {
@@ -188,7 +188,7 @@ export default function DailyTasksCard({
     return base + extra;
   })();
 
-  // ---------- NEW: resolve "done" from either the boolean or the summary presence ----------
+  // ---------- NEW: resolve "done" from each task independently ----------
   const hasWorkoutSummary =
     typeof workoutSummary?.calories === "number" ||
     typeof workoutSummary?.duration === "number" ||
@@ -199,8 +199,9 @@ export default function DailyTasksCard({
     typeof optionalSummary?.duration === "number" ||
     (optionalSummary?.weightUsed && optionalSummary.weightUsed.length > 0);
 
-  const recurringDoneResolved = Boolean(recurringDone || hasWorkoutSummary);
-  const optionalDoneResolved  = Boolean(optionalDone  || hasOptionalSummary);
+  const recurringDoneResolved = Boolean(recurringDone); // independent
+  const mandatoryDoneResolved = Boolean(workoutDone || hasWorkoutSummary); // mandatory only
+  const optionalDoneResolved  = Boolean(optionalDone  || hasOptionalSummary); // optional only
 
   return (
     <div style={{ marginBottom: 20 }}>
@@ -260,7 +261,7 @@ export default function DailyTasksCard({
       {/* Planned Workout when NO recurring */}
       {!hasRecurringToday && hasWorkout && (
         <RowWrapper href={hrefs.workout} locked={workoutLocked} ariaLabel="Open planned workout">
-          <div style={rowStyle(Boolean(workoutDone), "#5b7c99", workoutLocked)} aria-label="Planned workout" aria-live="polite">
+          <div style={rowStyle(mandatoryDoneResolved, "#5b7c99", workoutLocked)} aria-label="Planned workout" aria-live="polite">
             <span style={iconWrap}>
               {workoutLocked ? (
                 <i className="fas fa-lock" style={{ color: "#5b7c99" }} />
@@ -271,10 +272,10 @@ export default function DailyTasksCard({
               {workoutLocked && premiumTag("#5b7c99")}
             </span>
             <span style={valueStyle}>
-              {workoutDone
+              {mandatoryDoneResolved
                 ? `${workoutSummary?.calories || 0} kcal${
                     workoutSummary?.duration ? ` · ${Math.round(workoutSummary.duration)} min` : ""
-                  }${workoutSummary?.weightUsed ? ` · ${workoutSummary?.weightUsed}` : ""}`
+                  }${workoutSummary?.weightUsed ? ` · ${workoutSummary.weightUsed}` : ""}`
                 : workoutLocked
                 ? "Locked"
                 : "Pending"}
@@ -283,7 +284,7 @@ export default function DailyTasksCard({
         </RowWrapper>
       )}
 
-      {/* BXKR Optional Workout — now reflects completion */}
+      {/* Optional Workout */}
       {hasRecurringToday && firstOptional && (
         <RowWrapper href={optionalHref} ariaLabel="Open optional BXKR workout">
           <div
