@@ -29,7 +29,7 @@ export default function BarcodeScannerClient({
   const [lookupLoading, setLookupLoading] = useState(false);
   const [restartTick, setRestartTick] = useState(0);
 
-  // Quick-add inline state (futuristic styling, scrollable)
+  // Quick-add inline state
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
   const [quickMsg, setQuickMsg] = useState<string | null>(null);
@@ -66,7 +66,6 @@ export default function BarcodeScannerClient({
   }
 
   async function startScanner(mountedRef: { current: boolean }) {
-    // reset transient state each start
     setScanError(null);
     setBarcodeInput("");
     setLastCode("");
@@ -89,7 +88,6 @@ export default function BarcodeScannerClient({
       const reader = new BrowserMultiFormatReader();
       readerRef.current = reader;
 
-      // Prefer back/rear camera
       const devices = await BrowserMultiFormatReader.listVideoInputDevices();
       if (!devices || devices.length === 0) {
         setHasCamera(false);
@@ -102,7 +100,7 @@ export default function BarcodeScannerClient({
       const controls = await reader.decodeFromVideoDevice(
         chosen.deviceId,
         videoRef.current!,
-        async (result /*, err */) => {
+        async (result /* , err */) => {
           if (!mountedRef.current) return;
           if (result && !scannedOnce.current) {
             scannedOnce.current = true;
@@ -113,7 +111,6 @@ export default function BarcodeScannerClient({
               setLookupLoading(true);
               const found = await onLookupBarcode(code);
               if (!found) {
-                // Not found -> stop camera and open Quick Add
                 setScanError("No product found for this barcode.");
                 setQuickForm((f) => ({
                   ...f,
@@ -136,7 +133,6 @@ export default function BarcodeScannerClient({
               setScanError("Barcode lookup failed. Please try again or enter manually.");
             } finally {
               setLookupLoading(false);
-              // allow another scan only if quickOpen didn't trigger
               scannedOnce.current = false;
             }
           }
@@ -160,7 +156,6 @@ export default function BarcodeScannerClient({
     }
   }
 
-  // Start/teardown lifecycle
   useEffect(() => {
     if (!isOpen) return;
 
@@ -184,12 +179,10 @@ export default function BarcodeScannerClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, onClose, onFoundFood, onLookupBarcode, restartTick]);
 
-  // When Quick Add opens, close the camera (hide video; free memory)
   useEffect(() => {
     if (quickOpen) {
       teardown();
     } else if (isOpen) {
-      // If user goes back to scanner, restart it
       setRestartTick((t) => t + 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -211,7 +204,7 @@ export default function BarcodeScannerClient({
           ...f,
           code: String(code || "").replace(/\D/g, ""),
         }));
-        setQuickOpen(true); // close camera and show Quick Add
+        setQuickOpen(true);
       } else {
         onFoundFood(found);
         onClose();
@@ -221,13 +214,12 @@ export default function BarcodeScannerClient({
     }
   }
 
-  // ---- Quick add submit ----
+  // ---- Quick add submit (GLOBAL) ----
   async function saveQuickAdd(e?: React.FormEvent) {
     e?.preventDefault();
     setQuickMsg(null);
 
     const payload = {
-      scope: "user", // user-level quick add
       code: String(quickForm.code || "").replace(/\D/g, ""),
       name: String(quickForm.name || "").trim(),
       brand: String(quickForm.brand || "").trim(),
@@ -254,7 +246,6 @@ export default function BarcodeScannerClient({
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to save");
 
-      // Return the saved food to the parent instantly
       const food: Food = json.food || {
         id: payload.code,
         code: payload.code,
@@ -286,25 +277,13 @@ export default function BarcodeScannerClient({
   return (
     <div className="bxkr-modal">
       <div className="bxkr-modal-backdrop" onClick={onClose} />
-      {/* Use futuristic card and make content scrollable */}
       <div className="bxkr-modal-dialog futuristic-card" role="dialog" aria-modal="true" aria-label="Barcode scanner">
-        <div
-          className="w-100"
-          style={{
-            maxHeight: "80vh",
-            overflowY: "auto",
-            WebkitOverflowScrolling: "touch",
-          }}
-        >
+        <div className="w-100" style={{ maxHeight: "80vh", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h5 className="mb-0">Scan barcode</h5>
             <div className="d-flex gap-2">
               {!quickOpen && (
-                <button
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={() => setRestartTick((t) => t + 1)}
-                  title="Restart camera"
-                >
+                <button className="btn btn-outline-secondary btn-sm" onClick={() => setRestartTick((t) => t + 1)} title="Restart camera">
                   Restart
                 </button>
               )}
@@ -314,7 +293,6 @@ export default function BarcodeScannerClient({
             </div>
           </div>
 
-          {/* When Quick Add is open, hide camera UI and show only the form */}
           {quickOpen ? (
             <div>
               <div className="d-flex justify-content-between align-items-center mb-2">
@@ -322,7 +300,7 @@ export default function BarcodeScannerClient({
                 <button
                   className="btn btn-outline-secondary btn-sm"
                   onClick={() => {
-                    setQuickOpen(false); // will restart camera via effect
+                    setQuickOpen(false);
                     setScanError(null);
                   }}
                   title="Back to scanner"
@@ -331,11 +309,7 @@ export default function BarcodeScannerClient({
                 </button>
               </div>
 
-              {quickMsg && (
-                <div className={`alert ${quickMsg.includes("Failed") ? "alert-danger" : "alert-info"} py-2`}>
-                  {quickMsg}
-                </div>
-              )}
+              {quickMsg && <div className={`alert ${quickMsg.includes("Failed") ? "alert-danger" : "alert-info"} py-2`}>{quickMsg}</div>}
 
               <form onSubmit={saveQuickAdd}>
                 <div className="row g-2">
@@ -344,9 +318,7 @@ export default function BarcodeScannerClient({
                     <input
                       className="form-control"
                       value={quickForm.code}
-                      onChange={(e) =>
-                        setQuickForm((f) => ({ ...f, code: e.target.value.replace(/\D/g, "") }))
-                      }
+                      onChange={(e) => setQuickForm((f) => ({ ...f, code: e.target.value.replace(/\D/g, "") }))}
                       inputMode="numeric"
                       placeholder="digits only"
                     />
@@ -376,7 +348,7 @@ export default function BarcodeScannerClient({
                       className="form-control"
                       value={quickForm.servingSize}
                       onChange={(e) => setQuickForm((f) => ({ ...f, servingSize: e.target.value }))}
-                      placeholder="e.g. 1 bar (45g)"
+                      placeholder="e.g. 1 bar (45g) or 45"
                     />
                   </div>
 
@@ -433,28 +405,16 @@ export default function BarcodeScannerClient({
                 </div>
 
                 <div className="d-flex justify-content-end gap-2 mt-3">
-                  <button
-                    type="button"
-                    className="btn btn-outline-light"
-                    style={{ borderRadius: 24 }}
-                    onClick={() => setQuickOpen(false)}
-                    disabled={quickBusy}
-                  >
+                  <button type="button" className="btn btn-outline-light" style={{ borderRadius: 24 }} onClick={() => setQuickOpen(false)} disabled={quickBusy}>
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    className="btn btn-outline-light"
-                    style={{ borderRadius: 24 }}
-                    disabled={quickBusy}
-                  >
+                  <button type="submit" className="btn btn-outline-light" style={{ borderRadius: 24 }} disabled={quickBusy}>
                     {quickBusy ? "Saving…" : "Save & use"}
                   </button>
                 </div>
               </form>
             </div>
           ) : (
-            // Scanner UI (only when not in Quick Add)
             <div>
               {hasCamera ? (
                 <>
@@ -473,12 +433,7 @@ export default function BarcodeScannerClient({
                       onChange={(e) => setBarcodeInput(e.target.value)}
                       inputMode="numeric"
                     />
-                    <button
-                      className="btn btn-outline-light"
-                      onClick={lookupManualBarcode}
-                      disabled={lookupLoading}
-                      title="Lookup barcode"
-                    >
+                    <button className="btn btn-outline-light" onClick={lookupManualBarcode} disabled={lookupLoading} title="Lookup barcode">
                       {lookupLoading ? "Looking up…" : "Lookup"}
                     </button>
                   </div>
@@ -514,22 +469,14 @@ export default function BarcodeScannerClient({
                       onChange={(e) => setBarcodeInput(e.target.value)}
                       inputMode="numeric"
                     />
-                    <button
-                      className="btn btn-outline-light"
-                      onClick={lookupManualBarcode}
-                      disabled={lookupLoading}
-                    >
+                    <button className="btn btn-outline-light" onClick={lookupManualBarcode} disabled={lookupLoading}>
                       {lookupLoading ? "Looking up…" : "Lookup"}
                     </button>
                   </div>
                   {scanError && (
                     <div className="mt-2">
                       <div className="text-danger">{scanError}</div>
-                      <button
-                        className="btn btn-sm btn-outline-light mt-2"
-                        style={{ borderRadius: 24 }}
-                        onClick={() => setQuickOpen(true)}
-                      >
+                      <button className="btn btn-sm btn-outline-light mt-2" style={{ borderRadius: 24 }} onClick={() => setQuickOpen(true)}>
                         + Quick add this barcode
                       </button>
                     </div>
