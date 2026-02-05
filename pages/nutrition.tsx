@@ -163,7 +163,7 @@ export default function NutritionPage() {
   };
   const toggleFavourite = (food: Food) => {
     const exists = isFavourite(food);
-    const next = exists
+    the next = exists
       ? favourites.filter((f) => f.id !== food.id && f.code !== food.code)
       : [{ ...food }, ...favourites].slice(0, 30);
     saveFavourites(next);
@@ -251,7 +251,7 @@ export default function NutritionPage() {
     doSearch(query);
   }, [query, doSearch]);
 
-  // Add entry — now trusts the Food payload passed in (macros already calculated by the editor)
+  // Add entry — trusts the Food payload passed in (macros already calculated by the editor)
   const addEntry = async (meal: string, food: Food | null) => {
     if (!session?.user?.email || !food) return signIn("google");
 
@@ -408,7 +408,27 @@ export default function NutritionPage() {
     setSelectedFood((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
-  // Centralised select logic (cards & favourites & scanner)
+  // Factory: empty manual item for quick macros entry
+  function createManualFood(): Food {
+    return {
+      id: `manual-${Date.now()}`,
+      code: "",
+      name: "",
+      brand: "",
+      image: null,
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      servingSize: null,
+      caloriesPerServing: null,
+      proteinPerServing: null,
+      carbsPerServing: null,
+      fatPerServing: null,
+    };
+  }
+
+  // Centralised select logic (cards & favourites & scanner & manual)
   function selectFoodForMeal(food: Food, meal: typeof meals[number]) {
     setSelectedFood(food);
     setOpenMeal(meal);
@@ -546,7 +566,7 @@ export default function NutritionPage() {
                     />
                   ) : (
                     <>
-                      {/* Search */}
+                      {/* Search + Add Manual */}
                       <div className="d-flex gap-2 mb-2">
                         <input
                           className="form-control"
@@ -554,6 +574,22 @@ export default function NutritionPage() {
                           value={query}
                           onChange={(e) => setQuery(e.target.value)}
                         />
+                        <button
+                          className="btn btn-sm"
+                          style={{
+                            borderRadius: 12,
+                            border: `1px solid ${ACCENT}`,
+                            color: ACCENT,
+                            background: "transparent",
+                            boxShadow: `0 0 10px ${ACCENT}55`,
+                            whiteSpace: "nowrap",
+                          }}
+                          onClick={() => selectFoodForMeal(createManualFood(), meal)}
+                          title="Add a manual item (enter macros)"
+                          aria-label="Add manual item"
+                        >
+                          + Manual
+                        </button>
                       </div>
 
                       {/* Favourites rail */}
@@ -608,7 +644,6 @@ export default function NutritionPage() {
                                       {food.name || food.code || "Food"}
                                     </div>
                                     <div className="small text-dim">
-                                      {/* Show per-100g baseline if available; otherwise show whatever is provided */}
                                       <span style={{ color: COLORS.calories }}>{round2((food as any).calories)} kcal</span>{" "}
                                       | <span style={{ color: COLORS.protein }}>{round2((food as any).protein)}p</span>{" "}
                                       | <span style={{ color: COLORS.carbs }}>{round2((food as any).carbs)}c</span>{" "}
