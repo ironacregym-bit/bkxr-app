@@ -12,6 +12,7 @@ import BottomNav from "../../components/BottomNav";
 import GlobalNumericFocus from "../../components/GlobalNumericFocus";
 
 const ACCENT = "#FF8A2A";
+const GREEN = "#22c55e";
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 // Fix for Firestore gif_url containing "public/"
@@ -292,6 +293,17 @@ export default function GymWorkoutViewerPage() {
       .catch(() => {});
   }, [mounted, id]);
 
+  // Inline previous values lookup map: key = `${exercise_id}|${set}`
+  const prevByKey = useMemo(() => {
+    const m: Record<string, { weight: number | null; reps: number | null }> = {};
+    if (previousSession?.sets?.length) {
+      for (const s of previousSession.sets) {
+        m[`${s.exercise_id}|${s.set}`] = { weight: s.weight ?? null, reps: s.reps ?? null };
+      }
+    }
+    return m;
+  }, [previousSession]);
+
   // Media hook
   const mediaRounds = useMemo(() => toMediaRounds(data), [data]);
   const { mediaById } = useGymExerciseMedia(mediaRounds);
@@ -361,6 +373,8 @@ export default function GymWorkoutViewerPage() {
 
   if (!mounted) return null;
 
+  const isCompleted = Boolean(previousSession?.completedAt || (previousSession?.sets && previousSession.sets.length > 0));
+
   return (
     <>
       <Head>
@@ -380,17 +394,42 @@ export default function GymWorkoutViewerPage() {
         {data && (
           <>
             {/* Header */}
-            <section className="futuristic-card p-3 mb-3">
+            <section
+              className="futuristic-card p-3 mb-3"
+              style={
+                isCompleted
+                  ? {
+                      borderColor: GREEN,
+                      boxShadow: `0 0 0 1px ${GREEN}55 inset, 0 0 16px ${GREEN}22`,
+                    }
+                  : undefined
+              }
+            >
               <div className="d-flex align-items-center justify-content-between">
                 <h2 className="m-0">{data.workout_name}</h2>
-                <span className="badge" style={{ background: ACCENT, color: "#0b0f14" }}>
-                  Gym
-                </span>
+                <div className="d-flex align-items-center gap-2">
+                  <span className="badge" style={{ background: ACCENT, color: "#0b0f14" }}>
+                    Gym
+                  </span>
+                  {isCompleted && (
+                    <span
+                      className="badge"
+                      style={{
+                        border: `1px solid ${GREEN}AA`,
+                        color: GREEN,
+                        background: "transparent",
+                      }}
+                      title="Previously completed"
+                    >
+                      Completed
+                    </span>
+                  )}
+                </div>
               </div>
               {data.notes && <div className="mt-1 text-dim small">{data.notes}</div>}
             </section>
 
-            {/* Previous Session */}
+            {/* Previous Session (collapsible card remains for full detail) */}
             {previousSession && (
               <section className="futuristic-card p-3 mb-3">
                 <div
@@ -406,7 +445,7 @@ export default function GymWorkoutViewerPage() {
                   <div className="mt-2 small">
                     {previousSession.sets.map((s, i) => (
                       <div key={i} className="mb-1">
-                        <strong>{s.exercise_id}</strong> — Set {s.set}: {s.weight ?? "-"}kg × {s.reps ?? "-"}
+                        <strong>{s.exercise_id}</strong> — Set {s.set}: {s.weight ?? "-"}kg × {s.reps ?? "-"} reps
                       </div>
                     ))}
                   </div>
@@ -419,6 +458,7 @@ export default function GymWorkoutViewerPage() {
               <RoundBlock
                 round={data.warmup}
                 media={mediaById}
+                prevByKey={prevByKey}
                 onUpdateSet={updateSet}
                 onOpenMedia={openMedia}
                 kgWidth={KG_INPUT_W}
@@ -428,6 +468,7 @@ export default function GymWorkoutViewerPage() {
             <RoundBlock
               round={data.main}
               media={mediaById}
+              prevByKey={prevByKey}
               onUpdateSet={updateSet}
               onOpenMedia={openMedia}
               kgWidth={KG_INPUT_W}
@@ -437,6 +478,7 @@ export default function GymWorkoutViewerPage() {
               <RoundBlock
                 round={data.finisher}
                 media={mediaById}
+                prevByKey={prevByKey}
                 onUpdateSet={updateSet}
                 onOpenMedia={openMedia}
                 kgWidth={KG_INPUT_W}
@@ -446,18 +488,34 @@ export default function GymWorkoutViewerPage() {
 
             {/* Complete Workout */}
             <div className="d-grid mt-3">
-              <button
-                className="btn btn-primary"
-                style={{
-                  background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
-                  border: "none",
-                  borderRadius: 24,
-                  fontWeight: 700,
-                }}
-                onClick={() => setCompleteOpen(true)}
-              >
-                Complete Workout
-              </button>
+              {isCompleted ? (
+                <button
+                  className="btn btn-outline-success"
+                  style={{
+                    borderRadius: 24,
+                    borderColor: GREEN,
+                    color: GREEN,
+                    fontWeight: 700,
+                    background: "transparent",
+                  }}
+                  disabled
+                >
+                  Completed
+                </button>
+              ) : (
+                <button
+                  className="btn btn-primary"
+                  style={{
+                    background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                    border: "none",
+                    borderRadius: 24,
+                    fontWeight: 700,
+                  }}
+                  onClick={() => setCompleteOpen(true)}
+                >
+                  Complete Workout
+                </button>
+              )}
             </div>
           </>
         )}
@@ -563,6 +621,7 @@ export default function GymWorkoutViewerPage() {
 function RoundBlock({
   round,
   media,
+  prevByKey,
   onUpdateSet,
   onOpenMedia,
   kgWidth,
@@ -570,6 +629,7 @@ function RoundBlock({
 }: {
   round: UIRound;
   media: Record<string, { gif_url?: string; video_url?: string; exercise_name?: string }>;
+  prevByKey: Record<string, { weight: number | null; reps: number | null }>;
   onUpdateSet: (exercise_id: string, set: number, patch: Partial<CompletionSet>) => void;
   onOpenMedia: (exercise_id: string) => void;
   kgWidth: number;
@@ -601,6 +661,7 @@ function RoundBlock({
               <SingleItemBlock
                 item={it as UISingleItem}
                 media={media[(it as UISingleItem).exercise_id]}
+                prevByKey={prevByKey}
                 onUpdateSet={onUpdateSet}
                 onOpenMedia={onOpenMedia}
                 kgWidth={kgWidth}
@@ -610,6 +671,7 @@ function RoundBlock({
               <SupersetBlock
                 item={it as UISupersetItem}
                 media={media}
+                prevByKey={prevByKey}
                 onUpdateSet={onUpdateSet}
                 onOpenMedia={onOpenMedia}
                 kgWidth={kgWidth}
@@ -627,6 +689,7 @@ function RoundBlock({
 function SingleItemBlock({
   item,
   media,
+  prevByKey,
   onUpdateSet,
   onOpenMedia,
   kgWidth,
@@ -634,6 +697,7 @@ function SingleItemBlock({
 }: {
   item: UISingleItem;
   media?: { gif_url?: string; video_url?: string; exercise_name?: string };
+  prevByKey: Record<string, { weight: number | null; reps: number | null }>;
   onUpdateSet: (exercise_id: string, set: number, patch: Partial<CompletionSet>) => void;
   onOpenMedia: (exercise_id: string) => void;
   kgWidth: number;
@@ -684,29 +748,40 @@ function SingleItemBlock({
 
       {/* Inputs grid: same columns sizing */}
       <div className="d-flex flex-wrap gap-2">
-        {[...Array(sets)].map((_, i) => (
-          <div key={i} className="d-flex align-items-center gap-2" style={{ marginBottom: 8 }}>
-            <div className="text-dim small" style={{ width: 44, textAlign: "right" }}>
-              Set {i + 1}
+        {[...Array(sets)].map((_, i) => {
+          const prev = prevByKey[`${item.exercise_id}|${i + 1}`];
+          return (
+            <div key={i} className="d-flex align-items-center gap-2" style={{ marginBottom: 8 }}>
+              <div className="text-dim small" style={{ width: 44, textAlign: "right" }}>
+                Set {i + 1}
+              </div>
+              <input
+                className="form-control"
+                type="number"
+                inputMode="decimal"
+                placeholder="kg"
+                onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { weight: Number(e.target.value) || null })}
+                style={{ width: kgWidth, fontSize: "0.9rem" }}
+              />
+              <div className="d-flex align-items-center" style={{ gap: 6 }}>
+                <input
+                  className="form-control"
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="reps"
+                  onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { reps: Number(e.target.value) || null })}
+                  style={{ width: repsWidth, fontSize: "0.9rem" }}
+                />
+                <span className="small text-dim">reps</span>
+              </div>
+
+              {/* Prev inline */}
+              <div className="small text-dim ms-1">
+                Prev: {(prev?.weight ?? "-")}kg × {(prev?.reps ?? "-")} reps
+              </div>
             </div>
-            <input
-              className="form-control"
-              type="number"
-              inputMode="decimal"
-              placeholder="kg"
-              onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { weight: Number(e.target.value) || null })}
-              style={{ width: kgWidth, fontSize: "0.9rem" }}
-            />
-            <input
-              className="form-control"
-              type="number"
-              inputMode="numeric"
-              placeholder="reps"
-              onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { reps: Number(e.target.value) || null })}
-              style={{ width: repsWidth, fontSize: "0.9rem" }}
-            />
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -716,6 +791,7 @@ function SingleItemBlock({
 function SupersetBlock({
   item,
   media,
+  prevByKey,
   onUpdateSet,
   onOpenMedia,
   kgWidth,
@@ -723,6 +799,7 @@ function SupersetBlock({
 }: {
   item: UISupersetItem;
   media: Record<string, { gif_url?: string; video_url?: string; exercise_name?: string }>;
+  prevByKey: Record<string, { weight: number | null; reps: number | null }>;
   onUpdateSet: (exercise_id: string, set: number, patch: Partial<CompletionSet>) => void;
   onOpenMedia: (exercise_id: string) => void;
   kgWidth: number;
@@ -761,6 +838,8 @@ function SupersetBlock({
 
           {item.items.map((sub, i) => {
             const m = media[sub.exercise_id] || {};
+            const prev = prevByKey[`${sub.exercise_id}|${setIdx + 1}`];
+
             return (
               <div key={i} className="d-flex align-items-center gap-2 mb-2">
                 {/* Media thumb */}
@@ -786,16 +865,20 @@ function SupersetBlock({
                   )}
                 </button>
 
-                {/* Name + inputs aligned with Single layout */}
+                {/* Name + prescribed reps + inputs aligned with Single layout */}
                 <div className="flex-fill">
                   <div className="fw-semibold" style={{ lineHeight: 1.2 }}>
                     {m.exercise_name || sub.exercise_id}
                   </div>
+                  <div className="text-dim small">
+                    {sub.reps ? `• ${sub.reps} reps` : ""}
+                  </div>
 
-                  <div className="d-flex align-items-center gap-2 mt-1">
+                  <div className="d-flex align-items-center gap-2 mt-1 flex-wrap">
                     <div className="text-dim small" style={{ width: 44, textAlign: "right" }}>
                       &nbsp;
                     </div>
+
                     <input
                       className="form-control"
                       type="number"
@@ -807,16 +890,24 @@ function SupersetBlock({
                       style={{ width: kgWidth, fontSize: "0.85rem" }}
                     />
 
-                    <input
-                      className="form-control"
-                      type="number"
-                      inputMode="numeric"
-                      placeholder="reps"
-                      onChange={(e) =>
-                        onUpdateSet(sub.exercise_id, setIdx + 1, { reps: Number(e.target.value) || null })
-                      }
-                      style={{ width: repsWidth, fontSize: "0.85rem" }}
-                    />
+                    <div className="d-flex align-items-center" style={{ gap: 6 }}>
+                      <input
+                        className="form-control"
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="reps"
+                        onChange={(e) =>
+                          onUpdateSet(sub.exercise_id, setIdx + 1, { reps: Number(e.target.value) || null })
+                        }
+                        style={{ width: repsWidth, fontSize: "0.85rem" }}
+                      />
+                      <span className="small text-dim">reps</span>
+                    </div>
+
+                    {/* Prev inline */}
+                    <div className="small text-dim ms-1">
+                      Prev: {(prev?.weight ?? "-")}kg × {(prev?.reps ?? "-")} reps
+                    </div>
                   </div>
                 </div>
               </div>
