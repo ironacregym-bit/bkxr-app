@@ -9,6 +9,26 @@ const MIN_PAYOUT = Number(process.env.MIN_PAYOUT_GBP || 20);
 
 type TargetEntry = { refDocId: string; idx: number; invoice_id: string; amount: number };
 
+function origin() {
+  return process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+}
+async function emitEmail(event: string, email: string, context: Record<string, any> = {}, force = false) {
+  const BASE = origin();
+  if (!BASE || !email) return;
+  await fetch(`${BASE}/api/notify/emit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event, email, context, force }),
+  }).catch(() => null);
+}
+async function notifyAdmins(event: string, context: Record<string, any> = {}) {
+  const list = (process.env.NOTIFY_ADMIN_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  await Promise.all(list.map((email) => emitEmail(event, email, context)));
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") { res.setHeader("Allow", "POST"); return res.status(405).json({ error: "Method not allowed" }); }
 
@@ -57,22 +77,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
 
-    // Create payout doc and lock entries to "requested" with transfer_id (in a transaction)
+    // Create payout doc and lock entries to "requested" with transfer_id (transaction)
     const payoutRef = firestore.collection("referral_payouts").doc();
     await firestore.runTransaction(async (tx) => {
-      // lock per referrals doc
-      const grouped = groupBy(targets, t => t.refDocId);
-      for (const g of grouped) {
+      const groups = groupBy(targets, (t) => t.refDocId);
+      for (const g of groups) {
         const docRef = firestore.collection("referrals").doc(g.key);
         const snap = await tx.get(docRef);
         if (!snap.exists) continue;
         const d = snap.data() || {};
         const arr: any[] = Array.isArray(d.commission_entries) ? d.commission_entries : [];
+
         const updated = arr.map((e, i) => {
-          const match = g.items.find(m => m.idx === i && e?.invoice_id === m.invoice_id && e?.status === "unpaid");
+          const match = g.items.find((m) => m.idx === i && e?.invoice_id === m.invoice_id && e?.status === "unpaid");
           if (match) return { ...e, status: "requested", requested_at: new Date().toISOString(), payout_id: payoutRef.id, transfer_id: transfer.id };
           return e;
         });
+
         tx.set(docRef, { commission_entries: updated }, { merge: true });
       }
 
@@ -80,12 +101,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         referrer_email: email,
         amount_gbp: total,
         currency: "GBP",
-        status: "pending", // you can update to 'paid' via webhook or admin action
+        status: "pending",
         created_at: new Date().toISOString(),
         transfer_id: transfer.id,
         stripe_connect_id: accountId,
-        entries: targets.map(t => ({ referral_doc_id: t.refDocId, invoice_id: t.invoice_id, amount: t.amount })),
+        entries: targets.map((t) => ({ referral_doc_id: t.refDocId, invoice_id: t.invoice_id, amount: t.amount })),
       });
+    });
+
+    // Notify referrer + admins
+    await emitEmail("referral_payout_requested", email, {
+      payout_id: payoutRef.id,
+      transfer_id: transfer.id,
+      amount_gbp: total,
+      currency: "GBP",
+      entries_count: targets.length,
+    });
+    await notifyAdmins("admin_referral_payout_requested", {
+      payout_id: payoutRef.id,
+      referrer_email: email,
+      transfer_id: transfer.id,
+      amount_gbp: total,
+      entries_count: targets.length,
     });
 
     return res.status(200).json({ ok: true, payout_id: payoutRef.id, amount_gbp: total, transfer_id: transfer.id });
