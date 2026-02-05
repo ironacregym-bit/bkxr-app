@@ -727,7 +727,7 @@ export default function NutritionPage() {
 
       {/* Scanner Modal */}
       <BarcodeScannerClient
-        isOpen={scannerOpen && Boolean(isPremium))}
+        isOpen={scannerOpen && Boolean(isPremium)}
         onClose={() => setScannerOpen(false)}
         onFoundFood={(food) => {
           // Close scanner and open editor with the found item
