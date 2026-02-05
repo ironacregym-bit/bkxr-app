@@ -386,68 +386,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
-      case "transfer.failed": {
-        const transfer = event.data.object as Stripe.Transfer;
-        const transferId = transfer.id;
-
-        const paySnap = await firestore
-          .collection("referral_payouts")
-          .where("transfer_id", "==", transferId)
-          .limit(1)
-          .get();
-        if (paySnap.empty) break;
-
-        const payoutRef = paySnap.docs[0].ref;
-        const payout = paySnap.docs[0].data() || {};
-        const entries: Array<{ referral_doc_id: string; invoice_id: string; amount: number }> =
-          Array.isArray(payout.entries) ? payout.entries : [];
-
-        await firestore.runTransaction(async (tx) => {
-          for (const group of groupBy(entries, (e) => e.referral_doc_id)) {
-            const docRef = firestore.collection("referrals").doc(group.key);
-            const snap = await tx.get(docRef);
-            if (!snap.exists) continue;
-            const d = snap.data() || {};
-            const arr: any[] = Array.isArray(d.commission_entries) ? d.commission_entries : [];
-
-            const updated = arr.map((e) => {
-              const match = group.items.find((m) => m.invoice_id === e?.invoice_id);
-              if (!match) return e;
-              if (String(e?.payout_id || "") !== payoutRef.id) return e;
-              if (e?.status === "requested" || e?.status === "paid") {
-                const { payout_id: _a, requested_at: _b, transfer_id: _c, paid_at: _d, ...rest } = e || {};
-                return { ...rest, status: "unpaid", reverted_at: new Date().toISOString() };
-              }
-              return e;
-            });
-
-            tx.set(docRef, { commission_entries: updated }, { merge: true });
-          }
-
-          tx.set(
-            payoutRef,
-            { status: "rejected", rejected_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-            { merge: true }
-          );
-        });
-
-        if (payout.referrer_email) {
-          await emitEmail("referral_payout_failed", payout.referrer_email as string, {
-            payout_id: payoutRef.id,
-            transfer_id: transferId,
-            amount_gbp: payout.amount_gbp || 0,
-          });
-        }
-        await notifyAdmins("admin_referral_payout_failed", {
-          payout_id: payoutRef.id,
-          transfer_id: transferId,
-          referrer_email: payout.referrer_email || "",
-          amount_gbp: payout.amount_gbp || 0,
-        });
-
-        break;
-      }
-
+      // NOTE: Stripe does not emit "transfer.failed".
+      // Reversal is the supported transfer rollback path:
       case "transfer.reversed": {
         const transfer = event.data.object as Stripe.Transfer;
         const transferId = transfer.id;
