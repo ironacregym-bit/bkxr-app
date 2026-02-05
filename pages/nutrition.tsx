@@ -251,33 +251,7 @@ export default function NutritionPage() {
     doSearch(query);
   }, [query, doSearch]);
 
-  // Compute scaled macros for non-manual using serving/per100
-  const scaledSelected: Food | null = useMemo(() => {
-    if (!selectedFood) return null;
-    if (selectedFood.id?.startsWith("manual-")) return selectedFood;
-
-    // Auto-select per serving if available; otherwise per100 (existing fields)
-    if (usingServing === "serving" && selectedFood.servingSize) {
-      const hasPerServing =
-        selectedFood.caloriesPerServing != null ||
-        selectedFood.proteinPerServing != null ||
-        selectedFood.carbsPerServing != null ||
-        selectedFood.fatPerServing != null;
-
-      if (hasPerServing) {
-        return {
-          ...selectedFood,
-          calories: +(Number(selectedFood.caloriesPerServing ?? 0)).toFixed(2),
-          protein: +(Number(selectedFood.proteinPerServing ?? 0)).toFixed(2),
-          carbs: +(Number(selectedFood.carbsPerServing ?? 0)).toFixed(2),
-          fat: +(Number(selectedFood.fatPerServing ?? 0)).toFixed(2),
-        };
-      }
-    }
-    return selectedFood;
-  }, [selectedFood, usingServing]);
-
-  // Add entry
+  // Add entry — now trusts the Food payload passed in (macros already calculated by the editor)
   const addEntry = async (meal: string, food: Food | null) => {
     if (!session?.user?.email || !food) return signIn("google");
 
@@ -285,10 +259,10 @@ export default function NutritionPage() {
       date: formattedDate,
       meal,
       food,
-      calories: (scaledSelected || food).calories,
-      protein: (scaledSelected || food).protein,
-      carbs: (scaledSelected || food).carbs,
-      fat: (scaledSelected || food).fat,
+      calories: Number(food.calories || 0),
+      protein: Number(food.protein || 0),
+      carbs: Number(food.carbs || 0),
+      fat: Number(food.fat || 0),
     };
 
     setAdding(true);
@@ -439,14 +413,6 @@ export default function NutritionPage() {
     setSelectedFood(food);
     setOpenMeal(meal);
 
-    // Auto-select per serving if available
-    const hasPerServing =
-      food.caloriesPerServing != null ||
-      food.proteinPerServing != null ||
-      food.carbsPerServing != null ||
-      food.fatPerServing != null;
-    setUsingServing(hasPerServing ? "serving" : "per100");
-
     // Keep editor visible
     requestAnimationFrame(() => {
       editorTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -571,7 +537,7 @@ export default function NutritionPage() {
                       food={selectedFood}
                       usingServing={usingServing}
                       setUsingServing={setUsingServing}
-                      scaledSelected={scaledSelected}
+                      scaledSelected={null /* not used now */}
                       addEntry={addEntry}
                       isFavourite={isFavourite(selectedFood)}
                       onToggleFavourite={() => toggleFavourite(selectedFood)}
@@ -642,6 +608,7 @@ export default function NutritionPage() {
                                       {food.name || food.code || "Food"}
                                     </div>
                                     <div className="small text-dim">
+                                      {/* Show per-100g baseline if available; otherwise show whatever is provided */}
                                       <span style={{ color: COLORS.calories }}>{round2((food as any).calories)} kcal</span>{" "}
                                       | <span style={{ color: COLORS.protein }}>{round2((food as any).protein)}p</span>{" "}
                                       | <span style={{ color: COLORS.carbs }}>{round2((food as any).carbs)}c</span>{" "}
