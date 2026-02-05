@@ -191,12 +191,27 @@ export default function Home() {
   const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
   const [weekLoading, setWeekLoading] = useState(false);
 
+  // ----- UPDATED: make recurring behave like single-workout days -----
   const deriveDayBooleans = (o: any) => {
     const isFriday = Boolean(o.isFriday ?? new Date(o.dateKey + "T00:00:00").getDay() === 5);
-    const hasWorkout = Boolean(o.hasWorkout) || Boolean(o.workoutIds?.length) || Boolean(o.workoutSummary);
+
+    // Has workout if planned OR recurring OR summaries/ids exist
+    const hasWorkout =
+      Boolean(o.hasWorkout) ||
+      Boolean(o.hasRecurringToday) ||
+      Boolean(o.recurringWorkouts?.length) ||
+      Boolean(o.workoutIds?.length) ||
+      Boolean(o.workoutSummary);
+
+    // Done if explicit OR recurringDone OR can be inferred via summary
+    const hasSummary =
+      Boolean(o.workoutSummary && (o.workoutSummary.calories || o.workoutSummary.duration || o.workoutSummary.weightUsed));
+
     const workoutDone =
       Boolean(o.workoutDone) ||
-      Boolean(o.workoutSummary && (o.workoutSummary.calories || o.workoutSummary.duration || o.workoutSummary.weightUsed));
+      Boolean(o.recurringDone) ||
+      hasSummary;
+
     const nutritionLogged = Boolean(o.nutritionLogged);
     const habitAllDone =
       Boolean(o.habitAllDone) ||
@@ -436,7 +451,7 @@ export default function Home() {
     };
   }, [daySummary, dayCompletionList, selectedDateKey]);
 
-  // ---------- NEW: Optional BXKR completion state ----------
+  // ---------- Optional BXKR completion (unchanged) ----------
   const { optionalDone, optionalSummary } = useMemo(() => {
     const ids = (selectedDayData?.optionalWorkouts || []).map((w) => String(w.id));
     if (!ids.length) return { optionalDone: false, optionalSummary: undefined as undefined };
@@ -462,6 +477,53 @@ export default function Home() {
       } as { calories: number; duration: number; weightUsed?: string },
     };
   }, [selectedDayData?.optionalWorkouts, dayCompletionList]);
+
+  // ---------- NEW: Recurring completion via completions (same concept as optional) ----------
+  const { recurringDoneFromCompletions, recurringSummary } = useMemo(() => {
+    const ids = (selectedDayData?.recurringWorkouts || []).map((w) => String(w.id));
+    if (!ids.length) return { recurringDoneFromCompletions: false, recurringSummary: undefined as undefined };
+
+    const matches = dayCompletionList.filter((c) => ids.includes(String(c.workout_id || "")));
+    if (!matches.length) return { recurringDoneFromCompletions: false, recurringSummary: undefined as undefined };
+
+    const calories = matches.reduce((sum, c) => sum + (Number(c.calories_burned) || 0), 0);
+    const duration = matches.reduce(
+      (sum, c) => sum + (Number((c as any).duration) || Number(c.duration_minutes) || 0),
+      0
+    );
+    const last = matches[matches.length - 1];
+    const weightUsed =
+      typeof last?.weight_completed_with === "number" ? `${Math.round(last.weight_completed_with)} kg` : undefined;
+
+    return {
+      recurringDoneFromCompletions: true,
+      recurringSummary: {
+        calories,
+        duration,
+        weightUsed,
+      } as { calories: number; duration: number; weightUsed?: string },
+    };
+  }, [selectedDayData?.recurringWorkouts, dayCompletionList]);
+
+  // Use recurring summary when it's a recurring day; otherwise use the planned workout summary
+  const workoutSummaryForCard =
+    selectedDayData?.hasRecurringToday
+      ? (recurringSummary || selectedDayData?.workoutSummary)
+      : selectedDayData?.workoutSummary;
+
+  // Resolve recurringDone using either API flag or completions
+  const recurringDoneResolved = Boolean(selectedDayData?.recurringDone || recurringDoneFromCompletions);
+
+  // Hrefs
+  const hrefs = {
+    nutrition: `${nutritionHref}`,
+    workout: workoutHref,
+    habit: habitHref,
+    checkin: `${checkinHref}`,
+    freestyle: "/workouts/freestyle",
+    recurring: recurringHref,
+    optionalWorkout: optionalWorkoutHref,
+  };
 
   return (
     <>
@@ -604,29 +666,20 @@ export default function Home() {
             })}`}
             nutritionSummary={roundedNutrition}
             nutritionLogged={Boolean(selectedStatus.nutritionLogged)}
-            workoutSummary={selectedDayData.workoutSummary}
+            workoutSummary={workoutSummaryForCard}        {/* <-- use recurring summary on recurring days */}
             hasWorkout={Boolean(selectedStatus.hasWorkout)}
-            workoutDone={Boolean(selectedStatus.workoutDone)}
+            workoutDone={Boolean(selectedStatus.workoutDone)}  {/* used only for non-recurring row */}
             hasRecurringToday={Boolean(selectedDayData.hasRecurringToday)}
-            recurringDone={Boolean(selectedDayData.recurringDone)}
+            recurringDone={recurringDoneResolved}         {/* <-- boolean resolved via completions */}
             recurringWorkouts={selectedDayData.recurringWorkouts || []}
             optionalWorkouts={selectedDayData.optionalWorkouts || []}
-            // NEW: pass optional completion
             optionalDone={optionalDone}
             optionalSummary={optionalSummary}
+            hrefs={hrefs}
             habitSummary={selectedDayData.habitSummary}
             habitAllDone={Boolean(selectedStatus.habitAllDone)}
             checkinSummary={checkinSummaryNormalized as any}
             checkinComplete={Boolean(selectedStatus.checkinComplete)}
-            hrefs={{
-              nutrition: `${nutritionHref}`,
-              workout: workoutHref,
-              habit: habitHref,
-              checkin: `${checkinHref}`,
-              freestyle: "/workouts/freestyle",
-              recurring: recurringHref,
-              optionalWorkout: optionalWorkoutHref,
-            }}
             freestyleLogged={freestyleLogged}
             freestyleSummary={freestyleSummary}
           />
@@ -687,7 +740,6 @@ export default function Home() {
                   </ul>
                 </>
               ) : null}
-
 
               <div className="mt-3 d-flex gap-2">
                 <a
