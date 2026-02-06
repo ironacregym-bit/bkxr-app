@@ -63,7 +63,6 @@ function isYMD(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 function formatYMD(d: Date): string {
-  // 'en-CA' yields YYYY-MM-DD
   return d.toLocaleDateString("en-CA");
 }
 function parseYMD(ymd: string): Date {
@@ -114,6 +113,26 @@ function toDate(v: any): Date | null {
   } catch {
     return null;
   }
+}
+
+/** Pull every plausible workout identifier from a completion */
+function candidateIdsFromCompletion(c: any): string[] {
+  const fields = [
+    "workout_id",
+    "gym_workout_id",
+    "recurring_workout_id",
+    "recurring_id",
+    "assigned_workout_id",
+    "plan_workout_id",
+    "rx_id",
+  ];
+  const out: string[] = [];
+  for (const f of fields) {
+    const v = c?.[f];
+    if (v != null && String(v).trim() !== "") out.push(String(v).trim());
+  }
+  // De-dupe while preserving order
+  return Array.from(new Set(out));
 }
 
 export default async function handler(
@@ -310,7 +329,7 @@ export default async function handler(
       });
     }
 
-    /** ===== LEGACY RECURRING (now supports assigned_to: string[]) ===== */
+    /** ===== LEGACY RECURRING (assigned_to fallback) ===== */
     try {
       const arrSnap = await firestore
         .collection(WORKOUTS_COLLECTION)
@@ -334,7 +353,6 @@ export default async function handler(
 
       legacyDocs.forEach((doc: any) => {
         const w = doc.data() as any;
-        // Safety filter: include if assigned_to contains user (array) OR equals user (string)
         const assigned = w?.assigned_to;
         const isMine = Array.isArray(assigned)
           ? assigned.map((x: any) => String(x || "").toLowerCase()).includes(userEmail)
@@ -361,7 +379,7 @@ export default async function handler(
         });
       });
     } catch {
-      // Soft‑fail; legacy recurring may not exist or need index. Already covered by assignments model.
+      // Soft‑fail
     }
 
     /** ===== COMPLETIONS (THIS WEEK only) — per‑week done state ===== */
@@ -396,7 +414,7 @@ export default async function handler(
         });
     }
 
-    /** Per-week completion sets (done + latest summary by workout_id) */
+    /** Per-week completion sets (done + latest summary by any candidate ID) */
     const doneInWeek = new Set<string>();
     const latestInWeekById = new Map<
       string,
@@ -404,16 +422,15 @@ export default async function handler(
     >();
 
     for (const c of completionsWeek) {
-      const wid = String(c.workout_id || "");
-      if (!wid) continue;
-
       const completedAt: Date | undefined =
         c.completed_date?.toDate?.() ||
         c.date_completed?.toDate?.() ||
         (c.completed_at?.toDate?.() || undefined);
       if (!completedAt || isNaN(completedAt.getTime?.() || NaN)) continue;
 
-      doneInWeek.add(wid);
+      // get all plausible IDs and mark them done
+      const ids = candidateIdsFromCompletion(c);
+      if (!ids.length) continue;
 
       const row = {
         calories_burned: typeof c.calories_burned === "number" ? c.calories_burned : undefined,
@@ -430,9 +447,13 @@ export default async function handler(
           undefined,
         completedAt,
       };
-      const prev = latestInWeekById.get(wid);
-      if (!prev || (row.completedAt?.getTime?.() ?? 0) > (prev.completedAt?.getTime?.() ?? 0)) {
-        latestInWeekById.set(wid, row);
+
+      for (const id of ids) {
+        doneInWeek.add(id);
+        const prev = latestInWeekById.get(id);
+        if (!prev || (row.completedAt?.getTime?.() ?? 0) > (prev.completedAt?.getTime?.() ?? 0)) {
+          latestInWeekById.set(id, row);
+        }
       }
     }
 
@@ -495,7 +516,7 @@ export default async function handler(
           if (latest.weight_completed_with != null) {
             weightUsed =
               typeof latest.weight_completed_with === "number"
-                ? `${latest.weight_completed_with}kg`
+                ? `${latest.weight_completed_with} kg`
                 : String(latest.weight_completed_with);
           }
         }
