@@ -1,7 +1,7 @@
 // pages/gymworkout/[id].tsx
 // BXKR — Gym Workout Viewer (List-style, set logging, GIF→Video media modal)
-// Bootstrap-only, hydration-safe, GIF size 64px always. Mobile formatting tightened.
-// Adds expandable sets (per-exercise/per-set) to condense the view.
+// Bootstrap-only, hydration-safe, GIF size 64px always.
+// Sets expanded by default; single arrow toggle to collapse/expand per item.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
@@ -278,7 +278,7 @@ export default function GymWorkoutViewerPage() {
   const [mediaGif, setMediaGif] = useState<string | undefined>();
   const [mediaVideo, setMediaVideo] = useState<string | undefined>();
 
-  // Inputs: slightly tighter on mobile; width via CSS variables for consistency
+  // Inputs: consistent widths across wraps
   const KG_INPUT_W = 88;
   const REPS_INPUT_W = 88;
 
@@ -385,9 +385,6 @@ export default function GymWorkoutViewerPage() {
         style={{
           color: "#fff",
           paddingBottom: 90,
-          // Input width vars used below for consistent sizing even as layout wraps
-          // (keeps icons/labels aligned on mobile)
-          // @ts-ignore custom vars
           ["--kgw" as any]: `${KG_INPUT_W}px`,
           ["--repsw" as any]: `${REPS_INPUT_W}px`,
           touchAction: "pan-y" as any,
@@ -395,7 +392,11 @@ export default function GymWorkoutViewerPage() {
       >
         <div className="mb-3 d-flex justify-content-between align-items-center">
           <Link href="/" className="btn btn-outline-secondary">← Back</Link>
-          {data?.workout_name && <div className="fw-bold text-truncate" style={{ maxWidth: 280 }}>{data.workout_name}</div>}
+          {data?.workout_name && (
+            <div className="fw-bold text-truncate" style={{ maxWidth: 280 }}>
+              {data.workout_name}
+            </div>
+          )}
           <div />
         </div>
 
@@ -698,7 +699,7 @@ function RoundBlock({
   );
 }
 
-/* ---------------- Single Item Block (with expandable sets) ---------------- */
+/* ---------------- Single Item Block (expanded by default; arrow toggle) ---------------- */
 function SingleItemBlock({
   item,
   media,
@@ -719,30 +720,8 @@ function SingleItemBlock({
   const sets = Number.isFinite(item.sets) ? Number(item.sets) : 3;
   const rest = item.rest_s ?? null;
 
-  // Expandable sets: default collapsed on initial render to keep mobile compact
-  const [expanded, setExpanded] = useState<boolean[]>(() => Array.from({ length: sets }, () => false));
-
-  // If sets count changes dynamically, realign the state length
-  useEffect(() => {
-    setExpanded((prev) => {
-      const next = Array.from({ length: sets }, (_, i) => prev[i] ?? false);
-      return next;
-    });
-  }, [sets]);
-
-  const allExpanded = expanded.every(Boolean);
-  const anyExpanded = expanded.some(Boolean);
-
-  function toggleSet(i: number) {
-    setExpanded((prev) => {
-      const next = [...prev];
-      next[i] = !next[i];
-      return next;
-    });
-  }
-  function expandAll(v: boolean) {
-    setExpanded(Array.from({ length: sets }, () => v));
-  }
+  // one toggle controls the sets area; default expanded
+  const [expanded, setExpanded] = useState<boolean>(true);
 
   return (
     <div>
@@ -783,102 +762,79 @@ function SingleItemBlock({
           {item.notes && <div className="small text-dim mt-1">{item.notes}</div>}
         </div>
 
-        {/* Expand controls */}
-        <div className="d-flex align-items-center gap-2">
-          <button
-            className="btn btn-sm"
-            style={{
-              borderRadius: 999,
-              border: `1px solid ${ACCENT}88`,
-              color: ACCENT,
-              background: "transparent",
-              fontWeight: 600,
-            }}
-            onClick={() => expandAll(!allExpanded)}
-            title={allExpanded ? "Collapse all sets" : "Expand all sets"}
-          >
-            {allExpanded ? "Collapse all" : anyExpanded ? "Expand all" : "Expand sets"}
-          </button>
-        </div>
+        {/* Single arrow toggle */}
+        <button
+          className="btn btn-sm"
+          style={{
+            borderRadius: 999,
+            border: `1px solid ${ACCENT}88`,
+            color: ACCENT,
+            background: "transparent",
+            fontWeight: 600,
+          }}
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-controls={`single-sets-${item.exercise_id}`}
+          title={expanded ? "Collapse sets" : "Expand sets"}
+        >
+          <i className={`fas fa-chevron-${expanded ? "up" : "down"}`} />
+        </button>
       </div>
 
-      {/* Set chips (tap to expand individual set) */}
-      <div className="d-flex flex-wrap gap-2 mb-2">
-        {Array.from({ length: sets }).map((_, i) => (
-          <button
-            key={i}
-            className="btn btn-sm"
-            onClick={() => toggleSet(i)}
-            style={{
-              borderRadius: 999,
-              padding: "4px 10px",
-              background: expanded[i] ? `${ACCENT}22` : "transparent",
-              border: `1px solid ${expanded[i] ? `${ACCENT}AA` : "rgba(255,255,255,0.18)"}`,
-              color: expanded[i] ? ACCENT : "#d1d5db",
-              fontWeight: 600,
-            }}
-            aria-expanded={expanded[i]}
-            aria-controls={`single-set-${item.exercise_id}-${i + 1}`}
-          >
-            Set {i + 1}
-          </button>
-        ))}
-      </div>
-
-      {/* Inputs: render only expanded sets to keep the view condensed */}
-      <div className="d-flex flex-column" style={{ gap: 8 }}>
-        {Array.from({ length: sets }).map((_, i) => {
-          if (!expanded[i]) return null;
-          const prev = prevByKey[`${item.exercise_id}|${i + 1}`];
-          return (
-            <div
-              key={i}
-              id={`single-set-${item.exercise_id}-${i + 1}`}
-              className="d-flex align-items-center flex-wrap"
-              style={{
-                gap: 8,
-                background: "rgba(255,255,255,0.035)",
-                border: "1px dashed rgba(255,255,255,0.15)",
-                borderRadius: 10,
-                padding: 8,
-              }}
-            >
-              <div className="text-dim small" style={{ width: 52, textAlign: "right", flex: "0 0 auto" }}>
-                Set {i + 1}
-              </div>
-              <input
-                className="form-control"
-                type="number"
-                inputMode="decimal"
-                placeholder="kg"
-                onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { weight: Number(e.target.value) || null })}
-                style={{ width: "var(--kgw)", fontSize: "0.9rem", flex: "0 0 auto" }}
-              />
-              <div className="d-flex align-items-center" style={{ gap: 6, flex: "0 0 auto" }}>
+      {/* Inputs grid: only when expanded */}
+      {expanded && (
+        <div id={`single-sets-${item.exercise_id}`} className="d-flex flex-column" style={{ gap: 8 }}>
+          {Array.from({ length: sets }).map((_, i) => {
+            const prev = prevByKey[`${item.exercise_id}|${i + 1}`];
+            return (
+              <div
+                key={i}
+                className="d-flex align-items-center flex-wrap"
+                style={{
+                  gap: 8,
+                  background: "rgba(255,255,255,0.035)",
+                  border: "1px dashed rgba(255,255,255,0.15)",
+                  borderRadius: 10,
+                  padding: 8,
+                }}
+              >
+                <div className="text-dim small" style={{ width: 52, textAlign: "right", flex: "0 0 auto" }}>
+                  Set {i + 1}
+                </div>
                 <input
                   className="form-control"
                   type="number"
-                  inputMode="numeric"
-                  placeholder="reps"
-                  onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { reps: Number(e.target.value) || null })}
-                  style={{ width: "var(--repsw)", fontSize: "0.9rem" }}
+                  inputMode="decimal"
+                  placeholder="kg"
+                  onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { weight: Number(e.target.value) || null })}
+                  style={{ width: "var(--kgw)", fontSize: "0.9rem", flex: "0 0 auto" }}
                 />
-                <span className="small text-dim">reps</span>
-              </div>
+                <div className="d-flex align-items-center" style={{ gap: 6, flex: "0 0 auto" }}>
+                  <input
+                    className="form-control"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="reps"
+                    onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { reps: Number(e.target.value) || null })}
+                    style={{ width: "var(--repsw)", fontSize: "0.9rem" }}
+                  />
+                  <span className="small text-dim">reps</span>
+                </div>
 
-              {/* Prev inline */}
-              <div className="small text-dim ms-auto" style={{ minWidth: 160 }}>
-                Prev: {(prev?.weight ?? "-")}kg × {(prev?.reps ?? "-")} reps
+                {/* Prev inline */}
+                <div className="small text-dim ms-auto" style={{ minWidth: 160 }}>
+                  Prev: {(prev?.weight ?? "-")}kg × {(prev?.reps ?? "-")} reps
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-/* ---------------- Superset Block (per-set expandable) ---------------- */
+/* ---------------- Superset Block (expanded by default; arrow toggle) ---------------- */
 function SupersetBlock({
   item,
   media,
@@ -899,28 +855,7 @@ function SupersetBlock({
   const sets = Number.isFinite(item.sets) ? Number(item.sets) : 3;
   const rest = item.rest_s ?? null;
 
-  // Per-set expandable accordion
-  const [expanded, setExpanded] = useState<boolean[]>(() => Array.from({ length: sets }, () => false));
-
-  useEffect(() => {
-    setExpanded((prev) => {
-      const next = Array.from({ length: sets }, (_, i) => prev[i] ?? false);
-      return next;
-    });
-  }, [sets]);
-
-  const allExpanded = expanded.every(Boolean);
-  const anyExpanded = expanded.some(Boolean);
-  function toggleSet(i: number) {
-    setExpanded((prev) => {
-      const next = [...prev];
-      next[i] = !next[i];
-      return next;
-    });
-  }
-  function expandAll(v: boolean) {
-    setExpanded(Array.from({ length: sets }, () => v));
-  }
+  const [expanded, setExpanded] = useState<boolean>(true);
 
   return (
     <div>
@@ -940,10 +875,12 @@ function SupersetBlock({
               background: "transparent",
               fontWeight: 600,
             }}
-            onClick={() => expandAll(!allExpanded)}
-            title={allExpanded ? "Collapse all sets" : "Expand all sets"}
+            onClick={() => setExpanded((v) => v ? false : true)}
+            aria-expanded={expanded}
+            aria-controls={`ss-sets-${(item.name || "").replace(/\s+/g, "-")}`}
+            title={expanded ? "Collapse sets" : "Expand sets"}
           >
-            {allExpanded ? "Collapse all" : anyExpanded ? "Expand all" : "Expand sets"}
+            <i className={`fas fa-chevron-${expanded ? "up" : "down"}`} />
           </button>
         </div>
       </div>
@@ -953,125 +890,100 @@ function SupersetBlock({
         {item.notes ? ` • ${item.notes}` : ""}
       </div>
 
-      {/* Set chips */}
-      <div className="d-flex flex-wrap gap-2 mb-2">
-        {Array.from({ length: sets }).map((_, i) => (
-          <button
-            key={i}
-            className="btn btn-sm"
-            onClick={() => toggleSet(i)}
-            style={{
-              borderRadius: 999,
-              padding: "4px 10px",
-              background: expanded[i] ? `${ACCENT}22` : "transparent",
-              border: `1px solid ${expanded[i] ? `${ACCENT}AA` : "rgba(255,255,255,0.18)"}`,
-              color: expanded[i] ? ACCENT : "#d1d5db",
-              fontWeight: 600,
-            }}
-            aria-expanded={expanded[i]}
-            aria-controls={`ss-set-${(item.name || "").replace(/\s+/g, "-")}-${i + 1}`}
-          >
-            Set {i + 1}
-          </button>
-        ))}
-      </div>
+      {/* All sets (expanded by default) */}
+      {expanded && (
+        <div id={`ss-sets-${(item.name || "").replace(/\s+/g, "-")}`}>
+          {Array.from({ length: sets }).map((_, setIdx) => (
+            <div
+              key={setIdx}
+              className="p-2 mb-2"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px dashed rgba(255,255,255,0.15)",
+                borderRadius: 10,
+              }}
+            >
+              <div className="fw-semibold mb-2">Set {setIdx + 1}</div>
 
-      {/* For each expanded set, render rows of exercises with same input widths */}
-      {Array.from({ length: sets }).map((_, setIdx) => {
-        if (!expanded[setIdx]) return null;
-        return (
-          <div
-            key={setIdx}
-            id={`ss-set-${(item.name || "").replace(/\s+/g, "-")}-${setIdx + 1}`}
-            className="p-2 mb-2"
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px dashed rgba(255,255,255,0.15)",
-              borderRadius: 10,
-            }}
-          >
-            <div className="fw-semibold mb-2">Set {setIdx + 1}</div>
+              {item.items.map((sub, i) => {
+                const m = media[sub.exercise_id] || {};
+                const prev = prevByKey[`${sub.exercise_id}|${setIdx + 1}`];
 
-            {item.items.map((sub, i) => {
-              const m = media[sub.exercise_id] || {};
-              const prev = prevByKey[`${sub.exercise_id}|${setIdx + 1}`];
+                return (
+                  <div key={i} className="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                    {/* Media thumb */}
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-light"
+                      style={{ borderRadius: 12, padding: 0, overflow: "hidden", flex: "0 0 auto" }}
+                      onClick={() => onOpenMedia(sub.exercise_id)}
+                    >
+                      {m.gif_url ? (
+                        <img
+                          src={fixGifUrl(m.gif_url)}
+                          alt={m.exercise_name || sub.exercise_id}
+                          style={{ width: 64, height: 64, objectFit: "cover", display: "block" }}
+                        />
+                      ) : (
+                        <div
+                          className="d-flex align-items-center justify-content-center"
+                          style={{ width: 64, height: 64, background: "rgba(255,255,255,0.06)" }}
+                        >
+                          <i className="fas fa-play" />
+                        </div>
+                      )}
+                    </button>
 
-              return (
-                <div key={i} className="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                  {/* Media thumb */}
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline-light"
-                    style={{ borderRadius: 12, padding: 0, overflow: "hidden", flex: "0 0 auto" }}
-                    onClick={() => onOpenMedia(sub.exercise_id)}
-                  >
-                    {m.gif_url ? (
-                      <img
-                        src={fixGifUrl(m.gif_url)}
-                        alt={m.exercise_name || sub.exercise_id}
-                        style={{ width: 64, height: 64, objectFit: "cover", display: "block" }}
-                      />
-                    ) : (
-                      <div
-                        className="d-flex align-items-center justify-content-center"
-                        style={{ width: 64, height: 64, background: "rgba(255,255,255,0.06)" }}
-                      >
-                        <i className="fas fa-play" />
+                    {/* Name + prescribed reps + inputs aligned with Single layout */}
+                    <div className="flex-fill" style={{ minWidth: 220 }}>
+                      <div className="fw-semibold text-truncate" style={{ lineHeight: 1.2 }}>
+                        {m.exercise_name || sub.exercise_id}
                       </div>
-                    )}
-                  </button>
+                      <div className="text-dim small">{sub.reps ? `• ${sub.reps} reps` : ""}</div>
 
-                  {/* Name + prescribed reps + inputs aligned with Single layout */}
-                  <div className="flex-fill" style={{ minWidth: 220 }}>
-                    <div className="fw-semibold text-truncate" style={{ lineHeight: 1.2 }}>
-                      {m.exercise_name || sub.exercise_id}
-                    </div>
-                    <div className="text-dim small">
-                      {sub.reps ? `• ${sub.reps} reps` : ""}
-                    </div>
+                      <div className="d-flex align-items-center gap-2 mt-1 flex-wrap">
+                        <div className="text-dim small" style={{ width: 52, textAlign: "right", flex: "0 0 auto" }}>
+                          &nbsp;
+                        </div>
 
-                    <div className="d-flex align-items-center gap-2 mt-1 flex-wrap">
-                      <div className="text-dim small" style={{ width: 52, textAlign: "right", flex: "0 0 auto" }}>
-                        &nbsp;
-                      </div>
-
-                      <input
-                        className="form-control"
-                        type="number"
-                        inputMode="decimal"
-                        placeholder="kg"
-                        onChange={(e) =>
-                          onUpdateSet(sub.exercise_id, setIdx + 1, { weight: Number(e.target.value) || null })
-                        }
-                        style={{ width: "var(--kgw)", fontSize: "0.85rem", flex: "0 0 auto" }}
-                      />
-
-                      <div className="d-flex align-items-center" style={{ gap: 6, flex: "0 0 auto" }}>
                         <input
                           className="form-control"
                           type="number"
-                          inputMode="numeric"
-                          placeholder="reps"
+                          inputMode="decimal"
+                          placeholder="kg"
                           onChange={(e) =>
-                            onUpdateSet(sub.exercise_id, setIdx + 1, { reps: Number(e.target.value) || null })
+                            onUpdateSet(sub.exercise_id, setIdx + 1, { weight: Number(e.target.value) || null })
                           }
-                          style={{ width: "var(--repsw)", fontSize: "0.85rem" }}
+                          style={{ width: "var(--kgw)", fontSize: "0.85rem", flex: "0 0 auto" }}
                         />
-                        <span className="small text-dim">reps</span>
-                      </div>
 
-                      {/* Prev inline */}
-                      <div className="small text-dim ms-auto" style={{ minWidth: 160 }}>
-                        Prev: {(prev?.weight ?? "-")}kg × {(prev?.reps ?? "-")} reps
+                        <div className="d-flex align-items-center" style={{ gap: 6, flex: "0 0 auto" }}>
+                          <input
+                            className="form-control"
+                            type="number"
+                            inputMode="numeric"
+                            placeholder="reps"
+                            onChange={(e) =>
+                              onUpdateSet(sub.exercise_id, setIdx + 1, { reps: Number(e.target.value) || null })
+                            }
+                            style={{ width: "var(--repsw)", fontSize: "0.85rem" }}
+                          />
+                          <span className="small text-dim">reps</span>
+                        </div>
+
+                        {/* Prev inline */}
+                        <div className="small text-dim ms-auto" style={{ minWidth: 160 }}>
+                          Prev: {(prev?.weight ?? "-")}kg × {(prev?.reps ?? "-")} reps
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
