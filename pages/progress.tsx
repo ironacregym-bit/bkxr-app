@@ -1,4 +1,3 @@
-
 // pages/progress.tsx
 "use client";
 
@@ -41,14 +40,32 @@ const addDays = (d: Date, n: number) => {
   x.setDate(x.getDate() + n);
   return x;
 };
+
+/** Robust Firestore timestamp parser:
+ * - Timestamp.toDate()
+ * - Firestore JSON: { _seconds, _nanoseconds }
+ * - ISO strings or epoch-like values
+ * Returns ISO string or null
+ */
 const toISO = (v: any) => {
   try {
-    const d = v?.toDate?.() instanceof Date ? v.toDate() : v ? new Date(v) : null;
-    return d && !isNaN(d.getTime()) ? d.toISOString() : null;
+    if (!v) return null;
+    if (typeof v?.toDate === "function") {
+      const d = v.toDate();
+      return d && !isNaN(d.getTime()) ? d.toISOString() : null;
+    }
+    if (typeof v === "object" && typeof v._seconds === "number") {
+      const ms = v._seconds * 1000 + (typeof v._nanoseconds === "number" ? v._nanoseconds / 1e6 : 0);
+      const d = new Date(ms);
+      return !isNaN(d.getTime()) ? d.toISOString() : null;
+    }
+    const d = new Date(v);
+    return !isNaN(d.getTime()) ? d.toISOString() : null;
   } catch {
     return null;
   }
 };
+
 // ISO week key, Mon-based (YYYY-Www); we also keep the last date for chart label spacing
 function toWeekKeyKeepLast(ymd: string) {
   const d = new Date(ymd + "T00:00:00");
@@ -75,7 +92,8 @@ type Completion = {
   workout_id?: string | null;
   sets_completed?: number | null;
   weight_completed_with?: number | null;
-  completed_date?: string | { toDate?: () => Date } | null;
+  completed_date?: string | { toDate?: () => Date } | { _seconds?: number; _nanoseconds?: number } | null;
+  date_completed?: string | { toDate?: () => Date } | { _seconds?: number; _nanoseconds?: number } | null;
   started_at?: string | { toDate?: () => Date } | null;
   created_at?: string | { toDate?: () => Date } | null;
 };
@@ -171,10 +189,13 @@ export default function ProgressPage() {
     let totalSessions = 0;
 
     for (const c of allCompletions) {
+      // IMPORTANT: include date_completed fallback (and keep started_at/created_at as last resort)
       const iso =
         toISO((c as any).completed_date) ||
+        toISO((c as any).date_completed) ||
         toISO((c as any).started_at) ||
         toISO((c as any).created_at);
+
       if (!iso) continue;
 
       const ymd = iso.slice(0, 10);
