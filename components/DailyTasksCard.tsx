@@ -314,7 +314,7 @@ export default function DailyTasksCard({
                 ? `${optionalSummary?.calories || 0} kcal${
                     optionalSummary?.duration ? ` · ${Math.round(optionalSummary.duration)} min` : ""
                   }${optionalSummary?.weightUsed ? ` · ${optionalSummary.weightUsed}` : ""}`
-                : "Optional · Pending"}
+                : "Pending"}
             </span>
           </div>
         </RowWrapper>
