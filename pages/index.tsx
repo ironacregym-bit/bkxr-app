@@ -87,6 +87,7 @@ type ApiDay = {
   checkinSummary?: { weight: number; body_fat_pct: number; weightChange?: number; bfChange?: number };
   workoutIds?: string[];
 
+  // From /api/weekly/overview
   hasRecurringToday?: boolean;
   recurringDone?: boolean;
   recurringWorkouts?: SimpleWorkoutRef[];
@@ -119,8 +120,8 @@ type Completion = {
   duration?: number | null;
   calories_burned?: number | null;
   weight_completed_with?: number | null;
-  completed_date?: string | { toDate?: () => Date };
-  date_completed?: string | { toDate?: () => Date };
+  completed_date?: any;
+  date_completed?: any;
 };
 
 type OnboardingStatus = {
@@ -147,6 +148,22 @@ type DaySummaryRes = {
     } | null;
   };
 };
+
+// ---- Robust Firestore Timestamp parser (supports toDate() and {_seconds,_nanoseconds}) ----
+function toDateAny(v: any): Date | null {
+  try {
+    if (!v) return null;
+    if (typeof v?.toDate === "function") return v.toDate();
+    if (typeof v === "object" && typeof v._seconds === "number") {
+      const ms = v._seconds * 1000 + (typeof v._nanoseconds === "number" ? v._nanoseconds / 1e6 : 0);
+      return new Date(ms);
+    }
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+}
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -372,24 +389,13 @@ export default function Home() {
     const weekDoneIds = new Set<string>();
     const weekLatestById = new Map<string, LatestRow>();
 
-    const toDate = (v: any): Date | null => {
-      try {
-        if (!v) return null;
-        if (typeof v?.toDate === "function") return v.toDate();
-        const d = new Date(v);
-        return isNaN(d.getTime()) ? null : d;
-      } catch {
-        return null;
-      }
-    };
-
     for (const c of list) {
       const wid = String(c.workout_id || "").trim();
       if (!wid) continue;
 
       const dt =
-        toDate((c as any).completed_date) ||
-        toDate((c as any).date_completed);
+        toDateAny((c as any).completed_date) ||
+        toDateAny((c as any).date_completed);
       if (!dt) continue;
 
       weekDoneIds.add(wid);
@@ -410,25 +416,21 @@ export default function Home() {
     return { weekDoneIds, weekLatestById };
   }, [weekCompletions]);
 
-  // ---------- Resolve optional & recurring states for the selected day ----------
+  // ---------- Resolve optional & recurring states for the selected day (WEEK-level for both) ----------
   const recurringIds: string[] = (selectedDayData?.recurringWorkouts || []).map((w) => String(w.id));
   const optionalIds: string[] = (selectedDayData?.optionalWorkouts || []).map((w) => String(w.id));
 
-  // Recurring is week-level done by workout_id
   const recurringDoneFromWeek = useMemo(() => {
     if (!recurringIds.length) return false;
     return recurringIds.some((id) => weekDoneIds.has(id));
   }, [recurringIds, weekDoneIds]);
 
-  // BXKR OPTIONAL: CHANGE → also week-level (used to be day-bound)
   const optionalDoneFromWeek = useMemo(() => {
     if (!optionalIds.length) return false;
     return optionalIds.some((id) => weekDoneIds.has(id));
   }, [optionalIds, weekDoneIds]);
 
-  // Card summaries:
-  // - Recurring day → use the most recent of recurring IDs within the week
-  // - Optional on recurring day → use the most recent of optional IDs within the week (CHANGED)
+  // Card summaries via week-latest
   const recurringSummaryForCard = useMemo(() => {
     if (!selectedDayData?.hasRecurringToday || !recurringIds.length) return undefined;
     let latest: LatestRow | undefined;
@@ -461,29 +463,26 @@ export default function Home() {
       : undefined;
   }, [selectedDayData?.hasRecurringToday, optionalIds, weekLatestById]);
 
-  // The main card "workoutSummary" still shows the mandatory (recurring on recurring days; otherwise programmed)
+  // Main card “workoutSummary” shows the mandatory track (recurring on recurring days; else programmed/overview)
   const workoutSummaryForCard = useMemo(() => {
     return selectedDayData?.hasRecurringToday
       ? recurringSummaryForCard
       : selectedDayData?.workoutSummary;
   }, [selectedDayData?.hasRecurringToday, recurringSummaryForCard, selectedDayData?.workoutSummary]);
 
-  // Recurring boolean for the card
+  // Booleans for the card
   const recurringDoneResolved = Boolean(selectedDayData?.recurringDone) || recurringDoneFromWeek;
-
-  // Optional boolean for the card (CHANGED: week-level)
   const optionalDoneResolved = optionalDoneFromWeek;
 
-  // Workout "done" for the selected day → use recurring rule on recurring day, else planned/overview
+  // Workout “done” for the selected day → mandatory on recurring days; planned otherwise
   const workoutDoneResolved = useMemo(() => {
     if (Boolean(selectedDayData?.hasRecurringToday)) {
       return recurringDoneResolved;
     }
-    // No recurring ⇒ planned day (keep as overview boolean)
     return Boolean(selectedStatus.workoutDone);
   }, [selectedDayData?.hasRecurringToday, recurringDoneResolved, selectedStatus.workoutDone]);
 
-  // All-done for the selected day (UI override for the selected pill)
+  // All‑done for the selected day (UI override for the selected pill)
   const allDoneResolved = useMemo(() => {
     const isFriday = new Date(selectedDateKey + "T00:00:00").getDay() === 5;
     const nutritionLogged = Boolean(selectedStatus.nutritionLogged);
@@ -522,7 +521,12 @@ export default function Home() {
         <div className="d-flex justify-content-between mb-2 align-items-center">
           <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
             {session?.user?.image && (
-              <img src={session.user.image} alt="" className="rounded-circle" style={{ width: 36, height: 36, objectFit: "cover" }} />
+              <img
+                src={session.user.image}
+                alt=""
+                className="rounded-circle"
+                style={{ width: 36, height: 36, objectFit: "cover" }}
+              />
             )}
             {(status === "loading" || !mounted || weekLoading || overviewLoading) && <div className="inline-spinner" />}
             <div
