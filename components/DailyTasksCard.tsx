@@ -236,7 +236,7 @@ export default function DailyTasksCard({
                   padding: "2px 8px",
                   borderRadius: 999,
                   fontSize: "0.7rem",
-                  fontWeight: 800,
+                  fontWeight: 600,
                   color: "#0a0a0c",
                   background: ACCENT,
                   boxShadow: `0 0 8px ${ACCENT}77`,
