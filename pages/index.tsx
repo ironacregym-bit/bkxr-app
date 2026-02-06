@@ -41,11 +41,7 @@ function formatYMD(d: Date) {
   return d.toLocaleDateString("en-CA");
 }
 function isSameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 function startOfAlignedWeek(d: Date) {
   const day = d.getDay();
@@ -54,6 +50,13 @@ function startOfAlignedWeek(d: Date) {
   s.setDate(d.getDate() - diffToMon);
   s.setHours(0, 0, 0, 0);
   return s;
+}
+function endOfAlignedWeek(d: Date) {
+  const s = startOfAlignedWeek(d);
+  const e = new Date(s);
+  e.setDate(s.getDate() + 6);
+  e.setHours(23, 59, 59, 999);
+  return e;
 }
 function fridayOfWeek(d: Date) {
   const s = startOfAlignedWeek(d);
@@ -84,7 +87,6 @@ type ApiDay = {
   checkinSummary?: { weight: number; body_fat_pct: number; weightChange?: number; bfChange?: number };
   workoutIds?: string[];
 
-  // From /api/weekly/overview
   hasRecurringToday?: boolean;
   recurringDone?: boolean;
   recurringWorkouts?: SimpleWorkoutRef[];
@@ -118,22 +120,7 @@ type Completion = {
   calories_burned?: number | null;
   weight_completed_with?: number | null;
   completed_date?: string | { toDate?: () => Date };
-
-  // other possible IDs that might be present for recurring/gym workouts
-  // (we don't change schemas; we only *read* if they exist)
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  gym_workout_id?: string;
-  // @ts-ignore
-  recurring_workout_id?: string;
-  // @ts-ignore
-  recurring_id?: string;
-  // @ts-ignore
-  assigned_workout_id?: string;
-  // @ts-ignore
-  plan_workout_id?: string;
-  // @ts-ignore
-  rx_id?: string;
+  date_completed?: string | { toDate?: () => Date };
 };
 
 type OnboardingStatus = {
@@ -177,10 +164,10 @@ export default function Home() {
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
 
   const selectedDateKey = formatYMD(selectedDay);
-  const weekStartKey = useMemo(
-    () => (mounted ? formatYMD(startOfAlignedWeek(new Date())) : ""),
-    [mounted]
-  );
+  const weekStart = useMemo(() => (mounted ? startOfAlignedWeek(new Date()) : null), [mounted]);
+  const weekEnd = useMemo(() => (mounted ? endOfAlignedWeek(new Date()) : null), [mounted]);
+  const weekStartKey = useMemo(() => (weekStart ? formatYMD(weekStart) : ""), [weekStart]);
+  const weekEndKey = useMemo(() => (weekEnd ? formatYMD(weekEnd) : ""), [weekEnd]);
 
   const { data: weeklyOverview, isLoading: overviewLoading } = useSWR(
     weekStartKey ? `/api/weekly/overview?week=${weekStartKey}` : null,
@@ -189,16 +176,13 @@ export default function Home() {
   );
 
   const profileKey =
-    mounted && session?.user?.email
-      ? `/api/profile?email=${encodeURIComponent(session.user.email)}`
-      : null;
+    mounted && session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email)}` : null;
   const { data: profile } = useSWR<UserAccess>(profileKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
 
-  const onboardingKey =
-    mounted && session?.user?.email ? "/api/onboarding/status" : null;
+  const onboardingKey = mounted && session?.user?.email ? "/api/onboarding/status" : null;
   const { data: onboarding } = useSWR<OnboardingStatus>(onboardingKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
@@ -207,11 +191,8 @@ export default function Home() {
   const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
   const [weekLoading, setWeekLoading] = useState(false);
 
-  // Treat recurring like single-workout days
   const deriveDayBooleans = (o: any) => {
     const isFriday = Boolean(o.isFriday ?? new Date(o.dateKey + "T00:00:00").getDay() === 5);
-
-    // Has workout if planned OR recurring OR summaries/ids exist
     const hasWorkout =
       Boolean(o.hasWorkout) ||
       Boolean(o.hasRecurringToday) ||
@@ -219,15 +200,10 @@ export default function Home() {
       Boolean(o.workoutIds?.length) ||
       Boolean(o.workoutSummary);
 
-    // Done if explicit OR recurringDone OR can be inferred via summary
     const hasSummary =
       Boolean(o.workoutSummary && (o.workoutSummary.calories || o.workoutSummary.duration || o.workoutSummary.weightUsed));
 
-    const workoutDone =
-      Boolean(o.workoutDone) ||
-      Boolean(o.recurringDone) ||
-      hasSummary;
-
+    const workoutDone = Boolean(o.workoutDone) || Boolean(o.recurringDone) || hasSummary;
     const nutritionLogged = Boolean(o.nutritionLogged);
     const habitAllDone =
       Boolean(o.habitAllDone) ||
@@ -235,10 +211,7 @@ export default function Home() {
     const checkinComplete = Boolean(o.checkinComplete) || Boolean(o.checkinSummary);
 
     const allDone =
-      (!hasWorkout || workoutDone) &&
-      nutritionLogged &&
-      habitAllDone &&
-      (!isFriday || checkinComplete);
+      (!hasWorkout || workoutDone) && nutritionLogged && habitAllDone && (!isFriday || checkinComplete);
 
     return { isFriday, hasWorkout, workoutDone, nutritionLogged, habitAllDone, checkinComplete, allDone };
   };
@@ -297,14 +270,11 @@ export default function Home() {
         : typeof (s as any).bodyFat === "number"
         ? (s as any).bodyFat
         : 0;
-    return {
-      ...s,
-      body_fat_pct,
-      bodyFat: (s as any).bodyFat ?? body_fat_pct,
-    };
+    return { ...s, body_fat_pct, bodyFat: (s as any).bodyFat ?? body_fat_pct };
   }, [selectedDayData]);
 
   const selectedStatus = weekStatus[selectedDateKey] || ({} as DayStatus);
+
   const hasWorkoutToday = Boolean(selectedStatus.hasWorkout);
   const workoutIds = selectedStatus.workoutIds || [];
   const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
@@ -317,7 +287,7 @@ export default function Home() {
 
   const isPremium = Boolean(
     (profile?.subscription_status === "active" || profile?.subscription_status === "trialing") ||
-    profile?.membership_status === "gym_member"
+      profile?.membership_status === "gym_member"
   );
 
   const weekday = selectedDay.getDay();
@@ -333,13 +303,10 @@ export default function Home() {
   const firstRecurring = selectedDayData?.recurringWorkouts?.[0];
   const firstOptional = selectedDayData?.optionalWorkouts?.[0];
 
-  const recurringHref = selectedDayData?.hasRecurringToday && firstRecurring
-    ? `/gymworkout/${encodeURIComponent(firstRecurring.id)}`
-    : "#";
+  const recurringHref =
+    selectedDayData?.hasRecurringToday && firstRecurring ? `/gymworkout/${encodeURIComponent(firstRecurring.id)}` : "#";
 
-  const optionalWorkoutHref = firstOptional
-    ? `/workout/${encodeURIComponent(firstOptional.id)}`
-    : "#";
+  const optionalWorkoutHref = firstOptional ? `/workout/${encodeURIComponent(firstOptional.id)}` : "#";
 
   const roundedNutrition = selectedDayData?.nutritionSummary
     ? {
@@ -376,200 +343,153 @@ export default function Home() {
     return Math.max(0, Math.min(3, count));
   }, [weeklyOverview]);
 
-  // Completions (whole day range)
-  const completionsKey = useMemo(() => {
-    if (!mounted) return null;
+  // ------- Weekly completions (Mon..Sun) for robust matching by workout_id -------
+  const weekCompletionsKey = useMemo(() => {
+    if (!mounted || !weekStartKey || !weekEndKey) return null;
     const params = new URLSearchParams();
-    params.set("from", selectedDateKey);
-    params.set("to", selectedDateKey);
+    params.set("from", weekStartKey);
+    params.set("to", weekEndKey);
     if (session?.user?.email) params.set("user_email", session.user.email);
     return `/api/completions?${params.toString()}`;
-  }, [mounted, selectedDateKey, session?.user?.email]);
+  }, [mounted, weekStartKey, weekEndKey, session?.user?.email]);
 
-  const { data: dayCompletions } = useSWR<{ results?: Completion[]; items?: Completion[]; completions?: Completion[]; data?: Completion[] }>(
-    completionsKey,
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 30_000 }
-  );
+  const { data: weekCompletions } = useSWR<{
+    results?: Completion[];
+    items?: Completion[];
+    completions?: Completion[];
+    data?: Completion[];
+  }>(weekCompletionsKey, fetcher, { revalidateOnFocus: false, dedupingInterval: 30_000 });
 
-  // Canonical day completion list
-  const dayCompletionList: Completion[] = useMemo(() => {
-    const src =
-      dayCompletions?.results ||
-      dayCompletions?.items ||
-      dayCompletions?.completions ||
-      dayCompletions?.data ||
+  type LatestRow = { calories?: number; duration?: number; weight?: number; at?: number };
+  const { weekDoneIds, weekLatestById } = useMemo(() => {
+    const list: Completion[] =
+      (weekCompletions?.results as Completion[]) ||
+      (weekCompletions?.items as Completion[]) ||
+      (weekCompletions?.completions as Completion[]) ||
+      (weekCompletions?.data as Completion[]) ||
       [];
-    return Array.isArray(src) ? (src as Completion[]) : [];
-  }, [dayCompletions]);
 
-  // Helper: robust matching by many possible completion ID fields
-  function matchByIds(c: Completion, ids: string[]): boolean {
-    if (!ids.length) return false;
-    const set = new Set<string>(ids.map(String));
-    const candidates = [
-      (c as any).workout_id,
-      (c as any).gym_workout_id,
-      (c as any).recurring_workout_id,
-      (c as any).recurring_id,
-      (c as any).assigned_workout_id,
-      (c as any).plan_workout_id,
-      (c as any).rx_id,
-    ]
-      .map((v) => (v != null ? String(v) : ""))
-      .filter(Boolean);
-    for (const cid of candidates) {
-      if (set.has(cid)) return true;
-    }
-    return false;
-  }
+    const weekDoneIds = new Set<string>();
+    const weekLatestById = new Map<string, LatestRow>();
 
-  // Day summary (freestyle)
-  const daySummaryKey = useMemo(() => {
-    if (!mounted) return null;
-    const params = new URLSearchParams();
-    params.set("summary", "day");
-    params.set("date", selectedDateKey);
-    return `/api/completions?${params.toString()}`;
-  }, [mounted, selectedDateKey]);
-
-  const { data: daySummary } = useSWR<DaySummaryRes>(daySummaryKey, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 30_000,
-  });
-
-  const { freestyleLogged, freestyleSummary } = useMemo(() => {
-    const s = daySummary?.freestyle?.summary;
-    if (daySummary?.freestyle?.logged && s) {
-      return {
-        freestyleLogged: true,
-        freestyleSummary: {
-          activity_type: s.activity_type || "Freestyle",
-          duration: typeof s.duration === "number" ? s.duration : undefined,
-          calories_burned: typeof s.calories_burned === "number" ? s.calories_burned : undefined,
-          weight_completed_with:
-            typeof s.weight_completed_with === "number" ? s.weight_completed_with : undefined,
-        },
-      };
-    }
-
-    const arr: Completion[] = dayCompletionList;
-    const sameDay = (v: any) => {
+    const toDate = (v: any): Date | null => {
       try {
-        const dt =
-          v?.toDate?.() instanceof Date ? v.toDate() :
-          v ? new Date(v) : null;
-        if (!dt || isNaN(dt.getTime())) return false;
-        return formatYMD(dt) === selectedDateKey;
+        if (!v) return null;
+        if (typeof v?.toDate === "function") return v.toDate();
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? null : d;
       } catch {
-        return false;
+        return null;
       }
     };
 
-    const freestyle = arr.filter((c) => c?.is_freestyle === true && sameDay(c.completed_date));
-    if (!freestyle.length) {
-      return { freestyleLogged: false, freestyleSummary: undefined as any };
+    for (const c of list) {
+      const wid = String(c.workout_id || "").trim();
+      if (!wid) continue;
+
+      const dt =
+        toDate((c as any).completed_date) ||
+        toDate((c as any).date_completed);
+      if (!dt) continue;
+
+      weekDoneIds.add(wid);
+
+      const calories = typeof c.calories_burned === "number" ? c.calories_burned : undefined;
+      const duration =
+        typeof c.duration === "number" ? c.duration :
+        typeof c.duration_minutes === "number" ? c.duration_minutes : undefined;
+      const weight = typeof c.weight_completed_with === "number" ? c.weight_completed_with : undefined;
+      const at = dt.getTime();
+
+      const prev = weekLatestById.get(wid);
+      if (!prev || (at > (prev.at || 0))) {
+        weekLatestById.set(wid, { calories, duration, weight, at });
+      }
     }
 
-    const totalCalories = freestyle.reduce((sum, c) => sum + (Number(c.calories_burned) || 0), 0);
-    const totalDuration = freestyle.reduce(
-      (sum, c) => sum + (Number((c as any).duration) || Number(c.duration_minutes) || 0),
-      0
-    );
-    const lastActivity = freestyle[freestyle.length - 1]?.activity_type || undefined;
+    return { weekDoneIds, weekLatestById };
+  }, [weekCompletions]);
 
-    return {
-      freestyleLogged: true,
-      freestyleSummary: {
-        activity_type: typeof lastActivity === "string" ? lastActivity : "Freestyle",
-        duration: totalDuration || undefined,
-        calories_burned: totalCalories || undefined,
-      },
-    };
-  }, [daySummary, dayCompletionList, selectedDateKey]);
+  // ---------- Resolve optional & recurring states for the selected day ----------
+  const recurringIds: string[] = (selectedDayData?.recurringWorkouts || []).map((w) => String(w.id));
+  const optionalIds: string[] = (selectedDayData?.optionalWorkouts || []).map((w) => String(w.id));
 
-  // Optional BXKR completion (now also uses robust matcher)
-  const { optionalDone, optionalSummary } = useMemo(() => {
-    const ids = (selectedDayData?.optionalWorkouts || []).map((w) => String(w.id));
-    if (!ids.length) return { optionalDone: false, optionalSummary: undefined as undefined };
+  // Recurring is week-level done by workout_id
+  const recurringDoneFromWeek = useMemo(() => {
+    if (!recurringIds.length) return false;
+    return recurringIds.some((id) => weekDoneIds.has(id));
+  }, [recurringIds, weekDoneIds]);
 
-    const matches = dayCompletionList.filter((c) => matchByIds(c, ids));
-    if (!matches.length) return { optionalDone: false, optionalSummary: undefined as undefined };
+  // BXKR OPTIONAL: CHANGE → also week-level (used to be day-bound)
+  const optionalDoneFromWeek = useMemo(() => {
+    if (!optionalIds.length) return false;
+    return optionalIds.some((id) => weekDoneIds.has(id));
+  }, [optionalIds, weekDoneIds]);
 
-    const calories = matches.reduce((sum, c) => sum + (Number(c.calories_burned) || 0), 0);
-    const duration = matches.reduce(
-      (sum, c) => sum + (Number((c as any).duration) || Number(c.duration_minutes) || 0),
-      0
-    );
-    const last = matches[matches.length - 1];
-    const weightUsed =
-      typeof last?.weight_completed_with === "number" ? `${Math.round(last.weight_completed_with)} kg` : undefined;
+  // Card summaries:
+  // - Recurring day → use the most recent of recurring IDs within the week
+  // - Optional on recurring day → use the most recent of optional IDs within the week (CHANGED)
+  const recurringSummaryForCard = useMemo(() => {
+    if (!selectedDayData?.hasRecurringToday || !recurringIds.length) return undefined;
+    let latest: LatestRow | undefined;
+    for (const id of recurringIds) {
+      const row = weekLatestById.get(id);
+      if (row && (!latest || (row.at || 0) > (latest.at || 0))) latest = row;
+    }
+    return latest
+      ? {
+          calories: round2(latest.calories ?? 0),
+          duration: round2(latest.duration ?? 0),
+          weightUsed: typeof latest.weight === "number" ? `${Math.round(latest.weight)} kg` : undefined,
+        }
+      : undefined;
+  }, [selectedDayData?.hasRecurringToday, recurringIds, weekLatestById]);
 
-    return {
-      optionalDone: true,
-      optionalSummary: {
-        calories,
-        duration,
-        weightUsed,
-      } as { calories: number; duration: number; weightUsed?: string },
-    };
-  }, [selectedDayData?.optionalWorkouts, dayCompletionList]);
+  const optionalSummaryForCard = useMemo(() => {
+    if (!selectedDayData?.hasRecurringToday || !optionalIds.length) return undefined;
+    let latest: LatestRow | undefined;
+    for (const id of optionalIds) {
+      const row = weekLatestById.get(id);
+      if (row && (!latest || (row.at || 0) > (latest.at || 0))) latest = row;
+    }
+    return latest
+      ? {
+          calories: round2(latest.calories ?? 0),
+          duration: round2(latest.duration ?? 0),
+          weightUsed: typeof latest.weight === "number" ? `${Math.round(latest.weight)} kg` : undefined,
+        }
+      : undefined;
+  }, [selectedDayData?.hasRecurringToday, optionalIds, weekLatestById]);
 
-  // Recurring completion via completions (robust matcher)
-  const { recurringDoneFromCompletions, recurringSummary } = useMemo(() => {
-    const ids = (selectedDayData?.recurringWorkouts || []).map((w) => String(w.id));
-    if (!ids.length) return { recurringDoneFromCompletions: false, recurringSummary: undefined as undefined };
-
-    const matches = dayCompletionList.filter((c) => matchByIds(c, ids));
-    if (!matches.length) return { recurringDoneFromCompletions: false, recurringSummary: undefined as undefined };
-
-    const calories = matches.reduce((sum, c) => sum + (Number(c.calories_burned) || 0), 0);
-    const duration = matches.reduce(
-      (sum, c) => sum + (Number((c as any).duration) || Number(c.duration_minutes) || 0),
-      0
-    );
-    const last = matches[matches.length - 1];
-    const weightUsed =
-      typeof last?.weight_completed_with === "number" ? `${Math.round(last.weight_completed_with)} kg` : undefined;
-
-    return {
-      recurringDoneFromCompletions: true,
-      recurringSummary: {
-        calories,
-        duration,
-        weightUsed,
-      } as { calories: number; duration: number; weightUsed?: string },
-    };
-  }, [selectedDayData?.recurringWorkouts, dayCompletionList]);
-
-  // Use recurring summary when it's a recurring day; otherwise use the planned workout summary
-  const workoutSummaryForCard =
-    selectedDayData?.hasRecurringToday
-      ? (recurringSummary || selectedDayData?.workoutSummary)
+  // The main card "workoutSummary" still shows the mandatory (recurring on recurring days; otherwise programmed)
+  const workoutSummaryForCard = useMemo(() => {
+    return selectedDayData?.hasRecurringToday
+      ? recurringSummaryForCard
       : selectedDayData?.workoutSummary;
+  }, [selectedDayData?.hasRecurringToday, recurringSummaryForCard, selectedDayData?.workoutSummary]);
 
-  // Resolve recurringDone using either API flag or completions
-  const recurringDoneResolved = Boolean(selectedDayData?.recurringDone || recurringDoneFromCompletions);
+  // Recurring boolean for the card
+  const recurringDoneResolved = Boolean(selectedDayData?.recurringDone) || recurringDoneFromWeek;
 
-  // ---------- Resolve workout & all-done for the *selected* day (UI override) ----------
+  // Optional boolean for the card (CHANGED: week-level)
+  const optionalDoneResolved = optionalDoneFromWeek;
+
+  // Workout "done" for the selected day → use recurring rule on recurring day, else planned/overview
   const workoutDoneResolved = useMemo(() => {
-    const hasRecurring = Boolean(selectedDayData?.hasRecurringToday);
-    if (hasRecurring) {
-      // Mandatory on recurring days = recurring workout completion
-      return Boolean(recurringDoneFromCompletions);
+    if (Boolean(selectedDayData?.hasRecurringToday)) {
+      return recurringDoneResolved;
     }
-    // No recurring ⇒ planned/optional day. If weeklyOverview says done OR optional completion exists, treat as done.
-    return Boolean(selectedStatus.workoutDone) || Boolean(optionalDone);
-  }, [selectedDayData?.hasRecurringToday, recurringDoneFromCompletions, selectedStatus.workoutDone, optionalDone]);
+    // No recurring ⇒ planned day (keep as overview boolean)
+    return Boolean(selectedStatus.workoutDone);
+  }, [selectedDayData?.hasRecurringToday, recurringDoneResolved, selectedStatus.workoutDone]);
 
+  // All-done for the selected day (UI override for the selected pill)
   const allDoneResolved = useMemo(() => {
-    const isFri = new Date(selectedDateKey + "T00:00:00").getDay() === 5;
+    const isFriday = new Date(selectedDateKey + "T00:00:00").getDay() === 5;
     const nutritionLogged = Boolean(selectedStatus.nutritionLogged);
     const habitsDone = Boolean(selectedStatus.habitAllDone);
-    const checkInDone = isFri ? Boolean(selectedStatus.checkinComplete) : true;
-
-    return (!Boolean(selectedStatus.hasWorkout) || workoutDoneResolved)
-      && nutritionLogged && habitsDone && checkInDone;
+    const checkInDone = isFriday ? Boolean(selectedStatus.checkinComplete) : true;
+    return (!Boolean(selectedStatus.hasWorkout) || workoutDoneResolved) && nutritionLogged && habitsDone && checkInDone;
   }, [
     selectedStatus.hasWorkout,
     workoutDoneResolved,
@@ -579,7 +499,6 @@ export default function Home() {
     selectedDateKey,
   ]);
 
-  // Hrefs
   const hrefs = {
     nutrition: `${nutritionHref}`,
     workout: workoutHref,
@@ -603,12 +522,7 @@ export default function Home() {
         <div className="d-flex justify-content-between mb-2 align-items-center">
           <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
             {session?.user?.image && (
-              <img
-                src={session.user.image}
-                alt=""
-                className="rounded-circle"
-                style={{ width: 36, height: 36, objectFit: "cover" }}
-              />
+              <img src={session.user.image} alt="" className="rounded-circle" style={{ width: 36, height: 36, objectFit: "cover" }} />
             )}
             {(status === "loading" || !mounted || weekLoading || overviewLoading) && <div className="inline-spinner" />}
             <div
@@ -681,9 +595,8 @@ export default function Home() {
                 );
               }
 
-              // Selected-day override so the ring reflects the resolved truth immediately
+              // Override only for the selected day
               const stAllDone = isSelected ? allDoneResolved : st.allDone;
-
               const ringColor = stAllDone ? "#64c37a" : isSelected ? "#ff8a2a" : "rgba(255,255,255,0.3)";
               const boxShadow = isSelected ? `0 0 8px ${ringColor}` : stAllDone ? `0 0 3px ${ringColor}` : "none";
 
@@ -697,9 +610,7 @@ export default function Home() {
                     style={{ boxShadow, fontWeight: isSelected ? 600 : 500, borderColor: stAllDone ? undefined : ringColor }}
                   >
                     <span
-                      className={`bxkr-day-content ${
-                        stAllDone ? (isSelected ? "state-num" : "state-flame") : "state-num"
-                      }`}
+                      className={`bxkr-day-content ${stAllDone ? (isSelected ? "state-num" : "state-flame") : "state-num"}`}
                       style={{ fontWeight: 500 }}
                     >
                       {stAllDone && !isSelected ? (
@@ -726,9 +637,7 @@ export default function Home() {
         {/* Daily Tasks */}
         {mounted && selectedDayData && (
           <DailyTasksCard
-            dayLabel={`${selectedDay.toLocaleDateString(undefined, {
-              weekday: "long",
-            })}, ${selectedDay.toLocaleDateString(undefined, {
+            dayLabel={`${selectedDay.toLocaleDateString(undefined, { weekday: "long" })}, ${selectedDay.toLocaleDateString(undefined, {
               day: "numeric",
               month: "short",
             })}`}
@@ -736,20 +645,20 @@ export default function Home() {
             nutritionLogged={Boolean(selectedStatus.nutritionLogged)}
             workoutSummary={workoutSummaryForCard}
             hasWorkout={Boolean(selectedStatus.hasWorkout)}
-            workoutDone={Boolean(selectedStatus.workoutDone)}
+            workoutDone={workoutDoneResolved}
             hasRecurringToday={Boolean(selectedDayData.hasRecurringToday)}
             recurringDone={recurringDoneResolved}
             recurringWorkouts={selectedDayData.recurringWorkouts || []}
             optionalWorkouts={selectedDayData.optionalWorkouts || []}
-            optionalDone={optionalDone}
-            optionalSummary={optionalSummary}
+            optionalDone={optionalDoneResolved}
+            optionalSummary={optionalSummaryForCard}
             hrefs={hrefs}
             habitSummary={selectedDayData.habitSummary}
             habitAllDone={Boolean(selectedStatus.habitAllDone)}
             checkinSummary={checkinSummaryNormalized as any}
             checkinComplete={Boolean(selectedStatus.checkinComplete)}
-            freestyleLogged={freestyleLogged}
-            freestyleSummary={freestyleSummary}
+            freestyleLogged={false}
+            freestyleSummary={undefined}
           />
         )}
 
@@ -831,10 +740,8 @@ export default function Home() {
           </div>
         )}
       </main>
-      
-      {mounted && onboarding?.complete === true && (
-        <AddToHomeScreen />
-      )}
+
+      {mounted && onboarding?.complete === true && <AddToHomeScreen />}
       <BottomNav />
     </>
   );
