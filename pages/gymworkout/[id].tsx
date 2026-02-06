@@ -1,6 +1,7 @@
 // pages/gymworkout/[id].tsx
 // BXKR — Gym Workout Viewer (List-style, set logging, GIF→Video media modal)
-// Bootstrap-only, hydration-safe, GIF size 64px always.
+// Bootstrap-only, hydration-safe, GIF size 64px always. Mobile formatting tightened.
+// Adds expandable sets (per-exercise/per-set) to condense the view.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
@@ -170,7 +171,7 @@ function MediaModal({ open, title, gifUrl, videoUrl, onClose }: MediaModalProps)
     >
       <div
         className="position-absolute top-50 start-50 translate-middle"
-        style={{ width: "92vw", maxWidth: 680 }}
+        style={{ width: "92vw", maxWidth: 680, touchAction: "pan-y" as any }}
       >
         <div className="futuristic-card p-2" onClick={(e) => e.stopPropagation()}>
           <div className="d-flex justify-content-between align-items-center mb-2">
@@ -277,8 +278,9 @@ export default function GymWorkoutViewerPage() {
   const [mediaGif, setMediaGif] = useState<string | undefined>();
   const [mediaVideo, setMediaVideo] = useState<string | undefined>();
 
-  const KG_INPUT_W = 84;
-  const REPS_INPUT_W = 84;
+  // Inputs: slightly tighter on mobile; width via CSS variables for consistency
+  const KG_INPUT_W = 88;
+  const REPS_INPUT_W = 88;
 
   // Load previous session
   useEffect(() => {
@@ -286,7 +288,6 @@ export default function GymWorkoutViewerPage() {
     fetch(`/api/completions/last?workout_id=${id}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
-        // Page tolerates either {ok,last} or direct object; adapt:
         const last = json?.last || json;
         if (last?.sets) setPreviousSession({ sets: last.sets, completedAt: last.completed_date });
       })
@@ -343,10 +344,9 @@ export default function GymWorkoutViewerPage() {
       const body: any = {
         workout_id: id,
         activity_type: "Strength training",
-        sets: formSets, // <-- per-exercise results
+        sets: formSets,
       };
 
-      // Summary fields (optional but recommended)
       if (calories) body.calories_burned = Number(calories);
       if (duration) body.duration_minutes = Number(duration);
       const rpe = difficultyToRPE(difficulty);
@@ -361,7 +361,6 @@ export default function GymWorkoutViewerPage() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to submit completion");
 
-      // Navigate away or show toast; keep as before:
       router.push("/");
     } catch (e) {
       console.error(e);
@@ -381,10 +380,22 @@ export default function GymWorkoutViewerPage() {
         <title>{data?.workout_name || "Gym Workout"}</title>
       </Head>
 
-      <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
+      <main
+        className="container py-3"
+        style={{
+          color: "#fff",
+          paddingBottom: 90,
+          // Input width vars used below for consistent sizing even as layout wraps
+          // (keeps icons/labels aligned on mobile)
+          // @ts-ignore custom vars
+          ["--kgw" as any]: `${KG_INPUT_W}px`,
+          ["--repsw" as any]: `${REPS_INPUT_W}px`,
+          touchAction: "pan-y" as any,
+        }}
+      >
         <div className="mb-3 d-flex justify-content-between align-items-center">
           <Link href="/" className="btn btn-outline-secondary">← Back</Link>
-          {data?.workout_name && <div className="fw-bold">{data.workout_name}</div>}
+          {data?.workout_name && <div className="fw-bold text-truncate" style={{ maxWidth: 280 }}>{data.workout_name}</div>}
           <div />
         </div>
 
@@ -405,9 +416,9 @@ export default function GymWorkoutViewerPage() {
                   : undefined
               }
             >
-              <div className="d-flex align-items-center justify-content-between">
+              <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
                 <h2 className="m-0">{data.workout_name}</h2>
-                <div className="d-flex align-items-center gap-2">
+                <div className="d-flex align-items-center gap-2 ms-auto">
                   <span className="badge" style={{ background: ACCENT, color: "#0b0f14" }}>
                     Gym
                   </span>
@@ -642,10 +653,12 @@ function RoundBlock({
 
   return (
     <section className="futuristic-card p-3 mb-3">
-      <h4 className="mb-3">{round.name}</h4>
+      <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <h4 className="m-0">{round.name}</h4>
+      </div>
 
       {sorted.length === 0 ? (
-        <div className="text-dim small">No items.</div>
+        <div className="text-dim small mt-2">No items.</div>
       ) : (
         sorted.map((it, idx) => (
           <div
@@ -685,7 +698,7 @@ function RoundBlock({
   );
 }
 
-/* ---------------- Single Item Block ---------------- */
+/* ---------------- Single Item Block (with expandable sets) ---------------- */
 function SingleItemBlock({
   item,
   media,
@@ -706,15 +719,40 @@ function SingleItemBlock({
   const sets = Number.isFinite(item.sets) ? Number(item.sets) : 3;
   const rest = item.rest_s ?? null;
 
+  // Expandable sets: default collapsed on initial render to keep mobile compact
+  const [expanded, setExpanded] = useState<boolean[]>(() => Array.from({ length: sets }, () => false));
+
+  // If sets count changes dynamically, realign the state length
+  useEffect(() => {
+    setExpanded((prev) => {
+      const next = Array.from({ length: sets }, (_, i) => prev[i] ?? false);
+      return next;
+    });
+  }, [sets]);
+
+  const allExpanded = expanded.every(Boolean);
+  const anyExpanded = expanded.some(Boolean);
+
+  function toggleSet(i: number) {
+    setExpanded((prev) => {
+      const next = [...prev];
+      next[i] = !next[i];
+      return next;
+    });
+  }
+  function expandAll(v: boolean) {
+    setExpanded(Array.from({ length: sets }, () => v));
+  }
+
   return (
     <div>
       {/* Header row */}
-      <div className="d-flex align-items-center gap-3 mb-2">
+      <div className="d-flex align-items-center gap-2 gap-md-3 mb-2 flex-wrap">
         {/* Media thumb */}
         <button
           type="button"
           className="btn btn-sm btn-outline-light"
-          style={{ borderRadius: 12, padding: 0, overflow: "hidden" }}
+          style={{ borderRadius: 12, padding: 0, overflow: "hidden", flex: "0 0 auto" }}
           onClick={() => onOpenMedia(item.exercise_id)}
           aria-label={`Open media for ${media?.exercise_name || item.exercise_id}`}
         >
@@ -735,8 +773,8 @@ function SingleItemBlock({
         </button>
 
         {/* Title + meta */}
-        <div className="flex-fill">
-          <div className="fw-semibold" style={{ lineHeight: 1.2 }}>
+        <div className="flex-fill" style={{ minWidth: 220 }}>
+          <div className="fw-semibold text-truncate" style={{ lineHeight: 1.2 }}>
             {media?.exercise_name || item.exercise_id}
           </div>
           <div className="text-dim small">
@@ -744,15 +782,68 @@ function SingleItemBlock({
           </div>
           {item.notes && <div className="small text-dim mt-1">{item.notes}</div>}
         </div>
+
+        {/* Expand controls */}
+        <div className="d-flex align-items-center gap-2">
+          <button
+            className="btn btn-sm"
+            style={{
+              borderRadius: 999,
+              border: `1px solid ${ACCENT}88`,
+              color: ACCENT,
+              background: "transparent",
+              fontWeight: 600,
+            }}
+            onClick={() => expandAll(!allExpanded)}
+            title={allExpanded ? "Collapse all sets" : "Expand all sets"}
+          >
+            {allExpanded ? "Collapse all" : anyExpanded ? "Expand all" : "Expand sets"}
+          </button>
+        </div>
       </div>
 
-      {/* Inputs grid: same columns sizing */}
-      <div className="d-flex flex-wrap gap-2">
-        {[...Array(sets)].map((_, i) => {
+      {/* Set chips (tap to expand individual set) */}
+      <div className="d-flex flex-wrap gap-2 mb-2">
+        {Array.from({ length: sets }).map((_, i) => (
+          <button
+            key={i}
+            className="btn btn-sm"
+            onClick={() => toggleSet(i)}
+            style={{
+              borderRadius: 999,
+              padding: "4px 10px",
+              background: expanded[i] ? `${ACCENT}22` : "transparent",
+              border: `1px solid ${expanded[i] ? `${ACCENT}AA` : "rgba(255,255,255,0.18)"}`,
+              color: expanded[i] ? ACCENT : "#d1d5db",
+              fontWeight: 600,
+            }}
+            aria-expanded={expanded[i]}
+            aria-controls={`single-set-${item.exercise_id}-${i + 1}`}
+          >
+            Set {i + 1}
+          </button>
+        ))}
+      </div>
+
+      {/* Inputs: render only expanded sets to keep the view condensed */}
+      <div className="d-flex flex-column" style={{ gap: 8 }}>
+        {Array.from({ length: sets }).map((_, i) => {
+          if (!expanded[i]) return null;
           const prev = prevByKey[`${item.exercise_id}|${i + 1}`];
           return (
-            <div key={i} className="d-flex align-items-center gap-2" style={{ marginBottom: 8 }}>
-              <div className="text-dim small" style={{ width: 44, textAlign: "right" }}>
+            <div
+              key={i}
+              id={`single-set-${item.exercise_id}-${i + 1}`}
+              className="d-flex align-items-center flex-wrap"
+              style={{
+                gap: 8,
+                background: "rgba(255,255,255,0.035)",
+                border: "1px dashed rgba(255,255,255,0.15)",
+                borderRadius: 10,
+                padding: 8,
+              }}
+            >
+              <div className="text-dim small" style={{ width: 52, textAlign: "right", flex: "0 0 auto" }}>
                 Set {i + 1}
               </div>
               <input
@@ -761,22 +852,22 @@ function SingleItemBlock({
                 inputMode="decimal"
                 placeholder="kg"
                 onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { weight: Number(e.target.value) || null })}
-                style={{ width: kgWidth, fontSize: "0.9rem" }}
+                style={{ width: "var(--kgw)", fontSize: "0.9rem", flex: "0 0 auto" }}
               />
-              <div className="d-flex align-items-center" style={{ gap: 6 }}>
+              <div className="d-flex align-items-center" style={{ gap: 6, flex: "0 0 auto" }}>
                 <input
                   className="form-control"
                   type="number"
                   inputMode="numeric"
                   placeholder="reps"
                   onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { reps: Number(e.target.value) || null })}
-                  style={{ width: repsWidth, fontSize: "0.9rem" }}
+                  style={{ width: "var(--repsw)", fontSize: "0.9rem" }}
                 />
                 <span className="small text-dim">reps</span>
               </div>
 
               {/* Prev inline */}
-              <div className="small text-dim ms-1">
+              <div className="small text-dim ms-auto" style={{ minWidth: 160 }}>
                 Prev: {(prev?.weight ?? "-")}kg × {(prev?.reps ?? "-")} reps
               </div>
             </div>
@@ -787,7 +878,7 @@ function SingleItemBlock({
   );
 }
 
-/* ---------------- Superset Block ---------------- */
+/* ---------------- Superset Block (per-set expandable) ---------------- */
 function SupersetBlock({
   item,
   media,
@@ -808,14 +899,53 @@ function SupersetBlock({
   const sets = Number.isFinite(item.sets) ? Number(item.sets) : 3;
   const rest = item.rest_s ?? null;
 
+  // Per-set expandable accordion
+  const [expanded, setExpanded] = useState<boolean[]>(() => Array.from({ length: sets }, () => false));
+
+  useEffect(() => {
+    setExpanded((prev) => {
+      const next = Array.from({ length: sets }, (_, i) => prev[i] ?? false);
+      return next;
+    });
+  }, [sets]);
+
+  const allExpanded = expanded.every(Boolean);
+  const anyExpanded = expanded.some(Boolean);
+  function toggleSet(i: number) {
+    setExpanded((prev) => {
+      const next = [...prev];
+      next[i] = !next[i];
+      return next;
+    });
+  }
+  function expandAll(v: boolean) {
+    setExpanded(Array.from({ length: sets }, () => v));
+  }
+
   return (
     <div>
       {/* Superset header */}
-      <div className="d-flex align-items-center justify-content-between mb-1">
-        <strong>{(item.name || "").trim() || "Superset"}</strong>
-        <span className="badge border" style={{ borderColor: ACCENT, color: ACCENT }}>
-          {sets} sets
-        </span>
+      <div className="d-flex align-items-center justify-content-between mb-1 flex-wrap gap-2">
+        <strong className="text-truncate">{(item.name || "").trim() || "Superset"}</strong>
+        <div className="d-flex align-items-center gap-2">
+          <span className="badge border" style={{ borderColor: ACCENT, color: ACCENT }}>
+            {sets} sets
+          </span>
+          <button
+            className="btn btn-sm"
+            style={{
+              borderRadius: 999,
+              border: `1px solid ${ACCENT}88`,
+              color: ACCENT,
+              background: "transparent",
+              fontWeight: 600,
+            }}
+            onClick={() => expandAll(!allExpanded)}
+            title={allExpanded ? "Collapse all sets" : "Expand all sets"}
+          >
+            {allExpanded ? "Collapse all" : anyExpanded ? "Expand all" : "Expand sets"}
+          </button>
+        </div>
       </div>
 
       <div className="text-dim small mb-2">
@@ -823,98 +953,125 @@ function SupersetBlock({
         {item.notes ? ` • ${item.notes}` : ""}
       </div>
 
-      {/* For each set, render rows of exercises with same input widths */}
-      {[...Array(sets)].map((_, setIdx) => (
-        <div
-          key={setIdx}
-          className="p-2 mb-2"
-          style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px dashed rgba(255,255,255,0.15)",
-            borderRadius: 10,
-          }}
-        >
-          <div className="fw-semibold mb-2">Set {setIdx + 1}</div>
+      {/* Set chips */}
+      <div className="d-flex flex-wrap gap-2 mb-2">
+        {Array.from({ length: sets }).map((_, i) => (
+          <button
+            key={i}
+            className="btn btn-sm"
+            onClick={() => toggleSet(i)}
+            style={{
+              borderRadius: 999,
+              padding: "4px 10px",
+              background: expanded[i] ? `${ACCENT}22` : "transparent",
+              border: `1px solid ${expanded[i] ? `${ACCENT}AA` : "rgba(255,255,255,0.18)"}`,
+              color: expanded[i] ? ACCENT : "#d1d5db",
+              fontWeight: 600,
+            }}
+            aria-expanded={expanded[i]}
+            aria-controls={`ss-set-${(item.name || "").replace(/\s+/g, "-")}-${i + 1}`}
+          >
+            Set {i + 1}
+          </button>
+        ))}
+      </div>
 
-          {item.items.map((sub, i) => {
-            const m = media[sub.exercise_id] || {};
-            const prev = prevByKey[`${sub.exercise_id}|${setIdx + 1}`];
+      {/* For each expanded set, render rows of exercises with same input widths */}
+      {Array.from({ length: sets }).map((_, setIdx) => {
+        if (!expanded[setIdx]) return null;
+        return (
+          <div
+            key={setIdx}
+            id={`ss-set-${(item.name || "").replace(/\s+/g, "-")}-${setIdx + 1}`}
+            className="p-2 mb-2"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px dashed rgba(255,255,255,0.15)",
+              borderRadius: 10,
+            }}
+          >
+            <div className="fw-semibold mb-2">Set {setIdx + 1}</div>
 
-            return (
-              <div key={i} className="d-flex align-items-center gap-2 mb-2">
-                {/* Media thumb */}
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-light"
-                  style={{ borderRadius: 12, padding: 0, overflow: "hidden" }}
-                  onClick={() => onOpenMedia(sub.exercise_id)}
-                >
-                  {m.gif_url ? (
-                    <img
-                      src={fixGifUrl(m.gif_url)}
-                      alt={m.exercise_name || sub.exercise_id}
-                      style={{ width: 64, height: 64, objectFit: "cover", display: "block" }}
-                    />
-                  ) : (
-                    <div
-                      className="d-flex align-items-center justify-content-center"
-                      style={{ width: 64, height: 64, background: "rgba(255,255,255,0.06)" }}
-                    >
-                      <i className="fas fa-play" />
+            {item.items.map((sub, i) => {
+              const m = media[sub.exercise_id] || {};
+              const prev = prevByKey[`${sub.exercise_id}|${setIdx + 1}`];
+
+              return (
+                <div key={i} className="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                  {/* Media thumb */}
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-light"
+                    style={{ borderRadius: 12, padding: 0, overflow: "hidden", flex: "0 0 auto" }}
+                    onClick={() => onOpenMedia(sub.exercise_id)}
+                  >
+                    {m.gif_url ? (
+                      <img
+                        src={fixGifUrl(m.gif_url)}
+                        alt={m.exercise_name || sub.exercise_id}
+                        style={{ width: 64, height: 64, objectFit: "cover", display: "block" }}
+                      />
+                    ) : (
+                      <div
+                        className="d-flex align-items-center justify-content-center"
+                        style={{ width: 64, height: 64, background: "rgba(255,255,255,0.06)" }}
+                      >
+                        <i className="fas fa-play" />
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Name + prescribed reps + inputs aligned with Single layout */}
+                  <div className="flex-fill" style={{ minWidth: 220 }}>
+                    <div className="fw-semibold text-truncate" style={{ lineHeight: 1.2 }}>
+                      {m.exercise_name || sub.exercise_id}
                     </div>
-                  )}
-                </button>
-
-                {/* Name + prescribed reps + inputs aligned with Single layout */}
-                <div className="flex-fill">
-                  <div className="fw-semibold" style={{ lineHeight: 1.2 }}>
-                    {m.exercise_name || sub.exercise_id}
-                  </div>
-                  <div className="text-dim small">
-                    {sub.reps ? `• ${sub.reps} reps` : ""}
-                  </div>
-
-                  <div className="d-flex align-items-center gap-2 mt-1 flex-wrap">
-                    <div className="text-dim small" style={{ width: 44, textAlign: "right" }}>
-                      &nbsp;
+                    <div className="text-dim small">
+                      {sub.reps ? `• ${sub.reps} reps` : ""}
                     </div>
 
-                    <input
-                      className="form-control"
-                      type="number"
-                      inputMode="decimal"
-                      placeholder="kg"
-                      onChange={(e) =>
-                        onUpdateSet(sub.exercise_id, setIdx + 1, { weight: Number(e.target.value) || null })
-                      }
-                      style={{ width: kgWidth, fontSize: "0.85rem" }}
-                    />
+                    <div className="d-flex align-items-center gap-2 mt-1 flex-wrap">
+                      <div className="text-dim small" style={{ width: 52, textAlign: "right", flex: "0 0 auto" }}>
+                        &nbsp;
+                      </div>
 
-                    <div className="d-flex align-items-center" style={{ gap: 6 }}>
                       <input
                         className="form-control"
                         type="number"
-                        inputMode="numeric"
-                        placeholder="reps"
+                        inputMode="decimal"
+                        placeholder="kg"
                         onChange={(e) =>
-                          onUpdateSet(sub.exercise_id, setIdx + 1, { reps: Number(e.target.value) || null })
+                          onUpdateSet(sub.exercise_id, setIdx + 1, { weight: Number(e.target.value) || null })
                         }
-                        style={{ width: repsWidth, fontSize: "0.85rem" }}
+                        style={{ width: "var(--kgw)", fontSize: "0.85rem", flex: "0 0 auto" }}
                       />
-                      <span className="small text-dim">reps</span>
-                    </div>
 
-                    {/* Prev inline */}
-                    <div className="small text-dim ms-1">
-                      Prev: {(prev?.weight ?? "-")}kg × {(prev?.reps ?? "-")} reps
+                      <div className="d-flex align-items-center" style={{ gap: 6, flex: "0 0 auto" }}>
+                        <input
+                          className="form-control"
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="reps"
+                          onChange={(e) =>
+                            onUpdateSet(sub.exercise_id, setIdx + 1, { reps: Number(e.target.value) || null })
+                          }
+                          style={{ width: "var(--repsw)", fontSize: "0.85rem" }}
+                        />
+                        <span className="small text-dim">reps</span>
+                      </div>
+
+                      {/* Prev inline */}
+                      <div className="small text-dim ms-auto" style={{ minWidth: 160 }}>
+                        Prev: {(prev?.weight ?? "-")}kg × {(prev?.reps ?? "-")} reps
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      ))}
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 }
