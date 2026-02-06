@@ -551,6 +551,34 @@ export default function Home() {
   // Resolve recurringDone using either API flag or completions
   const recurringDoneResolved = Boolean(selectedDayData?.recurringDone || recurringDoneFromCompletions);
 
+  // ---------- Resolve workout & all-done for the *selected* day (UI override) ----------
+  const workoutDoneResolved = useMemo(() => {
+    const hasRecurring = Boolean(selectedDayData?.hasRecurringToday);
+    if (hasRecurring) {
+      // Mandatory on recurring days = recurring workout completion
+      return Boolean(recurringDoneFromCompletions);
+    }
+    // No recurring ⇒ planned/optional day. If weeklyOverview says done OR optional completion exists, treat as done.
+    return Boolean(selectedStatus.workoutDone) || Boolean(optionalDone);
+  }, [selectedDayData?.hasRecurringToday, recurringDoneFromCompletions, selectedStatus.workoutDone, optionalDone]);
+
+  const allDoneResolved = useMemo(() => {
+    const isFri = new Date(selectedDateKey + "T00:00:00").getDay() === 5;
+    const nutritionLogged = Boolean(selectedStatus.nutritionLogged);
+    const habitsDone = Boolean(selectedStatus.habitAllDone);
+    const checkInDone = isFri ? Boolean(selectedStatus.checkinComplete) : true;
+
+    return (!Boolean(selectedStatus.hasWorkout) || workoutDoneResolved)
+      && nutritionLogged && habitsDone && checkInDone;
+  }, [
+    selectedStatus.hasWorkout,
+    workoutDoneResolved,
+    selectedStatus.nutritionLogged,
+    selectedStatus.habitAllDone,
+    selectedStatus.checkinComplete,
+    selectedDateKey,
+  ]);
+
   // Hrefs
   const hrefs = {
     nutrition: `${nutritionHref}`,
@@ -653,8 +681,11 @@ export default function Home() {
                 );
               }
 
-              const ringColor = st.allDone ? "#64c37a" : isSelected ? "#ff8a2a" : "rgba(255,255,255,0.3)";
-              const boxShadow = isSelected ? `0 0 8px ${ringColor}` : st.allDone ? `0 0 3px ${ringColor}` : "none";
+              // Selected-day override so the ring reflects the resolved truth immediately
+              const stAllDone = isSelected ? allDoneResolved : st.allDone;
+
+              const ringColor = stAllDone ? "#64c37a" : isSelected ? "#ff8a2a" : "rgba(255,255,255,0.3)";
+              const boxShadow = isSelected ? `0 0 8px ${ringColor}` : stAllDone ? `0 0 3px ${ringColor}` : "none";
 
               return (
                 <div key={i} style={{ width: 44, cursor: "pointer" }} onClick={() => setSelectedDay(d)}>
@@ -662,16 +693,16 @@ export default function Home() {
                     {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
                   </div>
                   <div
-                    className={`bxkr-day-pill ${st.allDone ? "completed" : ""}`}
-                    style={{ boxShadow, fontWeight: isSelected ? 600 : 500, borderColor: st.allDone ? undefined : ringColor }}
+                    className={`bxkr-day-pill ${stAllDone ? "completed" : ""}`}
+                    style={{ boxShadow, fontWeight: isSelected ? 600 : 500, borderColor: stAllDone ? undefined : ringColor }}
                   >
                     <span
                       className={`bxkr-day-content ${
-                        st.allDone ? (isSelected ? "state-num" : "state-flame") : "state-num"
+                        stAllDone ? (isSelected ? "state-num" : "state-flame") : "state-num"
                       }`}
                       style={{ fontWeight: 500 }}
                     >
-                      {st.allDone && !isSelected ? (
+                      {stAllDone && !isSelected ? (
                         <i
                           className="fas fa-fire"
                           style={{
