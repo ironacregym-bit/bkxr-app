@@ -95,6 +95,9 @@ export default function AdminDashboard() {
   }
 
   const tiles = [
+    // 🔧 Workouts admin library (NEW)
+    { title: "Workouts", icon: "fas fa-list-ul", link: "/admin/workouts", color: "primary" },
+
     { title: "Create Workout (BXKR)", icon: "fas fa-dumbbell", link: "/admin/workouts/create", color: "primary" },
     { title: "Create Exercise", icon: "fas fa-plus-circle", link: "/admin/exercises/create", color: "success" },
     { title: "Create Gym Workout", icon: "fas fa-weight-hanging", link: "/admin/workouts/gym-create", color: "warning" },
@@ -182,4 +185,3 @@ export default function AdminDashboard() {
     </>
   );
 }
-``
