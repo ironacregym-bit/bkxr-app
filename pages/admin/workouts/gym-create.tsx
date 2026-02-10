@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import useSWR from "swr";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../../../components/BottomNav";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
@@ -16,7 +16,6 @@ type DayName = typeof DAYS[number];
 
 /** ---------- Utilities ---------- */
 const mkUid = () => {
-  // Prefer crypto if available; fallback to Math.random
   try {
     // @ts-ignore
     return crypto?.randomUUID ? crypto.randomUUID() : `uid_${Math.random().toString(36).slice(2)}`;
@@ -27,7 +26,7 @@ const mkUid = () => {
 
 /** ---------- Types (add uid for stable keys) ---------- */
 type SingleItem = {
-  uid: string; // stable key
+  uid: string;
   type: "Single";
   order: number;
   exercise_id: string;
@@ -39,20 +38,18 @@ type SingleItem = {
 };
 
 type SupersetSubItem = {
-  uid: string; // stable key
+  uid: string;
   exercise_id: string;
   reps?: string;
   weight_kg?: number | null;
 };
 
 type SupersetItem = {
-  uid: string; // stable key
+  uid: string;
   type: "Superset";
   order: number;
   name?: string | null;
-  /** Unlimited sub-exercises now */
   items: SupersetSubItem[];
-  /** Superset-level sets to complete (required in UI; default 3) */
   sets: number;
   rest_s?: number | null;
   notes?: string | null;
@@ -70,19 +67,53 @@ type QuickTarget =
   | { kind: "single"; round: "warmup" | "main" | "finisher"; idx: number }
   | { kind: "superset"; round: "warmup" | "main" | "finisher"; idx: number; subIdx: number };
 
+/** ---------- Admin workout (fetch shape) ---------- */
+type AdminRoundFetch = {
+  name: string;
+  order: number;
+  items?: any[];             // normalised items
+  superset_items?: any[];    // tolerated legacy on each superset item
+};
+
+type AdminWorkoutFetch = {
+  workout_id: string;
+  workout_name: string;
+  visibility: "global" | "private";
+  owner_email?: string;
+  focus?: string;
+  notes?: string;
+  video_url?: string;
+  // rounds (normalised)
+  warmup?: AdminRoundFetch | null;
+  main?: AdminRoundFetch | null;
+  finisher?: AdminRoundFetch | null;
+  // optional assignment/recurrence (if your API returns them)
+  recurring?: boolean;
+  recurring_day?: DayName | null;
+  recurring_start?: string | null;
+  recurring_end?: string | null;
+  assigned_to?: string | null;
+};
+
 export default function GymCreateWorkoutPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const ownerEmail = (session?.user?.email || "").toLowerCase();
   const role = (session?.user as any)?.role || "user";
 
+  // Detect edit mode via ?edit=WORKOUT_ID or ?id=WORKOUT_ID
+  const editIdRaw = (router.query.edit as string) || (router.query.id as string) || "";
+  const editId = (typeof editIdRaw === "string" ? editIdRaw.trim() : "") || "";
+  const isEdit = Boolean(editId);
+
+  // Load exercises for dropdown
   const {
-    data,
+    data: exData,
     mutate: mutateExercises,
   } = useSWR("/api/exercises?limit=1000", fetcher, { revalidateOnFocus: false });
-  const exercises: ExerciseRow[] = Array.isArray(data?.exercises) ? data!.exercises : [];
+  const exercises: ExerciseRow[] = Array.isArray(exData?.exercises) ? exData!.exercises : [];
 
-  // Base form + assignment/recurrence
+  // ----- Base form + assignment/recurrence
   const [meta, setMeta] = useState({
     workout_name: "",
     focus: "",
@@ -90,11 +121,10 @@ export default function GymCreateWorkoutPage() {
     video_url: "",
     visibility: "global" as "global" | "private",
 
-    // New assignment & recurrence fields
     recurring: false,
     recurring_day: "Monday" as DayName,
     recurring_start: "" as string, // YYYY-MM-DD
-    recurring_end: "" as string, // YYYY-MM-DD
+    recurring_end: "" as string,   // YYYY-MM-DD
     assigned_to: ownerEmail || "",
   });
 
@@ -148,7 +178,6 @@ export default function GymCreateWorkoutPage() {
       setQuickBusy(true);
       setQuickErr(null);
       const body = {
-        // ID defaults to name server-side per your API spec; we keep it simple:
         exercise_name: quickForm.exercise_name.trim(),
         type: quickForm.type.trim(),
         equipment: quickForm.equipment.trim(),
@@ -169,11 +198,9 @@ export default function GymCreateWorkoutPage() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to create exercise");
 
-      // Refresh the exercises list and select the created one
       await mutateExercises();
       const newId: string = json?.exercise_id || body.exercise_name;
       applyQuickToSelection(newId);
-
       setQuickOpen(false);
     } catch (e: any) {
       setQuickErr(e?.message || "Failed to create exercise");
@@ -192,7 +219,7 @@ export default function GymCreateWorkoutPage() {
     );
   }
 
-  /* ---------- Utilities to keep item orders clean ---------- */
+  /* ---------- Utilities ---------- */
   function renumber(items: Array<SingleItem | SupersetItem>): Array<SingleItem | SupersetItem> {
     return items.map((it, i) => ({ ...it, order: i + 1 }));
   }
@@ -225,10 +252,7 @@ export default function GymCreateWorkoutPage() {
     const dropFrom = (r: GymRound | null): GymRound | null => {
       if (!r) return r;
       const next = r.items.filter((_, i) => i !== idx);
-      if (next.length === 0 && r.name === "Finisher") {
-        // If finisher becomes empty, hide the whole section
-        return null;
-      }
+      if (next.length === 0 && r.name === "Finisher") return null;
       return { ...r, items: renumber(next) };
     };
     if (round === "warmup") setWarmup((prev) => dropFrom(prev));
@@ -236,7 +260,7 @@ export default function GymCreateWorkoutPage() {
     if (round === "finisher") setFinisher((prev) => dropFrom(prev));
   }
 
-  /* ---------- Helpers for Supersets (unlimited items + sets at superset level) ---------- */
+  /* ---------- Helpers for Supersets ---------- */
   function newSupersetSub(): SupersetSubItem {
     return { uid: mkUid(), exercise_id: "", reps: "" };
   }
@@ -352,7 +376,7 @@ export default function GymCreateWorkoutPage() {
             items: r.items.map((it, i) => {
               if (i !== idx) return it;
               const ss = it as SupersetItem;
-              if (!ss.items || ss.items.length <= 1) return ss; // keep at least 1
+              if (!ss.items || ss.items.length <= 1) return ss;
               const next = ss.items.filter((_, j) => j !== subIdx);
               return { ...ss, items: next };
             }),
@@ -363,21 +387,150 @@ export default function GymCreateWorkoutPage() {
     if (round === "finisher") setFinisher((prev) => up(prev));
   }
 
+  /* ---------- Edit: fetch + normalise into UI ---------- */
+  const workoutKey = useMemo(() => (isEdit ? `/api/workouts/admin/${encodeURIComponent(editId)}` : null), [isEdit, editId]);
+  const { data: workoutResp } = useSWR<AdminWorkoutFetch>(workoutKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30_000,
+  });
+
+  // Map AdminRoundFetch -> GymRound with fresh uids
+  function toUIRound(r?: AdminRoundFetch | null, fallbackName = "Round", fallbackOrder = 1): GymRound | null {
+    if (!r) return null;
+    const rawItems: any[] = Array.isArray(r.items) ? r.items : [];
+    const uiItems: Array<SingleItem | SupersetItem> = rawItems.map((it: any, idx: number) => {
+      const order = Number.isFinite(it?.order) ? it.order : idx + 1;
+      if (String(it?.type) === "Superset") {
+        // tolerate both .items and .superset_items
+        const subs: any[] = Array.isArray(it.items)
+          ? it.items
+          : Array.isArray(it.superset_items)
+          ? it.superset_items
+          : [];
+        const mappedSubs: SupersetSubItem[] = subs.map((s: any) => ({
+          uid: mkUid(),
+          exercise_id: String(s?.exercise_id || ""),
+          reps: typeof s?.reps === "string" ? s.reps : s?.reps != null ? String(s.reps) : "",
+          weight_kg: typeof s?.weight_kg === "number" ? s.weight_kg : s?.weight_kg ?? null,
+        }));
+        return {
+          uid: mkUid(),
+          type: "Superset",
+          order,
+          name: (it?.name ?? "") || "",
+          items: mappedSubs.length ? mappedSubs : [newSupersetSub()],
+          sets: Number.isFinite(it?.sets) ? it.sets : 3,
+          rest_s: it?.rest_s ?? null,
+          notes: it?.notes ?? null,
+        };
+      }
+      // Single
+      return {
+        uid: mkUid(),
+        type: "Single",
+        order,
+        exercise_id: String(it?.exercise_id || ""),
+        sets: Number.isFinite(it?.sets) ? it.sets : undefined,
+        reps: typeof it?.reps === "string" ? it.reps : it?.reps != null ? String(it.reps) : "",
+        weight_kg: typeof it?.weight_kg === "number" ? it.weight_kg : it?.weight_kg ?? null,
+        rest_s: it?.rest_s ?? null,
+        notes: it?.notes ?? null,
+      };
+    });
+
+    return {
+      name: (r?.name || fallbackName) as string,
+      order: Number.isFinite(r?.order) ? (r!.order as number) : fallbackOrder,
+      items: uiItems,
+    };
+  }
+
+  // Prefill once when workoutResp arrives
+  const [prefilled, setPrefilled] = useState(false);
+  useEffect(() => {
+    if (!isEdit || !workoutResp || prefilled) return;
+
+    // Meta (gracefully handle absent fields)
+    setMeta((m) => ({
+      ...m,
+      workout_name: workoutResp.workout_name || "",
+      focus: workoutResp.focus || "",
+      notes: workoutResp.notes || "",
+      video_url: workoutResp.video_url || "",
+      visibility: workoutResp.visibility || "global",
+      recurring: !!workoutResp.recurring,
+      recurring_day: (workoutResp.recurring_day as DayName) || m.recurring_day,
+      recurring_start: (workoutResp.recurring_start || "").slice(0, 10),
+      recurring_end: (workoutResp.recurring_end || "").slice(0, 10),
+      assigned_to: (workoutResp.assigned_to || ownerEmail || "").toLowerCase(),
+    }));
+
+    // Rounds
+    const w = workoutResp;
+    const uiWarm = toUIRound(w.warmup, "Warm Up", 1);
+    const uiMain = toUIRound(w.main || { name: "Main Set", order: 2, items: [] }, "Main Set", 2);
+    const uiFin = toUIRound(w.finisher, "Finisher", 3);
+
+    setWarmup(uiWarm);
+    setMain(uiMain || { name: "Main Set", order: 2, items: [] });
+    setFinisher(uiFin);
+
+    setPrefilled(true);
+  }, [isEdit, workoutResp, prefilled, ownerEmail]);
+
   /* ---------- Save ---------- */
   function toISODateOrNull(s: string): string | null {
     if (!s) return null;
     const dt = new Date(s);
     if (isNaN(dt.getTime())) return null;
-    // normalise to 12:00 to avoid TZ midnight drift when server reads it as local
     dt.setHours(12, 0, 0, 0);
     return dt.toISOString();
+  }
+
+  // Strip uids for save; keep schema identical to create payload
+  function stripRound(r: GymRound | null): any | null {
+    if (!r) return null;
+    return {
+      name: r.name,
+      order: r.order,
+      items: (r.items || []).map((it) => {
+        if (it.type === "Superset") {
+          const ss = it as SupersetItem;
+          return {
+            type: "Superset",
+            order: ss.order,
+            name: ss.name || "",
+            sets: Number.isFinite(ss.sets) ? ss.sets : 3,
+            rest_s: ss.rest_s ?? null,
+            notes: ss.notes ?? null,
+            // store normalised 'items'
+            items: (ss.items || []).map((s) => ({
+              exercise_id: s.exercise_id,
+              reps: s.reps || "",
+              weight_kg: s.weight_kg ?? null,
+            })),
+          };
+        }
+        const si = it as SingleItem;
+        return {
+          type: "Single",
+          order: si.order,
+          exercise_id: si.exercise_id,
+          sets: si.sets,
+          reps: si.reps || "",
+          weight_kg: si.weight_kg ?? null,
+          rest_s: si.rest_s ?? null,
+          notes: si.notes ?? null,
+        };
+      }),
+    };
   }
 
   async function save() {
     setSaving(true);
     setMsg(null);
     try {
-      // Client-side validation for recurring fields
+      // Recurring validation
       if (meta.recurring) {
         if (!meta.assigned_to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(meta.assigned_to)) {
           throw new Error("Please enter a valid email for 'Assigned To'.");
@@ -395,19 +548,18 @@ export default function GymCreateWorkoutPage() {
         }
       }
 
-      // We keep uid fields; your API can simply ignore them or strip server-side
-      const body = {
+      const body: any = {
+        ...(isEdit ? { workout_id: editId } : null),
         visibility: meta.visibility,
         owner_email: meta.visibility === "private" ? ownerEmail : undefined,
         workout_name: meta.workout_name.trim(),
         focus: meta.focus.trim() || undefined,
         notes: meta.notes.trim() || undefined,
         video_url: meta.video_url.trim() || undefined,
-        warmup,
-        main,
-        finisher,
+        warmup: stripRound(warmup),
+        main: stripRound(main),
+        finisher: stripRound(finisher),
 
-        // New fields (API will validate & coerce)
         recurring: !!meta.recurring,
         recurring_day: meta.recurring ? meta.recurring_day : null,
         recurring_start: meta.recurring ? toISODateOrNull(meta.recurring_start) : null,
@@ -415,24 +567,26 @@ export default function GymCreateWorkoutPage() {
         assigned_to: meta.recurring ? meta.assigned_to.trim().toLowerCase() : null,
       };
 
-      const res = await fetch("/api/workouts/gym-create", {
+      const url = isEdit ? "/api/workouts/admin/update" : "/api/workouts/gym-create";
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Failed to create gym workout");
-      setMsg("Created ✅");
-      setTimeout(() => router.push(`/admin/workouts/${json.workout_id}`), 700);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || (isEdit ? "Failed to update workout" : "Failed to create workout"));
+
+      setMsg(isEdit ? "Saved changes ✅" : "Created ✅");
+      const newId = json?.workout_id || editId;
+      setTimeout(() => router.push(`/admin/workouts/${newId}`), 700);
     } catch (e: any) {
-      setMsg(e?.message || "Failed to create workout");
+      setMsg(e?.message || (isEdit ? "Failed to save workout" : "Failed to create workout"));
     } finally {
       setSaving(false);
     }
   }
 
   /** ---------- UI ---------- */
-
   function ExerciseSelect({
     value,
     onChange,
@@ -507,7 +661,6 @@ export default function GymCreateWorkoutPage() {
             </div>
           </div>
 
-          {/* Delete superset */}
           <div className="mt-3">
             <button
               type="button"
@@ -521,7 +674,6 @@ export default function GymCreateWorkoutPage() {
           </div>
         </div>
 
-        {/* Dynamic list of sub-exercises */}
         <div className="col-12 col-md-8">
           {Array.isArray(it.items) && it.items.length > 0 ? (
             it.items.map((s, sidx) => (
@@ -657,7 +809,7 @@ export default function GymCreateWorkoutPage() {
   return (
     <>
       <Head>
-        <title>Create Gym Workout • Admin</title>
+        <title>{isEdit ? "Edit Gym Workout • Admin" : "Create Gym Workout • Admin"}</title>
       </Head>
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <div className="mb-3">
@@ -666,8 +818,8 @@ export default function GymCreateWorkoutPage() {
           </Link>
         </div>
 
-        <h2 className="mb-3">Create Gym Workout</h2>
-        {msg && <div className={`alert ${msg.includes("Failed") ? "alert-danger" : "alert-info"}`}>{msg}</div>}
+        <h2 className="mb-3">{isEdit ? "Edit Gym Workout" : "Create Gym Workout"}</h2>
+        {msg && <div className={`alert ${msg.toLowerCase().includes("failed") ? "alert-danger" : "alert-info"}`}>{msg}</div>}
 
         {/* Meta */}
         <section className="futuristic-card p-3 mb-3">
@@ -950,8 +1102,13 @@ export default function GymCreateWorkoutPage() {
           )}
         </section>
 
-        <button className="btn btn-primary w-100 mt-2" onClick={save} disabled={saving} style={{ borderRadius: 24, background: ACCENT, border: "none" }}>
-          {saving ? "Saving…" : "Create Gym Workout"}
+        <button
+          className="btn btn-primary w-100 mt-2"
+          onClick={save}
+          disabled={saving}
+          style={{ borderRadius: 24, background: ACCENT, border: "none" }}
+        >
+          {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Gym Workout"}
         </button>
       </main>
 
