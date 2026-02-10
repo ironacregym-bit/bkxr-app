@@ -1,7 +1,7 @@
 // pages/gymworkout/[id].tsx
 // BXKR — Gym Workout Viewer (List-style, set logging, GIF→Video media modal)
-// Bootstrap-only, hydration-safe, GIF size 64px always.
-// Sets expanded by default; single arrow toggle to collapse/expand per item.
+// Hydration-safe, GIF size 64px always, sets expanded by default with a single arrow toggle.
+// FIX: Completion is now evaluated for the selected week (Mon–Sun) that the selected day belongs to.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
@@ -10,20 +10,37 @@ import useSWR from "swr";
 import Link from "next/link";
 import useGymExerciseMedia, { GymRound as MediaRound } from "../../hooks/useGymExerciseMedia";
 import BottomNav from "../../components/BottomNav";
-import GlobalNumericFocus from "../../components/GlobalNumericFocus";
 
 const ACCENT = "#FF8A2A";
 const GREEN = "#22c55e";
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-// Fix for Firestore gif_url containing "public/"
+// ---- Helpers ----
 function fixGifUrl(u?: string) {
   if (!u) return u;
   if (u.startsWith("public/")) return "/" + u.replace(/^public\//, "");
   return u;
 }
+function formatYMD(d: Date) {
+  return d.toLocaleDateString("en-CA");
+}
+function startOfAlignedWeek(d: Date) {
+  const day = d.getDay(); // 0=Sun,1=Mon...
+  const diffToMon = (day + 6) % 7; // Mon=0
+  const s = new Date(d);
+  s.setDate(d.getDate() - diffToMon);
+  s.setHours(0, 0, 0, 0);
+  return s;
+}
+function endOfAlignedWeek(d: Date) {
+  const s = startOfAlignedWeek(d);
+  const e = new Date(s);
+  e.setDate(s.getDate() + 6);
+  e.setHours(23, 59, 59, 999);
+  return e;
+}
 
-/* ---------------- Types ---------------- */
+// ---- Types ----
 type UISingleItem = {
   type: "Single";
   order: number;
@@ -81,7 +98,20 @@ type PreviousCompletion = {
   completedAt?: string;
 };
 
-/* Build rounds for media hook */
+type Completion = {
+  id?: string;
+  workout_id?: string;
+  is_freestyle?: boolean;
+  activity_type?: string | null;
+  duration_minutes?: number | null;
+  duration?: number | null;
+  calories_burned?: number | null;
+  weight_completed_with?: number | null;
+  completed_date?: any;
+  date_completed?: any;
+};
+
+// Build rounds for media hook
 function toMediaRounds(w: GymWorkout | undefined | null): MediaRound[] {
   if (!w) return [];
   const rounds: UIRound[] = [];
@@ -252,10 +282,26 @@ function MediaModal({ open, title, gifUrl, videoUrl, onClose }: MediaModalProps)
 /* ---------------- Main Page ---------------- */
 export default function GymWorkoutViewerPage() {
   const router = useRouter();
-  const { id } = router.query;
+  const { id, date } = router.query;
 
-  const url = id && !Array.isArray(id) ? `/api/workouts/${id}` : null;
-  const { data, error } = useSWR<GymWorkout>(url, fetcher, { revalidateOnFocus: false });
+  // Selected day context: from ?date=YYYY-MM-DD or default to today
+  const selectedYMD = useMemo(() => {
+    if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+    return formatYMD(new Date());
+  }, [date]);
+
+  const selectedDate = useMemo(() => {
+    // Safe parse as local date at 00:00
+    return new Date(`${selectedYMD}T00:00:00`);
+  }, [selectedYMD]);
+
+  // Compute the calendar week range (Mon–Sun) that the selected day belongs to
+  const weekStartKey = useMemo(() => formatYMD(startOfAlignedWeek(selectedDate)), [selectedDate]);
+  const weekEndKey = useMemo(() => formatYMD(endOfAlignedWeek(selectedDate)), [selectedDate]);
+
+  // API: workout details
+  const workoutUrl = id && !Array.isArray(id) ? `/api/workouts/${id}` : null;
+  const { data, error } = useSWR<GymWorkout>(workoutUrl, fetcher, { revalidateOnFocus: false });
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -270,7 +316,7 @@ export default function GymWorkoutViewerPage() {
   const [difficulty, setDifficulty] = useState<string>("");
   const [calories, setCalories] = useState<string>("");
   const [duration, setDuration] = useState<string>("");
-  const [notes, setNotes] = useState<string>("");
+  the [notes, setNotes] = useState<string>("");
 
   // Media modal
   const [mediaOpen, setMediaOpen] = useState(false);
@@ -278,11 +324,11 @@ export default function GymWorkoutViewerPage() {
   const [mediaGif, setMediaGif] = useState<string | undefined>();
   const [mediaVideo, setMediaVideo] = useState<string | undefined>();
 
-  // Inputs: consistent widths across wraps
+  // Inputs: consistent widths
   const KG_INPUT_W = 88;
   const REPS_INPUT_W = 88;
 
-  // Load previous session
+  // Load previous session (for inline display only)
   useEffect(() => {
     if (!mounted || !id || Array.isArray(id)) return;
     fetch(`/api/completions/last?workout_id=${id}`)
@@ -336,6 +382,32 @@ export default function GymWorkoutViewerPage() {
     return null;
   };
 
+  // ---------- WEEKLY COMPLETION (Mon–Sun of the selected day) ----------
+  // Fetch completions for the whole week that contains `selectedYMD`
+  const weekCompletionsKey =
+    mounted && id && !Array.isArray(id)
+      ? `/api/completions?from=${encodeURIComponent(weekStartKey)}&to=${encodeURIComponent(weekEndKey)}`
+      : null;
+
+  const { data: weekCompletions } = useSWR<{
+    results?: Completion[];
+    items?: Completion[];
+    completions?: Completion[];
+    data?: Completion[];
+  }>(weekCompletionsKey, fetcher, { revalidateOnFocus: false, dedupingInterval: 30_000 });
+
+  const isCompleted = useMemo(() => {
+    if (!weekCompletions || !id || Array.isArray(id)) return false;
+    const list: Completion[] =
+      (weekCompletions.results as Completion[]) ||
+      (weekCompletions.items as Completion[]) ||
+      (weekCompletions.completions as Completion[]) ||
+      (weekCompletions.data as Completion[]) ||
+      [];
+    const idStr = String(id);
+    return list.some((c) => String(c.workout_id || "") === idStr);
+  }, [weekCompletions, id]);
+
   async function submitCompletion() {
     if (!id || Array.isArray(id)) return;
     try {
@@ -361,6 +433,7 @@ export default function GymWorkoutViewerPage() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to submit completion");
 
+      // After saving, return to dashboard (it will reflect the correct week/day state)
       router.push("/");
     } catch (e) {
       console.error(e);
@@ -371,8 +444,6 @@ export default function GymWorkoutViewerPage() {
   }
 
   if (!mounted) return null;
-
-  const isCompleted = Boolean(previousSession?.completedAt || (previousSession?.sets && previousSession.sets.length > 0));
 
   return (
     <>
@@ -385,19 +456,26 @@ export default function GymWorkoutViewerPage() {
         style={{
           color: "#fff",
           paddingBottom: 90,
-          ["--kgw" as any]: `${KG_INPUT_W}px`,
-          ["--repsw" as any]: `${REPS_INPUT_W}px`,
+          ["--kgw" as any]: `88px`,
+          ["--repsw" as any]: `88px`,
           touchAction: "pan-y" as any,
         }}
       >
         <div className="mb-3 d-flex justify-content-between align-items-center">
-          <Link href="/" className="btn btn-outline-secondary">← Back</Link>
+          <Link href="/" className="btn btn-outline-secondary">
+            ← Back
+          </Link>
           {data?.workout_name && (
             <div className="fw-bold text-truncate" style={{ maxWidth: 280 }}>
               {data.workout_name}
             </div>
           )}
           <div />
+        </div>
+
+        {/* Context note: which week we’re checking */}
+        <div className="text-dim small mb-2">
+          Week window: <span className="fw-semibold">{weekStartKey}</span> → <span className="fw-semibold">{weekEndKey}</span>
         </div>
 
         {error && <div className="alert alert-danger">Could not load this workout.</div>}
@@ -431,7 +509,7 @@ export default function GymWorkoutViewerPage() {
                         color: GREEN,
                         background: "transparent",
                       }}
-                      title="Previously completed"
+                      title={`Completed sometime this week (${weekStartKey}–${weekEndKey})`}
                     >
                       Completed
                     </span>
@@ -441,7 +519,7 @@ export default function GymWorkoutViewerPage() {
               {data.notes && <div className="mt-1 text-dim small">{data.notes}</div>}
             </section>
 
-            {/* Previous Session (collapsible card remains for full detail) */}
+            {/* Previous Session (collapsible card) */}
             {previousSession && (
               <section className="futuristic-card p-3 mb-3">
                 <div
@@ -647,10 +725,7 @@ function RoundBlock({
   kgWidth: number;
   repsWidth: number;
 }) {
-  const sorted = useMemo(
-    () => [...(round.items || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-    [round.items]
-  );
+  const sorted = useMemo(() => [...(round.items || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)), [round.items]);
 
   return (
     <section className="futuristic-card p-3 mb-3">
@@ -699,7 +774,7 @@ function RoundBlock({
   );
 }
 
-/* ---------------- Single Item Block (expanded by default; arrow toggle) ---------------- */
+/* ---------------- Single Item Block ---------------- */
 function SingleItemBlock({
   item,
   media,
@@ -720,7 +795,6 @@ function SingleItemBlock({
   const sets = Number.isFinite(item.sets) ? Number(item.sets) : 3;
   const rest = item.rest_s ?? null;
 
-  // one toggle controls the sets area; default expanded
   const [expanded, setExpanded] = useState<boolean>(true);
 
   return (
@@ -762,7 +836,7 @@ function SingleItemBlock({
           {item.notes && <div className="small text-dim mt-1">{item.notes}</div>}
         </div>
 
-        {/* Single arrow toggle */}
+        {/* Toggle */}
         <button
           className="btn btn-sm"
           style={{
@@ -781,7 +855,7 @@ function SingleItemBlock({
         </button>
       </div>
 
-      {/* Inputs grid: only when expanded */}
+      {/* Inputs grid */}
       {expanded && (
         <div id={`single-sets-${item.exercise_id}`} className="d-flex flex-column" style={{ gap: 8 }}>
           {Array.from({ length: sets }).map((_, i) => {
@@ -834,7 +908,7 @@ function SingleItemBlock({
   );
 }
 
-/* ---------------- Superset Block (expanded by default; arrow toggle) ---------------- */
+/* ---------------- Superset Block ---------------- */
 function SupersetBlock({
   item,
   media,
@@ -875,7 +949,7 @@ function SupersetBlock({
               background: "transparent",
               fontWeight: 600,
             }}
-            onClick={() => setExpanded((v) => v ? false : true)}
+            onClick={() => setExpanded((v) => (v ? false : true))}
             aria-expanded={expanded}
             aria-controls={`ss-sets-${(item.name || "").replace(/\s+/g, "-")}`}
             title={expanded ? "Collapse sets" : "Expand sets"}
@@ -951,9 +1025,7 @@ function SupersetBlock({
                           type="number"
                           inputMode="decimal"
                           placeholder="kg"
-                          onChange={(e) =>
-                            onUpdateSet(sub.exercise_id, setIdx + 1, { weight: Number(e.target.value) || null })
-                          }
+                          onChange={(e) => onUpdateSet(sub.exercise_id, setIdx + 1, { weight: Number(e.target.value) || null })}
                           style={{ width: "var(--kgw)", fontSize: "0.85rem", flex: "0 0 auto" }}
                         />
 
