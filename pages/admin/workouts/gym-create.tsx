@@ -1,3 +1,4 @@
+// pages/admin/workouts/gym-create.tsx
 "use client";
 
 import Head from "next/head";
@@ -16,6 +17,7 @@ type DayName = typeof DAYS[number];
 
 /** ---------- Utilities ---------- */
 const mkUid = () => {
+  // Prefer crypto if available; fallback to Math.random
   try {
     // @ts-ignore
     return crypto?.randomUUID ? crypto.randomUUID() : `uid_${Math.random().toString(36).slice(2)}`;
@@ -24,9 +26,46 @@ const mkUid = () => {
   }
 };
 
+// Accepts Firestore Timestamp, Date, number(ms), or string → returns "YYYY-MM-DD" or ""
+function toYMD(input: any): string {
+  if (!input) return "";
+  try {
+    // String
+    if (typeof input === "string") {
+      const s = input.trim();
+      if (s.length >= 10 && /\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+    }
+    // Firestore Timestamp-like
+    if (typeof input === "object" && input !== null && typeof (input as any).seconds === "number") {
+      const ts = input as { seconds: number; nanoseconds?: number };
+      const ms = ts.seconds * 1000 + (ts.nanoseconds ? ts.nanoseconds / 1e6 : 0);
+      const d = new Date(ms);
+      return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+    }
+    // Date
+    if (input instanceof Date) {
+      return isNaN(input.getTime()) ? "" : input.toISOString().slice(0, 10);
+    }
+    // Number (assume ms)
+    if (typeof input === "number") {
+      const d = new Date(input);
+      return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+    }
+    // Fallback: stringify
+    const s = String(input);
+    if (/\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+  } catch {
+    return "";
+  }
+}
+
 /** ---------- Types (add uid for stable keys) ---------- */
 type SingleItem = {
-  uid: string;
+  uid: string; // stable key
   type: "Single";
   order: number;
   exercise_id: string;
@@ -38,18 +77,20 @@ type SingleItem = {
 };
 
 type SupersetSubItem = {
-  uid: string;
+  uid: string; // stable key
   exercise_id: string;
   reps?: string;
   weight_kg?: number | null;
 };
 
 type SupersetItem = {
-  uid: string;
+  uid: string; // stable key
   type: "Superset";
   order: number;
   name?: string | null;
+  /** Unlimited sub-exercises now */
   items: SupersetSubItem[];
+  /** Superset-level sets to complete (required in UI; default 3) */
   sets: number;
   rest_s?: number | null;
   notes?: string | null;
@@ -71,8 +112,7 @@ type QuickTarget =
 type AdminRoundFetch = {
   name: string;
   order: number;
-  items?: any[];             // normalised items
-  superset_items?: any[];    // tolerated legacy on each superset item
+  items?: any[]; // normalised items
 };
 
 type AdminWorkoutFetch = {
@@ -87,11 +127,11 @@ type AdminWorkoutFetch = {
   warmup?: AdminRoundFetch | null;
   main?: AdminRoundFetch | null;
   finisher?: AdminRoundFetch | null;
-  // optional assignment/recurrence (if your API returns them)
+  // Assignment/recurrence (types softened to accept Timestamp/Date/number/string)
   recurring?: boolean;
-  recurring_day?: DayName | null;
-  recurring_start?: string | null;
-  recurring_end?: string | null;
+  recurring_day?: DayName | string | null;
+  recurring_start?: any;
+  recurring_end?: any;
   assigned_to?: string | null;
 };
 
@@ -106,14 +146,13 @@ export default function GymCreateWorkoutPage() {
   const editId = (typeof editIdRaw === "string" ? editIdRaw.trim() : "") || "";
   const isEdit = Boolean(editId);
 
-  // Load exercises for dropdown
-  const {
-    data: exData,
-    mutate: mutateExercises,
-  } = useSWR("/api/exercises?limit=1000", fetcher, { revalidateOnFocus: false });
+  // --- Load exercises for dropdown ---
+  const { data: exData, mutate: mutateExercises } = useSWR("/api/exercises?limit=1000", fetcher, {
+    revalidateOnFocus: false,
+  });
   const exercises: ExerciseRow[] = Array.isArray(exData?.exercises) ? exData!.exercises : [];
 
-  // ----- Base form + assignment/recurrence
+  // --- Template metadata ---
   const [meta, setMeta] = useState({
     workout_name: "",
     focus: "",
@@ -121,10 +160,11 @@ export default function GymCreateWorkoutPage() {
     video_url: "",
     visibility: "global" as "global" | "private",
 
+    // Assignment & recurrence
     recurring: false,
     recurring_day: "Monday" as DayName,
     recurring_start: "" as string, // YYYY-MM-DD
-    recurring_end: "" as string,   // YYYY-MM-DD
+    recurring_end: "" as string, // YYYY-MM-DD
     assigned_to: ownerEmail || "",
   });
 
@@ -219,7 +259,7 @@ export default function GymCreateWorkoutPage() {
     );
   }
 
-  /* ---------- Utilities ---------- */
+  /* ---------- Utilities to keep item orders clean ---------- */
   function renumber(items: Array<SingleItem | SupersetItem>): Array<SingleItem | SupersetItem> {
     return items.map((it, i) => ({ ...it, order: i + 1 }));
   }
@@ -252,7 +292,10 @@ export default function GymCreateWorkoutPage() {
     const dropFrom = (r: GymRound | null): GymRound | null => {
       if (!r) return r;
       const next = r.items.filter((_, i) => i !== idx);
-      if (next.length === 0 && r.name === "Finisher") return null;
+      if (next.length === 0 && r.name === "Finisher") {
+        // If finisher becomes empty, hide the whole section
+        return null;
+      }
       return { ...r, items: renumber(next) };
     };
     if (round === "warmup") setWarmup((prev) => dropFrom(prev));
@@ -260,7 +303,7 @@ export default function GymCreateWorkoutPage() {
     if (round === "finisher") setFinisher((prev) => dropFrom(prev));
   }
 
-  /* ---------- Helpers for Supersets ---------- */
+  /* ---------- Helpers for Supersets (unlimited items + sets at superset level) ---------- */
   function newSupersetSub(): SupersetSubItem {
     return { uid: mkUid(), exercise_id: "", reps: "" };
   }
@@ -376,7 +419,7 @@ export default function GymCreateWorkoutPage() {
             items: r.items.map((it, i) => {
               if (i !== idx) return it;
               const ss = it as SupersetItem;
-              if (!ss.items || ss.items.length <= 1) return ss;
+              if (!ss.items || ss.items.length <= 1) return ss; // keep at least 1
               const next = ss.items.filter((_, j) => j !== subIdx);
               return { ...ss, items: next };
             }),
@@ -401,7 +444,7 @@ export default function GymCreateWorkoutPage() {
     const uiItems: Array<SingleItem | SupersetItem> = rawItems.map((it: any, idx: number) => {
       const order = Number.isFinite(it?.order) ? it.order : idx + 1;
       if (String(it?.type) === "Superset") {
-        // tolerate both .items and .superset_items
+        // tolerate both .items and legacy .superset_items (if your data contains it on fetch side)
         const subs: any[] = Array.isArray(it.items)
           ? it.items
           : Array.isArray(it.superset_items)
@@ -450,7 +493,10 @@ export default function GymCreateWorkoutPage() {
   useEffect(() => {
     if (!isEdit || !workoutResp || prefilled) return;
 
-    // Meta (gracefully handle absent fields)
+    // Guard recurring_day
+    const dayRaw = (workoutResp.recurring_day ?? "") as string;
+    const day = (DAYS as readonly string[]).includes(dayRaw) ? (dayRaw as DayName) : (meta.recurring_day as DayName);
+
     setMeta((m) => ({
       ...m,
       workout_name: workoutResp.workout_name || "",
@@ -459,9 +505,10 @@ export default function GymCreateWorkoutPage() {
       video_url: workoutResp.video_url || "",
       visibility: workoutResp.visibility || "global",
       recurring: !!workoutResp.recurring,
-      recurring_day: (workoutResp.recurring_day as DayName) || m.recurring_day,
-      recurring_start: (workoutResp.recurring_start || "").slice(0, 10),
-      recurring_end: (workoutResp.recurring_end || "").slice(0, 10),
+      recurring_day: day,
+      // Safe normalisation to YYYY-MM-DD for <input type="date">
+      recurring_start: toYMD(workoutResp.recurring_start),
+      recurring_end: toYMD(workoutResp.recurring_end),
       assigned_to: (workoutResp.assigned_to || ownerEmail || "").toLowerCase(),
     }));
 
@@ -476,13 +523,14 @@ export default function GymCreateWorkoutPage() {
     setFinisher(uiFin);
 
     setPrefilled(true);
-  }, [isEdit, workoutResp, prefilled, ownerEmail]);
+  }, [isEdit, workoutResp, prefilled, ownerEmail, meta.recurring_day]);
 
   /* ---------- Save ---------- */
   function toISODateOrNull(s: string): string | null {
     if (!s) return null;
     const dt = new Date(s);
     if (isNaN(dt.getTime())) return null;
+    // normalise to 12:00 to avoid TZ midnight drift when server reads it as local
     dt.setHours(12, 0, 0, 0);
     return dt.toISOString();
   }
@@ -530,7 +578,7 @@ export default function GymCreateWorkoutPage() {
     setSaving(true);
     setMsg(null);
     try {
-      // Recurring validation
+      // Client-side validation for recurring fields
       if (meta.recurring) {
         if (!meta.assigned_to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(meta.assigned_to)) {
           throw new Error("Please enter a valid email for 'Assigned To'.");
@@ -560,6 +608,7 @@ export default function GymCreateWorkoutPage() {
         main: stripRound(main),
         finisher: stripRound(finisher),
 
+        // New fields (API will validate & coerce)
         recurring: !!meta.recurring,
         recurring_day: meta.recurring ? meta.recurring_day : null,
         recurring_start: meta.recurring ? toISODateOrNull(meta.recurring_start) : null,
@@ -575,8 +624,8 @@ export default function GymCreateWorkoutPage() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || (isEdit ? "Failed to update workout" : "Failed to create workout"));
-
       setMsg(isEdit ? "Saved changes ✅" : "Created ✅");
+
       const newId = json?.workout_id || editId;
       setTimeout(() => router.push(`/admin/workouts/${newId}`), 700);
     } catch (e: any) {
@@ -587,6 +636,7 @@ export default function GymCreateWorkoutPage() {
   }
 
   /** ---------- UI ---------- */
+
   function ExerciseSelect({
     value,
     onChange,
@@ -661,6 +711,7 @@ export default function GymCreateWorkoutPage() {
             </div>
           </div>
 
+          {/* Delete superset */}
           <div className="mt-3">
             <button
               type="button"
@@ -674,6 +725,7 @@ export default function GymCreateWorkoutPage() {
           </div>
         </div>
 
+        {/* Dynamic list of sub-exercises */}
         <div className="col-12 col-md-8">
           {Array.isArray(it.items) && it.items.length > 0 ? (
             it.items.map((s, sidx) => (
