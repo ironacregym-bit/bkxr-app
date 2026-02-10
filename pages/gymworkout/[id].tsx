@@ -316,7 +316,7 @@ export default function GymWorkoutViewerPage() {
   const [difficulty, setDifficulty] = useState<string>("");
   const [calories, setCalories] = useState<string>("");
   const [duration, setDuration] = useState<string>("");
-  the [notes, setNotes] = useState<string>("");
+  const [notes, setNotes] = useState<string>("");
 
   // Media modal
   const [mediaOpen, setMediaOpen] = useState(false);
