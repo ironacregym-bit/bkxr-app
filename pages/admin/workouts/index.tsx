@@ -19,15 +19,9 @@ type WorkoutRow = {
   created_at?: any;
 };
 
-type ListResp = {
-  items: WorkoutRow[];
-};
+type ListResp = { items: WorkoutRow[] };
 
-type AdminRound = {
-  name: string;
-  order: number;
-  items: any[];
-};
+type AdminRound = { name: string; order: number; items: any[] };
 
 type AdminWorkout = {
   workout_id: string;
@@ -37,7 +31,7 @@ type AdminWorkout = {
   focus?: string;
   notes?: string;
   video_url?: string;
-  // GYM
+  // GYM (may or may not be inflated by the GET API)
   warmup?: AdminRound | null;
   main?: AdminRound | null;
   finisher?: AdminRound | null;
@@ -61,7 +55,7 @@ export default function AdminWorkoutsManager() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // ----- Local UI state (always declared before any conditional rendering) -----
+  // ----- Local UI state -----
   const [query, setQuery] = useState("");
   const [filterVis, setFilterVis] = useState<"" | "global" | "private">("");
   const [filterKind, setFilterKind] = useState<"" | "gym" | "bxkr">("");
@@ -69,14 +63,13 @@ export default function AdminWorkoutsManager() {
   const [mobileEditing, setMobileEditing] = useState(false);
   const [viewerDate, setViewerDate] = useState<string>(formatYMD(new Date()));
 
-  // Build list key; ensure hooks are always called, but key=null when not allowed
+  // Build list key
   const listKey = useMemo(() => {
     if (!mounted || status === "loading") return null;
     const isAllowed = !!session && (role === "admin" || role === "gym");
     if (!isAllowed) return null;
 
     const qs = new URLSearchParams();
-    // Server can accept q (optional) + visibility
     if (query.trim()) qs.set("q", query.trim());
     if (filterVis) qs.set("visibility", filterVis);
     qs.set("limit", "300");
@@ -84,19 +77,19 @@ export default function AdminWorkoutsManager() {
     return `/api/workouts/list${suffix}`;
   }, [mounted, status, session, role, query, filterVis]);
 
-  const { data: listData, mutate: mutateList } = useSWR<ListResp>(listKey, fetcher, {
+  const { data: listData } = useSWR<ListResp>(listKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
   const items: WorkoutRow[] = Array.isArray(listData?.items) ? listData!.items : [];
 
-  // Client-side kind filter (keep snappy UI)
+  // Client-side kind filter
   const filteredItems = useMemo(() => {
     if (!filterKind) return items;
     return items.filter((w) => w.kind === filterKind);
   }, [items, filterKind]);
 
-  // Selected workout fetch (key is null if none selected or not allowed)
+  // Selected workout fetch
   const getKey = useMemo(() => {
     if (!mounted || status === "loading" || !selectedId) return null;
     const isAllowed = !!session && (role === "admin" || role === "gym");
@@ -104,15 +97,28 @@ export default function AdminWorkoutsManager() {
     return `/api/workouts/admin/${encodeURIComponent(selectedId)}`;
   }, [mounted, status, session, role, selectedId]);
 
-  const { data: selectedData, mutate: mutateSelected } = useSWR<AdminWorkout>(
-    getKey,
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 30_000 }
-  );
+  const { data: selectedData } = useSWR<AdminWorkout>(getKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30_000,
+  });
 
   const selected = selectedData || null;
 
-  // ----- Render (single return; no early returns before hooks) -----
+  // Derive the selected row (from the list) and use its 'kind' primarily
+  const selectedRow = useMemo(
+    () => (selectedId ? items.find((w) => w.workout_id === selectedId) || null : null),
+    [items, selectedId]
+  );
+
+  const selectedKind: "gym" | "bxkr" | "unknown" = useMemo(() => {
+    if (selectedRow?.kind) return selectedRow.kind;
+    // Fallback heuristic if the list row isn't present/typed
+    if (selected?.main || selected?.warmup || selected?.finisher) return "gym";
+    if (selected?.boxing && selected?.kettlebell) return "bxkr";
+    return "unknown";
+  }, [selectedRow, selected]);
+
+  // ----- Render -----
   const isAllowed = !!session && (role === "admin" || role === "gym");
 
   return (
@@ -120,10 +126,8 @@ export default function AdminWorkoutsManager() {
       <Head><title>Workouts • Admin</title></Head>
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
-        {/* Access gates rendered in-place (no early return) */}
-        {(!mounted || status === "loading") && (
-          <div className="py-4">Checking access…</div>
-        )}
+        {/* Access gates */}
+        {(!mounted || status === "loading") && <div className="py-4">Checking access…</div>}
 
         {mounted && status !== "loading" && !isAllowed && (
           <div className="py-4">
@@ -248,9 +252,7 @@ export default function AdminWorkoutsManager() {
                     </div>
                   </div>
 
-                  {!selected && (
-                    <div className="text-dim">Pick a workout from the list to view actions and details.</div>
-                  )}
+                  {!selected && <div className="text-dim">Pick a workout from the list to view actions and details.</div>}
 
                   {selected && (
                     <>
@@ -290,8 +292,8 @@ export default function AdminWorkoutsManager() {
                         </div>
                       ) : null}
 
-                      {/* Gym viewer date control */}
-                      {(selected.main || selected.warmup || selected.finisher) && (
+                      {/* Gym viewer date control: show only for Gym */}
+                      {selectedKind === "gym" && (
                         <div className="mt-3 d-flex align-items-center gap-2">
                           <label htmlFor="viewer-date" className="small text-dim mb-0">Gym viewer date</label>
                           <input
@@ -310,16 +312,18 @@ export default function AdminWorkoutsManager() {
                       <div className="d-flex flex-wrap gap-2 mt-3">
                         {/* Open in Viewer */}
                         <Link
-                          href={(selected.main || selected.warmup || selected.finisher)
-                            ? `/gymworkout/${encodeURIComponent(selected.workout_id)}${viewerDate ? `?date=${encodeURIComponent(viewerDate)}` : ""}`
-                            : `/workout/${encodeURIComponent(selected.workout_id)}`}
+                          href={
+                            selectedKind === "gym"
+                              ? `/gymworkout/${encodeURIComponent(selected.workout_id)}${viewerDate ? `?date=${encodeURIComponent(viewerDate)}` : ""}`
+                              : `/workout/${encodeURIComponent(selected.workout_id)}`
+                          }
                           className="btn btn-outline-light"
                           style={{ borderRadius: 24 }}
                         >
                           Open in Viewer
                         </Link>
 
-                        {/* Edit in Viewer */}
+                        {/* Edit in Viewer (shared) */}
                         <Link
                           href={`/admin/viewer/${encodeURIComponent(selected.workout_id)}`}
                           className="btn btn-outline-light"
@@ -330,9 +334,11 @@ export default function AdminWorkoutsManager() {
 
                         {/* Edit (Dedicated editors) */}
                         <Link
-                          href={(selected.main || selected.warmup || selected.finisher)
-                            ? `/admin/workouts/gym-edit/${encodeURIComponent(selected.workout_id)}`
-                            : `/admin/workouts/bxkr-edit/${encodeURIComponent(selected.workout_id)}`}
+                          href={
+                            selectedKind === "gym"
+                              ? `/admin/workouts/gym-edit/${encodeURIComponent(selected.workout_id)}`
+                              : `/admin/workouts/bxkr-edit/${encodeURIComponent(selected.workout_id)}`
+                          }
                           className="btn"
                           style={{ borderRadius: 24, background: ACCENT, color: "#0b0f14" }}
                         >
@@ -344,7 +350,7 @@ export default function AdminWorkoutsManager() {
                       <div className="small text-dim mt-3">
                         Kind:{" "}
                         <span className="text-light">
-                          {(selected.main || selected.warmup || selected.finisher) ? "GYM" : (selected.boxing && selected.kettlebell) ? "BXKR" : "Unknown"}
+                          {selectedKind === "gym" ? "GYM" : selectedKind === "bxkr" ? "BXKR" : "Unknown"}
                         </span>
                       </div>
                     </>
