@@ -328,15 +328,15 @@ export default function AdminWorkoutsManager() {
                           Edit in Viewer
                         </Link>
 
-                        {/* Edit (Create-style) */}
+                        {/* Edit (Dedicated editors) */}
                         <Link
                           href={(selected.main || selected.warmup || selected.finisher)
-                            ? `/admin/workouts/gym-create?edit=${encodeURIComponent(selected.workout_id)}`
-                            : `/admin/workouts/create?edit=${encodeURIComponent(selected.workout_id)}`}
+                            ? `/admin/workouts/gym-edit/${encodeURIComponent(selected.workout_id)}`
+                            : `/admin/workouts/bxkr-edit/${encodeURIComponent(selected.workout_id)}`}
                           className="btn"
                           style={{ borderRadius: 24, background: ACCENT, color: "#0b0f14" }}
                         >
-                          Edit (Create‑style)
+                          Edit
                         </Link>
                       </div>
 
