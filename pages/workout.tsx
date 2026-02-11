@@ -76,6 +76,35 @@ function dayIndexMonSun(d: Date | null): number {
   const js = d.getDay(); // Sun=0..Sat=6
   return js === 0 ? 6 : js - 1; // Mon=0..Sun=6
 }
+function dayNameToIndex(day: string | null | undefined): number | null {
+  if (!day) return null;
+  const s = String(day).trim().toLowerCase();
+  const map: Record<string, number> = {
+    mon: 0, monday: 0,
+    tue: 1, tues: 1, tuesday: 1,
+    wed: 2, weds: 2, wednesday: 2,
+    thu: 3, thur: 3, thurs: 3, thursday: 3,
+    fri: 4, friday: 4,
+    sat: 5, saturday: 5,
+    sun: 6, sunday: 6,
+  };
+  return map[s] ?? null;
+}
+function dateForWeekday(sow: Date, idxMonSun: number): Date {
+  const d = new Date(sow);
+  d.setDate(sow.getDate() + idxMonSun);
+  d.setHours(12, 0, 0, 0); // midday to avoid DST edge cases
+  return d;
+}
+function isoDate(d: Date | null): string {
+  if (!d) return "any";
+  return d.toISOString().slice(0, 10);
+}
+function arrIncludesCi(arr: any, needle: string): boolean {
+  if (!Array.isArray(arr)) return false;
+  const n = needle.toLowerCase();
+  return arr.some((x) => String(x || "").toLowerCase() === n);
+}
 
 // ---- Page -------------------------------------------------------------------
 export default function WorkoutHubPage() {
@@ -180,7 +209,7 @@ export default function WorkoutHubPage() {
             </div>
           </div>
 
-          {/* Weekly workouts (mandatory + optional) */}
+          {/* Weekly workouts (mandatory + optional, includes recurring assignments) */}
           <WeeklyWorkoutsHeader email={userEmail} />
         </div>
 
@@ -264,7 +293,7 @@ export default function WorkoutHubPage() {
   );
 }
 
-// ---- Weekly Workouts (Mandatory & Optional) ---------------------------------
+// ---- Weekly Workouts (Mandatory & Optional, includes recurring) -------------
 type WeeklyResp = {
   weekStart?: string | Date | any;
   workouts?: any[];
@@ -272,6 +301,8 @@ type WeeklyResp = {
   results?: any[];
   data?: any[];
 };
+
+type ListResp = { items?: any[] };
 
 type WeekCard = {
   id: string;
@@ -294,7 +325,17 @@ function inferKind(data: any): "gym" | "bxkr" | "unknown" {
 function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
   // Primary source: /api/workouts → { weekStart, workouts: [] }
   const key = email ? "/api/workouts" : null;
-  const { data, error } = useSWR<WeeklyResp>(key, fetcher, {
+  const { data: weeklyData, error } = useSWR<WeeklyResp>(key, fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    dedupingInterval: 60_000,
+    shouldRetryOnError: false,
+  });
+
+  // Secondary source: /api/workouts/list for recurring assignments
+  // We keep it broad (no visibility filter) so private or global both surface.
+  const listKey = email ? "/api/workouts/list?limit=300" : null;
+  const { data: listData } = useSWR<ListResp>(listKey, fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     dedupingInterval: 60_000,
@@ -302,20 +343,22 @@ function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
   });
 
   const { mandatory, optional, sow, eow } = useMemo(() => {
-    const list =
-      (Array.isArray(data?.workouts) && data!.workouts) ||
-      (Array.isArray(data?.results) && data!.results) ||
-      (Array.isArray(data?.items) && data!.items) ||
-      (Array.isArray(data?.data) && data!.data) ||
+    // 1) Base items from weekly API (dated items or API-provided)
+    const listA =
+      (Array.isArray(weeklyData?.workouts) && weeklyData!.workouts) ||
+      (Array.isArray(weeklyData?.results) && weeklyData!.results) ||
+      (Array.isArray(weeklyData?.items) && weeklyData!.items) ||
+      (Array.isArray(weeklyData?.data) && weeklyData!.data) ||
       [];
 
-    const weekStart =
-      toDateSafe(data?.weekStart) ??
-      startOfWeekMonday(new Date()); // if API omits weekStart, assume current week
+    // 2) Recurring items from the list API (assign to this week)
+    const fromListAll = Array.isArray(listData?.items) ? listData!.items : [];
 
+    const weekStart =
+      toDateSafe(weeklyData?.weekStart) ?? startOfWeekMonday(new Date());
     const weekEnd = endOfWeekSunday(weekStart);
 
-    const rows: WeekCard[] = list
+    const baseRows: WeekCard[] = listA
       .map((w: any): WeekCard | null => {
         const id: string =
           w.id ?? w.workout_id ?? w.workoutId ?? w.slug ?? w.doc_id ?? String(w._id || "");
@@ -324,7 +367,6 @@ function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
         const name: string = w.name ?? w.workout_name ?? w.title ?? w.plan_name ?? "Workout";
         const kind = inferKind(w);
 
-        // Try to read a scheduled date within the week
         const dateField =
           w.date ??
           w.scheduled_for ??
@@ -338,7 +380,6 @@ function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
           null;
         const date = toDateSafe(dateField);
 
-        // Optional flag (default to mandatory)
         const isOptional: boolean =
           (typeof w.optional === "boolean" && w.optional) ||
           (typeof w.is_optional === "boolean" && w.is_optional) ||
@@ -346,25 +387,82 @@ function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
           (typeof w.required === "boolean" ? !w.required : false) ||
           false;
 
-        // Build viewer href (match Admin page logic)
         const href =
           kind === "gym"
             ? `/gymworkout/${encodeURIComponent(id)}${
-                date ? `?date=${encodeURIComponent(date.toISOString().slice(0, 10))}` : ""
+                date ? `?date=${encodeURIComponent(isoDate(date))}` : ""
               }`
-            : `/workout/${encodeURIComponent(id)}`; // bxkr or unknown → same viewer
+            : `/workout/${encodeURIComponent(id)}`;
 
         return { id, name, kind, date, isOptional, href };
       })
       .filter(Boolean) as WeekCard[];
 
+    // Recurring expansion
+    const recurringRows: WeekCard[] = (fromListAll as any[])
+      .filter((w) => {
+        if (!w || !w.recurring) return false;
+        if (!email) return false;
+        // Check assignment
+        if (!arrIncludesCi(w.assigned_to, email)) return false;
+
+        // Check window overlap
+        const rs = toDateSafe(w.recurring_start) ?? toDateSafe(w.start) ?? null;
+        const re = toDateSafe(w.recurring_end) ?? toDateSafe(w.end) ?? null;
+
+        // If no bounds provided, assume valid
+        const overlaps =
+          (!rs || rs.getTime() <= weekEnd.getTime()) &&
+          (!re || re.getTime() >= weekStart.getTime());
+
+        if (!overlaps) return false;
+
+        // Must have a day
+        const idx = dayNameToIndex(w.recurring_day);
+        return idx !== null;
+      })
+      .map((w) => {
+        const id: string =
+          w.id ?? w.workout_id ?? w.workoutId ?? w.slug ?? w.doc_id ?? String(w._id || "");
+        const name: string = w.name ?? w.workout_name ?? w.title ?? w.plan_name ?? "Workout";
+        const kind = inferKind(w);
+
+        const idx = dayNameToIndex(w.recurring_day)!; // guaranteed not null from filter
+        const date = dateForWeekday(weekStart, idx);
+
+        const isOptional: boolean =
+          (typeof w.optional === "boolean" && w.optional) ||
+          (typeof w.is_optional === "boolean" && w.is_optional) ||
+          (typeof w.mandatory === "boolean" ? !w.mandatory : false) ||
+          (typeof w.required === "boolean" ? !w.required : false) ||
+          false;
+
+        const href =
+          kind === "gym"
+            ? `/gymworkout/${encodeURIComponent(id)}?date=${encodeURIComponent(isoDate(date))}`
+            : `/workout/${encodeURIComponent(id)}`;
+
+        return { id, name, kind, date, isOptional, href };
+      });
+
+    // Merge and dedupe by (id + dateISO) so we don't double-list if weekly API also included it
+    const seen = new Set<string>();
+    const merged: WeekCard[] = [];
+
+    for (const r of [...baseRows, ...recurringRows]) {
+      const key = `${r.id}:${isoDate(r.date)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(r);
+    }
+
     // Keep only items that fall within the Mon–Sun window if a date is present
-    const inWindow = rows.filter((r) => {
+    const inWindow = merged.filter((r) => {
       if (!r.date) return true; // allow "Any day" items
       return r.date.getTime() >= weekStart.getTime() && r.date.getTime() <= weekEnd.getTime();
     });
 
-    // Sort by day index; "Any day" last
+    // Sort by day index; "Any day" last, then name
     inWindow.sort((a, b) => {
       const da = dayIndexMonSun(a.date);
       const db = dayIndexMonSun(b.date);
@@ -376,7 +474,7 @@ function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
     const optional = inWindow.filter((r) => r.isOptional);
 
     return { mandatory, optional, sow: weekStart, eow: weekEnd };
-  }, [data]);
+  }, [weeklyData, listData, email]);
 
   // Render states
   if (error) {
@@ -387,7 +485,11 @@ function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
             <div className="fw-semibold">This week</div>
             <div className="small text-dim">Couldn’t load your weekly workouts.</div>
           </div>
-          <Link href="/workouts" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
+          <Link
+            href="/workouts"
+            className="btn btn-bxkr-outline btn-sm"
+            style={{ borderRadius: 24 }}
+          >
             Browse
           </Link>
         </div>
@@ -409,7 +511,11 @@ function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
           <div className="small text-dim">{rangeLabel}</div>
         </div>
         <div className="d-flex gap-2">
-          <Link href="/workouts" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
+          <Link
+            href="/workouts"
+            className="btn btn-bxkr-outline btn-sm"
+            style={{ borderRadius: 24 }}
+          >
             Plan
           </Link>
           <Link
@@ -437,7 +543,7 @@ function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
               <div className="small text-dim mb-1">Mandatory</div>
               <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                 {mandatory.map((w, i) => (
-                  <li key={`m-${w.id}-${i}`} className="mb-1">
+                  <li key={`m-${w.id}-${isoDate(w.date)}-${i}`} className="mb-1">
                     <Link
                       href={w.href}
                       className="w-100 d-flex align-items-center justify-content-between"
@@ -492,7 +598,7 @@ function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
               <div className="small text-dim mb-1">Optional</div>
               <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                 {optional.map((w, i) => (
-                  <li key={`o-${w.id}-${i}`} className="mb-1">
+                  <li key={`o-${w.id}-${isoDate(w.date)}-${i}`} className="mb-1">
                     <Link
                       href={w.href}
                       className="w-100 d-flex align-items-center justify-content-between"
