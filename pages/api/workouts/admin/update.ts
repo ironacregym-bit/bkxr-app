@@ -184,7 +184,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const now = Timestamp.now();
 
     // Update top-level doc (merge; keep created_at, workout_type, etc.)
-    const topLevelUpdate: FirebaseFirestore.UpdateData = {
+    const topLevelUpdate = {
       workout_name: p.workout_name,
       focus: p.focus ?? null,
       notes: p.notes ?? null,
