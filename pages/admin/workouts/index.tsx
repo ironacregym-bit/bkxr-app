@@ -38,6 +38,8 @@ type AdminWorkout = {
   // BXKR
   boxing?: { rounds: any[] };
   kettlebell?: { rounds: any[] };
+  // Discriminator may be present on doc
+  workout_type?: string;
 };
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
@@ -110,12 +112,14 @@ export default function AdminWorkoutsManager() {
     [items, selectedId]
   );
 
+  // Prefer the list row kind (which is derived from workout_type by the list API).
+  // If not available (e.g., page reloaded and detail fetched before list), fallback to workout_type.
   const selectedKind: "gym" | "bxkr" | "unknown" = useMemo(() => {
-    if (selectedRow?.kind) return selectedRow.kind;
-    // Fallback heuristic if the list row isn't present/typed
-    if (selected?.main || selected?.warmup || selected?.finisher) return "gym";
-    if (selected?.boxing && selected?.kettlebell) return "bxkr";
-    return "unknown";
+    if (selectedRow?.kind === "gym" || selectedRow?.kind === "bxkr") return selectedRow.kind;
+    const wt = String((selected as any)?.workout_type || "").toLowerCase();
+    if (wt === "gym_custom") return "gym";
+    // Default to bxkr when discriminator is missing or different
+    return selected ? "bxkr" : "unknown";
   }, [selectedRow, selected]);
 
   // ----- Render -----
