@@ -69,10 +69,10 @@ function toDateSafe(v: any): Date | null {
 }
 function dayLabel(d: Date | null): string {
   if (!d) return "Any day";
-  return d.toLocaleDateString(undefined, { weekday: "short" }); // Mon, Tue, ...
+  return d.toLocaleDateString(undefined, { weekday: "short" });
 }
 function dayIndexMonSun(d: Date | null): number {
-  if (!d) return 7; // sort unknown to bottom
+  if (!d) return 7; // unknown at bottom
   const js = d.getDay(); // Sun=0..Sat=6
   return js === 0 ? 6 : js - 1; // Mon=0..Sun=6
 }
@@ -82,8 +82,7 @@ export default function WorkoutHubPage() {
   const { data: session } = useSession();
   const userEmail = session?.user?.email || null;
 
-  // Prefer: /api/completions/history?email=&limit=5
-  // Fallback: /api/completions/index?user_email&from&to (last 90 days)
+  // Completions history: primary then fallback
   const todayKey = formatDateKeyLocal(new Date());
   const fromKey = formatDateKeyLocal(subDays(new Date(), 90));
 
@@ -91,14 +90,12 @@ export default function WorkoutHubPage() {
     ? `/api/completions/history?email=${encodeURIComponent(userEmail)}&limit=5`
     : null;
 
-  // try history first
   const { data: histPrimary, error: histPrimaryErr } = useSWR(historyUrl, fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     dedupingInterval: 30_000,
   });
 
-  // if history endpoint missing, try index range
   const useFallback = !!histPrimaryErr;
   const historyRangeUrl =
     userEmail && useFallback
@@ -113,7 +110,6 @@ export default function WorkoutHubPage() {
     dedupingInterval: 30_000,
   });
 
-  // Normalise whatever shape we get back
   const historyPreview = useMemo(() => {
     const src =
       histPrimary?.results ||
@@ -138,7 +134,6 @@ export default function WorkoutHubPage() {
         calories_burned: Number(c.calories_burned || 0),
         sets_completed: Number(c.sets_completed || 0),
         weight_completed_with: c.weight_completed_with ?? null,
-        // Try to read a workout name without changing schema
         workout_name:
           c.workout_name ??
           c.name ??
@@ -273,7 +268,7 @@ export default function WorkoutHubPage() {
 type WeeklyResp = {
   weekStart?: string | Date | any;
   workouts?: any[];
-  items?: any[]; // tolerate alt naming
+  items?: any[];
   results?: any[];
   data?: any[];
 };
@@ -326,9 +321,7 @@ function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
           w.id ?? w.workout_id ?? w.workoutId ?? w.slug ?? w.doc_id ?? String(w._id || "");
         if (!id) return null;
 
-        const name: string =
-          w.name ?? w.workout_name ?? w.title ?? w.plan_name ?? "Workout";
-
+        const name: string = w.name ?? w.workout_name ?? w.title ?? w.plan_name ?? "Workout";
         const kind = inferKind(w);
 
         // Try to read a scheduled date within the week
@@ -359,9 +352,7 @@ function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
             ? `/gymworkout/${encodeURIComponent(id)}${
                 date ? `?date=${encodeURIComponent(date.toISOString().slice(0, 10))}` : ""
               }`
-            : kind === "bxkr"
-            ? `/workout/${encodeURIComponent(id)}`
-            : `/workout/${encodeURIComponent(id)}`;
+            : `/workout/${encodeURIComponent(id)}`; // bxkr or unknown → same viewer
 
         return { id, name, kind, date, isOptional, href };
       })
@@ -396,16 +387,7 @@ function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
             <div className="fw-semibold">This week</div>
             <div className="small text-dim">Couldn’t load your weekly workouts.</div>
           </div>
-          <Link
-            href="/workouts"
-            className="btn btn-sm"
-            style={{
-              borderRadius: 24,
-              color: "#fff",
-              background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
-              boxShadow: `0 0 14px ${ACCENT}66`,
-            }}
-          >
+          <Link href="/workouts" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
             Browse
           </Link>
         </div>
@@ -624,9 +606,6 @@ function BenchmarksList({ email }: { email?: string | null }) {
 
 // ---- Benchmark Graphs (weight & sets per kettlebell part) -------------------
 function BenchmarkGraphs({ email }: { email?: string | null }) {
-  // Expected endpoint: /api/benchmarks/series?email=...
-  // Shape expectation (flexible):
-  // [{ part: "Kettlebell Swing", date: "...", weight: 24, sets: 5 }, ...]
   const { data, error } = useSWR(
     email ? `/api/benchmarks/series?email=${encodeURIComponent(email)}` : null,
     fetcher,
@@ -636,7 +615,6 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
     }
   );
 
-  // Soft-fail messaging if endpoint not present
   if (error) {
     return (
       <div className="text-muted">
@@ -656,5 +634,106 @@ function BenchmarkGraphs({ email }: { email?: string | null }) {
   for (const row of series) {
     const key =
       row.part ||
+      row.kb_part ||
+      row.exercise_part ||
+      row.exercise_name ||
+      row.name ||
+      "Unknown Part";
+    (groups[key] ??= []).push(row);
   }
+
+  return (
+    <div>
+      {Object.entries(groups).map(([part, rows]) => {
+        // sort by date ascending for a clean line
+        const sorted = rows
+          .map((r) => ({
+            date:
+              r.date?.toDate?.() instanceof Date
+                ? r.date.toDate()
+                : r.date
+                ? new Date(r.date)
+                : null,
+            weight:
+              r.weight != null
+                ? Number(r.weight)
+                : r.value_unit === "kg"
+                ? Number(r.value)
+                : null,
+            sets:
+              r.sets != null
+                ? Number(r.sets)
+                : r.sets_completed != null
+                ? Number(r.sets_completed)
+                : null,
+          }))
+          .filter((r) => !!r.date)
+          .sort((a, b) => (a.date as Date).getTime() - (b.date as Date).getTime());
+
+        if (sorted.length === 0) return null;
+
+        const labels = sorted.map((r) =>
+          (r.date as Date).toLocaleDateString(undefined, { day: "numeric", month: "short" })
+        );
+        const weightData = sorted.map((r) => (r.weight != null ? r.weight : 0));
+        const setsData = sorted.map((r) => (r.sets != null ? r.sets : 0));
+
+        // ---- Typed chart config ----
+        const dataCfg: ChartData<"line"> = {
+          labels,
+          datasets: [
+            {
+              label: "Weight (kg)",
+              data: weightData,
+              borderColor: "#FF8A2A",
+              backgroundColor: "rgba(255,138,42,0.2)",
+              tension: 0.3,
+              pointRadius: 3,
+            } as ChartDataset<"line">,
+            {
+              label: "Sets",
+              data: setsData,
+              borderColor: "#32ff7f",
+              backgroundColor: "rgba(50,255,127,0.2)",
+              tension: 0.3,
+              pointRadius: 3,
+              yAxisID: "y1",
+            } as ChartDataset<"line">,
+          ],
+        };
+
+        const options: ChartOptions<"line"> = {
+          responsive: true,
+          plugins: {
+            legend: { labels: { color: "#e9eef6" } },
+            tooltip: { mode: "index", intersect: false },
+          },
+          scales: {
+            x: {
+              ticks: { color: "#9fb0c3" },
+              grid: { color: "rgba(255,255,255,0.08)" },
+            },
+            y: {
+              ticks: { color: "#9fb0c3" },
+              grid: { color: "rgba(255,255,255,0.08)" },
+            },
+            y1: {
+              position: "right",
+              ticks: { color: "#9fb0c3" },
+              grid: { drawOnChartArea: false },
+            },
+          },
+        };
+
+        return (
+          <div key={part} className="mb-3">
+            <div className="fw-semibold mb-1">{part}</div>
+            <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: 8 }}>
+              <Line data={dataCfg} options={options} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
