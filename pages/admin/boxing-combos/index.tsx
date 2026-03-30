@@ -239,6 +239,13 @@ export default function AdminBoxingCombosManager() {
 
   const isAllowed = !!session && (role === "admin" || role === "gym");
 
+  function actionToLabel(a: any): string {
+    if (!a) return "";
+    if (typeof a === "string") return a;
+    if (typeof a === "object" && typeof a.code === "string") return a.code;
+    return "";
+  }
+
   return (
     <>
       <Head><title>Boxing Combos • Admin</title></Head>
@@ -337,7 +344,7 @@ export default function AdminBoxingCombosManager() {
                                   <span className="badge" style={{ background: ACCENT, color: "#0b0f14" }}>{c.category}</span>
                                 </div>
                                 <div className="small text-dim">
-                                  {c.actions?.map((a) => ("code" in a ? a.code : "")).join(" - ")}
+                                  {(c.actions || []).map(actionToLabel).filter(Boolean).join(" - ")}
                                 </div>
                               </button>
                             </li>
