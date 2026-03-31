@@ -8,9 +8,21 @@ import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import BottomNav from "../../../components/BottomNav";
 
+type PunchCode =
+  | "jab"
+  | "cross"
+  | "lead hook"
+  | "rear hook"
+  | "lead uppercut"
+  | "rear uppercut"
+  | "hook"
+  | "uppercut";
+
+type DefenceCode = "slip" | "roll" | "parry" | "duck";
+
 type BoxingAction =
-  | { kind: "punch"; code: "jab" | "cross" | "lead_hook" | "rear_hook" | "lead_uppercut" | "rear_uppercut" | "hook" | "uppercut" }
-  | { kind: "defence"; code: "slip" | "roll" | "parry" | "duck" };
+  | { kind: "punch"; code: PunchCode }
+  | { kind: "defence"; code: DefenceCode };
 
 type BoxingCombo = {
   id: string;
@@ -31,21 +43,33 @@ type ListResp = { combos: BoxingCombo[]; nextCursor?: string | null };
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const ACCENT = "#FF8A2A";
 
+function actionToLabel(a: any): string {
+  if (!a) return "";
+  if (typeof a === "string") return a;
+  if (typeof a === "object" && typeof a.code === "string") return a.code;
+  return "";
+}
+
 export default function AdminBoxingCombosManager() {
   const { data: session, status } = useSession();
   const role = (session?.user as any)?.role || "user";
 
-  // Mount guard (hydration safety)
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // ----- Local UI state -----
   const [query, setQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState<"" | BoxingCombo["category"]>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mobileEditing, setMobileEditing] = useState(false);
 
-  // Build list key
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const [showImporter, setShowImporter] = useState(false);
+  const [importJson, setImportJson] = useState<string>("");
+  const [importing, setImporting] = useState(false);
+
   const listKey = useMemo(() => {
     if (!mounted || status === "loading") return null;
     const isAllowed = !!session && (role === "admin" || role === "gym");
@@ -67,7 +91,6 @@ export default function AdminBoxingCombosManager() {
 
   const items = Array.isArray(listData?.combos) ? listData!.combos : [];
 
-  // Selected combo fetch
   const getKey = useMemo(() => {
     if (!mounted || status === "loading" || !selectedId) return null;
     const isAllowed = !!session && (role === "admin" || role === "gym");
@@ -82,7 +105,6 @@ export default function AdminBoxingCombosManager() {
 
   const selected = selectedData?.combo || null;
 
-  // Editor form
   const [form, setForm] = useState({
     combo_name: "",
     category: "Basics" as BoxingCombo["category"],
@@ -95,11 +117,6 @@ export default function AdminBoxingCombosManager() {
 ]`,
   });
 
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  // Hydrate form when selection changes
   useEffect(() => {
     if (!selected) return;
     setForm({
@@ -237,14 +254,40 @@ export default function AdminBoxingCombosManager() {
     }
   }
 
-  const isAllowed = !!session && (role === "admin" || role === "gym");
+  async function importCombosJson() {
+    setImporting(true);
+    setMsg(null);
+    try {
+      let parsed: any;
+      try {
+        parsed = JSON.parse(importJson);
+      } catch {
+        throw new Error("Invalid JSON. Paste an array or { combos: [...] }.");
+      }
 
-  function actionToLabel(a: any): string {
-    if (!a) return "";
-    if (typeof a === "string") return a;
-    if (typeof a === "object" && typeof a.code === "string") return a.code;
-    return "";
+      const res = await fetch("/api/boxing-combos/bulk-create?upsert=true", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed),
+      });
+
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error || "Import failed");
+
+      const written = Array.isArray(j?.written) ? j.written.length : 0;
+      const failures = Array.isArray(j?.failures) ? j.failures.length : 0;
+      setMsg(`Imported ✅ Written: ${written}. Failures: ${failures}.`);
+      mutateList();
+      setShowImporter(false);
+      setImportJson("");
+    } catch (e: any) {
+      setMsg(`Error: ${e?.message || "Import failed"}`);
+    } finally {
+      setImporting(false);
+    }
   }
+
+  const isAllowed = !!session && (role === "admin" || role === "gym");
 
   return (
     <>
@@ -269,21 +312,94 @@ export default function AdminBoxingCombosManager() {
                 <h2 className="m-0">Boxing Combos</h2>
               </div>
 
-              <div className="d-md-none">
-                <button className="btn btn-bxkr" onClick={newCombo}>
-                  <i className="fas fa-plus me-2" /> Create
+              <div className="d-flex gap-2">
+                <button
+                  className="btn btn-outline-light"
+                  onClick={() => setShowImporter((v) => !v)}
+                  style={{ borderRadius: 24 }}
+                >
+                  {showImporter ? "Close Import" : "Import JSON"}
                 </button>
+
+                <button className="btn btn-bxkr d-none d-md-inline" onClick={newCombo}>
+                  <i className="fas fa-plus me-2" /> New
+                </button>
+
+                <div className="d-md-none">
+                  <button className="btn btn-bxkr" onClick={newCombo}>
+                    <i className="fas fa-plus me-2" /> Create
+                  </button>
+                </div>
               </div>
             </div>
 
             {msg && (
-              <div className={`alert ${msg.toLowerCase().includes("failed") || msg.toLowerCase().startsWith("error") ? "alert-danger" : "alert-success"}`}>
+              <div
+                className={`alert ${
+                  msg.toLowerCase().includes("failed") || msg.toLowerCase().startsWith("error")
+                    ? "alert-danger"
+                    : "alert-success"
+                }`}
+              >
                 {msg}
               </div>
             )}
 
+            {showImporter && (
+              <section
+                className="mb-3"
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  borderRadius: 16,
+                  padding: 16,
+                  backdropFilter: "blur(10px)",
+                }}
+              >
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <h5 className="m-0">Import Boxing Combos (JSON)</h5>
+                  <button
+                    className="btn btn-bxkr"
+                    onClick={importCombosJson}
+                    disabled={importing || !importJson.trim()}
+                    style={{ borderRadius: 24 }}
+                  >
+                    {importing ? "Importing…" : "Import"}
+                  </button>
+                </div>
+
+                <div className="small text-dim mb-2">
+                  Paste an array of combos or <code>{`{ "combos": [...] }`}</code>. Each combo must include combo_name, category, and actions (1–5).
+                </div>
+
+                <textarea
+                  className="form-control"
+                  rows={12}
+                  value={importJson}
+                  onChange={(e) => setImportJson(e.target.value)}
+                  placeholder={`[
+  {
+    "combo_name": "2-S-2-D",
+    "category": "Defensive",
+    "video_url": "",
+    "difficulty": 2,
+    "notes": "",
+    "actions": [
+      { "kind": "punch", "code": "cross" },
+      { "kind": "defence", "code": "slip" },
+      { "kind": "punch", "code": "cross" },
+      { "kind": "defence", "code": "duck" }
+    ]
+  }
+]`}
+                  style={{
+                    fontFamily:
+                      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                  }}
+                />
+              </section>
+            )}
+
             <div className="row gx-3">
-              {/* List pane */}
               <div className={`col-12 col-md-4 ${mobileEditing ? "d-none d-md-block" : ""}`}>
                 <div className="futuristic-card p-3">
                   <div className="d-flex gap-2 mb-2">
@@ -311,10 +427,6 @@ export default function AdminBoxingCombosManager() {
                       <option value="Defensive">Defensive</option>
                       <option value="Engine">Engine</option>
                     </select>
-
-                    <button className="btn btn-bxkr d-none d-md-inline" onClick={newCombo}>
-                      <i className="fas fa-plus me-2" /> New
-                    </button>
                   </div>
 
                   <div style={{ maxHeight: 480, overflowY: "auto", paddingRight: 4 }}>
@@ -328,7 +440,11 @@ export default function AdminBoxingCombosManager() {
                             <li key={c.id}>
                               <button
                                 type="button"
-                                onClick={() => { setSelectedId(c.id); setMobileEditing(true); setMsg(null); }}
+                                onClick={() => {
+                                  setSelectedId(c.id);
+                                  setMobileEditing(true);
+                                  setMsg(null);
+                                }}
                                 className="w-100 text-start"
                                 style={{
                                   border: "1px solid rgba(255,255,255,0.12)",
@@ -341,7 +457,9 @@ export default function AdminBoxingCombosManager() {
                               >
                                 <div className="d-flex justify-content-between align-items-center">
                                   <div className="fw-semibold">{c.combo_name}</div>
-                                  <span className="badge" style={{ background: ACCENT, color: "#0b0f14" }}>{c.category}</span>
+                                  <span className="badge" style={{ background: ACCENT, color: "#0b0f14" }}>
+                                    {c.category}
+                                  </span>
                                 </div>
                                 <div className="small text-dim">
                                   {(c.actions || []).map(actionToLabel).filter(Boolean).join(" - ")}
@@ -356,7 +474,6 @@ export default function AdminBoxingCombosManager() {
                 </div>
               </div>
 
-              {/* Editor pane */}
               <div className={`col-12 col-md-8 ${mobileEditing ? "" : "d-none d-md-block"}`}>
                 <div className="futuristic-card p-3">
                   <div className="d-flex justify-content-between align-items-center mb-2">
@@ -438,14 +555,20 @@ export default function AdminBoxingCombosManager() {
                         placeholder='[{"kind":"punch","code":"cross"},{"kind":"defence","code":"slip"}]'
                       />
                       <div className="small text-dim mt-1">
-                        Example codes: jab, cross, lead_hook, rear_hook, lead_uppercut, rear_uppercut, slip, roll, parry, duck
+                        Example codes: jab, cross, lead hook, rear hook, lead uppercut, rear uppercut, slip, roll, parry, duck
                       </div>
                     </div>
 
                     {form.video_url?.startsWith("http") && (
                       <div className="col-12">
                         <div className="small text-dim mb-1">Video</div>
-                        <a href={form.video_url} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline-light" style={{ borderRadius: 24 }}>
+                        <a
+                          href={form.video_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-sm btn-outline-light"
+                          style={{ borderRadius: 24 }}
+                        >
                           Watch video
                         </a>
                       </div>
@@ -467,7 +590,10 @@ export default function AdminBoxingCombosManager() {
                     <div className="small text-dim mt-3">
                       <div>Created: {selected.created_at ? new Date(selected.created_at).toLocaleString() : "—"}</div>
                       <div>Updated: {selected.updated_at ? new Date(selected.updated_at).toLocaleString() : "—"}</div>
-                      <div>By: {selected.created_by || "—"}{selected.last_modified_by ? ` → ${selected.last_modified_by}` : ""}</div>
+                      <div>
+                        By: {selected.created_by || "—"}
+                        {selected.last_modified_by ? ` → ${selected.last_modified_by}` : ""}
+                      </div>
                     </div>
                   )}
                 </div>
