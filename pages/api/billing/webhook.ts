@@ -3,7 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { stripe } from "../../../lib/stripe";
 import type Stripe from "stripe";
 import firestore from "../../../lib/firestoreClient";
-import { FieldValue } from "@google-cloud/firestore";
+import { FieldValue, Timestamp } from "@google-cloud/firestore";
 
 // Disable Next.js body parser to access the raw body for Stripe signature verification
 export const config = {
@@ -59,7 +59,6 @@ function isPremiumFromStatus(status: string): boolean {
 }
 
 async function emitUpgradeCta(email: string) {
-  // Keep your existing CTA emitter; complements explicit emails below
   const BASE = origin();
   if (!BASE) return;
   await fetch(`${BASE}/api/notify/emit`, {
@@ -128,7 +127,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Idempotency guard
     try {
       if (await alreadyProcessed(event.id)) {
         return res.status(200).json({ received: true, duplicate: true });
@@ -138,9 +136,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     switch (event.type) {
-      /* =========================
-       *  SUBSCRIPTIONS & INVOICES
-       * ========================= */
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
@@ -148,7 +143,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const email = await getCustomerEmail(customerId);
         if (!email) break;
 
-        const status = sub.status as string; // active|trialing|past_due|paused|canceled|incomplete...
+        const status = sub.status as string;
         const trialEndIso = trialEndIsoFrom(sub);
         const premium = isPremiumFromStatus(status);
 
@@ -162,7 +157,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           billing_plan: "online_monthly",
         };
 
-        // If not premium (post-trial), mark membership_status = expired and email the user
         if (!premium && hasTrialExpired(trialEndIso)) {
           baseUpdate.membership_status = "expired";
         }
@@ -170,13 +164,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await firestore.collection("users").doc(email).set(baseUpdate, { merge: true });
 
         if (!premium) {
-          // Gentle CTA (existing)
           await emitUpgradeCta(email);
-          // Explicit email about expiry (optional; disable if too chatty)
           if (hasTrialExpired(trialEndIso)) {
-            await emitEmail("trial_expired", email, {
-              trial_end: trialEndIso,
-            });
+            await emitEmail("trial_expired", email, { trial_end: trialEndIso });
           }
         }
         break;
@@ -195,20 +185,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             stripe_subscription_id: subscriptionId,
             subscription_status: "active",
             is_premium: true,
-            membership_status: FieldValue.delete(), // clear expired if set before
+            membership_status: FieldValue.delete(),
             last_billing_event_at: new Date().toISOString(),
           },
           { merge: true }
         );
 
-        // Commission accrual (unchanged)
         try {
-          const refSnap = await firestore
-            .collection("referrals")
-            .where("referred_email", "==", email)
-            .limit(1)
-            .get();
-
+          const refSnap = await firestore.collection("referrals").where("referred_email", "==", email).limit(1).get();
           if (refSnap.empty) break;
 
           const refDoc = refSnap.docs[0];
@@ -288,7 +272,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           last_billing_event_at: new Date().toISOString(),
         };
 
-        // If user had a trial_end and it's past, mark expired and email
         const userSnap = await firestore.collection("users").doc(email).get();
         const trialEnd = (userSnap.data()?.trial_end as string) || null;
         if (hasTrialExpired(trialEnd)) {
@@ -322,23 +305,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
-      /* =========================
-       *  REFERRAL PAYOUTS via CONNECT
-       * ========================= */
       case "transfer.created": {
-        const transfer = event.data.object as Stripe.Transfer; // platform -> connected account
+        const transfer = event.data.object as Stripe.Transfer;
         const transferId = transfer.id;
 
-        const paySnap = await firestore
-          .collection("referral_payouts")
-          .where("transfer_id", "==", transferId)
-          .limit(1)
-          .get();
+        const paySnap = await firestore.collection("referral_payouts").where("transfer_id", "==", transferId).limit(1).get();
         if (paySnap.empty) break;
 
         const payoutRef = paySnap.docs[0].ref;
         const payout = paySnap.docs[0].data() || {};
-        if (payout.status === "paid") break; // idempotent
+        if (payout.status === "paid") break;
 
         const entries: Array<{ referral_doc_id: string; invoice_id: string; amount: number }> =
           Array.isArray(payout.entries) ? payout.entries : [];
@@ -368,7 +344,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           );
         });
 
-        // Email referrer and admins
         if (payout.referrer_email) {
           await emitEmail("referral_payout_paid", payout.referrer_email as string, {
             payout_id: payoutRef.id,
@@ -386,17 +361,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
       }
 
-      // NOTE: Stripe does not emit "transfer.failed".
-      // Reversal is the supported transfer rollback path:
       case "transfer.reversed": {
         const transfer = event.data.object as Stripe.Transfer;
         const transferId = transfer.id;
 
-        const paySnap = await firestore
-          .collection("referral_payouts")
-          .where("transfer_id", "==", transferId)
-          .limit(1)
-          .get();
+        const paySnap = await firestore.collection("referral_payouts").where("transfer_id", "==", transferId).limit(1).get();
         if (paySnap.empty) break;
 
         const payoutRef = paySnap.docs[0].ref;
@@ -451,7 +420,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       case "checkout.session.completed": {
-        // Optional analytics; nothing required
+        const s = event.data.object as Stripe.Checkout.Session;
+
+        const purpose = String(s.metadata?.purpose || "");
+        const bookingId = String(s.metadata?.booking_id || "");
+
+        // Only handle our one-off class booking payments here
+        if (purpose === "class_booking" && bookingId) {
+          const paid = s.payment_status === "paid";
+          if (!paid) break;
+
+          const bookingRef = firestore.collection("bookings").doc(bookingId);
+
+          await bookingRef.set(
+            {
+              status: "confirmed",
+              paid: true,
+              paid_at: Timestamp.now(),
+              stripe_checkout_session_id: s.id,
+              stripe_payment_intent_id: typeof s.payment_intent === "string" ? s.payment_intent : null,
+              updated_at: Timestamp.now(),
+            },
+            { merge: true }
+          );
+        }
+
         break;
       }
 
