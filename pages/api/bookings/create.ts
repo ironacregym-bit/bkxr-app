@@ -7,12 +7,7 @@ import { hasRole } from "../../../lib/rbac";
 
 type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
 
-const RESERVED_STATUSES = [
-  "confirmed",
-  "pending_payment",
-  "pay_on_day",
-  "member_free",
-] as const;
+const RESERVED_STATUSES = ["confirmed", "pending_payment", "pay_on_day", "member_free"] as const;
 
 function originEmail(session: any): string {
   return String(session?.user?.email || "").trim().toLowerCase();
@@ -21,6 +16,20 @@ function originEmail(session: any): string {
 function resolveUid(session: any) {
   const user = session?.user as any;
   return user?.id || user?.uid || user?.email || null;
+}
+
+function originBase() {
+  return process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+}
+
+async function emitEmail(event: string, email: string, context: Record<string, any> = {}, force = false) {
+  const BASE = originBase();
+  if (!BASE || !email) return;
+  await fetch(`${BASE}/api/notify/emit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event, email, context, force }),
+  }).catch(() => null);
 }
 
 async function getUserFlags(email: string): Promise<{
@@ -81,25 +90,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!guestEmail) return res.status(400).json({ error: "guest_email is required for guests" });
   }
 
-  // ✅ Single source of truth
   const { isGymMember, isCashPayer } = email
     ? await getUserFlags(email)
     : { isGymMember: false, isCashPayer: false };
 
-  // ✅ Decide final payment method
   let method: PaymentMethod;
 
   if (isGymMember) {
-    // Free booking for gym members
     method = "member_free";
   } else if (isCashPayer) {
-    // Cash members pay £8 cash on the day
-    method = "pay_on_day";
+    method = "pay_on_day"; // £8 cash on arrival
   } else {
     method = requested;
   }
 
-  // Prevent spoofing free bookings
   if (!isGymMember && requested === "member_free") {
     return res.status(403).json({
       error: "Member-free booking is only available to gym members",
@@ -130,11 +134,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       method === "pay_on_day" ? 10 :
       8;
 
+    let sessData: any = null;
+
     await firestore.runTransaction(async (tx) => {
       const sessSnap = await tx.get(sessionRef);
       if (!sessSnap.exists) throw new Error("Session not found");
 
-      const sessData = sessSnap.data() as any;
+      sessData = sessSnap.data() as any;
+
       const max = Number(sessData?.max_attendance) || 0;
 
       const reservedSnap = await firestore
@@ -158,8 +165,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             status,
             payment_method: method,
             amount_gbp,
-            paid: method === "member_free" ? true : Boolean(ex?.paid),
             updated_at: now,
+            // ensure user_email is present for authed bookings
+            user_email: uidFromSession ? email : null,
+            // keep guest fields stable if present
+            guest_name: uidFromSession ? null : guestName,
+            guest_email: uidFromSession ? null : guestEmail,
           },
           { merge: true }
         );
@@ -170,6 +181,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         booking_id: bookingId,
         session_id,
         user_id: uidFromSession ? uid : null,
+        user_email: uidFromSession ? email : null,
         guest_name: uidFromSession ? null : guestName,
         guest_email: uidFromSession ? null : guestEmail,
         status,
@@ -183,6 +195,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         updated_at: now,
       });
     });
+
+    // Send confirmation email immediately for non-Stripe bookings only
+    // Stripe bookings will be emailed in the webhook after payment.
+    const recipient = uidFromSession ? email : guestEmail;
+
+    if (recipient && status !== "pending_payment") {
+      await emitEmail("class_booking_confirmed", recipient, {
+        booking_id: bookingId,
+        session_id,
+        payment_method: method,
+        amount_gbp,
+        class_id: sessData?.class_id || "",
+        gym_name: sessData?.gym_name || "",
+        start_time: sessData?.start_time || null,
+        note:
+          method === "member_free"
+            ? "Gym member booking (free)"
+            : isCashPayer
+            ? "Pay £8 cash at the gym"
+            : "Pay £10 on arrival",
+      });
+    }
 
     return res.status(200).json({
       ok: true,
