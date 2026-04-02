@@ -89,8 +89,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           booking_id: id,
           session_id: sessionId,
         },
-        success_url: `${BASE}/book/success?booking_id=${encodeURIComponent(id)}`,
-        cancel_url: `${BASE}/book/cancel?booking_id=${encodeURIComponent(id)}`,
+          success_url: `${BASE}/booking/success?booking_id=${encodeURIComponent(id)}`,
+          cancel_url: `${BASE}/booking/cancel?booking_id=${encodeURIComponent(id)}`,
       });
 
       await bookingRef.set(
