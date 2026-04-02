@@ -1,4 +1,3 @@
-// FILE: pages/schedule.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -28,12 +27,31 @@ type SessionItem = {
   location: string;
 };
 
-type PaymentMethod = "stripe" | "pay_on_day" | "cash" | "bank";
+type UserAccess = {
+  subscription_status?: string | null;
+  membership_status?: string | null;
+};
+
+type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
 
 export default function SchedulePage() {
   const { data: authSession } = useSession();
-  const role = (authSession?.user as any)?.role || "user";
+  const authedEmail = authSession?.user?.email || "";
 
+  // Profile (used to determine "full gym member" -> free booking)
+  const profileKey =
+    authedEmail ? `/api/profile?email=${encodeURIComponent(authedEmail)}` : null;
+  const { data: profile } = useSWR<UserAccess>(profileKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60_000,
+  });
+
+  const isMemberFree = Boolean(
+    (profile?.subscription_status === "active" || profile?.subscription_status === "trialing") ||
+      profile?.membership_status === "gym_member"
+  );
+
+  // Gyms
   const { data: gymsResp, error: gymsError } = useSWR("/api/gyms/list", fetcher);
   const gyms: Gym[] = gymsResp?.gyms ?? [];
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
@@ -42,9 +60,10 @@ export default function SchedulePage() {
     [gyms, selectedGymId]
   );
 
+  // Month navigation
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth());
+  const [month, setMonth] = useState(today.getMonth()); // 0..11
   const monthStart = useMemo(() => new Date(year, month, 1, 0, 0, 0, 0), [year, month]);
   const monthEnd = useMemo(() => new Date(year, month + 1, 0, 23, 59, 59, 999), [year, month]);
   const monthLabel = useMemo(
@@ -62,7 +81,6 @@ export default function SchedulePage() {
     setYear(d.getFullYear());
     setMonth(d.getMonth());
   }
-
   function nextMonth() {
     const d = new Date(year, month, 1);
     d.setMonth(d.getMonth() + 1);
@@ -70,21 +88,29 @@ export default function SchedulePage() {
     setMonth(d.getMonth());
   }
 
+  // Sessions for selected gym/location in month range
   const fromISO = monthStart.toISOString();
   const toISO = monthEnd.toISOString();
   const shouldLoadSessions = Boolean(selectedGym?.location);
 
-  const { data: sessionsResp, error: sessionsError, isLoading: sessionsLoading } = useSWR(
+  const {
+    data: sessionsResp,
+    error: sessionsError,
+    isLoading: sessionsLoading,
+    mutate: mutateSessions,
+  } = useSWR(
     shouldLoadSessions
       ? `/api/schedule/upcoming?location=${encodeURIComponent(selectedGym!.location)}&from=${encodeURIComponent(
           fromISO
         )}&to=${encodeURIComponent(toISO)}`
       : null,
-    fetcher
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
   );
 
   const sessions: SessionItem[] = sessionsResp?.sessions ?? [];
 
+  // Group sessions by YYYY-MM-DD
   const sessionsByDay = useMemo(() => {
     const map: Record<string, SessionItem[]> = {};
     for (const s of sessions) {
@@ -97,11 +123,10 @@ export default function SchedulePage() {
     return map;
   }, [sessions]);
 
-  const firstWeekday = monthStart.getDay();
+  // Calendar cells
+  const firstWeekday = monthStart.getDay(); // 0 Sun .. 6 Sat
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-
   type Cell = { key: string; blank: boolean; day?: number; ymd?: string; isToday?: boolean; count?: number };
-
   const cells: Cell[] = useMemo(() => {
     const blanks: Cell[] = Array.from({ length: firstWeekday }, (_, i) => ({ key: `blank-${i}`, blank: true }));
     const days: Cell[] = Array.from({ length: daysInMonth }, (_, i) => {
@@ -115,93 +140,17 @@ export default function SchedulePage() {
     return [...blanks, ...days];
   }, [firstWeekday, daysInMonth, year, month, sessionsByDay]);
 
+  // Day panel
   const [activeDay, setActiveDay] = useState<string | null>(null);
   useEffect(() => {
     setActiveDay(null);
   }, [year, month, selectedGymId]);
 
+  // Sharing (unchanged)
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [sharing, setSharing] = useState<{ message: string; link: string } | null>(null);
   const [pending, setPending] = useState<string | null>(null);
-
-  const [showBookModal, setShowBookModal] = useState(false);
-  const [activeSession, setActiveSession] = useState<SessionItem | null>(null);
-  const [guestName, setGuestName] = useState("");
-  const [guestEmail, setGuestEmail] = useState("");
-  const [bookMsg, setBookMsg] = useState<string | null>(null);
-  const [bookErr, setBookErr] = useState<string | null>(null);
-  const [bookingBusy, setBookingBusy] = useState(false);
-
-  const canUseCash = role === "admin" || role === "gym";
-
-  function openBookingModal(s: SessionItem) {
-    setActiveSession(s);
-    setShowBookModal(true);
-    setBookMsg(null);
-    setBookErr(null);
-    setGuestName("");
-    setGuestEmail("");
-  }
-
-  async function reserveAndPay(method: PaymentMethod) {
-    if (!activeSession) return;
-
-    setBookingBusy(true);
-    setBookMsg(null);
-    setBookErr(null);
-
-    try {
-      const isAuthed = Boolean(authSession?.user?.email);
-
-      if (!isAuthed) {
-        if (!guestName.trim()) throw new Error("Please enter your name.");
-        if (!guestEmail.trim()) throw new Error("Please enter your email.");
-      }
-
-      const reserveRes = await fetch("/api/bookings/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session_id: activeSession.id,
-          payment_method: method,
-          guest_name: isAuthed ? undefined : guestName.trim(),
-          guest_email: isAuthed ? undefined : guestEmail.trim(),
-        }),
-      });
-
-      const reserveJson = await reserveRes.json().catch(() => ({}));
-      if (!reserveRes.ok) throw new Error(reserveJson?.error || "Failed to reserve booking");
-
-      const bookingId = reserveJson.booking_id as string | undefined;
-      if (!bookingId) throw new Error("Reserved but no booking_id returned");
-
-      if (method === "stripe") {
-        const checkoutRes = await fetch("/api/billing/create-checkout-session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ purpose: "class_booking", booking_id: bookingId }),
-        });
-
-        const checkoutJson = await checkoutRes.json().catch(() => ({}));
-        if (!checkoutRes.ok) throw new Error(checkoutJson?.error || "Failed to start Stripe checkout");
-
-        if (!checkoutJson?.url) throw new Error("Stripe checkout created but no URL returned");
-        window.location.href = checkoutJson.url;
-        return;
-      }
-
-      if (method === "pay_on_day") setBookMsg("Booked ✅ Pay £10 on arrival");
-      else if (method === "bank") setBookMsg("Reserved ✅ Bank transfer pending");
-      else if (method === "cash") setBookMsg("Booked ✅ Cash/Comp recorded");
-      else setBookMsg("Booked ✅");
-
-    } catch (e: any) {
-      setBookErr(e?.message || "Booking failed");
-    } finally {
-      setBookingBusy(false);
-    }
-  }
 
   async function shareWhatsApp(session_id: string) {
     try {
@@ -224,15 +173,100 @@ export default function SchedulePage() {
     }
   }
 
+  // Auto-select first gym
   useEffect(() => {
-    if (!selectedGymId && gyms.length > 0) {
-      setSelectedGymId(gyms[0].id);
-    }
+    if (!selectedGymId && gyms.length > 0) setSelectedGymId(gyms[0].id);
   }, [gyms, selectedGymId]);
+
+  // Booking modal state
+  const [showBookModal, setShowBookModal] = useState(false);
+  const [activeSession, setActiveSession] = useState<SessionItem | null>(null);
+
+  const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
+
+  const [payOnDay, setPayOnDay] = useState(false); // checkbox
+  const [bookMsg, setBookMsg] = useState<string | null>(null);
+  const [bookErr, setBookErr] = useState<string | null>(null);
+  const [bookingBusy, setBookingBusy] = useState(false);
+
+  function openBookingModal(s: SessionItem) {
+    setActiveSession(s);
+    setShowBookModal(true);
+    setBookMsg(null);
+    setBookErr(null);
+    setGuestName("");
+    setGuestEmail("");
+    setPayOnDay(false);
+  }
+
+  async function confirmBooking() {
+    if (!activeSession) return;
+
+    setBookingBusy(true);
+    setBookMsg(null);
+    setBookErr(null);
+
+    try {
+      const isAuthed = Boolean(authSession?.user?.email);
+
+      if (!isAuthed) {
+        if (!guestName.trim()) throw new Error("Please enter your name.");
+        if (!guestEmail.trim()) throw new Error("Please enter your email.");
+      }
+
+      const method: PaymentMethod =
+        isMemberFree && isAuthed ? "member_free" : payOnDay ? "pay_on_day" : "stripe";
+
+      const res = await fetch("/api/bookings/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: activeSession.id,
+          payment_method: method,
+          guest_name: isAuthed ? undefined : guestName.trim(),
+          guest_email: isAuthed ? undefined : guestEmail.trim(),
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Failed to create booking");
+
+      const bookingId = String(json.booking_id || "");
+      const status = String(json.status || "");
+
+      // Stripe path -> redirect to checkout
+      if (method === "stripe") {
+        const checkoutRes = await fetch("/api/billing/create-checkout-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ purpose: "class_booking", booking_id: bookingId }),
+        });
+
+        const cj = await checkoutRes.json().catch(() => ({}));
+        if (!checkoutRes.ok) throw new Error(cj?.error || "Failed to start Stripe checkout");
+        if (!cj?.url) throw new Error("Stripe checkout created but no URL returned");
+        window.location.href = cj.url;
+        return;
+      }
+
+      // Non-stripe success
+      if (method === "member_free") setBookMsg("Booked ✅ Member booking (free)");
+      else if (method === "pay_on_day") setBookMsg("Booked ✅ Pay £10 on arrival");
+      else setBookMsg("Booked ✅");
+
+      mutateSessions();
+    } catch (e: any) {
+      setBookErr(e?.message || "Booking failed");
+    } finally {
+      setBookingBusy(false);
+    }
+  }
 
   return (
     <>
       <main className="container py-3 schedule-page" style={{ paddingBottom: "90px", color: "#fff" }}>
+        {/* Toolbar */}
         <div className="schedule-toolbar">
           <button className="btn btn-bxkr-outline" onClick={prevMonth} aria-label="Previous month">
             ← Previous
@@ -243,6 +277,7 @@ export default function SchedulePage() {
           </button>
         </div>
 
+        {/* Gym selector */}
         <div className="bxkr-card p-3 mb-3">
           <label className="form-label">Select gym</label>
           {gymsError && <div className="text-danger">Failed to load gyms.</div>}
@@ -261,6 +296,7 @@ export default function SchedulePage() {
           </select>
         </div>
 
+        {/* Calendar */}
         <div className="schedule-calendar mb-3" role="grid" aria-label={`Calendar for ${monthLabel}`}>
           <div className="calendar-weekdays">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
@@ -278,9 +314,7 @@ export default function SchedulePage() {
                 cell.isToday ? "today" : "",
                 isActive ? "active" : "",
                 (cell.count ?? 0) > 0 ? "has-sessions" : "",
-              ]
-                .join(" ")
-                .trim();
+              ].join(" ").trim();
               return (
                 <button
                   key={cell.key}
@@ -295,6 +329,7 @@ export default function SchedulePage() {
           </div>
         </div>
 
+        {/* Day detail panel */}
         {activeDay && (
           <div className="bxkr-card p-3 day-panel">
             <div className="panel-header">
@@ -318,28 +353,20 @@ export default function SchedulePage() {
               const endStr = endMs ? new Date(endMs).toLocaleTimeString() : "";
 
               const full = s.max_attendance > 0 && s.current_attendance >= s.max_attendance;
-              const pct =
-                s.max_attendance > 0 ? Math.min(100, Math.round((s.current_attendance / s.max_attendance) * 100)) : 0;
+              const pct = s.max_attendance > 0 ? Math.min(100, Math.round((s.current_attendance / s.max_attendance) * 100)) : 0;
 
               return (
                 <div key={s.id} className="session-card">
                   <div className="session-info">
-                    <div className="name">
-                      {s.class_id} — {s.gym_name}
-                    </div>
+                    <div className="name">{s.class_id} — {s.gym_name}</div>
                     <div className="sub">
-                      Coach: {s.coach_name || "TBC"} • {startStr}
-                      {endStr ? ` — ${endStr}` : ""}
+                      Coach: {s.coach_name || "TBC"} • {startStr}{endStr ? ` — ${endStr}` : ""}
                     </div>
                     <div className="session-meta">
-                      <span className="chip">£8 prebook / £10 on the day</span>
+                      <span className="chip">£8 prebook / £10 pay on day {isMemberFree ? " • Members book free" : ""}</span>
                       <span className="chip capacity">
-                        <span>
-                          {s.current_attendance}/{s.max_attendance || "∞"}
-                        </span>
-                        <span className="bar">
-                          <span style={{ width: `${pct}%` }} />
-                        </span>
+                        <span>{s.current_attendance}/{s.max_attendance || "∞"}</span>
+                        <span className="bar"><span style={{ width: `${pct}%` }} /></span>
                       </span>
                     </div>
                   </div>
@@ -378,14 +405,14 @@ export default function SchedulePage() {
                     <div className="d-flex gap-2">
                       <button
                         className="btn btn-bxkr"
-                        onClick={() => {
-                          const url = `https://wa.me/?text=${encodeURIComponent(sharing.message)}`;
-                          window.open(url, "_blank");
-                        }}
+                        onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(sharing.message)}`, "_blank")}
                       >
                         Open WhatsApp
                       </button>
-                      <button className="btn btn-bxkr-outline" onClick={() => navigator.clipboard?.writeText(sharing.message)}>
+                      <button
+                        className="btn btn-bxkr-outline"
+                        onClick={() => navigator.clipboard?.writeText(sharing.message)}
+                      >
                         Copy message
                       </button>
                     </div>
@@ -396,6 +423,7 @@ export default function SchedulePage() {
           </div>
         )}
 
+        {/* Booking modal */}
         {showBookModal && activeSession && (
           <div
             role="dialog"
@@ -424,9 +452,7 @@ export default function SchedulePage() {
               </div>
 
               <div className="mb-2">
-                <div className="fw-semibold">
-                  {activeSession.class_id} — {activeSession.gym_name}
-                </div>
+                <div className="fw-semibold">{activeSession.class_id} — {activeSession.gym_name}</div>
                 <div className="small text-dim">
                   {(() => {
                     const ms = toMillis(activeSession.start_time);
@@ -449,30 +475,40 @@ export default function SchedulePage() {
                 </>
               )}
 
-              {bookErr && <div className="alert alert-danger">{bookErr}</div>}
-              {bookMsg && <div className="alert alert-success">{bookMsg}</div>}
+              {!isMemberFree && (
+                <div className="form-check mt-2">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id="payOnDay"
+                    checked={payOnDay}
+                    onChange={(e) => setPayOnDay(e.target.checked)}
+                    disabled={bookingBusy}
+                  />
+                  <label className="form-check-label" htmlFor="payOnDay">
+                    Pay on the day (£10)
+                  </label>
+                </div>
+              )}
 
-              <div className="d-grid gap-2 mt-2">
-                <button className="btn btn-bxkr" onClick={() => reserveAndPay("stripe")} disabled={bookingBusy}>
-                  {bookingBusy ? "Processing…" : "Prepay £8 now (Stripe)"}
+              {isMemberFree && (
+                <div className="alert alert-info mt-2" style={{ marginBottom: 0 }}>
+                  You’re a member. This booking is free.
+                </div>
+              )}
+
+              {bookErr && <div className="alert alert-danger mt-2">{bookErr}</div>}
+              {bookMsg && <div className="alert alert-success mt-2">{bookMsg}</div>}
+
+              <div className="d-grid gap-2 mt-3">
+                <button className="btn btn-bxkr" onClick={confirmBooking} disabled={bookingBusy}>
+                  {bookingBusy ? "Processing…" : isMemberFree ? "Book free" : payOnDay ? "Confirm booking" : "Pay £8 now (Stripe)"}
                 </button>
-
-                <button className="btn btn-bxkr-outline" onClick={() => reserveAndPay("pay_on_day")} disabled={bookingBusy}>
-                  Pay £10 on the day
-                </button>
-
-                <button className="btn btn-outline-light" onClick={() => reserveAndPay("bank")} disabled={bookingBusy}>
-                  Bank transfer £8
-                </button>
-
-                {canUseCash && (
-                  <button className="btn btn-outline-secondary" onClick={() => reserveAndPay("cash")} disabled={bookingBusy}>
-                    Cash / Comp (coach)
-                  </button>
-                )}
               </div>
 
-              <div className="small text-dim mt-2">Prepay is £8. Pay on the day is £10.</div>
+              <div className="small text-dim mt-2">
+                {!isMemberFree ? (payOnDay ? "You’ll pay £10 at the gym." : "You’ll be redirected to Stripe to pay £8.") : null}
+              </div>
             </div>
           </div>
         )}
