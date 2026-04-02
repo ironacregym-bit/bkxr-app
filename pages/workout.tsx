@@ -512,11 +512,11 @@ function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
         </div>
         <div className="d-flex gap-2">
           <Link
-            href="/workouts"
+            href="/schedule"
             className="btn btn-bxkr-outline btn-sm"
             style={{ borderRadius: 24 }}
           >
-            Plan
+            Book A Class
           </Link>
           <Link
             href="/workouts/freestyle"
