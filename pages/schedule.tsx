@@ -30,6 +30,7 @@ type SessionItem = {
 type UserAccess = {
   subscription_status?: string | null;
   membership_status?: string | null;
+  payment_type?: string | null;
 };
 
 type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
@@ -53,10 +54,11 @@ export default function SchedulePage() {
     dedupingInterval: 60_000,
   });
 
-  const isMemberFree = Boolean(
-    (profile?.subscription_status === "active" || profile?.subscription_status === "trialing") ||
-      profile?.membership_status === "gym_member"
-  );
+  const isGymMember =
+    String(profile?.membership_status || "").toLowerCase() === "gym_member";
+  
+  const isCashPayer =
+    String(profile?.payment_type || "").toLowerCase() === "cash";
 
   // Gyms
   const { data: gymsResp, error: gymsError } = useSWR("/api/gyms/list", fetcher);
@@ -224,8 +226,21 @@ export default function SchedulePage() {
         if (!guestEmail.trim()) throw new Error("Please enter your email.");
       }
 
-      const method: PaymentMethod =
-        isMemberFree && isAuthed ? "member_free" : payOnDay ? "pay_on_day" : "stripe";
+  let method: PaymentMethod;
+  
+  if (isGymMember && isAuthed) {
+    // Full gym members book free
+    method = "member_free";
+  } else if (isCashPayer && isAuthed) {
+    // Cash members pay £8 cash on the day
+    method = "pay_on_day";
+  } else if (payOnDay) {
+    // Non-members pay £10 on the day
+    method = "pay_on_day";
+  } else {
+    // Default: £8 Stripe prepay
+    method = "stripe";
+  }
 
       const res = await fetch("/api/bookings/create", {
         method: "POST",
@@ -257,9 +272,15 @@ export default function SchedulePage() {
         return;
       }
 
-      if (method === "member_free") setBookMsg("Booked ✅ Member booking (free)");
-      else if (method === "pay_on_day") setBookMsg("Booked ✅ Pay £10 on arrival");
-      else setBookMsg("Booked ✅");
+    if (method === "member_free") {
+      setBookMsg("Booked ✅ Gym member booking (free)");
+    } else if (isCashPayer) {
+      setBookMsg("Booked ✅ Pay £8 cash at the gym");
+    } else if (method === "pay_on_day") {
+      setBookMsg("Booked ✅ Pay £10 on arrival");
+    } else {
+      setBookMsg("Booked ✅");
+    }
 
       mutateSessions();
     } catch (e: any) {
@@ -369,7 +390,11 @@ export default function SchedulePage() {
                       Coach: {s.coach_name || "TBC"} • {startStr}{endStr ? ` — ${endStr}` : ""}
                     </div>
                     <div className="session-meta">
-                      <span className="chip">£8 prebook / £10 pay on day {isMemberFree ? " • Members book free" : ""}</span>
+                      <span className="chip">
+                        £8 prebook / £10 pay on day
+                        {isGymMember ? " • Members book free" : ""}
+                        {isCashPayer ? " • Cash members £8 pay on arrival" : ""}
+                      </span>
                       <span className="chip capacity">
                         <span>{s.current_attendance}/{s.max_attendance || "∞"}</span>
                         <span className="bar"><span style={{ width: `${pct}%` }} /></span>
@@ -492,7 +517,7 @@ export default function SchedulePage() {
                     disabled={bookingBusy}
                   />
                   <label className="form-check-label" htmlFor="payOnDay">
-                    Pay on the day (£10)
+                    {isCashPayer ? "Pay £8 cash on the day" : "Pay on the day (£10)"}
                   </label>
                 </div>
               )}
