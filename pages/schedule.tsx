@@ -199,7 +199,13 @@ export default function SchedulePage() {
     setGuestEmail("");
     setPayOnDay(false);
   }
-
+  useEffect(() => {
+    const n = String((authSession?.user as any)?.name || "").trim();
+    const e = String(authSession?.user?.email || "").trim();
+    if (e) setGuestEmail(e);
+    if (n) setGuestName(n);
+  }, [authSession?.user?.email]);
+  
   async function confirmBooking() {
     if (!activeSession) return;
 
