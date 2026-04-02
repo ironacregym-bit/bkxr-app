@@ -429,9 +429,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (purpose === "class_booking" && bookingId) {
           const paid = s.payment_status === "paid";
           if (!paid) break;
-
+        
           const bookingRef = firestore.collection("bookings").doc(bookingId);
-
+        
+          // Confirm booking
           await bookingRef.set(
             {
               status: "confirmed",
@@ -443,6 +444,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             },
             { merge: true }
           );
+        
+          // Email confirmation (guest-safe and logged-in safe)
+          try {
+            const bSnap = await bookingRef.get();
+            const b = bSnap.exists ? (bSnap.data() as any) : null;
+        
+            const recipient = String(b?.guest_email || b?.user_email || "").trim().toLowerCase();
+            if (recipient) {
+              await emitEmail("class_booking_confirmed", recipient, {
+                booking_id: bookingId,
+                session_id: b?.session_id || "",
+                payment_method: "stripe",
+                amount_gbp: 8,
+                note: "Paid £8 via Stripe",
+              });
+            }
+          } catch (e: any) {
+            console.warn("[webhook] class booking email failed:", e?.message || e);
+          }
         }
 
         break;
