@@ -18,15 +18,12 @@ function resolveUid(session: any) {
   return user?.id || user?.uid || user?.email || null;
 }
 
-async function isFreeMember(email: string): Promise<boolean> {
+async function isGymMember(email: string): Promise<boolean> {
   if (!email) return false;
   const snap = await firestore.collection("users").doc(email).get();
   if (!snap.exists) return false;
   const d = snap.data() as any;
-  const sub = String(d?.subscription_status || "").toLowerCase();
-  const mem = String(d?.membership_status || "").toLowerCase();
-  const premium = Boolean(d?.is_premium);
-  return premium || sub === "active" || sub === "trialing" || mem === "gym_member";
+  return String(d?.membership_status || "").toLowerCase() === "gym_member";
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -34,7 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const session = await getServerSession(req, res, authOptions).catch(() => null);
 
-  // If signed in, enforce roles. If guest, allow but require guest details.
+  // Guests are allowed. Signed-in users must have a valid role.
   if (session && !hasRole(session, ["user", "gym", "admin"])) {
     return res.status(403).json({ error: "Forbidden" });
   }
@@ -48,8 +45,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!session_id) return res.status(400).json({ error: "session_id is required" });
 
-  const methodRaw = String(payment_method || "").trim() as PaymentMethod;
-  if (!["stripe", "pay_on_day", "member_free"].includes(methodRaw)) {
+  const requested = String(payment_method || "").trim() as PaymentMethod;
+  if (!["stripe", "pay_on_day", "member_free"].includes(requested)) {
     return res.status(400).json({ error: "payment_method must be stripe | pay_on_day | member_free" });
   }
 
@@ -64,9 +61,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!guestEmail) return res.status(400).json({ error: "guest_email is required for guests" });
   }
 
-  // If user is a full member, force free booking regardless of client choice
-  const memberFree = email ? await isFreeMember(email) : false;
-  const method: PaymentMethod = memberFree ? "member_free" : methodRaw;
+  // Enforce: ONLY membership_status === "gym_member" can book free
+  const memberFree = email ? await isGymMember(email) : false;
+  const method: PaymentMethod = memberFree ? "member_free" : requested;
+
+  // If not a gym member, do not allow them to request member_free
+  if (!memberFree && requested === "member_free") {
+    return res.status(403).json({ error: "Member-free booking is only available to gym members" });
+  }
 
   const uid = uidFromSession ? String(uidFromSession).trim().toLowerCase() : `guest_${guestEmail}`;
   const bookingId = `${session_id}_${uid}`;
@@ -105,6 +107,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const existing = await tx.get(bookingRef);
       if (existing.exists) {
         const ex = existing.data() as any;
+
         if (String(ex?.status) === "confirmed") return;
 
         tx.set(
@@ -113,6 +116,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             status,
             payment_method: method,
             amount_gbp,
+            paid: method === "member_free" ? true : Boolean(ex?.paid),
             updated_at: now,
           },
           { merge: true }
@@ -144,6 +148,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       status,
       payment_method: method,
       amount_gbp,
+      is_member_free: memberFree,
     });
   } catch (err: any) {
     const msg = err?.message || "Failed to create booking";
