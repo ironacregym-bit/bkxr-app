@@ -506,7 +506,7 @@ export default function SchedulePage() {
                 </>
               )}
 
-              {!isMemberFree && (
+              {!isGymMember && (
                 <div className="form-check mt-2">
                   <input
                     className="form-check-input"
@@ -522,7 +522,7 @@ export default function SchedulePage() {
                 </div>
               )}
 
-              {isMemberFree && (
+              {isGymMember && (
                 <div className="alert alert-info mt-2" style={{ marginBottom: 0 }}>
                   You’re a member. This booking is free.
                 </div>
@@ -533,12 +533,12 @@ export default function SchedulePage() {
 
               <div className="d-grid gap-2 mt-3">
                 <button className="btn btn-bxkr" onClick={confirmBooking} disabled={bookingBusy}>
-                  {bookingBusy ? "Processing…" : isMemberFree ? "Book free" : payOnDay ? "Confirm booking" : "Pay £8 now (Stripe)"}
+                  {bookingBusy ? "Processing…" : isGymMember ? "Book free" : payOnDay ? "Confirm booking" : "Pay £8 now (Stripe)"}
                 </button>
               </div>
 
               <div className="small text-dim mt-2">
-                {!isMemberFree ? (payOnDay ? "You’ll pay £10 at the gym." : "You’ll be redirected to Stripe to pay £8.") : null}
+                {!isGymMember ? (payOnDay ? "You’ll pay £10 at the gym." : "You’ll be redirected to Stripe to pay £8.") : null}
               </div>
             </div>
           </div>
