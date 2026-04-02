@@ -1,4 +1,3 @@
-
 // pages/api/notify/emit.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
@@ -9,25 +8,54 @@ import { writeUserNotification } from "../../../lib/notifications/store";
 import { sendPushIfOptedIn } from "../../../lib/notifications/push";
 import { sendEmailIfOptedIn } from "../../../lib/notifications/email";
 
+const SYSTEM_EVENTS = new Set([
+  "class_booking_confirmed",
+]);
+
 function onboardingComplete(user: any): boolean {
   const h = Number(user?.height_cm);
   const w = Number(user?.weight_kg);
-  return h > 0 && w > 0 && !!user?.DOB && !!user?.sex && !!user?.goal_primary && !!user?.workout_type && !!user?.fighting_style;
+  return (
+    h > 0 &&
+    w > 0 &&
+    !!user?.DOB &&
+    !!user?.sex &&
+    !!user?.goal_primary &&
+    !!user?.workout_type &&
+    !!user?.fighting_style
+  );
 }
+
 function escapeHtml(s: string) {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]!));
+  return s.replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  }[c]!));
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).end("Method Not Allowed");
-  const session = await getServerSession(req, res, authOptions);
-  if (!session?.user?.email) return res.status(401).json({ error: "Unauthorized" });
 
   const b = req.body || {};
   const event = String(b.event || "").trim();
   const context = b.context || {};
-  const userEmail = String(b.email || session.user.email);
+  const userEmail = String(b.email || "").trim().toLowerCase();
   const force = !!b.force;
+
+  // ✅ Only require auth for NON system events
+  if (!SYSTEM_EVENTS.has(event)) {
+    const session = await getServerSession(req, res, authOptions);
+    if (!session?.user?.email) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+  }
+
+  if (!event || !userEmail) {
+    return res.status(400).json({ error: "Missing event or email" });
+  }
 
   try {
     const userSnap = await firestore.collection("users").doc(userEmail).get();
@@ -39,11 +67,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .where("enabled", "==", true)
       .get();
 
-    const rules = q.docs.map((d) => d.data()).sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0));
+    const rules = q.docs
+      .map((d) => d.data())
+      .sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0));
+
     let emitted = 0;
 
     for (const r of rules) {
       const cond = r.condition || {};
+
       if (Object.prototype.hasOwnProperty.call(cond, "onboarding_complete")) {
         if (Boolean(cond.onboarding_complete) !== onboardingComplete(user)) continue;
       }
@@ -57,9 +89,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         { ...context, user }
       );
+
       if (!title || !body) continue;
 
-      const channels = Array.isArray(r.channels) && r.channels.length ? r.channels : ["in_app"];
+      const channels =
+        Array.isArray(r.channels) && r.channels.length ? r.channels : ["in_app"];
+
       const created = await writeUserNotification(userEmail, {
         title,
         message: body,
@@ -72,10 +107,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         force,
         meta: data,
       });
+
       if (!created) continue;
       emitted++;
 
-      if (channels.includes("push")) await sendPushIfOptedIn(userEmail, { title, body, url });
+      if (channels.includes("push")) {
+        await sendPushIfOptedIn(userEmail, { title, body, url });
+      }
+
       if (channels.includes("email")) {
         const subject = title;
         const html = `<div style="font-family:system-ui,Segoe UI,Arial,sans-serif">
@@ -83,7 +122,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           <p>${escapeHtml(body)}</p>
           ${url ? `<p><a href="${url}">Open BXKR</a></p>` : ""}
         </div>`;
-        await sendEmailIfOptedIn(userEmail, { subject, bodyHtml: html, bodyText: `${subject}\n\n${body}\n${url ?? ""}`.trim() });
+
+        await sendEmailIfOptedIn(userEmail, {
+          subject,
+          bodyHtml: html,
+          bodyText: `${subject}\n\n${body}\n${url ?? ""}`.trim(),
+        });
       }
     }
 
