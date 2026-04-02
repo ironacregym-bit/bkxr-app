@@ -47,7 +47,7 @@ export default function SchedulePage() {
   const isAuthed = Boolean(authSession?.user?.email);
   const authedEmail = authSession?.user?.email || "";
 
-  /* ---------- Profile / membership ---------- */
+  /* ---------- Profile ---------- */
   const profileKey = authedEmail
     ? `/api/profile?email=${encodeURIComponent(authedEmail)}`
     : null;
@@ -64,20 +64,19 @@ export default function SchedulePage() {
     String(profile?.payment_type || "").toLowerCase() === "cash";
 
   /* ---------- Gyms ---------- */
-  const { data: gymsResp } = useSWR("/api/gyms/list", fetcher);
+  const { data: gymsResp, error: gymsError } = useSWR("/api/gyms/list", fetcher);
   const gyms: Gym[] = gymsResp?.gyms ?? [];
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
+  const selectedGym = useMemo(
+    () => gyms.find((g) => g.id === selectedGymId) || null,
+    [gyms, selectedGymId]
+  );
 
   useEffect(() => {
     if (!selectedGymId && gyms.length > 0) {
       setSelectedGymId(gyms[0].id);
     }
   }, [gyms, selectedGymId]);
-
-  const selectedGym = useMemo(
-    () => gyms.find((g) => g.id === selectedGymId) || null,
-    [gyms, selectedGymId]
-  );
 
   /* ---------- Calendar ---------- */
   const today = new Date();
@@ -90,10 +89,14 @@ export default function SchedulePage() {
     [year, month]
   );
 
-  const monthLabel = monthStart.toLocaleString(undefined, {
-    month: "long",
-    year: "numeric",
-  });
+  const monthLabel = useMemo(
+    () =>
+      monthStart.toLocaleString(undefined, {
+        month: "long",
+        year: "numeric",
+      }),
+    [monthStart]
+  );
 
   function prevMonth() {
     const d = new Date(year, month, 1);
@@ -113,14 +116,15 @@ export default function SchedulePage() {
   const fromISO = monthStart.toISOString();
   const toISO = monthEnd.toISOString();
 
-  const { data: sessionsResp } = useSWR(
-    selectedGym?.location
-      ? `/api/schedule/upcoming?location=${encodeURIComponent(
-          selectedGym.location
-        )}&from=${fromISO}&to=${toISO}`
-      : null,
-    fetcher
-  );
+  const { data: sessionsResp, error: sessionsError, isLoading: sessionsLoading } =
+    useSWR(
+      selectedGym?.location
+        ? `/api/schedule/upcoming?location=${encodeURIComponent(
+            selectedGym.location
+          )}&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`
+        : null,
+      fetcher
+    );
 
   const sessions: SessionItem[] = sessionsResp?.sessions ?? [];
 
@@ -134,6 +138,33 @@ export default function SchedulePage() {
     }
     return map;
   }, [sessions]);
+
+  const firstWeekday = monthStart.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const cells = useMemo(() => {
+    const blanks = Array.from(
+      { length: firstWeekday },
+      (_, i) => ({ key: `b-${i}`, blank: true })
+    );
+
+    const days = Array.from({ length: daysInMonth }, (_, i) => {
+      const d = new Date(year, month, i + 1);
+      const ymd = ymdLocal(d);
+      return {
+        key: `d-${ymd}`,
+        blank: false,
+        day: i + 1,
+        ymd,
+        count: (sessionsByDay[ymd] || []).length,
+      };
+    });
+
+    return [...blanks, ...days];
+  }, [firstWeekday, daysInMonth, year, month, sessionsByDay]);
+
+  const [activeDay, setActiveDay] = useState<string | null>(null);
+  useEffect(() => setActiveDay(null), [year, month, selectedGymId]);
 
   /* ---------- Booking modal ---------- */
   const [showBookModal, setShowBookModal] = useState(false);
@@ -233,15 +264,54 @@ export default function SchedulePage() {
     <>
       <main className="container py-3 schedule-page" style={{ paddingBottom: 90 }}>
         <div className="schedule-toolbar">
-          <button onClick={prevMonth}>←</button>
+          <button className="btn btn-bxkr-outline" onClick={prevMonth}>
+            ← Previous
+          </button>
           <h2>Schedule — {monthLabel}</h2>
-          <button onClick={nextMonth}>→</button>
+          <button className="btn btn-bxkr-outline" onClick={nextMonth}>
+            Next →
+          </button>
         </div>
 
-        {Object.entries(sessionsByDay).map(([day, list]) => (
-          <div key={day} className="futuristic-card p-3 mb-2">
-            <h5>{day}</h5>
-            {list.map((s) => (
+        <div className="futuristic-card p-3 mb-3">
+          <label>Select gym</label>
+          {gymsError && <div className="text-danger">Failed to load gyms</div>}
+          <select
+            className="form-select"
+            value={selectedGymId ?? ""}
+            onChange={(e) => setSelectedGymId(e.target.value)}
+          >
+            {gyms.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name} — {g.location}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="schedule-calendar mb-3">
+          <div className="calendar-grid">
+            {cells.map((c) =>
+              c.blank ? (
+                <div key={c.key} />
+              ) : (
+                <button
+                  key={c.key}
+                  className={`calendar-day ${
+                    c.ymd === activeDay ? "active" : ""
+                  }`}
+                  onClick={() => setActiveDay(c.ymd!)}
+                >
+                  {c.day}
+                </button>
+              )
+            )}
+          </div>
+        </div>
+
+        {activeDay && (
+          <div className="futuristic-card p-3">
+            {(sessionsByDay[activeDay] || []).map((s) => (
               <div key={s.id} className="session-card">
                 <div>{s.class_id}</div>
                 <div>
@@ -249,11 +319,16 @@ export default function SchedulePage() {
                   {isGymMember && " • Members free"}
                   {isCashPayer && " • Cash £8"}
                 </div>
-                <button onClick={() => openBookingModal(s)}>Book</button>
+                <button
+                  className="btn btn-bxkr"
+                  onClick={() => openBookingModal(s)}
+                >
+                  Book
+                </button>
               </div>
             ))}
           </div>
-        ))}
+        )}
 
         {showBookModal && activeSession && (
           <div className="modal">
@@ -282,14 +357,20 @@ export default function SchedulePage() {
                     checked={payOnDay}
                     onChange={(e) => setPayOnDay(e.target.checked)}
                   />
-                  {isCashPayer ? " Pay £8 cash on the day" : " Pay on the day (£10)"}
+                  {isCashPayer
+                    ? " Pay £8 cash on the day"
+                    : " Pay on the day (£10)"}
                 </label>
               )}
 
-              {bookErr && <div className="error">{bookErr}</div>}
-              {bookMsg && <div className="success">{bookMsg}</div>}
+              {bookErr && <div className="text-danger">{bookErr}</div>}
+              {bookMsg && <div className="text-success">{bookMsg}</div>}
 
-              <button disabled={bookingBusy} onClick={confirmBooking}>
+              <button
+                className="btn btn-bxkr"
+                disabled={bookingBusy}
+                onClick={confirmBooking}
+              >
                 {bookingBusy
                   ? "Processing…"
                   : isGymMember
