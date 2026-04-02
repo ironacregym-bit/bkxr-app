@@ -258,12 +258,22 @@ export default function SchedulePage() {
 
       const bookingId = String(json.booking_id || "");
 
-      if (method === "stripe") {
+      if (json.status === "pending_payment") {
         const checkoutRes = await fetch("/api/billing/create-checkout-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ purpose: "class_booking", booking_id: bookingId }),
+          body: JSON.stringify({
+            purpose: "class_booking",
+            booking_id: json.booking_id,
+          }),
         });
+      
+        const cj = await checkoutRes.json();
+        if (!checkoutRes.ok) throw new Error(cj?.error || "Stripe error");
+      
+        window.location.href = cj.url;
+        return;
+      }
 
         const cj = await checkoutRes.json().catch(() => ({}));
         if (!checkoutRes.ok) throw new Error(cj?.error || "Failed to start Stripe checkout");
