@@ -1,3 +1,4 @@
+// FILE: pages/api/billing/create-checkout-session.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
@@ -48,12 +49,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!snap.exists) return res.status(404).json({ error: "Booking not found" });
 
       const b = snap.data() as any;
+      const status = String(b?.status || "");
 
-      if (String(b.status) !== "pending_payment") {
-        return res.status(400).json({ error: "Booking is not pending payment" });
+      if (status !== "pending_payment") {
+        return res.status(400).json({
+          error: `Booking is not pending payment (status=${status || "unknown"})`,
+        });
       }
 
-      const sessionId = String(b.session_id || "");
+      const sessionId = String(b?.session_id || "");
+
+      // Idempotency: if we already created a checkout session for this booking, reuse it
+      const existingCheckoutId = String(b?.stripe_checkout_session_id || "").trim();
+      if (existingCheckoutId) {
+        try {
+          const existing = await stripe.checkout.sessions.retrieve(existingCheckoutId);
+          if (existing?.url) {
+            return res.status(200).json({ url: existing.url, checkout_id: existing.id, reused: true });
+          }
+        } catch {
+          // If retrieve fails, fall through and create a new checkout
+        }
+      }
 
       const checkoutSession = await stripe.checkout.sessions.create({
         mode: "payment",
@@ -84,7 +101,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         { merge: true }
       );
 
-      return res.status(200).json({ url: checkoutSession.url, checkout_id: checkoutSession.id });
+      return res.status(200).json({ url: checkoutSession.url, checkout_id: checkoutSession.id, reused: false });
     }
 
     /* ----------------------------
@@ -97,7 +114,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const priceId = process.env.STRIPE_PRICE_ID_MONTHLY_20;
     if (!priceId) return res.status(500).json({ error: "Missing STRIPE_PRICE_ID_MONTHLY_20" });
 
-    // Resolve (or create) Stripe customer
     const userRef = firestore.collection("users").doc(email);
     const userSnap = await userRef.get();
     const userData = userSnap.exists ? (userSnap.data() ?? {}) : {};
