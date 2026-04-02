@@ -28,13 +28,14 @@ type SessionItem = {
 };
 
 type UserAccess = {
+  subscription_status?: string | null;
   membership_status?: string | null;
   payment_type?: string | null;
 };
 
 type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
 
-/* ---------- Local YYYY-MM-DD (fixes day offset bug) ---------- */
+// Local YYYY-MM-DD (prevents the “day out” bug from UTC conversion)
 function ymdLocal(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -47,7 +48,7 @@ export default function SchedulePage() {
   const isAuthed = Boolean(authSession?.user?.email);
   const authedEmail = authSession?.user?.email || "";
 
-  /* ---------- Profile ---------- */
+  // Profile for member / cash logic
   const profileKey = authedEmail
     ? `/api/profile?email=${encodeURIComponent(authedEmail)}`
     : null;
@@ -63,14 +64,10 @@ export default function SchedulePage() {
   const isCashPayer =
     String(profile?.payment_type || "").toLowerCase() === "cash";
 
-  /* ---------- Gyms ---------- */
+  // Gyms
   const { data: gymsResp, error: gymsError } = useSWR("/api/gyms/list", fetcher);
   const gyms: Gym[] = gymsResp?.gyms ?? [];
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
-  const selectedGym = useMemo(
-    () => gyms.find((g) => g.id === selectedGymId) || null,
-    [gyms, selectedGymId]
-  );
 
   useEffect(() => {
     if (!selectedGymId && gyms.length > 0) {
@@ -78,7 +75,12 @@ export default function SchedulePage() {
     }
   }, [gyms, selectedGymId]);
 
-  /* ---------- Calendar ---------- */
+  const selectedGym = useMemo(
+    () => gyms.find((g) => g.id === selectedGymId) || null,
+    [gyms, selectedGymId]
+  );
+
+  // Calendar state
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -112,7 +114,7 @@ export default function SchedulePage() {
     setMonth(d.getMonth());
   }
 
-  /* ---------- Sessions ---------- */
+  // Sessions
   const fromISO = monthStart.toISOString();
   const toISO = monthEnd.toISOString();
 
@@ -143,10 +145,10 @@ export default function SchedulePage() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const cells = useMemo(() => {
-    const blanks = Array.from(
-      { length: firstWeekday },
-      (_, i) => ({ key: `b-${i}`, blank: true })
-    );
+    const blanks = Array.from({ length: firstWeekday }, (_, i) => ({
+      key: `b-${i}`,
+      blank: true,
+    }));
 
     const days = Array.from({ length: daysInMonth }, (_, i) => {
       const d = new Date(year, month, i + 1);
@@ -166,7 +168,7 @@ export default function SchedulePage() {
   const [activeDay, setActiveDay] = useState<string | null>(null);
   useEffect(() => setActiveDay(null), [year, month, selectedGymId]);
 
-  /* ---------- Booking modal ---------- */
+  // Booking modal state
   const [showBookModal, setShowBookModal] = useState(false);
   const [activeSession, setActiveSession] = useState<SessionItem | null>(null);
   const [guestName, setGuestName] = useState("");
@@ -207,7 +209,7 @@ export default function SchedulePage() {
       } else if (payOnDay) {
         method = "pay_on_day"; // £10
       } else {
-        method = "stripe"; // £8
+        method = "stripe"; // £8 Stripe
       }
 
       const res = await fetch("/api/bookings/create", {
@@ -239,6 +241,7 @@ export default function SchedulePage() {
 
         const cj = await checkoutRes.json();
         if (!checkoutRes.ok) throw new Error(cj?.error || "Stripe error");
+
         window.location.href = cj.url;
         return;
       }
@@ -253,13 +256,12 @@ export default function SchedulePage() {
         setBookMsg("Booked ✅");
       }
     } catch (e: any) {
-      setBookErr(e.message || "Booking failed");
+      setBookErr(e?.message || "Booking failed");
     } finally {
       setBookingBusy(false);
     }
   }
 
-  /* ---------- UI ---------- */
   return (
     <>
       <main className="container py-3 schedule-page" style={{ paddingBottom: 90 }}>
@@ -267,15 +269,15 @@ export default function SchedulePage() {
           <button className="btn btn-bxkr-outline" onClick={prevMonth}>
             ← Previous
           </button>
-          <h2>Schedule — {monthLabel}</h2>
+          <h2 className="mb-0 month-title">Schedule — {monthLabel}</h2>
           <button className="btn btn-bxkr-outline" onClick={nextMonth}>
             Next →
           </button>
         </div>
 
         <div className="futuristic-card p-3 mb-3">
-          <label>Select gym</label>
-          {gymsError && <div className="text-danger">Failed to load gyms</div>}
+          <label className="form-label">Select gym</label>
+          {gymsError && <div className="text-danger">Failed to load gyms.</div>}
           <select
             className="form-select"
             value={selectedGymId ?? ""}
@@ -291,18 +293,18 @@ export default function SchedulePage() {
 
         <div className="schedule-calendar mb-3">
           <div className="calendar-grid">
-            {cells.map((c) =>
-              c.blank ? (
-                <div key={c.key} />
+            {cells.map((cell) =>
+              cell.blank ? (
+                <div key={cell.key} />
               ) : (
                 <button
-                  key={c.key}
+                  key={cell.key}
                   className={`calendar-day ${
-                    c.ymd === activeDay ? "active" : ""
+                    cell.ymd === activeDay ? "active" : ""
                   }`}
-                  onClick={() => setActiveDay(c.ymd!)}
+                  onClick={() => setActiveDay(cell.ymd!)}
                 >
-                  {c.day}
+                  <div className="num">{cell.day}</div>
                 </button>
               )
             )}
@@ -311,6 +313,12 @@ export default function SchedulePage() {
 
         {activeDay && (
           <div className="futuristic-card p-3">
+            {sessionsLoading && <div>Loading sessions…</div>}
+            {sessionsError && (
+              <div className="text-danger">
+                Failed to load sessions for this day.
+              </div>
+            )}
             {(sessionsByDay[activeDay] || []).map((s) => (
               <div key={s.id} className="session-card">
                 <div>{s.class_id}</div>
@@ -338,11 +346,13 @@ export default function SchedulePage() {
               {!isAuthed && (
                 <>
                   <input
+                    className="form-control mb-2"
                     placeholder="Name"
                     value={guestName}
                     onChange={(e) => setGuestName(e.target.value)}
                   />
                   <input
+                    className="form-control mb-2"
                     placeholder="Email"
                     value={guestEmail}
                     onChange={(e) => setGuestEmail(e.target.value)}
@@ -351,8 +361,9 @@ export default function SchedulePage() {
               )}
 
               {!isGymMember && (
-                <label>
+                <label className="form-check">
                   <input
+                    className="form-check-input"
                     type="checkbox"
                     checked={payOnDay}
                     onChange={(e) => setPayOnDay(e.target.checked)}
@@ -363,11 +374,11 @@ export default function SchedulePage() {
                 </label>
               )}
 
-              {bookErr && <div className="text-danger">{bookErr}</div>}
-              {bookMsg && <div className="text-success">{bookMsg}</div>}
+              {bookErr && <div className="text-danger mt-2">{bookErr}</div>}
+              {bookMsg && <div className="text-success mt-2">{bookMsg}</div>}
 
               <button
-                className="btn btn-bxkr"
+                className="btn btn-bxkr mt-3"
                 disabled={bookingBusy}
                 onClick={confirmBooking}
               >
