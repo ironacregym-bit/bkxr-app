@@ -34,13 +34,20 @@ type UserAccess = {
 
 type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
 
+// Local YYYY-MM-DD (prevents the “day out” bug from UTC conversion)
+function ymdLocal(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export default function SchedulePage() {
   const { data: authSession } = useSession();
   const authedEmail = authSession?.user?.email || "";
 
-  // Profile (used to determine "full gym member" -> free booking)
-  const profileKey =
-    authedEmail ? `/api/profile?email=${encodeURIComponent(authedEmail)}` : null;
+  // Profile for member-free booking
+  const profileKey = authedEmail ? `/api/profile?email=${encodeURIComponent(authedEmail)}` : null;
   const { data: profile } = useSWR<UserAccess>(profileKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
@@ -55,17 +62,16 @@ export default function SchedulePage() {
   const { data: gymsResp, error: gymsError } = useSWR("/api/gyms/list", fetcher);
   const gyms: Gym[] = gymsResp?.gyms ?? [];
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
-  const selectedGym = useMemo(
-    () => gyms.find((g) => g.id === selectedGymId) || null,
-    [gyms, selectedGymId]
-  );
+  const selectedGym = useMemo(() => gyms.find((g) => g.id === selectedGymId) || null, [gyms, selectedGymId]);
 
-  // Month navigation
+  // Month navigation (calendar view)
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth()); // 0..11
+
   const monthStart = useMemo(() => new Date(year, month, 1, 0, 0, 0, 0), [year, month]);
   const monthEnd = useMemo(() => new Date(year, month + 1, 0, 23, 59, 59, 999), [year, month]);
+
   const monthLabel = useMemo(
     () =>
       monthStart.toLocaleString(undefined, {
@@ -81,6 +87,7 @@ export default function SchedulePage() {
     setYear(d.getFullYear());
     setMonth(d.getMonth());
   }
+
   function nextMonth() {
     const d = new Date(year, month, 1);
     d.setMonth(d.getMonth() + 1);
@@ -88,7 +95,7 @@ export default function SchedulePage() {
     setMonth(d.getMonth());
   }
 
-  // Sessions for selected gym/location in month range
+  // Sessions
   const fromISO = monthStart.toISOString();
   const toISO = monthEnd.toISOString();
   const shouldLoadSessions = Boolean(selectedGym?.location);
@@ -110,14 +117,14 @@ export default function SchedulePage() {
 
   const sessions: SessionItem[] = sessionsResp?.sessions ?? [];
 
-  // Group sessions by YYYY-MM-DD
+  // Group sessions by local YYYY-MM-DD (fixes “day out”)
   const sessionsByDay = useMemo(() => {
     const map: Record<string, SessionItem[]> = {};
     for (const s of sessions) {
       const ms = toMillis(s.start_time);
       if (!ms) continue;
       const d = new Date(ms);
-      const key = d.toISOString().slice(0, 10);
+      const key = ymdLocal(d);
       (map[key] ??= []).push(s);
     }
     return map;
@@ -126,13 +133,15 @@ export default function SchedulePage() {
   // Calendar cells
   const firstWeekday = monthStart.getDay(); // 0 Sun .. 6 Sat
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+
   type Cell = { key: string; blank: boolean; day?: number; ymd?: string; isToday?: boolean; count?: number };
+
   const cells: Cell[] = useMemo(() => {
     const blanks: Cell[] = Array.from({ length: firstWeekday }, (_, i) => ({ key: `blank-${i}`, blank: true }));
     const days: Cell[] = Array.from({ length: daysInMonth }, (_, i) => {
       const dayNum = i + 1;
       const date = new Date(year, month, dayNum);
-      const ymd = date.toISOString().slice(0, 10);
+      const ymd = ymdLocal(date);
       const count = (sessionsByDay[ymd] || []).length;
       const isToday = date.toDateString() === new Date().toDateString();
       return { key: `d-${ymd}`, blank: false, day: dayNum, ymd, isToday, count };
@@ -146,7 +155,7 @@ export default function SchedulePage() {
     setActiveDay(null);
   }, [year, month, selectedGymId]);
 
-  // Sharing (unchanged)
+  // Share
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [sharing, setSharing] = useState<{ message: string; link: string } | null>(null);
@@ -178,14 +187,14 @@ export default function SchedulePage() {
     if (!selectedGymId && gyms.length > 0) setSelectedGymId(gyms[0].id);
   }, [gyms, selectedGymId]);
 
-  // Booking modal state
+  // Booking modal
   const [showBookModal, setShowBookModal] = useState(false);
   const [activeSession, setActiveSession] = useState<SessionItem | null>(null);
 
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
 
-  const [payOnDay, setPayOnDay] = useState(false); // checkbox
+  const [payOnDay, setPayOnDay] = useState(false);
   const [bookMsg, setBookMsg] = useState<string | null>(null);
   const [bookErr, setBookErr] = useState<string | null>(null);
   const [bookingBusy, setBookingBusy] = useState(false);
@@ -233,9 +242,7 @@ export default function SchedulePage() {
       if (!res.ok) throw new Error(json?.error || "Failed to create booking");
 
       const bookingId = String(json.booking_id || "");
-      const status = String(json.status || "");
 
-      // Stripe path -> redirect to checkout
       if (method === "stripe") {
         const checkoutRes = await fetch("/api/billing/create-checkout-session", {
           method: "POST",
@@ -250,7 +257,6 @@ export default function SchedulePage() {
         return;
       }
 
-      // Non-stripe success
       if (method === "member_free") setBookMsg("Booked ✅ Member booking (free)");
       else if (method === "pay_on_day") setBookMsg("Booked ✅ Pay £10 on arrival");
       else setBookMsg("Booked ✅");
@@ -278,7 +284,7 @@ export default function SchedulePage() {
         </div>
 
         {/* Gym selector */}
-        <div className="bxkr-card p-3 mb-3">
+        <div className="futuristic-card p-3 mb-3">
           <label className="form-label">Select gym</label>
           {gymsError && <div className="text-danger">Failed to load gyms.</div>}
           <select
@@ -331,7 +337,7 @@ export default function SchedulePage() {
 
         {/* Day detail panel */}
         {activeDay && (
-          <div className="bxkr-card p-3 day-panel">
+          <div className="futuristic-card p-3 day-panel">
             <div className="panel-header">
               <h5 className="mb-0 title">Sessions on {activeDay}</h5>
               <button className="btn btn-bxkr-outline" onClick={() => setActiveDay(null)}>
@@ -399,7 +405,7 @@ export default function SchedulePage() {
                 {actionMsg && <div className="pill-success mb-2">{actionMsg}</div>}
                 {actionErr && <div className="text-danger mb-2">{actionErr}</div>}
                 {sharing && (
-                  <div className="bxkr-card p-2">
+                  <div className="futuristic-card p-2">
                     <div className="small mb-2">WhatsApp message</div>
                     <textarea className="form-control mb-2" rows={3} readOnly value={sharing.message} />
                     <div className="d-flex gap-2">
@@ -443,7 +449,7 @@ export default function SchedulePage() {
               if (!bookingBusy) setShowBookModal(false);
             }}
           >
-            <div className="bxkr-card p-3" style={{ width: "min(520px, 92vw)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="futuristic-card p-3" style={{ width: "min(520px, 92vw)" }} onClick={(e) => e.stopPropagation()}>
               <div className="d-flex justify-content-between align-items-center mb-2">
                 <h5 className="m-0">Book session</h5>
                 <button className="btn btn-bxkr-outline btn-sm" onClick={() => setShowBookModal(false)} disabled={bookingBusy}>
