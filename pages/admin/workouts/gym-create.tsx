@@ -63,9 +63,18 @@ function toYMD(input: any): string {
   }
 }
 
-/** ---------- Types (add uid for stable keys) ---------- */
+type StrengthSpec = {
+  enabled?: boolean; // UI-only convenience
+  basis_exercise?: string; // which 1RM to use (e.g. "Deadlift", "Front Squat", "Snatch")
+  percent_1rm?: number | null; // single % e.g. 0.8 (80%)
+  percent_min?: number | null; // optional range min e.g. 0.85
+  percent_max?: number | null; // optional range max e.g. 0.9
+  rounding_kg?: number | null; // e.g. 2.5
+  mode?: "straight" | "top_set" | "backoff" | "emom" | "test" | null;
+};
+
 type SingleItem = {
-  uid: string; // stable key
+  uid: string;
   type: "Single";
   order: number;
   exercise_id: string;
@@ -74,6 +83,7 @@ type SingleItem = {
   weight_kg?: number | null;
   rest_s?: number | null;
   notes?: string | null;
+  strength?: StrengthSpec | null;
 };
 
 type SupersetSubItem = {
@@ -569,6 +579,18 @@ export default function GymCreateWorkoutPage() {
           weight_kg: si.weight_kg ?? null,
           rest_s: si.rest_s ?? null,
           notes: si.notes ?? null,
+        
+          // ✅ NEW: persist strength prescription
+          strength: si.strength
+            ? {
+                basis_exercise: si.strength.basis_exercise ?? null,
+                percent_1rm: si.strength.percent_1rm ?? null,
+                percent_min: si.strength.percent_min ?? null,
+                percent_max: si.strength.percent_max ?? null,
+                rounding_kg: si.strength.rounding_kg ?? null,
+                mode: si.strength.mode ?? null,
+              }
+            : null,
         };
       }),
     };
