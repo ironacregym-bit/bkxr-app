@@ -16,6 +16,26 @@ const GREEN = "#22c55e";
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 /* ---------------- Helpers ---------------- */
+function percentLabel(strength: {
+  percent_1rm?: number | null;
+  percent_min?: number | null;
+  percent_max?: number | null;
+}): string | null {
+  if (
+    strength.percent_min != null &&
+    strength.percent_max != null
+  ) {
+    return `${Math.round(strength.percent_min * 100)}–${Math.round(
+      strength.percent_max * 100
+    )}%`;
+  }
+
+  if (strength.percent_1rm != null) {
+    return `${Math.round(strength.percent_1rm * 100)}%`;
+  }
+
+  return null;
+}
 function roundToIncrement(value: number, increment: number): number {
   if (!increment || increment <= 0) return Math.round(value);
   return Math.round(value / increment) * increment;
