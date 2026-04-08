@@ -236,9 +236,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 percent_min: clamp01(s.strength.percent_min),
                 percent_max: clamp01(s.strength.percent_max),
                 rounding_kg:
-                  s.strength.rounding_kg === null || s.strength.rounding_kg === undefined || s.strength.rounding_kg === ""
+                  s.strength.rounding_kg == null
                     ? null
-                    : Number(s.strength.rounding_kg),
+                    : s.strength.rounding_kg,
                 mode: (s.strength.mode ?? null) as any,
               }
             : null;
