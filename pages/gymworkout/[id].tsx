@@ -39,7 +39,21 @@ function endOfAlignedWeek(d: Date) {
   e.setHours(23, 59, 59, 999);
   return e;
 }
+function roundToIncrement(value: number, inc: number) {
+  if (!inc || inc <= 0) return Math.round(value);
+  return Math.round(value / inc) * inc;
+}
 
+function percentLabel(s: any) {
+  if (!s) return null;
+  if (s.percent_min != null && s.percent_max != null) {
+    return `${Math.round(s.percent_min * 100)}–${Math.round(s.percent_max * 100)}%`;
+  }
+  if (s.percent_1rm != null) {
+    return `${Math.round(s.percent_1rm * 100)}%`;
+  }
+  return null;
+}
 // ---- Types ----
 type UISingleItem = {
   type: "Single";
