@@ -1,16 +1,29 @@
+// FILE: pages/api/workouts/gym-create.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
+
+type StrengthSpec = {
+  basis_exercise?: string | null;
+  percent_1rm?: number | null;
+  percent_min?: number | null;
+  percent_max?: number | null;
+  rounding_kg?: number | null;
+  mode?: "straight" | "top_set" | "backoff" | "emom" | "test" | null;
+};
 
 type SingleItem = {
   type: "Single";
   order: number;
   exercise_id: string;
   sets?: number;
-  reps?: string;         // e.g., "10" or "10-8-6"
+  reps?: string;
   weight_kg?: number | null;
   rest_s?: number | null;
   notes?: string | null;
+
+  // NEW
+  strength?: StrengthSpec | null;
 };
 
 type SupersetItem = {
@@ -28,14 +41,20 @@ type SupersetItem = {
 };
 
 type GymRound = {
-  name: string; // e.g., "Warm Up", "Main Set", "Finisher"
+  name: string;
   order: number;
   items: Array<SingleItem | SupersetItem>;
 };
 
-type DayName = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
+type DayName =
+  | "Monday"
+  | "Tuesday"
+  | "Wednesday"
+  | "Thursday"
+  | "Friday"
+  | "Saturday"
+  | "Sunday";
 
-/** Payload now supports string | string[] for assigned_to (normalised to string[]). */
 type GymCreatePayload = {
   visibility: "global" | "private";
   owner_email?: string;
@@ -47,16 +66,21 @@ type GymCreatePayload = {
   main: GymRound;
   finisher?: GymRound | null;
 
-  // Recurrence & assignment
   recurring?: boolean;
   recurring_day?: DayName | null;
-  recurring_start?: string | null; // ISO or parseable date string
-  recurring_end?: string | null;   // ISO or parseable date string
-  assigned_to?: string | string[] | null; // CHANGED: accept single/multiple; API will normalise to string[]
+  recurring_start?: string | null;
+  recurring_end?: string | null;
+  assigned_to?: string | string[] | null;
 };
 
 const ALLOWED_DAYS: DayName[] = [
-  "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
 ];
 
 function isEmail(s: string): boolean {
@@ -67,12 +91,10 @@ function parseDateToTimestamp(s: string | null | undefined): Timestamp | null {
   if (!s) return null;
   const dt = new Date(s);
   if (Number.isNaN(dt.getTime())) return null;
-  // Normalise hour to avoid TZ-midnight drift
   dt.setHours(12, 0, 0, 0);
   return Timestamp.fromDate(dt);
 }
 
-/** NEW: normalise assigned_to into a clean string[] (lowercased, unique). */
 function normaliseAssignedTo(input: string | string[] | null | undefined): string[] {
   if (Array.isArray(input)) {
     return Array.from(
@@ -84,7 +106,6 @@ function normaliseAssignedTo(input: string | string[] | null | undefined): strin
     );
   }
   if (typeof input === "string") {
-    // accept comma/semicolon/space separated lists
     const parts = input
       .split(/[,;\s]+/)
       .map((e) => e.trim().toLowerCase())
@@ -92,6 +113,13 @@ function normaliseAssignedTo(input: string | string[] | null | undefined): strin
     return Array.from(new Set(parts.filter(isEmail)));
   }
   return [];
+}
+
+function clamp01(n: any): number | null {
+  if (n === null || n === undefined || n === "") return null;
+  const v = Number(n);
+  if (!Number.isFinite(v)) return null;
+  return Math.max(0, Math.min(1.5, v));
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -102,7 +130,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const p = req.body as GymCreatePayload;
 
-  // ----- Basic validations (existing) -----
   if (!p.workout_name || !p.visibility) {
     return res.status(400).json({ error: "workout_name and visibility are required" });
   }
@@ -113,10 +140,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: "main must include at least one item" });
   }
 
-  // ----- Recurrence validations (updated) -----
   const isRecurring = !!p.recurring;
-
-  // Normalise assigned_to to array for consistent downstream usage
   const assignedToList = normaliseAssignedTo(p.assigned_to);
 
   let dayName: DayName | null = null;
@@ -125,19 +149,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (isRecurring) {
     if (!assignedToList.length) {
-      return res.status(400).json({ error: "assigned_to must include at least one valid email when recurring is true" });
+      return res.status(400).json({
+        error: "assigned_to must include at least one valid email when recurring is true",
+      });
     }
 
-    const rd = (p.recurring_day || "").trim() as DayName;
+    const rd = String(p.recurring_day || "").trim() as DayName;
     if (!ALLOWED_DAYS.includes(rd)) {
-      return res.status(400).json({ error: "recurring_day must be one of Monday–Sunday when recurring is true" });
+      return res.status(400).json({
+        error: "recurring_day must be one of Monday–Sunday when recurring is true",
+      });
     }
     dayName = rd;
 
     tsStart = parseDateToTimestamp(p.recurring_start || null);
     tsEnd = parseDateToTimestamp(p.recurring_end || null);
     if (!tsStart || !tsEnd) {
-      return res.status(400).json({ error: "recurring_start and recurring_end must be valid dates when recurring is true" });
+      return res.status(400).json({
+        error: "recurring_start and recurring_end must be valid dates when recurring is true",
+      });
     }
     if (tsStart.toDate().getTime() > tsEnd.toDate().getTime()) {
       return res.status(400).json({ error: "recurring_start must be on or before recurring_end" });
@@ -150,7 +180,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const now = Timestamp.now();
     const batch = db.batch();
 
-    // Base workout doc (add workout_id mirror + recurring fields)
     batch.set(
       workoutRef,
       {
@@ -163,29 +192,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         owner_email: p.visibility === "private" ? (p.owner_email || null) : null,
         is_benchmark: false,
         benchmark_name: null,
-        workout_type: "gym_custom", // helpful discriminator
+        workout_type: "gym_custom",
         created_at: now,
         updated_at: now,
 
-        // Recurring fields
         recurring: isRecurring,
         recurring_day: isRecurring ? dayName : null,
         recurring_start: isRecurring ? tsStart : null,
         recurring_end: isRecurring ? tsEnd : null,
-
-        // CHANGED: store as array always (empty [] if not provided)
-        assigned_to: assignedToList, // array form for legacy/overview compatibility
+        assigned_to: assignedToList,
       },
       { merge: true }
     );
 
-    // Build rounds array in the persisted order
     const rounds: GymRound[] = [];
     if (p.warmup) rounds.push({ ...p.warmup, order: 1 });
     rounds.push({ ...p.main, order: p.warmup ? 2 : 1 });
     if (p.finisher) rounds.push({ ...p.finisher, order: p.warmup ? 3 : (p.main ? 2 : 1) });
 
-    // Persist rounds/items
     for (const r of rounds) {
       const roundRef = workoutRef.collection("rounds").doc();
       batch.set(roundRef, {
@@ -198,10 +222,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
       const sorted = [...r.items].sort((a, b) => a.order - b.order);
+
       for (const it of sorted) {
         const itemRef = roundRef.collection("items").doc();
+
         if (it.type === "Single") {
           const s = it as SingleItem;
+
+          const strength = s.strength
+            ? {
+                basis_exercise: s.strength.basis_exercise ?? null,
+                percent_1rm: clamp01(s.strength.percent_1rm),
+                percent_min: clamp01(s.strength.percent_min),
+                percent_max: clamp01(s.strength.percent_max),
+                rounding_kg:
+                  s.strength.rounding_kg === null || s.strength.rounding_kg === undefined || s.strength.rounding_kg === ""
+                    ? null
+                    : Number(s.strength.rounding_kg),
+                mode: (s.strength.mode ?? null) as any,
+              }
+            : null;
+
           batch.set(itemRef, {
             type: "Single",
             order: s.order,
@@ -211,6 +252,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             weight_kg: s.weight_kg ?? null,
             rest_s: s.rest_s ?? null,
             notes: s.notes ?? null,
+
+            // NEW
+            strength,
           });
         } else {
           const ss = it as SupersetItem;
@@ -232,7 +276,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     await batch.commit();
-
     return res.status(201).json({ ok: true, workout_id: workoutRef.id });
   } catch (err: any) {
     console.error("[workouts/gym-create] error:", err?.message || err);
