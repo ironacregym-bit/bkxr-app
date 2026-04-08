@@ -16,7 +16,10 @@ const GREEN = "#22c55e";
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 /* ---------------- Helpers ---------------- */
-
+function roundToIncrement(value: number, increment: number): number {
+  if (!increment || increment <= 0) return Math.round(value);
+  return Math.round(value / increment) * increment;
+}
 function fixGifUrl(u?: string) {
   if (!u) return u;
   if (u.startsWith("public/")) return "/" + u.replace(/^public\//, "");
