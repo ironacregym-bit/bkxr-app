@@ -6,15 +6,23 @@ export default function IronAcreTaskCard({
   ctaLabel,
   onCta,
   rightMeta,
+  muted,
 }: {
   title: string;
   subtitle: string;
   ctaLabel: string;
   onCta: () => void;
   rightMeta?: string;
+  muted?: boolean;
 }) {
   return (
-    <section className="futuristic-card p-3 mb-2" style={{ border: `1px solid ${ACCENT_IRON}33` }}>
+    <section
+      className="futuristic-card p-3 mb-2"
+      style={{
+        border: `1px solid ${ACCENT_IRON}33`,
+        opacity: muted ? 0.75 : 1,
+      }}
+    >
       <div className="d-flex justify-content-between align-items-center gap-2">
         <div style={{ minWidth: 0 }}>
           <div className="fw-semibold">{title}</div>
@@ -30,7 +38,7 @@ export default function IronAcreTaskCard({
               borderRadius: 12,
               background: ACCENT_IRON,
               color: "#0b0f14",
-              fontWeight: 700,
+              fontWeight: 800,
               whiteSpace: "nowrap",
             }}
             onClick={onCta}
