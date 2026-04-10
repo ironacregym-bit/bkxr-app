@@ -86,17 +86,11 @@ export default async function handler(
 
     const db = firestore;
 
-    // 1) Try doc by id
     let docRef = db.collection(WORKOUTS_COLLECTION).doc(workoutId);
     let docSnap = await docRef.get();
 
-    // 2) If not found, try where workout_id == id
     if (!docSnap.exists) {
-      const q = await db
-        .collection(WORKOUTS_COLLECTION)
-        .where("workout_id", "==", workoutId)
-        .limit(1)
-        .get();
+      const q = await db.collection(WORKOUTS_COLLECTION).where("workout_id", "==", workoutId).limit(1).get();
       if (!q.empty) {
         docSnap = q.docs[0];
         docRef = docSnap.ref;
@@ -110,10 +104,8 @@ export default async function handler(
     const w = docSnap.data() || {};
     const rootId = String((w as any).workout_id || docSnap.id);
 
-    // Load rounds
     const roundsSnap = await docRef.collection("rounds").orderBy("order", "asc").get();
 
-    // Helper to load items for a round doc
     async function loadItems(
       roundDoc: FirebaseFirestore.QueryDocumentSnapshot
     ): Promise<Array<SingleItemOut | SupersetItemOut>> {
@@ -152,13 +144,8 @@ export default async function handler(
         }
 
         if (d.type === "Superset") {
-          // ✅ Support both new 'items' and legacy 'superset_items'
-          const subs = Array.isArray(d.items)
-            ? d.items
-            : Array.isArray(d.superset_items)
-            ? d.superset_items
-            : [];
-
+          // ✅ support both new 'items' and legacy 'superset_items'
+          const subs = Array.isArray(d.items) ? d.items : Array.isArray(d.superset_items) ? d.superset_items : [];
           const mappedSubs: SupersetSubOut[] = subs.map((s: any) => ({
             exercise_id: String(s.exercise_id || ""),
             exercise_name: typeof s.exercise_name === "string" ? s.exercise_name : undefined,
@@ -181,10 +168,7 @@ export default async function handler(
       return items;
     }
 
-    // Build up rounds by order and map to warmup/main/finisher
-    const roundDocs = roundsSnap.docs.sort(
-      (a, b) => Number(a.data().order || 0) - Number(b.data().order || 0)
-    );
+    const roundDocs = roundsSnap.docs.sort((a, b) => Number(a.data().order || 0) - Number(b.data().order || 0));
 
     const roundBlocks: GymRoundOut[] = [];
     for (const rDoc of roundDocs) {
@@ -201,9 +185,8 @@ export default async function handler(
     let main: GymRoundOut | null = null;
     let finisher: GymRoundOut | null = null;
 
-    if (roundBlocks.length === 1) {
-      main = roundBlocks[0];
-    } else if (roundBlocks.length === 2) {
+    if (roundBlocks.length === 1) main = roundBlocks[0];
+    else if (roundBlocks.length === 2) {
       warmup = roundBlocks[0];
       main = roundBlocks[1];
     } else if (roundBlocks.length >= 3) {
