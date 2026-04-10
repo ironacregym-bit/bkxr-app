@@ -8,6 +8,7 @@ import IronAcreHeader from "../../components/iron-acre/IronAcreHeader";
 import IronAcreTasks from "../../components/iron-acre/IronAcreTasks";
 import IronAcreStrengthSummary from "../../components/iron-acre/IronAcreStrengthSummary";
 import IronAcreRecentSessions from "../../components/iron-acre/IronAcreRecentSessions";
+import IronAcreClassesList from "../../components/iron-acre/IronAcreClassesList";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -141,7 +142,8 @@ export default function IronAcreHome() {
         <IronAcreHeader userName={userName} dateLabel={dateLabel} />
 
         <IronAcreTasks todayKey={todayKey} todayData={todayData} fridayYMD={weeklyOverview?.fridayYMD || ""} fridayData={fridayData} />
-
+        <IronAcreClassesList />
+        
         <div className="row g-2">
           <div className="col-12 col-lg-6">
             <IronAcreStrengthSummary profile={strengthProfile?.profile} />
