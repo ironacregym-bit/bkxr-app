@@ -12,6 +12,16 @@ import WeeklyCircles from "../components/dashboard/WeeklyCircles";
 import NotificationsBanner from "../components/NotificationsBanner";
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
+  const host = String(context.req.headers.host || "").toLowerCase();
+
+  // If request is coming from ironacregym.vercel.app, send them to Iron Acre home
+  if (host.includes("ironacregym")) {
+    return {
+      redirect: { destination: "/iron-acre", permanent: false },
+    };
+  }
+
+  // BXKR behaviour stays exactly the same
   const session = await getSession(context);
   if (!session) {
     const callbackUrl = encodeURIComponent(context.resolvedUrl || "/");
