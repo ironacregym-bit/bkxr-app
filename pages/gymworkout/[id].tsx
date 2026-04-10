@@ -15,41 +15,15 @@ const ACCENT = "#FF8A2A";
 const GREEN = "#22c55e";
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-/* ---------------- Helpers ---------------- */
-function percentLabel(strength: {
-  percent_1rm?: number | null;
-  percent_min?: number | null;
-  percent_max?: number | null;
-}): string | null {
-  if (
-    strength.percent_min != null &&
-    strength.percent_max != null
-  ) {
-    return `${Math.round(strength.percent_min * 100)}–${Math.round(
-      strength.percent_max * 100
-    )}%`;
-  }
-
-  if (strength.percent_1rm != null) {
-    return `${Math.round(strength.percent_1rm * 100)}%`;
-  }
-
-  return null;
-}
-function roundToIncrement(value: number, increment: number): number {
-  if (!increment || increment <= 0) return Math.round(value);
-  return Math.round(value / increment) * increment;
-}
+// ---- Helpers ----
 function fixGifUrl(u?: string) {
   if (!u) return u;
   if (u.startsWith("public/")) return "/" + u.replace(/^public\//, "");
   return u;
 }
-
 function formatYMD(d: Date) {
   return d.toLocaleDateString("en-CA");
 }
-
 function startOfAlignedWeek(d: Date) {
   const day = d.getDay(); // 0=Sun,1=Mon...
   const diffToMon = (day + 6) % 7; // Mon=0
@@ -58,7 +32,6 @@ function startOfAlignedWeek(d: Date) {
   s.setHours(0, 0, 0, 0);
   return s;
 }
-
 function endOfAlignedWeek(d: Date) {
   const s = startOfAlignedWeek(d);
   const e = new Date(s);
@@ -67,8 +40,7 @@ function endOfAlignedWeek(d: Date) {
   return e;
 }
 
-/* ---------------- Types ---------------- */
-
+// ---- Types ----
 type UISingleItem = {
   type: "Single";
   order: number;
@@ -139,8 +111,7 @@ type Completion = {
   date_completed?: any;
 };
 
-/* ---------------- Build rounds for media hook ---------------- */
-
+// Build rounds for media hook
 function toMediaRounds(w: GymWorkout | undefined | null): MediaRound[] {
   if (!w) return [];
   const rounds: UIRound[] = [];
@@ -153,17 +124,16 @@ function toMediaRounds(w: GymWorkout | undefined | null): MediaRound[] {
     order: i + 1,
     items: r.items.map((it) =>
       it.type === "Single"
-        ? { type: "Single" as const, exercise_id: it.exercise_id }
+        ? { type: "Single" as const, exercise_id: (it as UISingleItem).exercise_id }
         : {
             type: "Superset" as const,
-            items: it.items.map((s) => ({ exercise_id: s.exercise_id })),
+            items: (it as UISupersetItem).items.map((s) => ({ exercise_id: s.exercise_id })),
           }
     ),
   }));
 }
 
 /* ---------------- Media Modal ---------------- */
-
 type MediaModalProps = {
   open: boolean;
   title?: string;
@@ -283,6 +253,7 @@ function MediaModal({ open, title, gifUrl, videoUrl, onClose }: MediaModalProps)
             )}
           </div>
 
+          {/* Dots */}
           {slides.length > 1 && (
             <div className="d-flex justify-content-center gap-2 mt-2">
               {slides.map((_, i) => (
@@ -296,6 +267,7 @@ function MediaModal({ open, title, gifUrl, videoUrl, onClose }: MediaModalProps)
                     background: i === index ? ACCENT : "rgba(255,255,255,0.25)",
                     display: "inline-block",
                     cursor: "pointer",
+                    boxShadow: i === index ? `0 0 10px ${ACCENT}77` : undefined,
                   }}
                 />
               ))}
@@ -306,8 +278,8 @@ function MediaModal({ open, title, gifUrl, videoUrl, onClose }: MediaModalProps)
     </div>
   );
 }
-/* ---------------- Main Page ---------------- */
 
+/* ---------------- Main Page ---------------- */
 export default function GymWorkoutViewerPage() {
   const router = useRouter();
   const { id, date } = router.query;
@@ -324,29 +296,19 @@ export default function GymWorkoutViewerPage() {
   }, [selectedYMD]);
 
   // Compute the calendar week range (Mon–Sun) that the selected day belongs to
-  const weekStartKey = useMemo(
-    () => formatYMD(startOfAlignedWeek(selectedDate)),
-    [selectedDate]
-  );
-  const weekEndKey = useMemo(
-    () => formatYMD(endOfAlignedWeek(selectedDate)),
-    [selectedDate]
-  );
+  const weekStartKey = useMemo(() => formatYMD(startOfAlignedWeek(selectedDate)), [selectedDate]);
+  const weekEndKey = useMemo(() => formatYMD(endOfAlignedWeek(selectedDate)), [selectedDate]);
 
   // API: workout details
-  const workoutUrl =
-    id && !Array.isArray(id) ? `/api/workouts/${id}` : null;
-  const { data, error } = useSWR<GymWorkout>(workoutUrl, fetcher, {
-    revalidateOnFocus: false,
-  });
+  const workoutUrl = id && !Array.isArray(id) ? `/api/workouts/${id}` : null;
+  const { data, error } = useSWR<GymWorkout>(workoutUrl, fetcher, { revalidateOnFocus: false });
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
   const [formSets, setFormSets] = useState<CompletionSet[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [previousSession, setPreviousSession] =
-    useState<PreviousCompletion | null>(null);
+  const [previousSession, setPreviousSession] = useState<PreviousCompletion | null>(null);
   const [showPrev, setShowPrev] = useState(false);
 
   // Completion modal (Difficulty/Calories/etc.)
@@ -366,18 +328,6 @@ export default function GymWorkoutViewerPage() {
   const KG_INPUT_W = 88;
   const REPS_INPUT_W = 88;
 
-  /* ---------- NEW: Load user strength profile (no UI changes yet) ---------- */
-  const { data: strengthProfile } = useSWR(
-    mounted ? "/api/strength/profile/get" : null,
-    fetcher,
-    { revalidateOnFocus: false }
-  );
-
-  const trainingMaxes = strengthProfile?.profile?.training_maxes || {};
-  const defaultRounding =
-    strengthProfile?.profile?.rounding_increment_kg ?? 2.5;
-  /* ----------------------------------------------------------------------- */
-
   // Load previous session (for inline display only)
   useEffect(() => {
     if (!mounted || !id || Array.isArray(id)) return;
@@ -385,27 +335,17 @@ export default function GymWorkoutViewerPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         const last = json?.last || json;
-        if (last?.sets)
-          setPreviousSession({
-            sets: last.sets,
-            completedAt: last.completed_date,
-          });
+        if (last?.sets) setPreviousSession({ sets: last.sets, completedAt: last.completed_date });
       })
       .catch(() => {});
   }, [mounted, id]);
 
   // Inline previous values lookup map: key = `${exercise_id}|${set}`
   const prevByKey = useMemo(() => {
-    const m: Record<
-      string,
-      { weight: number | null; reps: number | null }
-    > = {};
+    const m: Record<string, { weight: number | null; reps: number | null }> = {};
     if (previousSession?.sets?.length) {
       for (const s of previousSession.sets) {
-        m[`${s.exercise_id}|${s.set}`] = {
-          weight: s.weight ?? null,
-          reps: s.reps ?? null,
-        };
+        m[`${s.exercise_id}|${s.set}`] = { weight: s.weight ?? null, reps: s.reps ?? null };
       }
     }
     return m;
@@ -423,25 +363,12 @@ export default function GymWorkoutViewerPage() {
     setMediaOpen(true);
   }
 
-  function updateSet(
-    exercise_id: string,
-    setNum: number,
-    patch: Partial<CompletionSet>
-  ) {
+  function updateSet(exercise_id: string, setNum: number, patch: Partial<CompletionSet>) {
     setFormSets((prev) => {
       const next = [...prev];
-      const idx = next.findIndex(
-        (s) => s.exercise_id === exercise_id && s.set === setNum
-      );
+      const idx = next.findIndex((s) => s.exercise_id === exercise_id && s.set === setNum);
       if (idx >= 0) next[idx] = { ...next[idx], ...patch };
-      else
-        next.push({
-          exercise_id,
-          set: setNum,
-          reps: null,
-          weight: null,
-          ...patch,
-        });
+      else next.push({ exercise_id, set: setNum, reps: null, weight: null, ...patch });
       return next;
     });
   }
@@ -456,11 +383,10 @@ export default function GymWorkoutViewerPage() {
   };
 
   // ---------- WEEKLY COMPLETION (Mon–Sun of the selected day) ----------
+  // Fetch completions for the whole week that contains `selectedYMD`
   const weekCompletionsKey =
     mounted && id && !Array.isArray(id)
-      ? `/api/completions?from=${encodeURIComponent(
-          weekStartKey
-        )}&to=${encodeURIComponent(weekEndKey)}`
+      ? `/api/completions?from=${encodeURIComponent(weekStartKey)}&to=${encodeURIComponent(weekEndKey)}`
       : null;
 
   const { data: weekCompletions } = useSWR<{
@@ -468,18 +394,15 @@ export default function GymWorkoutViewerPage() {
     items?: Completion[];
     completions?: Completion[];
     data?: Completion[];
-  }>(weekCompletionsKey, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 30_000,
-  });
+  }>(weekCompletionsKey, fetcher, { revalidateOnFocus: false, dedupingInterval: 30_000 });
 
   const isCompleted = useMemo(() => {
     if (!weekCompletions || !id || Array.isArray(id)) return false;
     const list: Completion[] =
-      weekCompletions.results ||
-      weekCompletions.items ||
-      weekCompletions.completions ||
-      weekCompletions.data ||
+      (weekCompletions.results as Completion[]) ||
+      (weekCompletions.items as Completion[]) ||
+      (weekCompletions.completions as Completion[]) ||
+      (weekCompletions.data as Completion[]) ||
       [];
     const idStr = String(id);
     return list.some((c) => String(c.workout_id || "") === idStr);
@@ -508,9 +431,9 @@ export default function GymWorkoutViewerPage() {
         body: JSON.stringify(body),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok)
-        throw new Error(json?.error || "Failed to submit completion");
+      if (!res.ok) throw new Error(json?.error || "Failed to submit completion");
 
+      // After saving, return to dashboard (it will reflect the correct week/day state)
       router.push("/");
     } catch (e) {
       console.error(e);
@@ -521,8 +444,270 @@ export default function GymWorkoutViewerPage() {
   }
 
   if (!mounted) return null;
-  /* ---------------- Round Block ---------------- */
 
+  return (
+    <>
+      <Head>
+        <title>{data?.workout_name || "Gym Workout"}</title>
+      </Head>
+
+      <main
+        className="container py-3"
+        style={{
+          color: "#fff",
+          paddingBottom: 90,
+          ["--kgw" as any]: `88px`,
+          ["--repsw" as any]: `88px`,
+          touchAction: "pan-y" as any,
+        }}
+      >
+        <div className="mb-3 d-flex justify-content-between align-items-center">
+          <Link href="/" className="btn btn-outline-secondary">
+            ← Back
+          </Link>
+          {data?.workout_name && (
+            <div className="fw-bold text-truncate" style={{ maxWidth: 280 }}>
+              {data.workout_name}
+            </div>
+          )}
+          <div />
+        </div>
+
+        {/* Context note: which week we’re checking */}
+        <div className="text-dim small mb-2">
+          Week window: <span className="fw-semibold">{weekStartKey}</span> → <span className="fw-semibold">{weekEndKey}</span>
+        </div>
+
+        {error && <div className="alert alert-danger">Could not load this workout.</div>}
+        {!data && !error && <div className="text-dim small">Loading workout…</div>}
+
+        {data && (
+          <>
+            {/* Header */}
+            <section
+              className="futuristic-card p-3 mb-3"
+              style={
+                isCompleted
+                  ? {
+                      borderColor: GREEN,
+                      boxShadow: `0 0 0 1px ${GREEN}55 inset, 0 0 16px ${GREEN}22`,
+                    }
+                  : undefined
+              }
+            >
+              <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                <h2 className="m-0">{data.workout_name}</h2>
+                <div className="d-flex align-items-center gap-2 ms-auto">
+                  <span className="badge" style={{ background: ACCENT, color: "#0b0f14" }}>
+                    Gym
+                  </span>
+                  {isCompleted && (
+                    <span
+                      className="badge"
+                      style={{
+                        border: `1px solid ${GREEN}AA`,
+                        color: GREEN,
+                        background: "transparent",
+                      }}
+                      title={`Completed sometime this week (${weekStartKey}–${weekEndKey})`}
+                    >
+                      Completed
+                    </span>
+                  )}
+                </div>
+              </div>
+              {data.notes && <div className="mt-1 text-dim small">{data.notes}</div>}
+            </section>
+
+            {/* Previous Session (collapsible card) */}
+            {previousSession && (
+              <section className="futuristic-card p-3 mb-3">
+                <div
+                  className="d-flex justify-content-between align-items-center"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setShowPrev((s) => !s)}
+                >
+                  <h5 className="m-0">Previous Session</h5>
+                  <i className={`fas fa-chevron-${showPrev ? "up" : "down"}`} />
+                </div>
+
+                {showPrev && previousSession.sets && (
+                  <div className="mt-2 small">
+                    {previousSession.sets.map((s, i) => (
+                      <div key={i} className="mb-1">
+                        <strong>{s.exercise_id}</strong> — Set {s.set}: {s.weight ?? "-"}kg × {s.reps ?? "-"} reps
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Rounds */}
+            {data.warmup && (
+              <RoundBlock
+                round={data.warmup}
+                media={mediaById}
+                prevByKey={prevByKey}
+                onUpdateSet={updateSet}
+                onOpenMedia={openMedia}
+                kgWidth={KG_INPUT_W}
+                repsWidth={REPS_INPUT_W}
+              />
+            )}
+            <RoundBlock
+              round={data.main}
+              media={mediaById}
+              prevByKey={prevByKey}
+              onUpdateSet={updateSet}
+              onOpenMedia={openMedia}
+              kgWidth={KG_INPUT_W}
+              repsWidth={REPS_INPUT_W}
+            />
+            {data.finisher && (
+              <RoundBlock
+                round={data.finisher}
+                media={mediaById}
+                prevByKey={prevByKey}
+                onUpdateSet={updateSet}
+                onOpenMedia={openMedia}
+                kgWidth={KG_INPUT_W}
+                repsWidth={REPS_INPUT_W}
+              />
+            )}
+
+            {/* Complete Workout */}
+            <div className="d-grid mt-3">
+              {isCompleted ? (
+                <button
+                  className="btn btn-outline-success"
+                  style={{
+                    borderRadius: 24,
+                    borderColor: GREEN,
+                    color: GREEN,
+                    fontWeight: 700,
+                    background: "transparent",
+                  }}
+                  disabled
+                >
+                  Completed
+                </button>
+              ) : (
+                <button
+                  className="btn btn-primary"
+                  style={{
+                    background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                    border: "none",
+                    borderRadius: 24,
+                    fontWeight: 700,
+                  }}
+                  onClick={() => setCompleteOpen(true)}
+                >
+                  Complete Workout
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </main>
+
+      {/* Completion Modal: Difficulty + Calories (+ optional Duration/Notes) */}
+      {completeOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="position-fixed top-0 start-0 w-100 h-100"
+          style={{ background: "rgba(0,0,0,0.65)", zIndex: 1050 }}
+          onClick={(e) => {
+            if ((e.target as HTMLElement).dataset?.scrim === "1") setCompleteOpen(false);
+          }}
+          data-scrim="1"
+        >
+          <div className="position-absolute top-50 start-50 translate-middle" style={{ width: "92vw", maxWidth: 720 }}>
+            <div className="futuristic-card p-3" onClick={(e) => e.stopPropagation()}>
+              <div className="d-flex align-items-center justify-content-between">
+                <h5 className="m-0">Complete workout</h5>
+                <button className="btn btn-sm btn-outline-light" style={{ borderRadius: 999 }} onClick={() => setCompleteOpen(false)}>
+                  ✕
+                </button>
+              </div>
+
+              <div className="small text-dim mt-1">
+                We’ll save your logged sets. Add <strong>Difficulty</strong> and <strong>Calories burnt</strong> for better tracking.
+              </div>
+
+              <div className="row g-2 mt-2">
+                <div className="col-12 col-md-4">
+                  <label className="form-label">Difficulty</label>
+                  <select className="form-select" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+                    <option value="">—</option>
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                  </select>
+                </div>
+                <div className="col-6 col-md-4">
+                  <label className="form-label">Calories burnt (kcal)</label>
+                  <input
+                    className="form-control"
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="e.g., 420"
+                    min={0}
+                    value={calories}
+                    onChange={(e) => setCalories(e.target.value)}
+                  />
+                </div>
+                <div className="col-6 col-md-4">
+                  <label className="form-label">Duration (min)</label>
+                  <input
+                    className="form-control"
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="e.g., 55"
+                    min={0}
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                  />
+                </div>
+                <div className="col-12">
+                  <label className="form-label">Notes (optional)</label>
+                  <textarea
+                    className="form-control"
+                    rows={2}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Anything to note…"
+                  />
+                </div>
+              </div>
+
+              <div className="d-flex justify-content-end gap-2 mt-3">
+                <button className="btn btn-outline-light" style={{ borderRadius: 24 }} onClick={() => setCompleteOpen(false)} disabled={submitting}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{ borderRadius: 24, background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`, border: "none" }}
+                  onClick={submitCompletion}
+                  disabled={submitting}
+                >
+                  {submitting ? "Saving…" : "Save completion"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <MediaModal open={mediaOpen} title={mediaTitle} gifUrl={mediaGif} videoUrl={mediaVideo} onClose={() => setMediaOpen(false)} />
+
+      <BottomNav />
+    </>
+  );
+}
+
+/* ---------------- Round Block ---------------- */
 function RoundBlock({
   round,
   media,
@@ -531,8 +716,6 @@ function RoundBlock({
   onOpenMedia,
   kgWidth,
   repsWidth,
-  trainingMaxes,
-  defaultRounding,
 }: {
   round: UIRound;
   media: Record<string, { gif_url?: string; video_url?: string; exercise_name?: string }>;
@@ -541,13 +724,8 @@ function RoundBlock({
   onOpenMedia: (exercise_id: string) => void;
   kgWidth: number;
   repsWidth: number;
-  trainingMaxes: Record<string, number>;
-  defaultRounding: number;
 }) {
-  const sorted = useMemo(
-    () => [...(round.items || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-    [round.items]
-  );
+  const sorted = useMemo(() => [...(round.items || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)), [round.items]);
 
   return (
     <section className="futuristic-card p-3 mb-3">
@@ -577,8 +755,6 @@ function RoundBlock({
                 onOpenMedia={onOpenMedia}
                 kgWidth={kgWidth}
                 repsWidth={repsWidth}
-                trainingMaxes={trainingMaxes}
-                defaultRounding={defaultRounding}
               />
             ) : (
               <SupersetBlock
@@ -599,7 +775,6 @@ function RoundBlock({
 }
 
 /* ---------------- Single Item Block ---------------- */
-
 function SingleItemBlock({
   item,
   media,
@@ -608,8 +783,6 @@ function SingleItemBlock({
   onOpenMedia,
   kgWidth,
   repsWidth,
-  trainingMaxes,
-  defaultRounding,
 }: {
   item: UISingleItem;
   media?: { gif_url?: string; video_url?: string; exercise_name?: string };
@@ -618,38 +791,9 @@ function SingleItemBlock({
   onOpenMedia: (exercise_id: string) => void;
   kgWidth: number;
   repsWidth: number;
-  trainingMaxes: Record<string, number>;
-  defaultRounding: number;
 }) {
   const sets = Number.isFinite(item.sets) ? Number(item.sets) : 3;
   const rest = item.rest_s ?? null;
-  const strength = (item as any).strength ?? null;
-
-  /* ---------- NEW: % / 1RM target calculation ---------- */
-  let targetKg: number | null = null;
-  let targetLabel: string | null = null;
-
-  if (
-    strength &&
-    strength.basis_exercise &&
-    trainingMaxes[strength.basis_exercise]
-  ) {
-    const max = Number(trainingMaxes[strength.basis_exercise]);
-
-    const pct =
-      strength.percent_1rm ??
-      (strength.percent_min != null && strength.percent_max != null
-        ? (strength.percent_min + strength.percent_max) / 2
-        : null);
-
-    if (pct != null && Number.isFinite(max)) {
-      const raw = max * pct;
-      const inc = strength.rounding_kg ?? defaultRounding;
-      targetKg = roundToIncrement(raw, inc);
-      targetLabel = percentLabel(strength);
-    }
-  }
-  /* ---------------------------------------------------- */
 
   const [expanded, setExpanded] = useState<boolean>(true);
 
@@ -663,6 +807,7 @@ function SingleItemBlock({
           className="btn btn-sm btn-outline-light"
           style={{ borderRadius: 12, padding: 0, overflow: "hidden", flex: "0 0 auto" }}
           onClick={() => onOpenMedia(item.exercise_id)}
+          aria-label={`Open media for ${media?.exercise_name || item.exercise_id}`}
         >
           {media?.gif_url ? (
             <img
@@ -685,28 +830,9 @@ function SingleItemBlock({
           <div className="fw-semibold text-truncate" style={{ lineHeight: 1.2 }}>
             {media?.exercise_name || item.exercise_id}
           </div>
-
           <div className="text-dim small">
-            {sets} Sets
-            {rest != null ? ` • Rest ${rest}s` : ""}
-            {item.reps ? ` • ${item.reps}` : ""}
+            {sets} Sets{rest != null ? ` • Rest ${rest}s` : ""}{item.reps ? ` • ${item.reps}` : ""}
           </div>
-
-          {/* NEW: % target display */}
-          {targetKg != null && (
-            <div className="small mt-1">
-              Target: <strong>{targetKg}kg</strong>
-              {targetLabel ? ` (${targetLabel})` : ""}
-              {strength?.basis_exercise ? ` • ${strength.basis_exercise} 1RM` : ""}
-            </div>
-          )}
-
-          {strength?.mode === "test" && (
-            <div className="small text-warning mt-1">
-              Test lift — work up to a smooth heavy top set
-            </div>
-          )}
-
           {item.notes && <div className="small text-dim mt-1">{item.notes}</div>}
         </div>
 
@@ -722,6 +848,8 @@ function SingleItemBlock({
           }}
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
+          aria-controls={`single-sets-${item.exercise_id}`}
+          title={expanded ? "Collapse sets" : "Expand sets"}
         >
           <i className={`fas fa-chevron-${expanded ? "up" : "down"}`} />
         </button>
@@ -729,7 +857,7 @@ function SingleItemBlock({
 
       {/* Inputs grid */}
       {expanded && (
-        <div className="d-flex flex-column" style={{ gap: 8 }}>
+        <div id={`single-sets-${item.exercise_id}`} className="d-flex flex-column" style={{ gap: 8 }}>
           {Array.from({ length: sets }).map((_, i) => {
             const prev = prevByKey[`${item.exercise_id}|${i + 1}`];
             return (
@@ -744,39 +872,32 @@ function SingleItemBlock({
                   padding: 8,
                 }}
               >
-                <div className="text-dim small" style={{ width: 52, textAlign: "right" }}>
+                <div className="text-dim small" style={{ width: 52, textAlign: "right", flex: "0 0 auto" }}>
                   Set {i + 1}
                 </div>
-
                 <input
                   className="form-control"
                   type="number"
+                  inputMode="decimal"
                   placeholder="kg"
-                  onChange={(e) =>
-                    onUpdateSet(item.exercise_id, i + 1, {
-                      weight: Number(e.target.value) || null,
-                    })
-                  }
-                  style={{ width: "var(--kgw)", fontSize: "0.9rem" }}
+                  onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { weight: Number(e.target.value) || null })}
+                  style={{ width: "var(--kgw)", fontSize: "0.9rem", flex: "0 0 auto" }}
                 />
-
-                <div className="d-flex align-items-center" style={{ gap: 6 }}>
+                <div className="d-flex align-items-center" style={{ gap: 6, flex: "0 0 auto" }}>
                   <input
                     className="form-control"
                     type="number"
+                    inputMode="numeric"
                     placeholder="reps"
-                    onChange={(e) =>
-                      onUpdateSet(item.exercise_id, i + 1, {
-                        reps: Number(e.target.value) || null,
-                      })
-                    }
+                    onChange={(e) => onUpdateSet(item.exercise_id, i + 1, { reps: Number(e.target.value) || null })}
                     style={{ width: "var(--repsw)", fontSize: "0.9rem" }}
                   />
                   <span className="small text-dim">reps</span>
                 </div>
 
+                {/* Prev inline */}
                 <div className="small text-dim ms-auto" style={{ minWidth: 160 }}>
-                  Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
+                  Prev: {(prev?.weight ?? "-")}kg × {(prev?.reps ?? "-")} reps
                 </div>
               </div>
             );
@@ -786,8 +907,8 @@ function SingleItemBlock({
     </div>
   );
 }
-/* ---------------- Superset Block ---------------- */
 
+/* ---------------- Superset Block ---------------- */
 function SupersetBlock({
   item,
   media,
@@ -812,10 +933,9 @@ function SupersetBlock({
 
   return (
     <div>
+      {/* Superset header */}
       <div className="d-flex align-items-center justify-content-between mb-1 flex-wrap gap-2">
-        <strong className="text-truncate">
-          {(item.name || "").trim() || "Superset"}
-        </strong>
+        <strong className="text-truncate">{(item.name || "").trim() || "Superset"}</strong>
         <div className="d-flex align-items-center gap-2">
           <span className="badge border" style={{ borderColor: ACCENT, color: ACCENT }}>
             {sets} sets
@@ -829,8 +949,10 @@ function SupersetBlock({
               background: "transparent",
               fontWeight: 600,
             }}
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => setExpanded((v) => (v ? false : true))}
             aria-expanded={expanded}
+            aria-controls={`ss-sets-${(item.name || "").replace(/\s+/g, "-")}`}
+            title={expanded ? "Collapse sets" : "Expand sets"}
           >
             <i className={`fas fa-chevron-${expanded ? "up" : "down"}`} />
           </button>
@@ -842,8 +964,9 @@ function SupersetBlock({
         {item.notes ? ` • ${item.notes}` : ""}
       </div>
 
+      {/* All sets (expanded by default) */}
       {expanded && (
-        <div>
+        <div id={`ss-sets-${(item.name || "").replace(/\s+/g, "-")}`}>
           {Array.from({ length: sets }).map((_, setIdx) => (
             <div
               key={setIdx}
@@ -862,17 +985,18 @@ function SupersetBlock({
 
                 return (
                   <div key={i} className="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                    {/* Media thumb */}
                     <button
                       type="button"
                       className="btn btn-sm btn-outline-light"
-                      style={{ borderRadius: 12, padding: 0, overflow: "hidden" }}
+                      style={{ borderRadius: 12, padding: 0, overflow: "hidden", flex: "0 0 auto" }}
                       onClick={() => onOpenMedia(sub.exercise_id)}
                     >
                       {m.gif_url ? (
                         <img
                           src={fixGifUrl(m.gif_url)}
                           alt={m.exercise_name || sub.exercise_id}
-                          style={{ width: 64, height: 64, objectFit: "cover" }}
+                          style={{ width: 64, height: 64, objectFit: "cover", display: "block" }}
                         />
                       ) : (
                         <div
@@ -884,41 +1008,44 @@ function SupersetBlock({
                       )}
                     </button>
 
+                    {/* Name + prescribed reps + inputs aligned with Single layout */}
                     <div className="flex-fill" style={{ minWidth: 220 }}>
-                      <div className="fw-semibold text-truncate">
+                      <div className="fw-semibold text-truncate" style={{ lineHeight: 1.2 }}>
                         {m.exercise_name || sub.exercise_id}
                       </div>
-                      <div className="text-dim small">
-                        {sub.reps ? `• ${sub.reps} reps` : ""}
-                      </div>
+                      <div className="text-dim small">{sub.reps ? `• ${sub.reps} reps` : ""}</div>
 
                       <div className="d-flex align-items-center gap-2 mt-1 flex-wrap">
+                        <div className="text-dim small" style={{ width: 52, textAlign: "right", flex: "0 0 auto" }}>
+                          &nbsp;
+                        </div>
+
                         <input
                           className="form-control"
                           type="number"
+                          inputMode="decimal"
                           placeholder="kg"
-                          onChange={(e) =>
-                            onUpdateSet(sub.exercise_id, setIdx + 1, {
-                              weight: Number(e.target.value) || null,
-                            })
-                          }
-                          style={{ width: "var(--kgw)" }}
+                          onChange={(e) => onUpdateSet(sub.exercise_id, setIdx + 1, { weight: Number(e.target.value) || null })}
+                          style={{ width: "var(--kgw)", fontSize: "0.85rem", flex: "0 0 auto" }}
                         />
 
-                        <input
-                          className="form-control"
-                          type="number"
-                          placeholder="reps"
-                          onChange={(e) =>
-                            onUpdateSet(sub.exercise_id, setIdx + 1, {
-                              reps: Number(e.target.value) || null,
-                            })
-                          }
-                          style={{ width: "var(--repsw)" }}
-                        />
+                        <div className="d-flex align-items-center" style={{ gap: 6, flex: "0 0 auto" }}>
+                          <input
+                            className="form-control"
+                            type="number"
+                            inputMode="numeric"
+                            placeholder="reps"
+                            onChange={(e) =>
+                              onUpdateSet(sub.exercise_id, setIdx + 1, { reps: Number(e.target.value) || null })
+                            }
+                            style={{ width: "var(--repsw)", fontSize: "0.85rem" }}
+                          />
+                          <span className="small text-dim">reps</span>
+                        </div>
 
+                        {/* Prev inline */}
                         <div className="small text-dim ms-auto" style={{ minWidth: 160 }}>
-                          Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
+                          Prev: {(prev?.weight ?? "-")}kg × {(prev?.reps ?? "-")} reps
                         </div>
                       </div>
                     </div>
@@ -931,5 +1058,4 @@ function SupersetBlock({
       )}
     </div>
   );
-}
 }
