@@ -60,13 +60,6 @@ try {
 -------------------------------------------------------- */
 
 export const authOptions: NextAuthOptions = {
-  /**
-   * ✅ REQUIRED for multi‑domain support
-   * Allows NextAuth to generate OAuth + magic‑link URLs
-   * from the incoming request host (bxkr / ironacregym)
-   */
-  trustHost: true,
-
   adapter,
 
   providers: [
@@ -97,10 +90,6 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
   },
 
-  /**
-   * ✅ Route both domains through your own register page
-   * (branding will be done there based on host)
-   */
   pages: {
     signIn: "/register",
     error: "/auth/error",
@@ -141,20 +130,20 @@ export const authOptions: NextAuthOptions = {
       }
 
       (session as any).accessToken = (token as any).accessToken as string;
+
       return session;
     },
 
-    /**
-     * ✅ Safe redirect logic
-     * Prevents cross‑origin redirects
-     */
     async redirect({ url, baseUrl }) {
       try {
         const u = new URL(url, baseUrl);
+
+        // Only allow redirects within the same origin (default safe behaviour)
         if (u.origin === baseUrl) return u.href;
       } catch {
         if (url.startsWith("/")) return `${baseUrl}${url}`;
       }
+
       return `${baseUrl}/`;
     },
   },
@@ -185,12 +174,10 @@ export const authOptions: NextAuthOptions = {
               created_at: nowIso,
               last_login_at: nowIso,
               role: "user",
-
               trial_start: now.toISOString(),
               trial_end: trialEnd,
               subscription_status: "trialing",
               is_premium: true,
-
               referral_code,
               referral_totals: {
                 total_signups: 0,
@@ -240,16 +227,10 @@ export const authOptions: NextAuthOptions = {
           await firestore
             .collection("users")
             .doc(user.email)
-            .set(
-              { last_login_at: new Date().toISOString() },
-              { merge: true }
-            );
+            .set({ last_login_at: new Date().toISOString() }, { merge: true });
         }
       } catch (e) {
-        console.error(
-          "[NextAuth events.signIn] update last_login_at failed:",
-          e
-        );
+        console.error("[NextAuth events.signIn] update last_login_at failed:", e);
       }
     },
   },
