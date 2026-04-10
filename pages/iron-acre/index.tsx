@@ -11,6 +11,41 @@ import IronAcreRecentSessions from "../../components/iron-acre/IronAcreRecentSes
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
+function formatYMD(d: Date) {
+  return d.toLocaleDateString("en-CA");
+}
+function startOfAlignedWeek(d: Date) {
+  const day = d.getDay();
+  const diffToMon = (day + 6) % 7;
+  const s = new Date(d);
+  s.setDate(d.getDate() - diffToMon);
+  s.setHours(0, 0, 0, 0);
+  return s;
+}
+
+type SimpleWorkoutRef = { id: string; name?: string };
+type DayOverview = {
+  dateKey: string;
+  isFriday: boolean;
+  checkinComplete: boolean;
+  hasWorkout: boolean;
+  workoutDone: boolean;
+  workoutIds: string[];
+  workoutSummary?: { calories: number; duration: number; weightUsed?: string };
+  hasRecurringToday: boolean;
+  recurringWorkouts: SimpleWorkoutRef[];
+  recurringDone: boolean;
+  optionalWorkouts: SimpleWorkoutRef[];
+};
+
+type WeeklyOverviewResponse = {
+  weekStartYMD: string;
+  weekEndYMD: string;
+  fridayYMD: string;
+  days: DayOverview[];
+  weeklyTotals?: any;
+};
+
 export default function IronAcreHome() {
   const { data: session, status } = useSession();
   const [mounted, setMounted] = useState(false);
@@ -18,14 +53,28 @@ export default function IronAcreHome() {
 
   const userName = (session?.user?.name || session?.user?.email || "Athlete").toString();
 
+  const now = useMemo(() => new Date(), []);
   const dateLabel = useMemo(() => {
-    const d = new Date();
     try {
-      return d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+      return now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
     } catch {
-      return d.toDateString();
+      return now.toDateString();
     }
-  }, []);
+  }, [now]);
+
+  const weekStartKey = useMemo(() => (mounted ? formatYMD(startOfAlignedWeek(new Date())) : ""), [mounted]);
+
+  const { data: weeklyOverview } = useSWR<WeeklyOverviewResponse>(
+    mounted && weekStartKey ? `/api/weekly/overview?week=${encodeURIComponent(weekStartKey)}` : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
+
+  const todayKey = useMemo(() => formatYMD(new Date()), []);
+  const todayData = useMemo(() => {
+    const days = weeklyOverview?.days || [];
+    return days.find((d) => d.dateKey === todayKey);
+  }, [weeklyOverview, todayKey]);
 
   const { data: strengthProfile } = useSWR(mounted ? "/api/strength/profile/get" : null, fetcher, {
     revalidateOnFocus: false,
@@ -54,7 +103,7 @@ export default function IronAcreHome() {
             <h2 className="m-0">Iron Acre Gym</h2>
             <div className="text-dim mt-2">Please sign in to view your performance dashboard.</div>
             <div className="mt-3">
-              <Link href={`/register?callbackUrl=${cb}`} className="btn btn-outline-light" style={{ borderRadius: 24 }}>
+              <Link href={`/register?callbackUrl=${cb}`} className="btn-bxkr-outline">
                 Sign in
               </Link>
             </div>
@@ -75,7 +124,11 @@ export default function IronAcreHome() {
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <IronAcreHeader userName={userName} dateLabel={dateLabel} />
 
-        <IronAcreTasks />
+        <IronAcreTasks
+          todayKey={todayKey}
+          fridayYMD={weeklyOverview?.fridayYMD || ""}
+          todayData={todayData}
+        />
 
         <div className="row g-2">
           <div className="col-12 col-lg-6">
