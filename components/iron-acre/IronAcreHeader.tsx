@@ -37,9 +37,11 @@ export default function IronAcreHeader({ userName, dateLabel }: { userName: stri
             <span>•</span>
             <span>{dateLabel}</span>
           </div>
+
           <div className="fw-bold" style={{ fontSize: "1.35rem", lineHeight: 1.2 }}>
             {greet}, {userName}
           </div>
+
           <div className="text-dim small mt-1">Iron Acre performance dashboard</div>
         </div>
 
