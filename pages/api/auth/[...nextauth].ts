@@ -1,5 +1,5 @@
-
 // pages/api/auth/[...nextauth].ts
+
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import EmailProvider from "next-auth/providers/email";
@@ -7,6 +7,10 @@ import { FirestoreAdapter } from "@next-auth/firebase-adapter";
 import { cert } from "firebase-admin/app";
 import firestore from "../../../lib/firestoreClient";
 import { generateUniqueReferralCode } from "../../../lib/referrals/generateCode";
+
+/* -------------------------------------------------------
+   Helpers
+-------------------------------------------------------- */
 
 const hasAll = (keys: string[]) =>
   keys.every((k) => process.env[k] && String(process.env[k]).trim() !== "");
@@ -18,6 +22,7 @@ const EMAIL_KEYS = [
   "EMAIL_SERVER_PASSWORD",
   "EMAIL_FROM",
 ];
+
 const HAVE_EMAIL = hasAll(EMAIL_KEYS);
 
 const HAVE_SA = hasAll([
@@ -26,7 +31,12 @@ const HAVE_SA = hasAll([
   "GOOGLE_PRIVATE_KEY",
 ]);
 
+/* -------------------------------------------------------
+   Firestore Adapter
+-------------------------------------------------------- */
+
 let adapter: ReturnType<typeof FirestoreAdapter> | undefined;
+
 try {
   if (HAVE_SA) {
     adapter = FirestoreAdapter({
@@ -45,7 +55,18 @@ try {
   console.error("[NextAuth] Failed to init FirestoreAdapter:", e);
 }
 
+/* -------------------------------------------------------
+   NextAuth Options
+-------------------------------------------------------- */
+
 export const authOptions: NextAuthOptions = {
+  /**
+   * ✅ REQUIRED for multi‑domain support
+   * Allows NextAuth to generate OAuth + magic‑link URLs
+   * from the incoming request host (bxkr / ironacregym)
+   */
+  trustHost: true,
+
   adapter,
 
   providers: [
@@ -72,9 +93,16 @@ export const authOptions: NextAuthOptions = {
       : []),
   ],
 
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+  },
 
+  /**
+   * ✅ Route both domains through your own register page
+   * (branding will be done there based on host)
+   */
   pages: {
+    signIn: "/register",
     error: "/auth/error",
   },
 
@@ -113,10 +141,13 @@ export const authOptions: NextAuthOptions = {
       }
 
       (session as any).accessToken = (token as any).accessToken as string;
-
       return session;
     },
 
+    /**
+     * ✅ Safe redirect logic
+     * Prevents cross‑origin redirects
+     */
     async redirect({ url, baseUrl }) {
       try {
         const u = new URL(url, baseUrl);
@@ -132,6 +163,7 @@ export const authOptions: NextAuthOptions = {
     async createUser({ user }) {
       try {
         if (!user?.email) return;
+
         const ref = firestore.collection("users").doc(user.email);
         const snap = await ref.get();
         const nowIso = new Date().toISOString();
@@ -139,7 +171,9 @@ export const authOptions: NextAuthOptions = {
         if (!snap.exists) {
           const now = new Date();
           const trialDays = 14;
-          const trialEnd = new Date(now.getTime() + trialDays * 86400000).toISOString();
+          const trialEnd = new Date(
+            now.getTime() + trialDays * 86400000
+          ).toISOString();
 
           const referral_code = await generateUniqueReferralCode();
 
@@ -151,10 +185,12 @@ export const authOptions: NextAuthOptions = {
               created_at: nowIso,
               last_login_at: nowIso,
               role: "user",
+
               trial_start: now.toISOString(),
               trial_end: trialEnd,
               subscription_status: "trialing",
               is_premium: true,
+
               referral_code,
               referral_totals: {
                 total_signups: 0,
@@ -176,7 +212,10 @@ export const authOptions: NextAuthOptions = {
           if (!data.trial_end && !data.subscription_status) {
             const now = new Date();
             const trialDays = 14;
-            const trialEnd = new Date(now.getTime() + trialDays * 86400000).toISOString();
+            const trialEnd = new Date(
+              now.getTime() + trialDays * 86400000
+            ).toISOString();
+
             await ref.set(
               {
                 trial_start: now.toISOString(),
@@ -201,10 +240,16 @@ export const authOptions: NextAuthOptions = {
           await firestore
             .collection("users")
             .doc(user.email)
-            .set({ last_login_at: new Date().toISOString() }, { merge: true });
+            .set(
+              { last_login_at: new Date().toISOString() },
+              { merge: true }
+            );
         }
       } catch (e) {
-        console.error("[NextAuth events.signIn] update last_login_at failed:", e);
+        console.error(
+          "[NextAuth events.signIn] update last_login_at failed:",
+          e
+        );
       }
     },
   },
