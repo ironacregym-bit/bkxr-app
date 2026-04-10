@@ -18,12 +18,28 @@ function resolveUid(session: any) {
   return user?.id || user?.uid || user?.email || null;
 }
 
-function originBase() {
-  return process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+// Prefer request host for multi-domain (bxkr + ironacregym) rather than NEXTAUTH_URL
+function baseFromReq(req: NextApiRequest) {
+  const proto =
+    (req.headers["x-forwarded-proto"] as string) ||
+    (req.headers["x-forwarded-protocol"] as string) ||
+    "https";
+  const host =
+    (req.headers["x-forwarded-host"] as string) ||
+    (req.headers.host as string) ||
+    "";
+  if (!host) return "";
+  return `${proto}://${host}`;
 }
 
-async function emitEmail(event: string, email: string, context: Record<string, any> = {}, force = false) {
-  const BASE = originBase();
+async function emitEmail(
+  req: NextApiRequest,
+  event: string,
+  email: string,
+  context: Record<string, any> = {},
+  force = false
+) {
+  const BASE = baseFromReq(req);
   if (!BASE || !email) return;
   await fetch(`${BASE}/api/notify/emit`, {
     method: "POST",
@@ -37,12 +53,9 @@ async function getUserFlags(email: string): Promise<{
   isCashPayer: boolean;
 }> {
   if (!email) return { isGymMember: false, isCashPayer: false };
-
   const snap = await firestore.collection("users").doc(email).get();
   if (!snap.exists) return { isGymMember: false, isCashPayer: false };
-
   const d = snap.data() as any;
-
   return {
     isGymMember: String(d?.membership_status || "").toLowerCase() === "gym_member",
     isCashPayer: String(d?.payment_type || "").toLowerCase() === "cash",
@@ -50,9 +63,7 @@ async function getUserFlags(email: string): Promise<{
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const session = await getServerSession(req, res, authOptions).catch(() => null);
 
@@ -68,15 +79,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     guest_email?: string;
   };
 
-  if (!session_id) {
-    return res.status(400).json({ error: "session_id is required" });
-  }
+  if (!session_id) return res.status(400).json({ error: "session_id is required" });
 
   const requested = String(payment_method || "").trim() as PaymentMethod;
   if (!["stripe", "pay_on_day", "member_free"].includes(requested)) {
-    return res.status(400).json({
-      error: "payment_method must be stripe | pay_on_day | member_free",
-    });
+    return res.status(400).json({ error: "payment_method must be stripe | pay_on_day | member_free" });
   }
 
   const email = session ? originEmail(session) : "";
@@ -105,15 +112,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (!isGymMember && requested === "member_free") {
-    return res.status(403).json({
-      error: "Member-free booking is only available to gym members",
-    });
+    return res.status(403).json({ error: "Member-free booking is only available to gym members" });
   }
 
-  const uid = uidFromSession
-    ? String(uidFromSession).trim().toLowerCase()
-    : `guest_${guestEmail}`;
-
+  const uid = uidFromSession ? String(uidFromSession).trim().toLowerCase() : `guest_${guestEmail}`;
   const bookingId = `${session_id}_${uid}`;
   const now = Timestamp.now();
 
@@ -129,10 +131,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         : "confirmed";
 
     const amount_gbp =
-      method === "member_free" ? 0 :
-      isCashPayer ? 8 :
-      method === "pay_on_day" ? 10 :
-      8;
+      method === "member_free"
+        ? 0
+        : isCashPayer
+        ? 8
+        : method === "pay_on_day"
+        ? 10
+        : 8;
 
     let sessData: any = null;
 
@@ -141,7 +146,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!sessSnap.exists) throw new Error("Session not found");
 
       sessData = sessSnap.data() as any;
-
       const max = Number(sessData?.max_attendance) || 0;
 
       const reservedSnap = await firestore
@@ -150,9 +154,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .where("status", "in", RESERVED_STATUSES as any)
         .get();
 
-      if (max > 0 && reservedSnap.size >= max) {
-        throw new Error("Session is full");
-      }
+      if (max > 0 && reservedSnap.size >= max) throw new Error("Session is full");
 
       const existing = await tx.get(bookingRef);
       if (existing.exists) {
@@ -166,9 +168,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             payment_method: method,
             amount_gbp,
             updated_at: now,
-            // ensure user_email is present for authed bookings
             user_email: uidFromSession ? email : null,
-            // keep guest fields stable if present
             guest_name: uidFromSession ? null : guestName,
             guest_email: uidFromSession ? null : guestEmail,
           },
@@ -201,7 +201,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const recipient = uidFromSession ? email : guestEmail;
 
     if (recipient && status !== "pending_payment") {
-      await emitEmail("class_booking_confirmed", recipient, {
+      await emitEmail(req, "class_booking_confirmed", recipient, {
         booking_id: bookingId,
         session_id,
         payment_method: method,
@@ -229,10 +229,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   } catch (err: any) {
     const msg = err?.message || "Failed to create booking";
-    const code =
-      msg === "Session is full" ? 409 :
-      msg === "Session not found" ? 404 :
-      500;
+    const code = msg === "Session is full" ? 409 : msg === "Session not found" ? 404 : 500;
     return res.status(code).json({ error: msg });
   }
 }
