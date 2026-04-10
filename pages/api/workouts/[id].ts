@@ -1,10 +1,17 @@
-
-// /pages/api/workouts/[id].ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]";
 import { hasRole } from "../../../lib/rbac";
+
+type StrengthSpecOut = {
+  basis_exercise?: string | null;
+  percent_1rm?: number | null;
+  percent_min?: number | null;
+  percent_max?: number | null;
+  rounding_kg?: number | null;
+  mode?: "straight" | "top_set" | "backoff" | "emom" | "test" | null;
+};
 
 type SingleItemOut = {
   type: "Single";
@@ -16,6 +23,7 @@ type SingleItemOut = {
   weight_kg?: number | null;
   rest_s?: number | null;
   notes?: string | null;
+  strength?: StrengthSpecOut | null;
 };
 
 type SupersetSubOut = {
@@ -100,18 +108,34 @@ export default async function handler(
     }
 
     const w = docSnap.data() || {};
-    const rootId = String(w.workout_id || docSnap.id);
+    const rootId = String((w as any).workout_id || docSnap.id);
 
     // Load rounds
     const roundsSnap = await docRef.collection("rounds").orderBy("order", "asc").get();
 
     // Helper to load items for a round doc
-    async function loadItems(roundDoc: FirebaseFirestore.QueryDocumentSnapshot): Promise<Array<SingleItemOut | SupersetItemOut>> {
+    async function loadItems(
+      roundDoc: FirebaseFirestore.QueryDocumentSnapshot
+    ): Promise<Array<SingleItemOut | SupersetItemOut>> {
       const itemsSnap = await roundDoc.ref.collection("items").orderBy("order", "asc").get();
       const items: Array<SingleItemOut | SupersetItemOut> = [];
+
       itemsSnap.forEach((itemDoc) => {
         const d = itemDoc.data() || {};
+
         if (d.type === "Single") {
+          const strengthRaw = d.strength ?? null;
+          const strength: StrengthSpecOut | null = strengthRaw
+            ? {
+                basis_exercise: strengthRaw.basis_exercise ?? null,
+                percent_1rm: strengthRaw.percent_1rm ?? null,
+                percent_min: strengthRaw.percent_min ?? null,
+                percent_max: strengthRaw.percent_max ?? null,
+                rounding_kg: strengthRaw.rounding_kg ?? null,
+                mode: (strengthRaw.mode ?? null) as any,
+              }
+            : null;
+
           items.push({
             type: "Single",
             order: Number(d.order ?? 0),
@@ -122,15 +146,26 @@ export default async function handler(
             weight_kg: d.weight_kg ?? null,
             rest_s: d.rest_s ?? null,
             notes: d.notes ?? null,
+            strength,
           });
-        } else if (d.type === "Superset") {
-          const subs = Array.isArray(d.superset_items) ? d.superset_items : [];
+          return;
+        }
+
+        if (d.type === "Superset") {
+          // ✅ Support both new 'items' and legacy 'superset_items'
+          const subs = Array.isArray(d.items)
+            ? d.items
+            : Array.isArray(d.superset_items)
+            ? d.superset_items
+            : [];
+
           const mappedSubs: SupersetSubOut[] = subs.map((s: any) => ({
             exercise_id: String(s.exercise_id || ""),
             exercise_name: typeof s.exercise_name === "string" ? s.exercise_name : undefined,
             reps: s.reps ?? null,
             weight_kg: s.weight_kg ?? null,
           }));
+
           items.push({
             type: "Superset",
             order: Number(d.order ?? 0),
@@ -142,27 +177,30 @@ export default async function handler(
           });
         }
       });
+
       return items;
     }
 
-    // Build up to three rounds by category order (we wrote as Gym, order 1..n)
-    // We don't rely on any category; we just take in order and then map to warmup/main/finisher.
-    const roundDocs = roundsSnap.docs.sort((a, b) => (Number(a.data().order || 0) - Number(b.data().order || 0)));
+    // Build up rounds by order and map to warmup/main/finisher
+    const roundDocs = roundsSnap.docs.sort(
+      (a, b) => Number(a.data().order || 0) - Number(b.data().order || 0)
+    );
+
     const roundBlocks: GymRoundOut[] = [];
     for (const rDoc of roundDocs) {
       const r = rDoc.data() || {};
       const items = await loadItems(rDoc);
       roundBlocks.push({
-        name: String(r.name || "Round"),
-        order: Number(r.order || 0),
+        name: String((r as any).name || "Round"),
+        order: Number((r as any).order || 0),
         items,
       });
     }
 
-    // Decide warmup / main / finisher
     let warmup: GymRoundOut | null = null;
     let main: GymRoundOut | null = null;
     let finisher: GymRoundOut | null = null;
+
     if (roundBlocks.length === 1) {
       main = roundBlocks[0];
     } else if (roundBlocks.length === 2) {
@@ -174,15 +212,15 @@ export default async function handler(
       finisher = roundBlocks[2];
     }
 
-    const created_at = w.created_at?.toDate?.()?.toISOString?.() || null;
-    const updated_at = w.updated_at?.toDate?.()?.toISOString?.() || null;
+    const created_at = (w as any).created_at?.toDate?.()?.toISOString?.() || null;
+    const updated_at = (w as any).updated_at?.toDate?.()?.toISOString?.() || null;
 
     const payload: GymWorkoutOut = {
       workout_id: rootId,
-      workout_name: String(w.workout_name || "Workout"),
-      focus: w.focus ?? null,
-      notes: w.notes ?? null,
-      video_url: w.video_url ?? null,
+      workout_name: String((w as any).workout_name || "Workout"),
+      focus: (w as any).focus ?? null,
+      notes: (w as any).notes ?? null,
+      video_url: (w as any).video_url ?? null,
       warmup,
       main: main || { name: "Main Set", order: 1, items: [] },
       finisher,
