@@ -1,6 +1,10 @@
 import { useMemo } from "react";
 import { useRouter } from "next/router";
+import useSWR from "swr";
 import IronAcreTaskCard from "./IronAcreTaskCard";
+import IronAcreWorkoutCard from "./IronAcreWorkoutCard";
+
+const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 type SimpleWorkoutRef = { id: string; name?: string };
 
@@ -20,6 +24,14 @@ type DayOverview = {
   optionalWorkouts: SimpleWorkoutRef[];
 };
 
+type WorkoutApi = {
+  workout_id: string;
+  workout_name: string;
+  warmup?: any;
+  main: any;
+  finisher?: any;
+};
+
 export default function IronAcreTasks({
   todayKey,
   fridayYMD,
@@ -36,29 +48,20 @@ export default function IronAcreTasks({
   const hasRecurringToday = Boolean(todayData?.hasRecurringToday);
   const sessionRef = todayData?.recurringWorkouts?.[0];
   const sessionId = sessionRef?.id || "";
-  const sessionTitle = sessionRef?.name || "Today’s gym session";
-
   const sessionDone = Boolean(hasRecurringToday ? todayData?.recurringDone : todayData?.workoutDone);
 
-  const sessionSub = useMemo(() => {
-    if (!hasRecurringToday) return "No recurring gym session assigned today";
-    if (sessionDone) return "Completed this week";
-    const s = todayData?.workoutSummary;
-    if (s && (s.duration || s.calories || s.weightUsed)) {
-      const parts = [];
-      if (s.duration) parts.push(`${s.duration} min`);
-      if (s.calories) parts.push(`${s.calories} kcal`);
-      if (s.weightUsed) parts.push(`${s.weightUsed}`);
-      return parts.join(" • ");
-    }
-    return "Start your programmed strength session";
-  }, [hasRecurringToday, sessionDone, todayData?.workoutSummary]);
+  const durationMinutes = typeof todayData?.workoutSummary?.duration === "number" ? todayData!.workoutSummary!.duration : null;
+
+  const { data: workoutData } = useSWR<WorkoutApi>(
+    sessionId ? `/api/workouts/${encodeURIComponent(sessionId)}` : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
 
   const isFriday = Boolean(todayData?.isFriday);
   const checkinDone = Boolean(fridayData?.checkinComplete);
   const checkinTargetDate = fridayYMD || todayKey;
 
-  const checkinTitle = "Weekly check-in";
   const checkinSubtitle = isFriday
     ? checkinDone
       ? "Completed"
@@ -70,23 +73,19 @@ export default function IronAcreTasks({
   return (
     <div className="mb-3">
       <IronAcreTaskCard
-        title={checkinTitle}
+        title="Weekly check-in"
         subtitle={checkinSubtitle}
         ctaLabel={checkinDone ? "View" : "Open"}
         rightMeta={checkinDone ? "✓" : undefined}
         onCta={() => router.push(`/checkin?date=${encodeURIComponent(checkinTargetDate)}`)}
       />
 
-      <IronAcreTaskCard
-        title={sessionTitle}
-        subtitle={sessionSub}
-        ctaLabel={sessionDone ? "View" : "Start"}
-        rightMeta={hasRecurringToday ? "Gym" : "—"}
-        muted={!hasRecurringToday}
-        onCta={() => {
-          if (!sessionId) return;
-          router.push(`/gymworkout/${encodeURIComponent(sessionId)}`);
-        }}
+      <IronAcreWorkoutCard
+        title="Today’s workout"
+        workout={workoutData || null}
+        workoutId={sessionId}
+        done={sessionDone}
+        durationMinutes={durationMinutes}
       />
 
       <IronAcreTaskCard
@@ -95,6 +94,12 @@ export default function IronAcreTasks({
         ctaLabel="1RMs"
         onCta={() => router.push("/iron-acre/strength")}
       />
+
+      {!hasRecurringToday && (
+        <div className="text-dim small mt-2">
+          No recurring gym session assigned today. If you want, we can fall back to the most recent session.
+        </div>
+      )}
     </div>
   );
 }
