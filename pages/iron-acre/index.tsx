@@ -24,14 +24,18 @@ function startOfAlignedWeek(d: Date) {
 }
 
 type SimpleWorkoutRef = { id: string; name?: string };
+
 type DayOverview = {
   dateKey: string;
   isFriday: boolean;
+
   checkinComplete: boolean;
+
   hasWorkout: boolean;
   workoutDone: boolean;
   workoutIds: string[];
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
+
   hasRecurringToday: boolean;
   recurringWorkouts: SimpleWorkoutRef[];
   recurringDone: boolean;
@@ -43,7 +47,6 @@ type WeeklyOverviewResponse = {
   weekEndYMD: string;
   fridayYMD: string;
   days: DayOverview[];
-  weeklyTotals?: any;
 };
 
 export default function IronAcreHome() {
@@ -56,7 +59,11 @@ export default function IronAcreHome() {
   const now = useMemo(() => new Date(), []);
   const dateLabel = useMemo(() => {
     try {
-      return now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+      return now.toLocaleDateString(undefined, {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      });
     } catch {
       return now.toDateString();
     }
@@ -75,6 +82,13 @@ export default function IronAcreHome() {
     const days = weeklyOverview?.days || [];
     return days.find((d) => d.dateKey === todayKey);
   }, [weeklyOverview, todayKey]);
+
+  const fridayData = useMemo(() => {
+    const fridayYMD = weeklyOverview?.fridayYMD || "";
+    if (!fridayYMD) return undefined;
+    const days = weeklyOverview?.days || [];
+    return days.find((d) => d.dateKey === fridayYMD);
+  }, [weeklyOverview]);
 
   const { data: strengthProfile } = useSWR(mounted ? "/api/strength/profile/get" : null, fetcher, {
     revalidateOnFocus: false,
@@ -98,17 +112,19 @@ export default function IronAcreHome() {
         <Head>
           <title>Iron Acre Gym</title>
         </Head>
+
         <main className="container py-4" style={{ color: "#fff", paddingBottom: 90 }}>
           <section className="futuristic-card p-3">
             <h2 className="m-0">Iron Acre Gym</h2>
             <div className="text-dim mt-2">Please sign in to view your performance dashboard.</div>
             <div className="mt-3">
-              <Link href={`/register?callbackUrl=${cb}`} className="btn-bxkr-outline">
+              <Link href={`/register?callbackUrl=${cb}`} className="btn btn-outline-light" style={{ borderRadius: 24 }}>
                 Sign in
               </Link>
             </div>
           </section>
         </main>
+
         <BottomNav />
       </>
     );
@@ -124,16 +140,13 @@ export default function IronAcreHome() {
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <IronAcreHeader userName={userName} dateLabel={dateLabel} />
 
-        <IronAcreTasks
-          todayKey={todayKey}
-          fridayYMD={weeklyOverview?.fridayYMD || ""}
-          todayData={todayData}
-        />
+        <IronAcreTasks todayKey={todayKey} todayData={todayData} fridayYMD={weeklyOverview?.fridayYMD || ""} fridayData={fridayData} />
 
         <div className="row g-2">
           <div className="col-12 col-lg-6">
             <IronAcreStrengthSummary profile={strengthProfile?.profile} />
           </div>
+
           <div className="col-12 col-lg-6">
             <IronAcreRecentSessions />
           </div>
