@@ -1,7 +1,7 @@
-import React, { useMemo } from "react";
-import Link from "next/link";
+import React from "react";
 import SessionTimer from "./SessionTimer";
-import { hhmm, GREEN } from "./utils";
+import BackButton from "../navigation/BackButton";
+import { GREEN } from "./utils";
 
 export default function HeaderBar({
   workoutName,
@@ -20,23 +20,23 @@ export default function HeaderBar({
   weekStartKey: string;
   weekEndKey: string;
 }) {
-  const time = useMemo(() => hhmm(), []);
-
   return (
     <>
       <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
-        <div className="text-dim small" style={{ minWidth: 52 }}>
-          {time}
-        </div>
+        {/* ✅ Global back button (history-aware) */}
+        /
 
         <div className="flex-fill" style={{ minWidth: 0 }}>
           <div className="fw-bold text-truncate" style={{ lineHeight: 1.1 }}>
             {workoutName}
           </div>
+
           <div className="text-dim small">
             Volume {volumeKg} kg • Sets {loggedSetCount}
           </div>
+
           <div className="mt-2">
+            {/* ✅ Session timer is its own component */}
             <SessionTimer />
           </div>
         </div>
@@ -62,13 +62,8 @@ export default function HeaderBar({
       </div>
 
       <div className="text-dim small mb-3">
-        <Link href="/">
-          ← Back
-        </Link>
-        <span style={{ marginLeft: 10 }}>
-          Week window <span className="fw-semibold">{weekStartKey}</span> →{" "}
-          <span className="fw-semibold">{weekEndKey}</span>
-        </span>
+        Week window <span className="fw-semibold">{weekStartKey}</span> →{" "}
+        <span className="fw-semibold">{weekEndKey}</span>
       </div>
     </>
   );
