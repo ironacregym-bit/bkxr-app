@@ -80,39 +80,47 @@ export default function ExerciseSupersetCard({
 
                   return (
                     <div key={`${sub.exercise_id}|${setNum}`} className="gx-ss-ex">
-                      {/* ✅ Guaranteed single-line: grid with 2 columns */}
+                      {/* ✅ title + icon same row, icon clickable */}
                       <div className="gx-ss-ex-head">
                         <div className="gx-ss-ex-title" title={title}>
                           {title}
                         </div>
 
-                        <button
-                          type="button"
-                          className="gx-play"
-                          onClick={() => onOpenMedia(sub.exercise_id)}
+                        <span
+                          className={`gx-play-icon ${hasMedia ? "" : "is-disabled"}`}
+                          role="button"
+                          tabIndex={hasMedia ? 0 : -1}
                           aria-label={hasMedia ? "Open exercise media" : "No media available"}
                           title={hasMedia ? "Open media" : "No media"}
-                          disabled={!hasMedia}
+                          onClick={() => {
+                            if (!hasMedia) return;
+                            onOpenMedia(sub.exercise_id);
+                          }}
+                          onKeyDown={(e) => {
+                            if (!hasMedia) return;
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onOpenMedia(sub.exercise_id);
+                            }
+                          }}
                         >
                           <i className="fa-solid fa-circle-play" />
-                        </button>
+                        </span>
                       </div>
 
-                      {/* Prev just below */}
+                      {/* Prev directly below */}
                       <div className="gx-ss-ex-prev text-dim small">
                         Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
                       </div>
 
-                      {/* One input row mapped to this setNum */}
+                      {/* One input row mapped to setNum */}
                       <SetGrid
                         exerciseId={sub.exercise_id}
                         sets={1}
                         prevByKey={prevByKey}
                         targetKg={null}
                         showUseTarget={false}
-                        onUpdateSet={(exercise_id, _ignored, patch) =>
-                          onUpdateSet(exercise_id, setNum, patch)
-                        }
+                        onUpdateSet={(exercise_id, _ignored, patch) => onUpdateSet(exercise_id, setNum, patch)}
                         tickKeys={tickKeys}
                         onToggleTick={(exercise_id, _ignored) => onToggleTick(exercise_id, setNum)}
                         prefillReps={prefillReps}
