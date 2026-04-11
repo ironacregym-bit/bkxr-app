@@ -1,6 +1,6 @@
 import React from "react";
-import SessionTimer from "./SessionTimer";
 import BackButton from "../navigation/BackButton";
+import SessionTimer from "./SessionTimer";
 import { GREEN } from "./utils";
 
 export default function HeaderBar({
@@ -23,20 +23,16 @@ export default function HeaderBar({
   return (
     <>
       <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
-        {/* ✅ Global back button (history-aware) */}
         /
 
         <div className="flex-fill" style={{ minWidth: 0 }}>
           <div className="fw-bold text-truncate" style={{ lineHeight: 1.1 }}>
             {workoutName}
           </div>
-
           <div className="text-dim small">
             Volume {volumeKg} kg • Sets {loggedSetCount}
           </div>
-
           <div className="mt-2">
-            {/* ✅ Session timer is its own component */}
             <SessionTimer />
           </div>
         </div>
@@ -55,7 +51,6 @@ export default function HeaderBar({
           }}
           onClick={onFinish}
           disabled={isCompleted}
-          title={isCompleted ? "Already completed this week" : "Finish session"}
         >
           Finish
         </button>
