@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { SessionProvider } from "next-auth/react";
 import type { AppProps } from "next/app";
 import "../styles/bootstrap.css";
+import "../styles/gymworkout.css";
 
 import NotificationsInit from "../components/NotificationsInit";
 import BillingTrialBanner from "../components/BillingTrialBanner";
