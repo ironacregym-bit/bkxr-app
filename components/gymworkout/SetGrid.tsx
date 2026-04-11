@@ -11,6 +11,8 @@ export default function SetGrid({
   tickKeys,
   onToggleTick,
   showUseTarget,
+  prefillReps,
+  prefillWeight,
 }: {
   exerciseId: string;
   sets: number;
@@ -20,6 +22,8 @@ export default function SetGrid({
   tickKeys: Record<string, boolean>;
   onToggleTick: (exercise_id: string, set: number) => void;
   showUseTarget: boolean;
+  prefillReps?: number | null;
+  prefillWeight?: number | null;
 }) {
   return (
     <div className="gx-grid">
@@ -46,6 +50,7 @@ export default function SetGrid({
                   type="number"
                   inputMode="decimal"
                   placeholder={targetKg != null ? String(targetKg) : "kg"}
+                  defaultValue={prefillWeight != null ? prefillWeight : undefined}
                   onChange={(e) =>
                     onUpdateSet(exerciseId, setNum, { weight: Number(e.target.value) || null })
                   }
@@ -60,6 +65,7 @@ export default function SetGrid({
                 type="number"
                 inputMode="numeric"
                 placeholder="reps"
+                defaultValue={prefillReps != null ? prefillReps : undefined}
                 onChange={(e) =>
                   onUpdateSet(exerciseId, setNum, { reps: Number(e.target.value) || null })
                 }
@@ -83,7 +89,10 @@ export default function SetGrid({
             </div>
 
             <div className="gx-prev">
-              Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
+              <span>
+                Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
+              </span>
+
               {showUseTarget && targetKg != null ? (
                 <button
                   type="button"
