@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import type { CompletionSet, UISupersetItem } from "./types";
 import SetGrid from "./SetGrid";
-import { ACCENT } from "./utils";
+import { ACCENT, fixGifUrl } from "./utils";
 
 export default function ExerciseSupersetCard({
   item,
@@ -25,18 +25,21 @@ export default function ExerciseSupersetCard({
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className="gx-ss">
+    <div>
       <div className="gx-ss-head">
         <div className="gx-ss-title">{(item.name || "").trim() || "Superset"}</div>
+
         <div className="gx-ss-right">
           <span className="gx-chip" style={{ borderColor: `${ACCENT}88`, color: ACCENT }}>
             {sets} sets
           </span>
+
           <button
             type="button"
             className="gx-chevron"
             onClick={() => setExpanded((v) => !v)}
             aria-label={expanded ? "Collapse" : "Expand"}
+            title={expanded ? "Collapse" : "Expand"}
           >
             <i className={`fas fa-chevron-${expanded ? "up" : "down"}`} />
           </button>
@@ -51,13 +54,47 @@ export default function ExerciseSupersetCard({
       {expanded && (
         <div className="gx-ss-body">
           {item.items.map((sub, idx) => {
-            const title = media[sub.exercise_id]?.exercise_name || sub.exercise_id;
+            const m = media[sub.exercise_id] || {};
+            const title = m.exercise_name || sub.exercise_id;
+
+            const thumbUrl = m.gif_url ? fixGifUrl(m.gif_url) : undefined;
+            const hasMedia = Boolean(thumbUrl || m.video_url);
+
             return (
               <div key={idx} className="gx-ex gx-ex--sub">
                 <div className="gx-ex-head">
                   <div className="gx-ex-title">{title}</div>
-                  <button type="button" className="gx-more" aria-label="More options">
-                    <i className="fas fa-ellipsis-h" />
+
+                  {/* ✅ Same “thumb instead of …” behaviour */}
+                  <button
+                    type="button"
+                    className="gx-more"
+                    onClick={() => onOpenMedia(sub.exercise_id)}
+                    aria-label={hasMedia ? "Open exercise media" : "No media available"}
+                    title={hasMedia ? "Open media" : "No media"}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      padding: 0,
+                      overflow: "hidden",
+                      opacity: hasMedia ? 1 : 0.6,
+                    }}
+                    disabled={!hasMedia}
+                  >
+                    {thumbUrl ? (
+                      <img
+                        src={thumbUrl}
+                        alt=""
+                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                      />
+                    ) : (
+                      <div
+                        className="d-flex align-items-center justify-content-center"
+                        style={{ width: "100%", height: "100%" }}
+                      >
+                        <i className="fas fa-play" />
+                      </div>
+                    )}
                   </button>
                 </div>
 
@@ -83,3 +120,4 @@ export default function ExerciseSupersetCard({
     </div>
   );
 }
+``
