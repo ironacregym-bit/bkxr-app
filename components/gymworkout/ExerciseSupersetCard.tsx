@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import type { CompletionSet, UISupersetItem } from "./types";
-import SetGrid from "./SetGrid";
-import { ACCENT, fixGifUrl } from "./utils";
+import { ACCENT, GREEN, fixGifUrl } from "./utils";
 
 export default function ExerciseSupersetCard({
   item,
@@ -25,7 +24,7 @@ export default function ExerciseSupersetCard({
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div>
+    <div className="gx-ss">
       <div className="gx-ss-head">
         <div className="gx-ss-title">{(item.name || "").trim() || "Superset"}</div>
 
@@ -53,65 +52,131 @@ export default function ExerciseSupersetCard({
 
       {expanded && (
         <div className="gx-ss-body">
-          {item.items.map((sub, idx) => {
-            const m = media[sub.exercise_id] || {};
-            const title = m.exercise_name || sub.exercise_id;
-
-            const thumbUrl = m.gif_url ? fixGifUrl(m.gif_url) : undefined;
-            const hasMedia = Boolean(thumbUrl || m.video_url);
+          {Array.from({ length: sets }).map((_, sIdx) => {
+            const setNum = sIdx + 1;
 
             return (
-              <div key={idx} className="gx-ex gx-ex--sub">
-                <div className="gx-ex-head">
-                  <div className="gx-ex-title">{title}</div>
+              <div
+                key={setNum}
+                className="p-2 mb-2"
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 12,
+                }}
+              >
+                <div className="d-flex align-items-center justify-content-between mb-2">
+                  <div className="fw-semibold">Set {setNum}</div>
+                  {rest != null ? (
+                    <div className="text-dim small">Rest {rest}s</div>
+                  ) : (
+                    <div />
+                  )}
+                </div>
 
-                  {/* ✅ Same “thumb instead of …” behaviour */}
-                  <button
-                    type="button"
-                    className="gx-more"
-                    onClick={() => onOpenMedia(sub.exercise_id)}
-                    aria-label={hasMedia ? "Open exercise media" : "No media available"}
-                    title={hasMedia ? "Open media" : "No media"}
-                    style={{
-                      width: 44,
-                      height: 44,
-                      padding: 0,
-                      overflow: "hidden",
-                      opacity: hasMedia ? 1 : 0.6,
-                    }}
-                    disabled={!hasMedia}
-                  >
-                    {thumbUrl ? (
-                      <img
-                        src={thumbUrl}
-                        alt=""
-                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                      />
-                    ) : (
-                      <div
-                        className="d-flex align-items-center justify-content-center"
-                        style={{ width: "100%", height: "100%" }}
+                {item.items.map((sub, idx) => {
+                  const m = media[sub.exercise_id] || {};
+                  const title = m.exercise_name || sub.exercise_id;
+
+                  const thumbUrl = m.gif_url ? fixGifUrl(m.gif_url) : undefined;
+                  const hasMedia = Boolean(thumbUrl || m.video_url);
+
+                  const prev = prevByKey[`${sub.exercise_id}|${setNum}`];
+                  const tick = Boolean(tickKeys[`${sub.exercise_id}|${setNum}`]);
+
+                  return (
+                    <div
+                      key={`${setNum}-${idx}-${sub.exercise_id}`}
+                      className="d-flex align-items-center gap-2 mb-2"
+                      style={{
+                        padding: 10,
+                        borderRadius: 12,
+                        background: "rgba(0,0,0,0.18)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                      }}
+                    >
+                      {/* Media thumb */}
+                      <button
+                        type="button"
+                        className="gx-more"
+                        onClick={() => onOpenMedia(sub.exercise_id)}
+                        aria-label={hasMedia ? "Open exercise media" : "No media available"}
+                        title={hasMedia ? "Open media" : "No media"}
+                        style={{
+                          width: 44,
+                          height: 44,
+                          padding: 0,
+                          overflow: "hidden",
+                          opacity: hasMedia ? 1 : 0.6,
+                          flex: "0 0 auto",
+                        }}
+                        disabled={!hasMedia}
                       >
-                        <i className="fas fa-play" />
+                        {thumbUrl ? (
+                          <img
+                            src={thumbUrl}
+                            alt={title}
+                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                          />
+                        ) : (
+                          <div className="d-flex align-items-center justify-content-center" style={{ width: "100%", height: "100%" }}>
+                            <i className="fas fa-play" />
+                          </div>
+                        )}
+                      </button>
+
+                      {/* Name + prescribed reps */}
+                      <div className="flex-fill" style={{ minWidth: 0 }}>
+                        <div className="fw-semibold text-truncate">{title}</div>
+                        <div className="text-dim small">{sub.reps ? `${sub.reps} reps` : ""}</div>
+                        <div className="text-dim small">
+                          Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
+                        </div>
                       </div>
-                    )}
-                  </button>
-                </div>
 
-                <div className="gx-ex-sub">
-                  {sub.reps ? `• ${sub.reps} reps` : ""}
-                </div>
+                      {/* Inputs */}
+                      <input
+                        className="gx-input"
+                        type="number"
+                        inputMode="decimal"
+                        placeholder="kg"
+                        onChange={(e) =>
+                          onUpdateSet(sub.exercise_id, setNum, { weight: Number(e.target.value) || null })
+                        }
+                        style={{ width: "var(--kgw)" as any }}
+                      />
 
-                <SetGrid
-                  exerciseId={sub.exercise_id}
-                  sets={sets}
-                  prevByKey={prevByKey}
-                  targetKg={null}
-                  showUseTarget={false}
-                  onUpdateSet={onUpdateSet}
-                  tickKeys={tickKeys}
-                  onToggleTick={onToggleTick}
-                />
+                      <input
+                        className="gx-input"
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="reps"
+                        onChange={(e) =>
+                          onUpdateSet(sub.exercise_id, setNum, { reps: Number(e.target.value) || null })
+                        }
+                        style={{ width: "var(--repsw)" as any }}
+                      />
+
+                      {/* Tick */}
+                      <button
+                        type="button"
+                        className="gx-tick"
+                        style={{
+                          borderColor: `${GREEN}88`,
+                          color: tick ? "#0b0f14" : GREEN,
+                          background: tick ? GREEN : "transparent",
+                          width: 44,
+                          height: 44,
+                          borderRadius: 999,
+                        }}
+                        onClick={() => onToggleTick(sub.exercise_id, setNum)}
+                        aria-label={tick ? "Unmark set" : "Mark set"}
+                      >
+                        <i className="fas fa-check" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
@@ -120,4 +185,3 @@ export default function ExerciseSupersetCard({
     </div>
   );
 }
-``
