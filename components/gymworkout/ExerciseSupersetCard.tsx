@@ -1,11 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import type { CompletionSet, UISupersetItem } from "./types";
 import SetGrid from "./SetGrid";
 import { ACCENT, fixGifUrl } from "./utils";
 
 function parseRepsToNumber(reps?: string | null): number | null {
   if (!reps) return null;
-  // Handles "10", "6 reps", "10-12" -> take first number
   const m = String(reps).match(/\d+/);
   if (!m) return null;
   const n = Number(m[0]);
@@ -67,9 +66,9 @@ export default function ExerciseSupersetCard({
 
             return (
               <div key={setNum} className="gx-ss-set">
+                {/* ✅ Remove duplicated “Rest 90s” inside Set header */}
                 <div className="gx-ss-set-head">
                   <strong>Set {setNum}</strong>
-                  {rest != null && <span className="text-dim small">Rest {rest}s</span>}
                 </div>
 
                 {item.items.map((sub) => {
@@ -84,6 +83,7 @@ export default function ExerciseSupersetCard({
 
                   return (
                     <div key={`${sub.exercise_id}|${setNum}`} className="gx-ss-ex">
+                      {/* ✅ Name + Prev + Thumb all on the same line */}
                       <div className="gx-ss-ex-head">
                         <div className="gx-ss-ex-title text-truncate">{title}</div>
 
@@ -100,30 +100,23 @@ export default function ExerciseSupersetCard({
                           disabled={!hasMedia}
                           style={{ opacity: hasMedia ? 1 : 0.6 }}
                         >
-                          {thumbUrl ? (
-                            <img src={thumbUrl} alt={title} />
-                          ) : (
-                            <i className="fas fa-play" />
-                          )}
+                          {thumbUrl ? <img src={thumbUrl} alt="" /> : <i className="fas fa-play" />}
                         </button>
                       </div>
 
-                      <div className="gx-ss-ex-meta text-dim small">
-                        {sub.reps ? `${sub.reps}` : ""}
-                        {sub.reps && rest != null ? " • " : ""}
-                        {rest != null ? `Rest ${rest}s` : ""}
-                      </div>
+                      {/* ✅ Remove the “6 • Rest 90s” meta line entirely */}
+                      {/* If you still want reps shown somewhere, we can add it subtly later */}
 
-                      {/* One set row worth of inputs, repeated by SetGrid */}
+                      {/* One input row (SetGrid sets=1) tied to current setNum */}
                       <SetGrid
                         exerciseId={sub.exercise_id}
                         sets={1}
                         prevByKey={prevByKey}
                         targetKg={null}
                         showUseTarget={false}
-                        onUpdateSet={(exercise_id, _, patch) => onUpdateSet(exercise_id, setNum, patch)}
+                        onUpdateSet={(exercise_id, _ignored, patch) => onUpdateSet(exercise_id, setNum, patch)}
                         tickKeys={tickKeys}
-                        onToggleTick={(exercise_id) => onToggleTick(exercise_id, setNum)}
+                        onToggleTick={(exercise_id, _ignored) => onToggleTick(exercise_id, setNum)}
                         prefillReps={prefillReps}
                       />
                     </div>
