@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import type { CompletionSet, UISingleItem } from "./types";
 import RestTimer from "./RestTimer";
 import SetGrid from "./SetGrid";
-import { computeTargetKg, GREEN, ACCENT } from "./utils";
+import { computeTargetKg, GREEN, ACCENT, fixGifUrl } from "./utils";
 
 export default function ExerciseSingleCard({
   item,
@@ -36,7 +36,7 @@ export default function ExerciseSingleCard({
     [item.strength, trainingMaxes, defaultRounding]
   );
 
-  const title = media?.exercise_name || item.exercise_id;
+  const title = media?.exercise_name || item.exercise_name || item.exercise_id;
 
   return (
     <div>
@@ -49,11 +49,16 @@ export default function ExerciseSingleCard({
           aria-label={`Open media for ${title}`}
         >
           {media?.gif_url ? (
-            <>
-              {}
-            </>
+            <img
+              src={fixGifUrl(media.gif_url)}
+              alt={title}
+              style={{ width: 64, height: 64, objectFit: "cover", display: "block" }}
+            />
           ) : (
-            <div className="d-flex align-items-center justify-content-center" style={{ width: 64, height: 64, background: "rgba(255,255,255,0.06)" }}>
+            <div
+              className="d-flex align-items-center justify-content-center"
+              style={{ width: 64, height: 64, background: "rgba(255,255,255,0.06)" }}
+            >
               <i className="fas fa-play" />
             </div>
           )}
@@ -65,13 +70,20 @@ export default function ExerciseSingleCard({
           </div>
 
           <div className="text-dim small">
-            {sets} Sets{item.rest_s != null ? ` • Rest ${item.rest_s}s` : ""}{item.reps ? ` • ${item.reps}` : ""}
+            {sets} Sets
+            {item.rest_s != null ? ` • Rest ${item.rest_s}s` : ""}
+            {item.reps ? ` • ${item.reps}` : ""}
           </div>
 
           {item.strength && (
             <div className="small mt-1" style={{ color: GREEN }}>
-              Target {target.targetKg != null ? `${target.targetKg}kg` : "—"} {target.pctLabel ? `(${target.pctLabel})` : ""}
-              {target.key ? <span className="text-dim" style={{ marginLeft: 8 }}>• 1RM key: {target.key}</span> : null}
+              Target {target.targetKg != null ? `${target.targetKg}kg` : "—"}{" "}
+              {target.pctLabel ? `(${target.pctLabel})` : ""}
+              {target.key ? (
+                <span className="text-dim" style={{ marginLeft: 8 }}>
+                  • 1RM key: {target.key}
+                </span>
+              ) : null}
             </div>
           )}
 
@@ -79,7 +91,11 @@ export default function ExerciseSingleCard({
         </div>
 
         <div className="d-flex align-items-center gap-2">
-          <button className="btn btn-sm btn-outline-light" style={{ borderRadius: 12 }} onClick={() => setExtraSets((n) => n + 1)}>
+          <button
+            className="btn btn-sm btn-outline-light"
+            style={{ borderRadius: 12 }}
+            onClick={() => setExtraSets((n) => n + 1)}
+          >
             + Add Set
           </button>
 
