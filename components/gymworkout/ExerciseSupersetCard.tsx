@@ -27,18 +27,14 @@ export default function ExerciseSupersetCard({
     <div className="gx-ss">
       <div className="gx-ss-head">
         <div className="gx-ss-title">{(item.name || "").trim() || "Superset"}</div>
-
         <div className="gx-ss-right">
           <span className="gx-chip" style={{ borderColor: `${ACCENT}88`, color: ACCENT }}>
             {sets} sets
           </span>
-
           <button
             type="button"
             className="gx-chevron"
             onClick={() => setExpanded((v) => !v)}
-            aria-label={expanded ? "Collapse" : "Expand"}
-            title={expanded ? "Collapse" : "Expand"}
           >
             <i className={`fas fa-chevron-${expanded ? "up" : "down"}`} />
           </button>
@@ -56,124 +52,83 @@ export default function ExerciseSupersetCard({
             const setNum = sIdx + 1;
 
             return (
-              <div
-                key={setNum}
-                className="p-2 mb-2"
-                style={{
-                  background: "rgba(255,255,255,0.03)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: 12,
-                }}
-              >
-                <div className="d-flex align-items-center justify-content-between mb-2">
-                  <div className="fw-semibold">Set {setNum}</div>
-                  {rest != null ? (
-                    <div className="text-dim small">Rest {rest}s</div>
-                  ) : (
-                    <div />
-                  )}
+              <div key={setNum} className="gx-ss-set">
+                <div className="gx-ss-set-head">
+                  <strong>Set {setNum}</strong>
+                  {rest != null && <span className="text-dim small">Rest {rest}s</span>}
                 </div>
 
-                {item.items.map((sub, idx) => {
+                {item.items.map((sub) => {
                   const m = media[sub.exercise_id] || {};
                   const title = m.exercise_name || sub.exercise_id;
-
-                  const thumbUrl = m.gif_url ? fixGifUrl(m.gif_url) : undefined;
-                  const hasMedia = Boolean(thumbUrl || m.video_url);
-
-                  const prev = prevByKey[`${sub.exercise_id}|${setNum}`];
+                  const thumb = m.gif_url ? fixGifUrl(m.gif_url) : null;
                   const tick = Boolean(tickKeys[`${sub.exercise_id}|${setNum}`]);
+                  const prev = prevByKey[`${sub.exercise_id}|${setNum}`];
 
                   return (
-                    <div
-                      key={`${setNum}-${idx}-${sub.exercise_id}`}
-                      className="d-flex align-items-center gap-2 mb-2"
-                      style={{
-                        padding: 10,
-                        borderRadius: 12,
-                        background: "rgba(0,0,0,0.18)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                      }}
-                    >
-                      {/* Media thumb */}
-                      <button
-                        type="button"
-                        className="gx-more"
-                        onClick={() => onOpenMedia(sub.exercise_id)}
-                        aria-label={hasMedia ? "Open exercise media" : "No media available"}
-                        title={hasMedia ? "Open media" : "No media"}
-                        style={{
-                          width: 44,
-                          height: 44,
-                          padding: 0,
-                          overflow: "hidden",
-                          opacity: hasMedia ? 1 : 0.6,
-                          flex: "0 0 auto",
-                        }}
-                        disabled={!hasMedia}
-                      >
-                        {thumbUrl ? (
-                          <img
-                            src={thumbUrl}
-                            alt={title}
-                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                          />
-                        ) : (
-                          <div className="d-flex align-items-center justify-content-center" style={{ width: "100%", height: "100%" }}>
-                            <i className="fas fa-play" />
-                          </div>
-                        )}
-                      </button>
+                    <div key={`${sub.exercise_id}-${setNum}`} className="gx-ss-row">
+                      {/* Top row */}
+                      <div className="gx-ss-row-top">
+                        <button
+                          type="button"
+                          className="gx-thumb"
+                          onClick={() => onOpenMedia(sub.exercise_id)}
+                        >
+                          {thumb ? (
+                            {thumb}
+                          ) : (
+                            <div className="gx-thumb-ph">
+                              <i className="fas fa-play" />
+                            </div>
+                          )}
+                        </button>
 
-                      {/* Name + prescribed reps */}
-                      <div className="flex-fill" style={{ minWidth: 0 }}>
-                        <div className="fw-semibold text-truncate">{title}</div>
-                        <div className="text-dim small">{sub.reps ? `${sub.reps} reps` : ""}</div>
-                        <div className="text-dim small">
-                          Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
+                        <div className="gx-ss-row-info">
+                          <div className="fw-semibold text-truncate">{title}</div>
+                          <div className="text-dim small">{sub.reps ? `${sub.reps} reps` : ""}</div>
+                          <div className="text-dim small">
+                            Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Inputs */}
-                      <input
-                        className="gx-input"
-                        type="number"
-                        inputMode="decimal"
-                        placeholder="kg"
-                        onChange={(e) =>
-                          onUpdateSet(sub.exercise_id, setNum, { weight: Number(e.target.value) || null })
-                        }
-                        style={{ width: "var(--kgw)" as any }}
-                      />
-
-                      <input
-                        className="gx-input"
-                        type="number"
-                        inputMode="numeric"
-                        placeholder="reps"
-                        onChange={(e) =>
-                          onUpdateSet(sub.exercise_id, setNum, { reps: Number(e.target.value) || null })
-                        }
-                        style={{ width: "var(--repsw)" as any }}
-                      />
-
-                      {/* Tick */}
-                      <button
-                        type="button"
-                        className="gx-tick"
-                        style={{
-                          borderColor: `${GREEN}88`,
-                          color: tick ? "#0b0f14" : GREEN,
-                          background: tick ? GREEN : "transparent",
-                          width: 44,
-                          height: 44,
-                          borderRadius: 999,
-                        }}
-                        onClick={() => onToggleTick(sub.exercise_id, setNum)}
-                        aria-label={tick ? "Unmark set" : "Mark set"}
-                      >
-                        <i className="fas fa-check" />
-                      </button>
+                      {/* Bottom row */}
+                      <div className="gx-ss-row-inputs">
+                        <input
+                          className="gx-input"
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="kg"
+                          onChange={(e) =>
+                            onUpdateSet(sub.exercise_id, setNum, {
+                              weight: Number(e.target.value) || null,
+                            })
+                          }
+                        />
+                        <input
+                          className="gx-input"
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="reps"
+                          onChange={(e) =>
+                            onUpdateSet(sub.exercise_id, setNum, {
+                              reps: Number(e.target.value) || null,
+                            })
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="gx-tick"
+                          style={{
+                            borderColor: `${GREEN}88`,
+                            color: tick ? "#0b0f14" : GREEN,
+                            background: tick ? GREEN : "transparent",
+                          }}
+                          onClick={() => onToggleTick(sub.exercise_id, setNum)}
+                        >
+                          <i className="fas fa-check" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
