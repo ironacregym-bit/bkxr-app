@@ -27,14 +27,18 @@ export default function ExerciseSupersetCard({
     <div className="gx-ss">
       <div className="gx-ss-head">
         <div className="gx-ss-title">{(item.name || "").trim() || "Superset"}</div>
+
         <div className="gx-ss-right">
           <span className="gx-chip" style={{ borderColor: `${ACCENT}88`, color: ACCENT }}>
             {sets} sets
           </span>
+
           <button
             type="button"
             className="gx-chevron"
             onClick={() => setExpanded((v) => !v)}
+            aria-label={expanded ? "Collapse" : "Expand"}
+            title={expanded ? "Collapse" : "Expand"}
           >
             <i className={`fas fa-chevron-${expanded ? "up" : "down"}`} />
           </button>
@@ -61,21 +65,28 @@ export default function ExerciseSupersetCard({
                 {item.items.map((sub) => {
                   const m = media[sub.exercise_id] || {};
                   const title = m.exercise_name || sub.exercise_id;
-                  const thumb = m.gif_url ? fixGifUrl(m.gif_url) : null;
-                  const tick = Boolean(tickKeys[`${sub.exercise_id}|${setNum}`]);
+
+                  const thumbUrl = m.gif_url ? fixGifUrl(m.gif_url) : undefined;
+                  const hasMedia = Boolean(thumbUrl || m.video_url);
+
                   const prev = prevByKey[`${sub.exercise_id}|${setNum}`];
+                  const tick = Boolean(tickKeys[`${sub.exercise_id}|${setNum}`]);
 
                   return (
-                    <div key={`${sub.exercise_id}-${setNum}`} className="gx-ss-row">
+                    <div key={`${sub.exercise_id}|${setNum}`} className="gx-ss-row">
                       {/* Top row */}
                       <div className="gx-ss-row-top">
                         <button
                           type="button"
                           className="gx-thumb"
                           onClick={() => onOpenMedia(sub.exercise_id)}
+                          aria-label={hasMedia ? "Open exercise media" : "No media available"}
+                          title={hasMedia ? "Open media" : "No media"}
+                          disabled={!hasMedia}
+                          style={{ opacity: hasMedia ? 1 : 0.6 }}
                         >
-                          {thumb ? (
-                            {thumb}
+                          {thumbUrl ? (
+                            <img src={thumbUrl} alt={title} className="gx-thumb-img" />
                           ) : (
                             <div className="gx-thumb-ph">
                               <i className="fas fa-play" />
@@ -105,6 +116,7 @@ export default function ExerciseSupersetCard({
                             })
                           }
                         />
+
                         <input
                           className="gx-input"
                           type="number"
@@ -116,6 +128,7 @@ export default function ExerciseSupersetCard({
                             })
                           }
                         />
+
                         <button
                           type="button"
                           className="gx-tick"
@@ -125,6 +138,7 @@ export default function ExerciseSupersetCard({
                             background: tick ? GREEN : "transparent",
                           }}
                           onClick={() => onToggleTick(sub.exercise_id, setNum)}
+                          aria-label={tick ? "Unmark set" : "Mark set"}
                         >
                           <i className="fas fa-check" />
                         </button>
