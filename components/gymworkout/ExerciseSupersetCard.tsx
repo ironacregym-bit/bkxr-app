@@ -84,9 +84,7 @@ export default function ExerciseSupersetCard({
                       <div className="gx-ss-ex-head">
                         <div className="gx-ss-ex-title" title={title}>
                           {title}
-                        </div>
-
-                        <span
+                                                  <span
                           className={`gx-play-icon ${hasMedia ? "" : "is-disabled"}`}
                           role="button"
                           tabIndex={hasMedia ? 0 : -1}
@@ -106,6 +104,9 @@ export default function ExerciseSupersetCard({
                         >
                           <i className="fa-solid fa-circle-play" />
                         </span>
+                        </div>
+
+
                       </div>
 
                       {/* Prev directly below */}
