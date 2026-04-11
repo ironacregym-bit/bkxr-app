@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import type { CompletionSet, UISupersetItem } from "./types";
 import SetGrid from "./SetGrid";
-import { ACCENT, fixGifUrl } from "./utils";
+import { ACCENT } from "./utils";
 
 function parseRepsToNumber(reps?: string | null): number | null {
   if (!reps) return null;
@@ -74,41 +74,35 @@ export default function ExerciseSupersetCard({
                   const m = media[sub.exercise_id] || {};
                   const title = m.exercise_name || sub.exercise_id;
 
-                  const thumbUrl = m.gif_url ? fixGifUrl(m.gif_url) : undefined;
-                  const hasMedia = Boolean(thumbUrl || m.video_url);
+                  const hasMedia = Boolean(m.gif_url || m.video_url);
 
                   const prev = prevByKey[`${sub.exercise_id}|${setNum}`];
                   const prefillReps = parseRepsToNumber(sub.reps);
 
                   return (
                     <div key={`${sub.exercise_id}|${setNum}`} className="gx-ss-ex">
-                      {/* ✅ Name + thumb on the SAME line */}
+                      {/* ✅ Name + play button on same line */}
                       <div className="gx-ss-ex-head">
                         <div className="gx-ss-ex-title text-truncate">{title}</div>
 
                         <button
                           type="button"
-                          className="gx-ss-ex-thumb"
+                          className="gx-play"
                           onClick={() => onOpenMedia(sub.exercise_id)}
                           aria-label={hasMedia ? "Open exercise media" : "No media available"}
                           title={hasMedia ? "Open media" : "No media"}
                           disabled={!hasMedia}
-                          style={{ opacity: hasMedia ? 1 : 0.6 }}
                         >
-                          {thumbUrl ? (
-                            <img src={thumbUrl} alt={title} />
-                          ) : (
-                            <i className="fas fa-play" />
-                          )}
+                          <i className="fas fa-play" />
                         </button>
                       </div>
 
-                      {/* ✅ Prev stays underneath (as you said it’s fine) */}
+                      {/* Prev underneath */}
                       <div className="gx-ss-ex-prev text-dim small">
                         Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
                       </div>
 
-                      {/* One input row mapped to this setNum */}
+                      {/* Inputs: one row only, mapped to this setNum */}
                       <SetGrid
                         exerciseId={sub.exercise_id}
                         sets={1}
