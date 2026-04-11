@@ -111,7 +111,7 @@ export default function GymWorkoutViewerPage() {
   const [tickKeys, setTickKeys] = useState<Record<string, boolean>>({});
   function toggleTick(exercise_id: string, setNum: number) {
     const k = `${exercise_id}|${setNum}`;
-    setTickKeys((m) => ({ ...m, !m[k] }));
+    setTickKeys((m) => ({ ...m, [k]: !m[k] }));
   }
 
   const mediaRounds = useMemo(() => toMediaRounds(data), [data]);
