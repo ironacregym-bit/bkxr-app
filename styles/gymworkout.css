@@ -1,6 +1,7 @@
 /* styles/gymworkout.css */
 /* Gym workout clean layout (no cards-on-cards) */
 
+/* ===== Rounds ===== */
 .gx-round{
   margin-bottom: 18px;
 }
@@ -16,7 +17,7 @@
   letter-spacing: .2px;
 }
 
-/* Single exercise panel */
+/* ===== Single exercise panel ===== */
 .gx-ex{
   background: rgba(0,0,0,0.22);
   border-top: 1px solid rgba(255,255,255,0.08);
@@ -31,26 +32,23 @@
 .gx-ex--sub{
   margin-top: 10px;
 }
+
+/* ===== Single header: same pattern as Superset title row (grid) ===== */
 .gx-ex-head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 10px;
 }
 .gx-ex-title{
-  font-size: 1.05rem;
+  min-width: 0;
   font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.gx-more{
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.03);
-  color: rgba(255,255,255,0.85);
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
+.gx-ex-prev{
+  margin-top: 6px;
 }
 .gx-ex-sub{
   margin-top: 6px;
@@ -59,6 +57,27 @@
 }
 .gx-ex-target{
   margin-left: 6px;
+}
+
+/* Icon-only click target (no button chrome) */
+.gx-play-icon{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  line-height: 1;
+  color: rgba(255,255,255,0.90);
+  font-size: 1.25rem;
+  padding: 2px;
+}
+.gx-play-icon:hover{
+  color: var(--bxkr-accent);
+  filter: drop-shadow(0 0 8px rgba(255,122,26,0.45));
+}
+.gx-play-icon.is-disabled{
+  cursor: not-allowed;
+  opacity: 0.35;
+  filter: none;
 }
 
 /* Notes line */
@@ -75,33 +94,8 @@
   padding: 10px 12px;
   color: #fff;
 }
-.gx-notes-input::placeholder{ color: rgba(255,255,255,0.45); }
-
-/* Media thumb */
-.gx-ex-media{ margin-top: 10px; }
-.gx-thumb{
-  border: none;
-  background: transparent;
-  padding: 0;
-}
-.gx-thumb-img{
-  width: 64px;
-  height: 64px;
-  border-radius: 12px;
-  object-fit: cover;
-  display:block;
-  border: 1px solid rgba(255,255,255,0.10);
-}
-.gx-thumb-ph{
-  width: 64px;
-  height: 64px;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.10);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  color: rgba(255,255,255,0.7);
+.gx-notes-input::placeholder{
+  color: rgba(255,255,255,0.45);
 }
 
 /* Bottom split actions */
@@ -125,7 +119,7 @@
   color: rgba(255,80,80,0.95);
 }
 
-/* Superset wrapper */
+/* ===== Superset wrapper ===== */
 .gx-ss{
   background: rgba(0,0,0,0.14);
   border: 1px solid rgba(255,255,255,0.08);
@@ -173,7 +167,22 @@
   margin-top: 12px;
 }
 
-/* Grid/table feel */
+/* Optional: set container (if you use it in superset rendering) */
+.gx-ss-set{
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.gx-ss-set-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom: 8px;
+}
+
+/* ===== Grid/table feel ===== */
 .gx-grid{
   margin-top: 12px;
 }
