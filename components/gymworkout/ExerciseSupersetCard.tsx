@@ -74,6 +74,7 @@ export default function ExerciseSupersetCard({
                   const m = media[sub.exercise_id] || {};
                   const title = m.exercise_name || sub.exercise_id;
 
+                  // only used to enable/disable the play button
                   const hasMedia = Boolean(m.gif_url || m.video_url);
 
                   const prev = prevByKey[`${sub.exercise_id}|${setNum}`];
@@ -81,9 +82,11 @@ export default function ExerciseSupersetCard({
 
                   return (
                     <div key={`${sub.exercise_id}|${setNum}`} className="gx-ss-ex">
-                      {/* ✅ Name + play button on same line */}
+                      {/* ✅ single-line header: name + play icon (no wrapping) */}
                       <div className="gx-ss-ex-head">
-                        <div className="gx-ss-ex-title text-truncate">{title}</div>
+                        <div className="gx-ss-ex-title" title={title}>
+                          {title}
+                        </div>
 
                         <button
                           type="button"
@@ -97,19 +100,21 @@ export default function ExerciseSupersetCard({
                         </button>
                       </div>
 
-                      {/* Prev underneath */}
+                      {/* ✅ Prev line directly below, as requested */}
                       <div className="gx-ss-ex-prev text-dim small">
                         Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
                       </div>
 
-                      {/* Inputs: one row only, mapped to this setNum */}
+                      {/* One input row mapped to current setNum */}
                       <SetGrid
                         exerciseId={sub.exercise_id}
                         sets={1}
                         prevByKey={prevByKey}
                         targetKg={null}
                         showUseTarget={false}
-                        onUpdateSet={(exercise_id, _ignored, patch) => onUpdateSet(exercise_id, setNum, patch)}
+                        onUpdateSet={(exercise_id, _ignored, patch) =>
+                          onUpdateSet(exercise_id, setNum, patch)
+                        }
                         tickKeys={tickKeys}
                         onToggleTick={(exercise_id, _ignored) => onToggleTick(exercise_id, setNum)}
                         prefillReps={prefillReps}
@@ -125,3 +130,4 @@ export default function ExerciseSupersetCard({
     </div>
   );
 }
+``
