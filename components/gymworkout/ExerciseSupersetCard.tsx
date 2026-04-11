@@ -1,6 +1,16 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import type { CompletionSet, UISupersetItem } from "./types";
-import { ACCENT, GREEN, fixGifUrl } from "./utils";
+import SetGrid from "./SetGrid";
+import { ACCENT, fixGifUrl } from "./utils";
+
+function parseRepsToNumber(reps?: string | null): number | null {
+  if (!reps) return null;
+  // Handles "10", "6 reps", "10-12" -> take first number
+  const m = String(reps).match(/\d+/);
+  if (!m) return null;
+  const n = Number(m[0]);
+  return Number.isFinite(n) ? n : null;
+}
 
 export default function ExerciseSupersetCard({
   item,
@@ -70,15 +80,20 @@ export default function ExerciseSupersetCard({
                   const hasMedia = Boolean(thumbUrl || m.video_url);
 
                   const prev = prevByKey[`${sub.exercise_id}|${setNum}`];
-                  const tick = Boolean(tickKeys[`${sub.exercise_id}|${setNum}`]);
+                  const prefillReps = parseRepsToNumber(sub.reps);
 
                   return (
-                    <div key={`${sub.exercise_id}|${setNum}`} className="gx-ss-row">
-                      {/* Top row */}
-                      <div className="gx-ss-row-top">
+                    <div key={`${sub.exercise_id}|${setNum}`} className="gx-ss-ex">
+                      <div className="gx-ss-ex-head">
+                        <div className="gx-ss-ex-title text-truncate">{title}</div>
+
+                        <div className="gx-ss-ex-prev text-dim small">
+                          Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
+                        </div>
+
                         <button
                           type="button"
-                          className="gx-thumb"
+                          className="gx-ss-ex-thumb"
                           onClick={() => onOpenMedia(sub.exercise_id)}
                           aria-label={hasMedia ? "Open exercise media" : "No media available"}
                           title={hasMedia ? "Open media" : "No media"}
@@ -86,63 +101,31 @@ export default function ExerciseSupersetCard({
                           style={{ opacity: hasMedia ? 1 : 0.6 }}
                         >
                           {thumbUrl ? (
-                            <img src={thumbUrl} alt={title} className="gx-thumb-img" />
+                            <img src={thumbUrl} alt={title} />
                           ) : (
-                            <div className="gx-thumb-ph">
-                              <i className="fas fa-play" />
-                            </div>
+                            <i className="fas fa-play" />
                           )}
                         </button>
-
-                        <div className="gx-ss-row-info">
-                          <div className="fw-semibold text-truncate">{title}</div>
-                          <div className="text-dim small">{sub.reps ? `${sub.reps} reps` : ""}</div>
-                          <div className="text-dim small">
-                            Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
-                          </div>
-                        </div>
                       </div>
 
-                      {/* Bottom row */}
-                      <div className="gx-ss-row-inputs">
-                        <input
-                          className="gx-input"
-                          type="number"
-                          inputMode="decimal"
-                          placeholder="kg"
-                          onChange={(e) =>
-                            onUpdateSet(sub.exercise_id, setNum, {
-                              weight: Number(e.target.value) || null,
-                            })
-                          }
-                        />
-
-                        <input
-                          className="gx-input"
-                          type="number"
-                          inputMode="numeric"
-                          placeholder="reps"
-                          onChange={(e) =>
-                            onUpdateSet(sub.exercise_id, setNum, {
-                              reps: Number(e.target.value) || null,
-                            })
-                          }
-                        />
-
-                        <button
-                          type="button"
-                          className="gx-tick"
-                          style={{
-                            borderColor: `${GREEN}88`,
-                            color: tick ? "#0b0f14" : GREEN,
-                            background: tick ? GREEN : "transparent",
-                          }}
-                          onClick={() => onToggleTick(sub.exercise_id, setNum)}
-                          aria-label={tick ? "Unmark set" : "Mark set"}
-                        >
-                          <i className="fas fa-check" />
-                        </button>
+                      <div className="gx-ss-ex-meta text-dim small">
+                        {sub.reps ? `${sub.reps}` : ""}
+                        {sub.reps && rest != null ? " • " : ""}
+                        {rest != null ? `Rest ${rest}s` : ""}
                       </div>
+
+                      {/* One set row worth of inputs, repeated by SetGrid */}
+                      <SetGrid
+                        exerciseId={sub.exercise_id}
+                        sets={1}
+                        prevByKey={prevByKey}
+                        targetKg={null}
+                        showUseTarget={false}
+                        onUpdateSet={(exercise_id, _, patch) => onUpdateSet(exercise_id, setNum, patch)}
+                        tickKeys={tickKeys}
+                        onToggleTick={(exercise_id) => onToggleTick(exercise_id, setNum)}
+                        prefillReps={prefillReps}
+                      />
                     </div>
                   );
                 })}
