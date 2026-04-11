@@ -62,7 +62,7 @@ export default function HeaderBar({
       </div>
 
       <div className="text-dim small mb-3">
-        /
+        <Link href="/">
           ← Back
         </Link>
         <span style={{ marginLeft: 10 }}>
