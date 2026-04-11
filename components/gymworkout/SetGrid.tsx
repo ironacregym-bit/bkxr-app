@@ -22,14 +22,12 @@ export default function SetGrid({
   showUseTarget: boolean;
 }) {
   return (
-    <div className="d-flex flex-column" style={{ gap: 8 }}>
-      <div className="d-flex align-items-center text-dim small" style={{ paddingLeft: 8, paddingRight: 8 }}>
-        <div style={{ width: 46, textAlign: "right" }}>SET</div>
-        <div style={{ width: 12 }} />
-        <div style={{ width: "var(--kgw)" }}>KG</div>
-        <div style={{ width: 12 }} />
-        <div style={{ width: "var(--repsw)" }}>REPS</div>
-        <div className="ms-auto" style={{ width: 44, textAlign: "center" }}>✓</div>
+    <div className="gx-grid">
+      <div className="gx-grid-head">
+        <div className="gx-col-set">SET</div>
+        <div className="gx-col-kg">KG</div>
+        <div className="gx-col-reps">REPS</div>
+        <div className="gx-col-tick">✓</div>
       </div>
 
       {Array.from({ length: sets }).map((_, i) => {
@@ -38,72 +36,64 @@ export default function SetGrid({
         const tick = Boolean(tickKeys[`${exerciseId}|${setNum}`]);
 
         return (
-          <div
-            key={i}
-            className="d-flex align-items-center flex-wrap"
-            style={{
-              gap: 10,
-              background: "rgba(255,255,255,0.035)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              borderRadius: 14,
-              padding: 10,
-            }}
-          >
-            <div className="text-dim small" style={{ width: 46, textAlign: "right", flex: "0 0 auto" }}>
-              {setNum}
+          <div key={i} className="gx-row">
+            <div className="gx-col-set">{setNum}</div>
+
+            <div className="gx-col-kg">
+              <div className="gx-kg-wrap">
+                <input
+                  className="gx-input gx-input-kg"
+                  type="number"
+                  inputMode="decimal"
+                  placeholder={targetKg != null ? String(targetKg) : "kg"}
+                  onChange={(e) =>
+                    onUpdateSet(exerciseId, setNum, { weight: Number(e.target.value) || null })
+                  }
+                />
+                {targetKg != null && showUseTarget && <span className="gx-dot" aria-hidden="true" />}
+              </div>
             </div>
 
-            <input
-              className="form-control"
-              type="number"
-              inputMode="decimal"
-              placeholder={targetKg != null ? String(targetKg) : "kg"}
-              onChange={(e) => onUpdateSet(exerciseId, setNum, { weight: Number(e.target.value) || null })}
-              style={{ width: "var(--kgw)", fontSize: "0.95rem", flex: "0 0 auto", borderRadius: 12 }}
-            />
+            <div className="gx-col-reps">
+              <input
+                className="gx-input gx-input-reps"
+                type="number"
+                inputMode="numeric"
+                placeholder="reps"
+                onChange={(e) =>
+                  onUpdateSet(exerciseId, setNum, { reps: Number(e.target.value) || null })
+                }
+              />
+            </div>
 
-            <input
-              className="form-control"
-              type="number"
-              inputMode="numeric"
-              placeholder="reps"
-              onChange={(e) => onUpdateSet(exerciseId, setNum, { reps: Number(e.target.value) || null })}
-              style={{ width: "var(--repsw)", fontSize: "0.95rem", flex: "0 0 auto", borderRadius: 12 }}
-            />
-
-            {showUseTarget && targetKg != null && (
+            <div className="gx-col-tick">
               <button
                 type="button"
-                className="btn btn-sm btn-outline-light"
-                style={{ borderRadius: 12, paddingLeft: 10, paddingRight: 10 }}
-                onClick={() => onUpdateSet(exerciseId, setNum, { weight: targetKg })}
+                className="gx-tick"
+                style={{
+                  borderColor: `${GREEN}88`,
+                  color: tick ? "#0b0f14" : GREEN,
+                  background: tick ? GREEN : "transparent",
+                }}
+                onClick={() => onToggleTick(exerciseId, setNum)}
+                aria-label={tick ? "Unmark set" : "Mark set"}
               >
-                Use target
+                <i className="fas fa-check" />
               </button>
-            )}
-
-            <div className="small text-dim ms-auto" style={{ minWidth: 160 }}>
-              Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
             </div>
 
-            <button
-              type="button"
-              className="btn btn-sm"
-              style={{
-                borderRadius: 999,
-                border: `1px solid ${GREEN}66`,
-                color: tick ? "#0b0f14" : GREEN,
-                background: tick ? GREEN : "transparent",
-                width: 40,
-                height: 40,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              onClick={() => onToggleTick(exerciseId, setNum)}
-            >
-              <i className="fas fa-check" />
-            </button>
+            <div className="gx-prev">
+              Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
+              {showUseTarget && targetKg != null ? (
+                <button
+                  type="button"
+                  className="gx-use"
+                  onClick={() => onUpdateSet(exerciseId, setNum, { weight: targetKg })}
+                >
+                  Use target
+                </button>
+              ) : null}
+            </div>
           </div>
         );
       })}
