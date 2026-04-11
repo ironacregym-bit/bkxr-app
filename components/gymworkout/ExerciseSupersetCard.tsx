@@ -66,7 +66,6 @@ export default function ExerciseSupersetCard({
 
             return (
               <div key={setNum} className="gx-ss-set">
-                {/* ✅ Remove duplicated “Rest 90s” inside Set header */}
                 <div className="gx-ss-set-head">
                   <strong>Set {setNum}</strong>
                 </div>
@@ -83,13 +82,9 @@ export default function ExerciseSupersetCard({
 
                   return (
                     <div key={`${sub.exercise_id}|${setNum}`} className="gx-ss-ex">
-                      {/* ✅ Name + Prev + Thumb all on the same line */}
+                      {/* ✅ Name + thumb on the SAME line */}
                       <div className="gx-ss-ex-head">
                         <div className="gx-ss-ex-title text-truncate">{title}</div>
-
-                        <div className="gx-ss-ex-prev text-dim small">
-                          Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
-                        </div>
 
                         <button
                           type="button"
@@ -100,14 +95,20 @@ export default function ExerciseSupersetCard({
                           disabled={!hasMedia}
                           style={{ opacity: hasMedia ? 1 : 0.6 }}
                         >
-                          {thumbUrl ? <img src={thumbUrl} alt="" /> : <i className="fas fa-play" />}
+                          {thumbUrl ? (
+                            <img src={thumbUrl} alt={title} />
+                          ) : (
+                            <i className="fas fa-play" />
+                          )}
                         </button>
                       </div>
 
-                      {/* ✅ Remove the “6 • Rest 90s” meta line entirely */}
-                      {/* If you still want reps shown somewhere, we can add it subtly later */}
+                      {/* ✅ Prev stays underneath (as you said it’s fine) */}
+                      <div className="gx-ss-ex-prev text-dim small">
+                        Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
+                      </div>
 
-                      {/* One input row (SetGrid sets=1) tied to current setNum */}
+                      {/* One input row mapped to this setNum */}
                       <SetGrid
                         exerciseId={sub.exercise_id}
                         sets={1}
