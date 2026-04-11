@@ -26,29 +26,25 @@ export default function RoundSection({
   tickKeys: Record<string, boolean>;
   onOpenMedia: (exercise_id: string) => void;
 }) {
-  const sorted = useMemo(() => [...(round.items || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)), [round.items]);
+  const sorted = useMemo(
+    () => [...(round.items || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    [round.items]
+  );
 
   return (
-    <section className="futuristic-card p-3 mb-3">
-      <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
-        <h4 className="m-0">{title}</h4>
+    <section className="gx-round">
+      <div className="gx-round-head">
+        <div className="gx-round-title">{title}</div>
       </div>
 
       {sorted.length === 0 ? (
         <div className="text-dim small mt-2">No items.</div>
       ) : (
-        sorted.map((it, idx) => (
-          <div
-            key={`${title}-${idx}`}
-            className="p-2 mb-3"
-            style={{
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              borderRadius: 12,
-            }}
-          >
-            {it.type === "Single" ? (
+        <div className="gx-round-body">
+          {sorted.map((it, idx) =>
+            it.type === "Single" ? (
               <ExerciseSingleCard
+                key={`${title}-single-${idx}`}
                 item={it as UISingleItem}
                 media={media[(it as UISingleItem).exercise_id]}
                 prevByKey={prevByKey}
@@ -61,6 +57,7 @@ export default function RoundSection({
               />
             ) : (
               <ExerciseSupersetCard
+                key={`${title}-ss-${idx}`}
                 item={it as UISupersetItem}
                 media={media}
                 prevByKey={prevByKey}
@@ -69,9 +66,9 @@ export default function RoundSection({
                 tickKeys={tickKeys}
                 onOpenMedia={onOpenMedia}
               />
-            )}
-          </div>
-        ))
+            )
+          )}
+        </div>
       )}
     </section>
   );
