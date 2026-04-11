@@ -1,9 +1,10 @@
+import React from "react";
 import { useRouter } from "next/router";
 import { useEffect, useRef } from "react";
 
 type BackButtonProps = {
-  fallbackHref?: string;      // where to go if no history
-  label?: string;             // default: Back
+  fallbackHref?: string;
+  label?: string;
   className?: string;
   style?: React.CSSProperties;
   iconOnly?: boolean;
@@ -17,21 +18,24 @@ export default function BackButton({
   iconOnly = false,
 }: BackButtonProps) {
   const router = useRouter();
-  const hasHistory = useRef(false);
+  const canGoBack = useRef(false);
 
   useEffect(() => {
-    // If the history length is > 1, we can go back safely
-    if (window.history.length > 1) {
-      hasHistory.current = true;
+    // If the user arrived here via internal navigation, history length is usually > 1.
+    // On hard refresh / direct load, it can be 1, so we fall back to fallbackHref.
+    try {
+      canGoBack.current = window.history.length > 1;
+    } catch {
+      canGoBack.current = false;
     }
   }, []);
 
   function handleBack() {
-    if (hasHistory.current) {
+    if (canGoBack.current) {
       router.back();
-    } else {
-      router.push(fallbackHref);
+      return;
     }
+    router.push(fallbackHref);
   }
 
   return (
@@ -44,9 +48,11 @@ export default function BackButton({
         display: "inline-flex",
         alignItems: "center",
         gap: 6,
+        whiteSpace: "nowrap",
         ...style,
       }}
-      aria-label="Go back"
+      aria-label={label}
+      title={label}
     >
       <i className="fas fa-arrow-left" />
       {!iconOnly && <span>{label}</span>}
