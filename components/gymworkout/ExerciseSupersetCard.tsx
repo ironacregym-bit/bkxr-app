@@ -74,15 +74,13 @@ export default function ExerciseSupersetCard({
                   const m = media[sub.exercise_id] || {};
                   const title = m.exercise_name || sub.exercise_id;
 
-                  // only used to enable/disable the play button
                   const hasMedia = Boolean(m.gif_url || m.video_url);
-
                   const prev = prevByKey[`${sub.exercise_id}|${setNum}`];
                   const prefillReps = parseRepsToNumber(sub.reps);
 
                   return (
                     <div key={`${sub.exercise_id}|${setNum}`} className="gx-ss-ex">
-                      {/* ✅ single-line header: name + play icon (no wrapping) */}
+                      {/* ✅ Guaranteed single-line: grid with 2 columns */}
                       <div className="gx-ss-ex-head">
                         <div className="gx-ss-ex-title" title={title}>
                           {title}
@@ -96,16 +94,16 @@ export default function ExerciseSupersetCard({
                           title={hasMedia ? "Open media" : "No media"}
                           disabled={!hasMedia}
                         >
-                          <i className="fas fa-play" />
+                          <i className="fa-solid fa-circle-play" />
                         </button>
                       </div>
 
-                      {/* ✅ Prev line directly below, as requested */}
+                      {/* Prev just below */}
                       <div className="gx-ss-ex-prev text-dim small">
                         Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
                       </div>
 
-                      {/* One input row mapped to current setNum */}
+                      {/* One input row mapped to this setNum */}
                       <SetGrid
                         exerciseId={sub.exercise_id}
                         sets={1}
@@ -130,4 +128,3 @@ export default function ExerciseSupersetCard({
     </div>
   );
 }
-``
