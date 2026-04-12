@@ -3,6 +3,16 @@ import type { CompletionSet, UIRound, UISingleItem, UISupersetItem } from "./typ
 import ExerciseSingleCard from "./ExerciseSingleCard";
 import ExerciseSupersetCard from "./ExerciseSupersetCard";
 
+type RoundItem = UISingleItem | UISupersetItem;
+
+function isSingle(it: RoundItem): it is UISingleItem {
+  return it.type === "Single";
+}
+
+function isSuperset(it: RoundItem): it is UISupersetItem {
+  return it.type === "Superset";
+}
+
 export default function RoundSection({
   title,
   round,
@@ -26,8 +36,9 @@ export default function RoundSection({
   tickKeys: Record<string, boolean>;
   onOpenMedia: (exercise_id: string) => void;
 }) {
-  const sorted = useMemo<Array<UISingleItem | UISupersetItem>>(() => {
-    const items = (round.items || []) as Array<UISingleItem | UISupersetItem>;
+  const sorted = useMemo<RoundItem[]>(() => {
+    // Force round.items to be treated as the discriminated union we expect
+    const items = (round.items || []) as RoundItem[];
     return [...items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [round.items]);
 
@@ -42,7 +53,7 @@ export default function RoundSection({
       ) : (
         <div className="gx-round-body">
           {sorted.map((it, idx) => {
-            if (it.type === "Single") {
+            if (isSingle(it)) {
               return (
                 <ExerciseSingleCard
                   key={`${title}-single-${idx}`}
@@ -59,19 +70,23 @@ export default function RoundSection({
               );
             }
 
-            // ✅ TS now correctly knows `it` is UISupersetItem here
-            return (
-              <ExerciseSupersetCard
-                key={`${title}-ss-${idx}`}
-                item={it}
-                media={media}
-                prevByKey={prevByKey}
-                onUpdateSet={onUpdateSet}
-                onToggleTick={onToggleTick}
-                tickKeys={tickKeys}
-                onOpenMedia={onOpenMedia}
-              />
-            );
+            if (isSuperset(it)) {
+              return (
+                <ExerciseSupersetCard
+                  key={`${title}-ss-${idx}`}
+                  item={it}
+                  media={media}
+                  prevByKey={prevByKey}
+                  onUpdateSet={onUpdateSet}
+                  onToggleTick={onToggleTick}
+                  tickKeys={tickKeys}
+                  onOpenMedia={onOpenMedia}
+                />
+              );
+            }
+
+            // Should never happen, but keeps TS happy if data is malformed
+            return null;
           })}
         </div>
       )}
