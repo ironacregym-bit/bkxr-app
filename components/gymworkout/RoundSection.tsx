@@ -1,17 +1,9 @@
 import React, { useMemo } from "react";
 import type { CompletionSet, UIRound, UISingleItem, UISupersetItem } from "./types";
 import ExerciseSingleCard from "./ExerciseSingleCard";
-import ExerciseSupersetCard from "./ExerciseSupersetCard";
+import GymExerciseSupersetCard from "./ExerciseSupersetCard";
 
 type RoundItem = UISingleItem | UISupersetItem;
-
-function isSingle(it: RoundItem): it is UISingleItem {
-  return it.type === "Single";
-}
-
-function isSuperset(it: RoundItem): it is UISupersetItem {
-  return it.type === "Superset";
-}
 
 export default function RoundSection({
   title,
@@ -37,7 +29,6 @@ export default function RoundSection({
   onOpenMedia: (exercise_id: string) => void;
 }) {
   const sorted = useMemo<RoundItem[]>(() => {
-    // Force round.items to be treated as the discriminated union we expect
     const items = (round.items || []) as RoundItem[];
     return [...items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [round.items]);
@@ -53,7 +44,7 @@ export default function RoundSection({
       ) : (
         <div className="gx-round-body">
           {sorted.map((it, idx) => {
-            if (isSingle(it)) {
+            if (it.type === "Single") {
               return (
                 <ExerciseSingleCard
                   key={`${title}-single-${idx}`}
@@ -70,23 +61,18 @@ export default function RoundSection({
               );
             }
 
-            if (isSuperset(it)) {
-              return (
-                <ExerciseSupersetCard
-                  key={`${title}-ss-${idx}`}
-                  item={it}
-                  media={media}
-                  prevByKey={prevByKey}
-                  onUpdateSet={onUpdateSet}
-                  onToggleTick={onToggleTick}
-                  tickKeys={tickKeys}
-                  onOpenMedia={onOpenMedia}
-                />
-              );
-            }
-
-            // Should never happen, but keeps TS happy if data is malformed
-            return null;
+            return (
+              <GymExerciseSupersetCard
+                key={`${title}-ss-${idx}`}
+                item={it}
+                media={media}
+                prevByKey={prevByKey}
+                onUpdateSet={onUpdateSet}
+                onToggleTick={onToggleTick}
+                tickKeys={tickKeys}
+                onOpenMedia={onOpenMedia}
+              />
+            );
           })}
         </div>
       )}
