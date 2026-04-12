@@ -13,6 +13,7 @@ export default function SetGrid({
   showUseTarget,
   prefillReps,
   prefillWeight,
+  showPrevRow = true,
 }: {
   exerciseId: string;
   sets: number;
@@ -24,6 +25,7 @@ export default function SetGrid({
   showUseTarget: boolean;
   prefillReps?: number | null;
   prefillWeight?: number | null;
+  showPrevRow?: boolean;
 }) {
   return (
     <div className="gx-grid">
@@ -88,21 +90,23 @@ export default function SetGrid({
               </button>
             </div>
 
-            <div className="gx-prev">
-              <span>
-                Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
-              </span>
+            {showPrevRow && (
+              <div className="gx-prev">
+                <span>
+                  Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
+                </span>
 
-              {showUseTarget && targetKg != null ? (
-                <button
-                  type="button"
-                  className="gx-use"
-                  onClick={() => onUpdateSet(exerciseId, setNum, { weight: targetKg })}
-                >
-                  Use target
-                </button>
-              ) : null}
-            </div>
+                {showUseTarget && targetKg != null ? (
+                  <button
+                    type="button"
+                    className="gx-use"
+                    onClick={() => onUpdateSet(exerciseId, setNum, { weight: targetKg })}
+                  >
+                    Use target
+                  </button>
+                ) : null}
+              </div>
+            )}
           </div>
         );
       })}
