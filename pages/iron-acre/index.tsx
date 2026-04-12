@@ -48,6 +48,13 @@ type WeeklyOverviewResponse = {
   weekEndYMD: string;
   fridayYMD: string;
   days: DayOverview[];
+  weeklyTotals?: {
+    totalTasks: number;
+    completedTasks: number;
+    totalWorkoutsCompleted: number;
+    totalWorkoutTime: number;
+    totalCaloriesBurned: number;
+  };
 };
 
 export default function IronAcreHome() {
@@ -79,10 +86,19 @@ export default function IronAcreHome() {
   );
 
   const todayKey = useMemo(() => formatYMD(new Date()), []);
+
+  const effectiveTodayKey = useMemo(() => {
+    const days = weeklyOverview?.days || [];
+    if (days.some((d) => d.dateKey === todayKey)) return todayKey;
+    // If the API week isn’t the current week (testing / time mismatch),
+    // fall back to the first day of the returned week so the UI still shows workouts.
+    return weeklyOverview?.weekStartYMD || todayKey;
+  }, [weeklyOverview, todayKey]);
+
   const todayData = useMemo(() => {
     const days = weeklyOverview?.days || [];
-    return days.find((d) => d.dateKey === todayKey);
-  }, [weeklyOverview, todayKey]);
+    return days.find((d) => d.dateKey === effectiveTodayKey);
+  }, [weeklyOverview, effectiveTodayKey]);
 
   const fridayData = useMemo(() => {
     const fridayYMD = weeklyOverview?.fridayYMD || "";
@@ -141,9 +157,19 @@ export default function IronAcreHome() {
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <IronAcreHeader userName={userName} dateLabel={dateLabel} />
 
-        <IronAcreTasks todayKey={todayKey} todayData={todayData} fridayYMD={weeklyOverview?.fridayYMD || ""} fridayData={fridayData} />
+        <IronAcreTasks
+          todayKey={effectiveTodayKey}
+          todayData={todayData}
+          fridayYMD={weeklyOverview?.fridayYMD || ""}
+          fridayData={fridayData}
+          weekDays={weeklyOverview?.days || []}
+          weekStartYMD={weeklyOverview?.weekStartYMD || ""}
+          weekEndYMD={weeklyOverview?.weekEndYMD || ""}
+          weeklyTotals={weeklyOverview?.weeklyTotals}
+        />
+
         <IronAcreClassesList />
-        
+
         <div className="row g-2">
           <div className="col-12 col-lg-6">
             <IronAcreStrengthSummary profile={strengthProfile?.profile} />
