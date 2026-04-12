@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const ACCENT_IRON = "#22c55e";
+const NEON = "#18ff9a";
 
 function greetingForHour(h: number) {
   if (h < 12) return "Good morning";
@@ -29,7 +29,14 @@ export default function IronAcreHeader({ userName, dateLabel }: { userName: stri
   }, []);
 
   return (
-    <section className="futuristic-card p-3 mb-3">
+    <section
+      className="futuristic-card p-3 mb-3"
+      style={{
+        border: `1px solid ${NEON}22`,
+        background: "linear-gradient(180deg, rgba(0,0,0,0.38), rgba(0,0,0,0.18))",
+        boxShadow: `0 0 0 1px ${NEON}12 inset, 0 0 22px ${NEON}10`,
+      }}
+    >
       <div className="d-flex justify-content-between align-items-start gap-2">
         <div style={{ minWidth: 0 }}>
           <div className="d-flex align-items-center gap-2 text-dim small">
@@ -47,13 +54,18 @@ export default function IronAcreHeader({ userName, dateLabel }: { userName: stri
 
         <button
           type="button"
-          className="btn btn-sm btn-outline-light"
+          className="btn btn-sm"
           style={{
             borderRadius: 999,
-            borderColor: `${ACCENT_IRON}88`,
-            color: ACCENT_IRON,
-            background: "transparent",
-            whiteSpace: "nowrap",
+            border: `1px solid ${NEON}55`,
+            color: NEON,
+            background: "rgba(0,0,0,0.20)",
+            width: 40,
+            height: 40,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: `0 0 16px ${NEON}14`,
           }}
           title="Notifications"
         >
