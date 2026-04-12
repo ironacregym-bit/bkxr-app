@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useRouter } from "next/router";
 import useSWR from "swr";
 import IronAcreTaskCard from "./IronAcreTaskCard";
@@ -27,6 +26,8 @@ type DayOverview = {
 type WorkoutApi = {
   workout_id: string;
   workout_name: string;
+  focus?: string | null;
+  notes?: string | null;
   warmup?: any;
   main: any;
   finisher?: any;
@@ -50,7 +51,10 @@ export default function IronAcreTasks({
   const sessionId = sessionRef?.id || "";
   const sessionDone = Boolean(hasRecurringToday ? todayData?.recurringDone : todayData?.workoutDone);
 
-  const durationMinutes = typeof todayData?.workoutSummary?.duration === "number" ? todayData!.workoutSummary!.duration : null;
+  const durationMinutes =
+    typeof todayData?.workoutSummary?.duration === "number"
+      ? todayData!.workoutSummary!.duration
+      : null;
 
   const { data: workoutData } = useSWR<WorkoutApi>(
     sessionId ? `/api/workouts/${encodeURIComponent(sessionId)}` : null,
@@ -86,6 +90,7 @@ export default function IronAcreTasks({
         workoutId={sessionId}
         done={sessionDone}
         durationMinutes={durationMinutes}
+        dateKey={todayKey}
       />
 
       <IronAcreTaskCard
