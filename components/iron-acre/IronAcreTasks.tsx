@@ -23,6 +23,14 @@ type DayOverview = {
   optionalWorkouts: SimpleWorkoutRef[];
 };
 
+type WeeklyTotals = {
+  totalTasks: number;
+  completedTasks: number;
+  totalWorkoutsCompleted: number;
+  totalWorkoutTime: number;
+  totalCaloriesBurned: number;
+};
+
 type WorkoutApi = {
   workout_id: string;
   workout_name: string;
@@ -38,32 +46,24 @@ export default function IronAcreTasks({
   fridayYMD,
   todayData,
   fridayData,
+  weekDays,
+  weekStartYMD,
+  weekEndYMD,
+  weeklyTotals,
 }: {
   todayKey: string;
   fridayYMD: string;
   todayData?: DayOverview;
   fridayData?: DayOverview;
+  weekDays: DayOverview[];
+  weekStartYMD: string;
+  weekEndYMD: string;
+  weeklyTotals?: WeeklyTotals;
 }) {
   const router = useRouter();
 
-  const hasRecurringToday = Boolean(todayData?.hasRecurringToday);
-  const sessionRef = todayData?.recurringWorkouts?.[0];
-  const sessionId = sessionRef?.id || "";
-  const sessionDone = Boolean(hasRecurringToday ? todayData?.recurringDone : todayData?.workoutDone);
-
-  const durationMinutes =
-    typeof todayData?.workoutSummary?.duration === "number"
-      ? todayData!.workoutSummary!.duration
-      : null;
-
-  const { data: workoutData } = useSWR<WorkoutApi>(
-    sessionId ? `/api/workouts/${encodeURIComponent(sessionId)}` : null,
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60_000 }
-  );
-
-  const isFriday = Boolean(todayData?.isFriday);
   const checkinDone = Boolean(fridayData?.checkinComplete);
+  const isFriday = Boolean(todayData?.isFriday);
   const checkinTargetDate = fridayYMD || todayKey;
 
   const checkinSubtitle = isFriday
@@ -74,6 +74,39 @@ export default function IronAcreTasks({
     ? `Completed for ${fridayYMD}`
     : `Next check-in: ${fridayYMD || "Friday"}`;
 
+  // pick workout for the card:
+  // 1) today recurring
+  // 2) next upcoming recurring in week
+  // 3) most recent recurring in week
+  const picked = (() => {
+    const daysWith = (weekDays || []).filter((d) => (d.recurringWorkouts || []).length > 0);
+
+    const todayHit = daysWith.find((d) => d.dateKey === todayKey);
+    if (todayHit) return { day: todayHit, ref: todayHit.recurringWorkouts[0] };
+
+    const next = daysWith.find((d) => d.dateKey >= todayKey);
+    if (next) return { day: next, ref: next.recurringWorkouts[0] };
+
+    const last = daysWith.length ? daysWith[daysWith.length - 1] : undefined;
+    if (last) return { day: last, ref: last.recurringWorkouts[0] };
+
+    return { day: undefined as any, ref: undefined as any };
+  })();
+
+  const sessionId: string = picked?.ref?.id || "";
+  const sessionDone = Boolean(picked?.day?.recurringDone);
+
+  const durationMinutes =
+    typeof picked?.day?.workoutSummary?.duration === "number"
+      ? picked.day.workoutSummary.duration
+      : null;
+
+  const { data: workoutData } = useSWR<WorkoutApi>(
+    sessionId ? `/api/workouts/${encodeURIComponent(sessionId)}` : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
+
   return (
     <div className="mb-3">
       <IronAcreTaskCard
@@ -82,6 +115,7 @@ export default function IronAcreTasks({
         ctaLabel={checkinDone ? "View" : "Open"}
         rightMeta={checkinDone ? "✓" : undefined}
         onCta={() => router.push(`/checkin?date=${encodeURIComponent(checkinTargetDate)}`)}
+        variant="neon"
       />
 
       <IronAcreWorkoutCard
@@ -90,7 +124,11 @@ export default function IronAcreTasks({
         workoutId={sessionId}
         done={sessionDone}
         durationMinutes={durationMinutes}
-        dateKey={todayKey}
+        dateKey={picked?.day?.dateKey || todayKey}
+        weekDays={weekDays}
+        weekStartYMD={weekStartYMD}
+        weekEndYMD={weekEndYMD}
+        weeklyTotals={weeklyTotals}
       />
 
       <IronAcreTaskCard
@@ -98,11 +136,12 @@ export default function IronAcreTasks({
         subtitle="Keep your maxes current so % loads stay accurate"
         ctaLabel="1RMs"
         onCta={() => router.push("/iron-acre/strength")}
+        variant="neon"
       />
 
-      {!hasRecurringToday && (
+      {!sessionId && (
         <div className="text-dim small mt-2">
-          No recurring gym session assigned today. If you want, we can fall back to the most recent session.
+          No recurring gym sessions found for this week.
         </div>
       )}
     </div>
