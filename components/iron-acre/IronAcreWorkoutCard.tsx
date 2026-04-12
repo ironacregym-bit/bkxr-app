@@ -1,10 +1,8 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import useSWR from "swr";
 
-const fetcher = (u: string) => fetch(u).then((r) => r.json());
-
-const ACCENT_IRON = "#22c55e";
+const NEON = "#18ff9a";
+const NEON_2 = "#00e5ff";
 
 type WorkoutItem =
   | {
@@ -41,23 +39,13 @@ type DayOverview = {
   recurringDone: boolean;
 };
 
-type WeeklyOverviewResponse = {
-  weekStartYMD: string;
-  weekEndYMD: string;
-  fridayYMD: string;
-  days: DayOverview[];
+type WeeklyTotals = {
+  totalTasks: number;
+  completedTasks: number;
+  totalWorkoutsCompleted: number;
+  totalWorkoutTime: number;
+  totalCaloriesBurned: number;
 };
-
-function startOfAlignedWeekFromYMD(ymd: string): string {
-  // ymd is YYYY-MM-DD local
-  const d = new Date(`${ymd}T00:00:00`);
-  const day = d.getDay();
-  const diffToMon = (day + 6) % 7;
-  const s = new Date(d);
-  s.setDate(d.getDate() - diffToMon);
-  s.setHours(0, 0, 0, 0);
-  return s.toLocaleDateString("en-CA");
-}
 
 function flattenExercisesWithReps(w?: Workout | null) {
   if (!w) return [] as Array<{ name: string; reps?: string | null }>;
@@ -67,29 +55,16 @@ function flattenExercisesWithReps(w?: Workout | null) {
   if (w.finisher) rounds.push(w.finisher);
 
   const out: Array<{ name: string; reps?: string | null }> = [];
-
   for (const r of rounds) {
     for (const it of r.items || []) {
       if (it.type === "Single") {
-        out.push({
-          name: it.exercise_name || it.exercise_id,
-          reps: it.reps ?? null,
-        });
+        out.push({ name: it.exercise_name || it.exercise_id, reps: it.reps ?? null });
       } else {
-        for (const s of it.items || []) {
-          out.push({
-            name: s.exercise_name || s.exercise_id,
-            reps: s.reps ?? null,
-          });
-        }
+        for (const s of it.items || []) out.push({ name: s.exercise_name || s.exercise_id, reps: s.reps ?? null });
       }
     }
   }
   return out;
-}
-
-function countExercises(w?: Workout | null) {
-  return flattenExercisesWithReps(w).length;
 }
 
 function estimateSets(w?: Workout | null) {
@@ -121,6 +96,10 @@ export default function IronAcreWorkoutCard({
   done,
   durationMinutes,
   dateKey,
+  weekDays,
+  weekStartYMD,
+  weekEndYMD,
+  weeklyTotals,
 }: {
   title: string;
   workout: Workout | null;
@@ -128,12 +107,16 @@ export default function IronAcreWorkoutCard({
   done: boolean;
   durationMinutes?: number | null;
   dateKey: string;
+  weekDays: DayOverview[];
+  weekStartYMD: string;
+  weekEndYMD: string;
+  weeklyTotals?: WeeklyTotals;
 }) {
-  const exCount = countExercises(workout);
-  const setCount = estimateSets(workout);
-
   const flat = useMemo(() => flattenExercisesWithReps(workout), [workout]);
+  const exCount = flat.length;
+  const setCount = useMemo(() => estimateSets(workout), [workout]);
   const preview = useMemo(() => flat.slice(0, 3), [flat]);
+
   const desc = useMemo(() => {
     const a = (workout?.focus || "").trim();
     const b = (workout?.notes || "").trim();
@@ -142,19 +125,10 @@ export default function IronAcreWorkoutCard({
     return "Strength session targeting key patterns with varied angles and equipment.";
   }, [workout?.focus, workout?.notes]);
 
-  // Weekly list (expandable inside this tile)
   const [showWeek, setShowWeek] = useState(false);
-  const weekStartKey = useMemo(() => startOfAlignedWeekFromYMD(dateKey), [dateKey]);
-
-  const { data: weeklyOverview } = useSWR<WeeklyOverviewResponse>(
-    showWeek ? `/api/weekly/overview?week=${encodeURIComponent(weekStartKey)}` : null,
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60_000 }
-  );
 
   const weekRows = useMemo(() => {
-    const days = weeklyOverview?.days || [];
-    // only recurring days with workouts
+    const days = weekDays || [];
     const rows = days
       .filter((d) => (d.recurringWorkouts || []).length > 0)
       .map((d) => ({
@@ -164,48 +138,67 @@ export default function IronAcreWorkoutCard({
         done: Boolean(d.recurringDone),
       }));
 
-    // split into completed/upcoming (relative to today)
-    const today = dateKey;
-    const completed = rows.filter((r) => r.done);
-    const upcoming = rows.filter((r) => !r.done && r.ymd >= today);
+    return {
+      completed: rows.filter((r) => r.done),
+      pending: rows.filter((r) => !r.done), // includes past + future
+      all: rows,
+    };
+  }, [weekDays]);
 
-    return { completed, upcoming };
-  }, [weeklyOverview, dateKey]);
+  const startHref = workoutId
+    ? `/gymworkout/${encodeURIComponent(workoutId)}?date=${encodeURIComponent(dateKey)}`
+    : "#";
 
-  const startHref = workoutId ? `/gymworkout/${encodeURIComponent(workoutId)}?date=${encodeURIComponent(dateKey)}` : "#";
+  const weekProgress = useMemo(() => {
+    const total = weekRows.all.length;
+    const doneCount = weekRows.completed.length;
+    return { total, doneCount };
+  }, [weekRows]);
 
   return (
     <section
       className="futuristic-card p-3 mb-3"
       style={{
-        border: "1px solid rgba(255,255,255,0.10)",
-        background: "linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.12))",
-        boxShadow: "0 10px 28px rgba(0,0,0,0.35)",
+        border: `1px solid ${NEON}33`,
+        background: "linear-gradient(180deg, rgba(0,0,0,0.42), rgba(0,0,0,0.18))",
+        boxShadow: `0 0 0 1px ${NEON}14 inset, 0 18px 40px rgba(0,0,0,0.45)`,
       }}
     >
-      {/* Section label row (matches reference style) */}
+      {/* Label row */}
       <div className="d-flex justify-content-between align-items-center mb-2">
-        <div className="text-dim small" style={{ letterSpacing: 0.8 }}>
-          <i className="fas fa-dumbbell" style={{ marginRight: 8, opacity: 0.9 }} />
+        <div className="text-dim small" style={{ letterSpacing: 0.9, display: "flex", alignItems: "center", gap: 8 }}>
+          <i className="fas fa-dumbbell" style={{ color: NEON, filter: `drop-shadow(0 0 8px ${NEON}66)` }} />
           TODAY’S WORKOUT
         </div>
 
         <button
           type="button"
-          className="btn btn-sm btn-outline-light"
-          style={{ borderRadius: 999, paddingLeft: 12, paddingRight: 12, opacity: 0.9 }}
           onClick={() => setShowWeek((v) => !v)}
-          title="Show this week"
+          className="btn btn-sm"
+          style={{
+            borderRadius: 999,
+            border: `1px solid ${NEON}55`,
+            background: "rgba(0,0,0,0.20)",
+            color: NEON,
+            fontWeight: 800,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            paddingLeft: 12,
+            paddingRight: 12,
+            boxShadow: `0 0 14px ${NEON}22`,
+          }}
+          title="Toggle this week"
         >
-          {showWeek ? "Hide week" : "This week"}
+          <i className={`fas fa-chevron-${showWeek ? "up" : "down"}`} />
+          This week
         </button>
       </div>
 
-      {/* Workout title + description */}
+      {/* Title + description */}
       <div className="fw-bold" style={{ fontSize: "1.25rem", lineHeight: 1.1 }}>
         {workout?.workout_name || "Gym session"}
       </div>
-
       <div className="text-dim small mt-1" style={{ maxWidth: 520 }}>
         {desc}
       </div>
@@ -216,49 +209,51 @@ export default function IronAcreWorkoutCard({
         style={{
           gap: 10,
           background: "rgba(255,255,255,0.03)",
-          border: "1px solid rgba(255,255,255,0.08)",
+          border: `1px solid ${NEON}22`,
           borderRadius: 14,
           padding: "10px 12px",
+          boxShadow: `0 0 18px ${NEON}14`,
         }}
       >
         <div style={{ flex: 1 }}>
-          <div style={{ color: ACCENT_IRON, fontWeight: 900, fontSize: "1.1rem" }}>{exCount || "—"}</div>
+          <div style={{ color: NEON, fontWeight: 900, fontSize: "1.1rem", textShadow: `0 0 12px ${NEON}55` }}>
+            {exCount || "—"}
+          </div>
           <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
             EXERCISES
           </div>
         </div>
 
         <div style={{ flex: 1 }}>
-          <div style={{ color: ACCENT_IRON, fontWeight: 900, fontSize: "1.1rem" }}>{setCount || "—"}</div>
+          <div style={{ color: NEON_2, fontWeight: 900, fontSize: "1.1rem", textShadow: `0 0 12px ${NEON_2}55` }}>
+            {setCount || "—"}
+          </div>
           <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
             SETS
           </div>
         </div>
 
         <div style={{ flex: 1 }}>
-          <div style={{ color: ACCENT_IRON, fontWeight: 900, fontSize: "1.1rem" }}>{durationMinutes ?? "—"}</div>
+          <div style={{ color: NEON, fontWeight: 900, fontSize: "1.1rem", textShadow: `0 0 12px ${NEON}55` }}>
+            {durationMinutes ?? "—"} {durationMinutes != null ? "min" : ""}
+          </div>
           <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
             DURATION
           </div>
         </div>
       </div>
 
-      {/* Exercise preview list */}
+      {/* Preview list */}
       {preview.length > 0 && (
-        <div className="mt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
+        <div className="mt-3" style={{ borderTop: `1px solid ${NEON}18`, paddingTop: 10 }}>
           {preview.map((x, i) => (
-            <div
-              key={i}
-              className="d-flex justify-content-between align-items-center"
-              style={{ padding: "6px 0" }}
-            >
+            <div key={i} className="d-flex justify-content-between align-items-center" style={{ padding: "6px 0" }}>
               <div className="text-truncate" style={{ minWidth: 0 }}>
                 <span className="text-dim" style={{ marginRight: 8 }}>
                   {i + 1}
                 </span>
-                <span style={{ fontWeight: 700 }}>{x.name}</span>
+                <span style={{ fontWeight: 750 }}>{x.name}</span>
               </div>
-
               <div className="text-dim small" style={{ whiteSpace: "nowrap" }}>
                 {x.reps ? x.reps : ""}
               </div>
@@ -279,50 +274,63 @@ export default function IronAcreWorkoutCard({
         </div>
       )}
 
-      {/* START button */}
+      {/* START */}
       <div className="mt-3">
         <Link
           href={startHref}
           className="btn w-100"
           style={{
             borderRadius: 14,
-            background: `linear-gradient(90deg, ${ACCENT_IRON}, #2ee59d)`,
-            color: "#0b0f14",
+            background: `linear-gradient(90deg, ${NEON}, ${NEON_2})`,
+            color: "#06110c",
             fontWeight: 900,
-            letterSpacing: 0.8,
+            letterSpacing: 0.9,
             padding: "12px 14px",
             pointerEvents: workoutId ? "auto" : "none",
             opacity: workoutId ? 1 : 0.6,
+            boxShadow: `0 0 24px ${NEON}45`,
           }}
         >
           START <i className="fas fa-play" style={{ marginLeft: 10 }} />
         </Link>
 
-        {done && (
-          <div className="text-dim small mt-2">
-            <i className="fas fa-check" style={{ color: ACCENT_IRON, marginRight: 6 }} />
-            Completed this week
+        <div className="d-flex justify-content-between align-items-center mt-2">
+          {done ? (
+            <div className="text-dim small">
+              <i className="fas fa-check" style={{ color: NEON, marginRight: 6 }} />
+              Completed this week
+            </div>
+          ) : (
+            <div className="text-dim small">Week {weekStartYMD} → {weekEndYMD}</div>
+          )}
+
+          <div className="text-dim small">
+            {weekProgress.doneCount}/{weekProgress.total} done
+            {weeklyTotals?.completedTasks != null && weeklyTotals?.totalTasks != null ? (
+              <span> • {weeklyTotals.completedTasks}/{weeklyTotals.totalTasks} tasks</span>
+            ) : null}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Expandable week list inside the tile */}
+      {/* Expandable week list */}
       {showWeek && (
-        <div className="mt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12 }}>
+        <div className="mt-3" style={{ borderTop: `1px solid ${NEON}18`, paddingTop: 12 }}>
           <div className="fw-semibold mb-2">This week</div>
 
-          {weekRows.upcoming.length > 0 && (
+          {weekRows.pending.length > 0 && (
             <>
-              <div className="text-dim small mb-1">Upcoming</div>
-              {weekRows.upcoming.map((r) => (
+              <div className="text-dim small mb-1">Pending</div>
+              {weekRows.pending.map((r) => (
                 <div
-                  key={`up-${r.ymd}`}
+                  key={`pending-${r.ymd}`}
                   style={{
                     padding: "10px 10px",
                     borderRadius: 12,
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    background: "rgba(255,255,255,0.03)",
+                    border: `1px solid ${NEON}22`,
+                    background: "rgba(0,0,0,0.20)",
                     marginBottom: 8,
+                    boxShadow: `0 0 16px ${NEON}10`,
                   }}
                 >
                   <div className="d-flex justify-content-between align-items-center">
@@ -330,7 +338,7 @@ export default function IronAcreWorkoutCard({
                       {r.day} <span className="text-dim">({r.ymd})</span>
                     </div>
                     <span className="badge" style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}>
-                      Upcoming
+                      Pending
                     </span>
                   </div>
 
@@ -364,16 +372,24 @@ export default function IronAcreWorkoutCard({
                   style={{
                     padding: "10px 10px",
                     borderRadius: 12,
-                    border: `1px solid ${ACCENT_IRON}33`,
-                    background: "rgba(34,197,94,0.06)",
+                    border: `1px solid ${NEON}44`,
+                    background: "rgba(24,255,154,0.06)",
                     marginBottom: 8,
+                    boxShadow: `0 0 16px ${NEON}18`,
                   }}
                 >
                   <div className="d-flex justify-content-between align-items-center">
                     <div className="fw-semibold">
                       {r.day} <span className="text-dim">({r.ymd})</span>
                     </div>
-                    <span className="badge" style={{ background: `${ACCENT_IRON}22`, color: ACCENT_IRON, border: `1px solid ${ACCENT_IRON}55` }}>
+                    <span
+                      className="badge"
+                      style={{
+                        background: `${NEON}22`,
+                        color: NEON,
+                        border: `1px solid ${NEON}55`,
+                      }}
+                    >
                       Completed
                     </span>
                   </div>
@@ -397,7 +413,7 @@ export default function IronAcreWorkoutCard({
             </>
           )}
 
-          {weekRows.upcoming.length === 0 && weekRows.completed.length === 0 && (
+          {weekRows.pending.length === 0 && weekRows.completed.length === 0 && (
             <div className="text-dim small">No recurring workouts found for this week.</div>
           )}
         </div>
