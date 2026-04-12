@@ -264,3 +264,26 @@
   padding: 6px 10px;
   font-weight: 700;
 }
+/* Clear circle icon button (same feel as gx-chevron) */
+.gx-icon-circle{
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  color: rgba(255,255,255,0.85);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+}
+
+.gx-icon-circle-sm{
+  width: 34px;
+  height: 34px;
+}
+
+.gx-icon-circle:disabled{
+  opacity: 0.45;
+  cursor: not-allowed;
+}
