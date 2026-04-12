@@ -26,10 +26,10 @@ export default function RoundSection({
   tickKeys: Record<string, boolean>;
   onOpenMedia: (exercise_id: string) => void;
 }) {
-  const sorted = useMemo(
-    () => [...(round.items || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-    [round.items]
-  );
+  const sorted = useMemo<Array<UISingleItem | UISupersetItem>>(() => {
+    const items = (round.items || []) as Array<UISingleItem | UISupersetItem>;
+    return [...items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }, [round.items]);
 
   return (
     <section className="gx-round">
@@ -41,24 +41,29 @@ export default function RoundSection({
         <div className="text-dim small mt-2">No items.</div>
       ) : (
         <div className="gx-round-body">
-          {sorted.map((it, idx) =>
-            it.type === "Single" ? (
-              <ExerciseSingleCard
-                key={`${title}-single-${idx}`}
-                item={it as UISingleItem}
-                media={media[(it as UISingleItem).exercise_id]}
-                prevByKey={prevByKey}
-                trainingMaxes={trainingMaxes}
-                defaultRounding={defaultRounding}
-                onUpdateSet={onUpdateSet}
-                onToggleTick={onToggleTick}
-                tickKeys={tickKeys}
-                onOpenMedia={onOpenMedia}
-              />
-            ) : (
+          {sorted.map((it, idx) => {
+            if (it.type === "Single") {
+              return (
+                <ExerciseSingleCard
+                  key={`${title}-single-${idx}`}
+                  item={it}
+                  media={media[it.exercise_id]}
+                  prevByKey={prevByKey}
+                  trainingMaxes={trainingMaxes}
+                  defaultRounding={defaultRounding}
+                  onUpdateSet={onUpdateSet}
+                  onToggleTick={onToggleTick}
+                  tickKeys={tickKeys}
+                  onOpenMedia={onOpenMedia}
+                />
+              );
+            }
+
+            // ✅ TS now correctly knows `it` is UISupersetItem here
+            return (
               <ExerciseSupersetCard
                 key={`${title}-ss-${idx}`}
-                item={it as UISupersetItem}
+                item={it}
                 media={media}
                 prevByKey={prevByKey}
                 onUpdateSet={onUpdateSet}
@@ -66,8 +71,8 @@ export default function RoundSection({
                 tickKeys={tickKeys}
                 onOpenMedia={onOpenMedia}
               />
-            )
-          )}
+            );
+          })}
         </div>
       )}
     </section>
