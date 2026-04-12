@@ -80,48 +80,40 @@ export default function ExerciseSupersetCard({
 
                   return (
                     <div key={`${sub.exercise_id}|${setNum}`} className="gx-ss-ex">
-                      {/* title + icon in same row (no wrapping) */}
+                      {/* Name + play button on same row */}
                       <div className="gx-ss-ex-head">
                         <div className="gx-ss-ex-title text-truncate" title={title}>
                           {title}
                         </div>
 
-                        <span
-                          className={`gx-play-icon ${hasMedia ? "" : "is-disabled"}`}
-                          role="button"
-                          tabIndex={hasMedia ? 0 : -1}
+                        <button
+                          type="button"
+                          className="gx-icon-circle gx-icon-circle-sm"
+                          onClick={() => hasMedia && onOpenMedia(sub.exercise_id)}
+                          disabled={!hasMedia}
                           aria-label={hasMedia ? "Open exercise media" : "No media available"}
                           title={hasMedia ? "Open media" : "No media"}
-                          onClick={() => {
-                            if (!hasMedia) return;
-                            onOpenMedia(sub.exercise_id);
-                          }}
-                          onKeyDown={(e) => {
-                            if (!hasMedia) return;
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              onOpenMedia(sub.exercise_id);
-                            }
-                          }}
                         >
-                          {/* If you’re on FA6 keep this. If FA5, change to: <i className="fas fa-play-circle" /> */}
-                          <i className="fa-solid fa-circle-play" />
-                        </span>
+                          <i className="fas fa-play" />
+                        </button>
                       </div>
 
-                      {/* Prev below */}
-                      <div className="gx-ss-ex-prev text-dim small">
+                      {/* Keep only the Prev near the set row (this one) */}
+                      <div className="text-dim small" style={{ marginTop: 6 }}>
                         Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
                       </div>
 
-                      {/* One row only (because setNum is fixed by the outer loop) */}
+                      {/* Single input row mapped to this setNum */}
                       <SetGrid
                         exerciseId={sub.exercise_id}
                         sets={1}
                         prevByKey={prevByKey}
                         targetKg={null}
                         showUseTarget={false}
-                        onUpdateSet={(exercise_id, _ignored, patch) => onUpdateSet(exercise_id, setNum, patch)}
+                        showPrevRow={false}
+                        onUpdateSet={(exercise_id, _ignored, patch) =>
+                          onUpdateSet(exercise_id, setNum, patch)
+                        }
                         tickKeys={tickKeys}
                         onToggleTick={(exercise_id, _ignored) => onToggleTick(exercise_id, setNum)}
                         prefillReps={prefillReps}
