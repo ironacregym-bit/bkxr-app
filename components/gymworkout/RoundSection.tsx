@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import type { CompletionSet, UIRound, UISingleItem, UISupersetItem } from "./types";
 import ExerciseSingleCard from "./ExerciseSingleCard";
-import GymExerciseSupersetCard from "./ExerciseSupersetCard";
+import ExerciseSupersetCard from "./ExerciseSupersetCard";
 
 type RoundItem = UISingleItem | UISupersetItem;
 
@@ -62,7 +62,7 @@ export default function RoundSection({
             }
 
             return (
-              <GymExerciseSupersetCard
+              <ExerciseSupersetCard
                 key={`${title}-ss-${idx}`}
                 item={it}
                 media={media}
