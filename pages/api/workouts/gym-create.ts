@@ -1,4 +1,3 @@
-// FILE: pages/api/workouts/gym-create.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
@@ -21,8 +20,6 @@ type SingleItem = {
   weight_kg?: number | null;
   rest_s?: number | null;
   notes?: string | null;
-
-  // NEW
   strength?: StrengthSpec | null;
 };
 
@@ -208,7 +205,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const rounds: GymRound[] = [];
     if (p.warmup) rounds.push({ ...p.warmup, order: 1 });
     rounds.push({ ...p.main, order: p.warmup ? 2 : 1 });
-    if (p.finisher) rounds.push({ ...p.finisher, order: p.warmup ? 3 : (p.main ? 2 : 1) });
+    if (p.finisher) rounds.push({ ...p.finisher, order: p.warmup ? 3 : 2 });
 
     for (const r of rounds) {
       const roundRef = workoutRef.collection("rounds").doc();
@@ -235,13 +232,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 percent_1rm: clamp01(s.strength.percent_1rm),
                 percent_min: clamp01(s.strength.percent_min),
                 percent_max: clamp01(s.strength.percent_max),
-                rounding_kg:
-                  s.strength.rounding_kg == null
-                    ? null
-                    : s.strength.rounding_kg,
+                rounding_kg: s.strength.rounding_kg == null ? null : s.strength.rounding_kg,
                 mode: (s.strength.mode ?? null) as any,
               }
             : null;
+
+          // ✅ Guard: do not allow both absolute kg and % prescription
+          if (strength && s.weight_kg != null) {
+            return res.status(400).json({
+              error: "Cannot specify weight_kg when using % of 1RM (strength). Clear weight_kg or disable strength.",
+            });
+          }
 
           batch.set(itemRef, {
             type: "Single",
@@ -249,11 +250,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             exercise_id: s.exercise_id,
             sets: s.sets ?? null,
             reps: s.reps ?? null,
-            weight_kg: s.weight_kg ?? null,
+            weight_kg: strength ? null : (s.weight_kg ?? null),
             rest_s: s.rest_s ?? null,
             notes: s.notes ?? null,
-
-            // NEW
             strength,
           });
         } else {
