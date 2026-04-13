@@ -3,6 +3,7 @@ import firestore from "../../../lib/firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]";
+import { processStrengthFromCompletion } from "../../../lib/strength/processStrengthFromCompletion";
 
 // ---------- Types ----------
 type GymCompletionSet = {
@@ -59,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const user_email = session.user.email.toLowerCase();
 
     // Body
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
     const workout_id = String(body.workout_id || "").trim();
     if (!workout_id) {
       return res.status(400).json({ error: "workout_id required" });
@@ -147,8 +148,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const docId = docRef.id;
 
     // ---------- GYM COMPLETION ----------
-    if (isGym || (!isBenchmarkLike && (calories_burned != null || duration_minutes != null || rpe != null || notes || weight_completed_with != null))) {
-      // Gym payload: record sets[] if present, and summary overrides when provided.
+    if (
+      isGym ||
+      (!isBenchmarkLike &&
+        (calories_burned != null ||
+          duration_minutes != null ||
+          rpe != null ||
+          notes ||
+          weight_completed_with != null))
+    ) {
       const payload: Record<string, any> = {
         id: docId,
         workout_id,
@@ -169,8 +177,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (weight_completed_with != null) payload.weight_completed_with = weight_completed_with;
 
       await docRef.set(payload, { merge: true });
-      
-      await processStrengthFromCompletion(docId);
+
+      // ✅ NEW: process strength profile after saving completion
+      // (safe + idempotent; does nothing if strength_exercises is empty)
+      try {
+        await processStrengthFromCompletion({ completionId: docId, userEmail: user_email });
+      } catch (e) {
+        console.error("[strength/process] error:", (e as any)?.message || e);
+        // do not fail completion creation if strength processing fails
+      }
 
       return res.status(201).json({ ok: true, type: "gym", id: docId });
     }
@@ -219,9 +234,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         completed_date: completedDateTS,
         date_completed: completedDateTS,
 
-        // Manual overrides (optional)
         calories_burned: calories_burned ?? null,
-        duration: duration_minutes ?? null, // legacy 'duration' name for BXKR
+        duration: duration_minutes ?? null,
         rating: body.rating != null ? Number(body.rating) : null,
         weight_completed_with: weight_completed_with ?? null,
         sets_completed: body.sets_completed != null ? Number(body.sets_completed) : null,
