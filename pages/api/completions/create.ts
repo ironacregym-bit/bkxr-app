@@ -169,6 +169,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (weight_completed_with != null) payload.weight_completed_with = weight_completed_with;
 
       await docRef.set(payload, { merge: true });
+      
+      await processStrengthFromCompletion(docId);
+
       return res.status(201).json({ ok: true, type: "gym", id: docId });
     }
 
