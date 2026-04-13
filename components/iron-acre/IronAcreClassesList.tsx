@@ -55,15 +55,21 @@ export default function IronAcreClassesList() {
   const isAuthed = Boolean(authSession?.user?.email);
   const authedEmail = authSession?.user?.email || "";
 
+  // We still load gyms so we can auto-pick the Iron Acre gym location,
+  // but we do NOT render the select UI.
   const { data: gymsResp } = useSWR("/api/gyms/list", fetcher, { revalidateOnFocus: false });
   const gyms: Gym[] = gymsResp?.gyms ?? [];
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Auto-select first gym silently
     if (!selectedGymId && gyms.length > 0) setSelectedGymId(gyms[0].id);
   }, [gyms, selectedGymId]);
 
-  const selectedGym = useMemo(() => gyms.find((g) => g.id === selectedGymId) || null, [gyms, selectedGymId]);
+  const selectedGym = useMemo(
+    () => gyms.find((g) => g.id === selectedGymId) || null,
+    [gyms, selectedGymId]
+  );
 
   const profileKey = authedEmail ? `/api/profile?email=${encodeURIComponent(authedEmail)}` : null;
   const { data: profile } = useSWR<UserAccess>(profileKey, fetcher, {
@@ -185,9 +191,7 @@ export default function IronAcreClassesList() {
 
   function renderWeek(title: string, groups: Record<string, SessionItem[]>) {
     const days = Object.keys(groups).sort();
-    if (!days.length) {
-      return <div className="text-dim small">No classes scheduled.</div>;
-    }
+    if (!days.length) return null;
 
     return (
       <div className="mb-3">
@@ -263,10 +267,18 @@ export default function IronAcreClassesList() {
     );
   }
 
+  const emptyThis = Object.keys(byWeek.thisWeek || {}).length === 0;
+  const emptyNext = Object.keys(byWeek.nextWeek || {}).length === 0;
+  const emptyAll = emptyThis && emptyNext;
+
   return (
     <section className="futuristic-card p-3 mb-3" style={neonCardStyle()}>
+      {/* Header row styled like Today's workout */}
       <div className="d-flex justify-content-between align-items-center mb-2">
-        <h6 className="m-0">Book a class</h6>
+        <div className="text-dim small" style={{ letterSpacing: 0.9, display: "flex", alignItems: "center", gap: 8 }}>
+          <i className="fas fa-calendar-alt" style={{ color: IA.neon, filter: `drop-shadow(0 0 8px ${IA.neon}66)` }} />
+          CLASSES
+        </div>
 
         <span
           className="badge"
@@ -278,22 +290,6 @@ export default function IronAcreClassesList() {
         >
           This week + next
         </span>
-      </div>
-
-      <div className="mb-3">
-        <label className="form-label">Select gym</label>
-        <select
-          className="form-select"
-          value={selectedGymId ?? ""}
-          onChange={(e) => setSelectedGymId(e.target.value || null)}
-        >
-          {gyms.length === 0 && <option value="">No gyms found</option>}
-          {gyms.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name} — {g.location}
-            </option>
-          ))}
-        </select>
       </div>
 
       {msg && (
@@ -316,8 +312,14 @@ export default function IronAcreClassesList() {
 
       {err && <div className="alert alert-danger mb-2">{err}</div>}
 
-      {renderWeek("This week", byWeek.thisWeek)}
-      {renderWeek("Next week", byWeek.nextWeek)}
+      {emptyAll ? (
+        <div className="text-dim small">No classes scheduled.</div>
+      ) : (
+        <>
+          {renderWeek("This week", byWeek.thisWeek)}
+          {renderWeek("Next week", byWeek.nextWeek)}
+        </>
+      )}
     </section>
   );
 }
