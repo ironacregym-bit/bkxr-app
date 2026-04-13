@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import { toMillis } from "../../lib/time";
+import { IA, neonCardStyle, neonPrimaryStyle, neonButtonStyle } from "./theme";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
-const ACCENT_IRON = "#22c55e";
 
 type Gym = { id: string; name: string; location: string };
 
@@ -66,7 +66,10 @@ export default function IronAcreClassesList() {
   const selectedGym = useMemo(() => gyms.find((g) => g.id === selectedGymId) || null, [gyms, selectedGymId]);
 
   const profileKey = authedEmail ? `/api/profile?email=${encodeURIComponent(authedEmail)}` : null;
-  const { data: profile } = useSWR<UserAccess>(profileKey, fetcher, { revalidateOnFocus: false, dedupingInterval: 60_000 });
+  const { data: profile } = useSWR<UserAccess>(profileKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60_000,
+  });
 
   const isGymMember = String(profile?.membership_status || "").toLowerCase() === "gym_member";
   const isCashPayer = String(profile?.payment_type || "").toLowerCase() === "cash";
@@ -85,7 +88,9 @@ export default function IronAcreClassesList() {
 
   const { data: sessionsResp, mutate: mutateSessions } = useSWR(
     shouldLoadSessions
-      ? `/api/schedule/upcoming?location=${encodeURIComponent(selectedGym!.location)}&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`
+      ? `/api/schedule/upcoming?location=${encodeURIComponent(selectedGym!.location)}&from=${encodeURIComponent(
+          fromISO
+        )}&to=${encodeURIComponent(toISO)}`
       : null,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 30_000 }
@@ -181,32 +186,40 @@ export default function IronAcreClassesList() {
   function renderWeek(title: string, groups: Record<string, SessionItem[]>) {
     const days = Object.keys(groups).sort();
     if (!days.length) {
-      return (
-        <div className="text-dim small">
-          No classes scheduled.
-        </div>
-      );
+      return <div className="text-dim small">No classes scheduled.</div>;
     }
 
     return (
       <div className="mb-3">
         <div className="fw-semibold mb-2">{title}</div>
+
         {days.map((ymd) => (
           <div key={ymd} className="mb-2">
             <div className="text-dim small mb-1">{ymd}</div>
+
             {(groups[ymd] || []).map((s) => {
               const full = s.max_attendance > 0 && s.current_attendance >= s.max_attendance;
               const startStr = s.start_time ? new Date(s.start_time).toLocaleString() : "TBC";
+
               return (
-                <section key={s.id} className="futuristic-card p-3 mb-2">
+                <section
+                  key={s.id}
+                  className="futuristic-card p-3 mb-2"
+                  style={neonCardStyle({
+                    border: `1px solid ${IA.borderSoft}`,
+                    boxShadow: IA.glowSoft,
+                  })}
+                >
                   <div className="d-flex justify-content-between align-items-start gap-2">
                     <div style={{ minWidth: 0 }}>
                       <div className="fw-semibold">
                         {s.class_id || "Class"} {s.gym_name ? `• ${s.gym_name}` : ""}
                       </div>
+
                       <div className="text-dim small">
                         {startStr} {s.coach_name ? `• Coach: ${s.coach_name}` : ""}
                       </div>
+
                       <div className="text-dim small mt-1">
                         Seats: {s.current_attendance}/{s.max_attendance || "∞"}
                         {isGymMember ? " • Members book free" : ""}
@@ -217,13 +230,12 @@ export default function IronAcreClassesList() {
                     <div className="d-flex flex-column gap-2">
                       <button
                         className="btn btn-sm"
-                        style={{
+                        style={neonPrimaryStyle({
                           borderRadius: 14,
-                          background: ACCENT_IRON,
-                          color: "#0b0f14",
-                          fontWeight: 800,
+                          paddingLeft: 14,
+                          paddingRight: 14,
                           opacity: full ? 0.6 : 1,
-                        }}
+                        })}
                         disabled={full || bookingBusy === s.id}
                         onClick={() => book(s.id, false)}
                       >
@@ -232,8 +244,8 @@ export default function IronAcreClassesList() {
 
                       {!isGymMember && (
                         <button
-                          className="btn btn-sm btn-outline-light"
-                          style={{ borderRadius: 14 }}
+                          className="btn btn-sm"
+                          style={neonButtonStyle({ borderRadius: 14 })}
                           disabled={full || bookingBusy === s.id}
                           onClick={() => book(s.id, true)}
                         >
@@ -252,15 +264,16 @@ export default function IronAcreClassesList() {
   }
 
   return (
-    <section className="futuristic-card p-3 mb-3">
+    <section className="futuristic-card p-3 mb-3" style={neonCardStyle()}>
       <div className="d-flex justify-content-between align-items-center mb-2">
         <h6 className="m-0">Book a class</h6>
+
         <span
           className="badge"
           style={{
-            background: `${ACCENT_IRON}22`,
-            color: ACCENT_IRON,
-            border: `1px solid ${ACCENT_IRON}55`,
+            background: `rgba(24,255,154,0.12)`,
+            color: IA.neon,
+            border: `1px solid ${IA.borderSoft}`,
           }}
         >
           This week + next
@@ -283,7 +296,24 @@ export default function IronAcreClassesList() {
         </select>
       </div>
 
-      {msg && <div className="pill-success mb-2">{msg}</div>}
+      {msg && (
+        <div
+          className="mb-2"
+          style={{
+            borderRadius: 999,
+            padding: "8px 12px",
+            background: `rgba(24,255,154,0.14)`,
+            color: IA.neon,
+            border: `1px solid ${IA.borderSoft}`,
+            boxShadow: IA.glowSoft,
+            fontWeight: 800,
+            fontSize: ".85rem",
+          }}
+        >
+          {msg}
+        </div>
+      )}
+
       {err && <div className="alert alert-danger mb-2">{err}</div>}
 
       {renderWeek("This week", byWeek.thisWeek)}
