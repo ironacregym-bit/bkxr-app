@@ -1,29 +1,14 @@
-export function resolveTargetWeightKg(args: {
+// lib/strength/resolveTargetWeight.ts
+export function resolveTargetWeightKg({
+  trainingMaxKg,
+  percent,
+  roundingKg = 2.5,
+}: {
   trainingMaxKg: number | null;
   percent?: number | null;
-  percentMin?: number | null;
-  percentMax?: number | null;
-  roundingKg?: number | null;
+  roundingKg?: number;
 }) {
-  const {
-    trainingMaxKg,
-    percent,
-    percentMin,
-    percentMax,
-    roundingKg = 2.5,
-  } = args;
-
-  if (!trainingMaxKg) return null;
-
-  const pct =
-    percent != null
-      ? percent
-      : percentMin != null && percentMax != null
-      ? (percentMin + percentMax) / 2
-      : null;
-
-  if (pct == null) return null;
-
-  const raw = trainingMaxKg * pct;
+  if (!trainingMaxKg || percent == null) return null;
+  const raw = trainingMaxKg * percent;
   return Math.round(raw / roundingKg) * roundingKg;
 }
