@@ -7,12 +7,16 @@ import { useState } from "react";
 import BottomNav from "../../../components/BottomNav";
 
 import ProgramMetaStep from "../../../components/program-create/ProgramMetaStep";
+import ProgramScheduleStep, {
+  ProgramScheduleItem,
+} from "../../../components/program-create/ProgramScheduleStep";
 
 export type ProgramDraft = {
   name: string;
   start_date: string;
   weeks: number;
   assigned_to: string[];
+  schedule: ProgramScheduleItem[];
 };
 
 export default function CreateProgramPage() {
@@ -39,6 +43,7 @@ export default function CreateProgramPage() {
     start_date: "",
     weeks: 12,
     assigned_to: [],
+    schedule: [],
   });
 
   return (
@@ -53,13 +58,21 @@ export default function CreateProgramPage() {
         {step === 1 && (
           <ProgramMetaStep
             value={program}
-            onChange={setProgram}
+            onChange={(v) => setProgram({ ...program, ...v })}
             onNext={() => setStep(2)}
           />
         )}
 
-        {/* Step 2: Schedule workouts (next batch) */}
-        {/* Step 3: Weekly progression */}
+        {step === 2 && (
+          <ProgramScheduleStep
+            value={program.schedule}
+            onChange={(schedule) => setProgram({ ...program, schedule })}
+            onBack={() => setStep(1)}
+            onNext={() => setStep(3)}
+          />
+        )}
+
+        {/* Step 3: Per-week % progression (next batch) */}
         {/* Step 4: Review & create */}
 
       </main>
