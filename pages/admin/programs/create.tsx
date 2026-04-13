@@ -1,7 +1,6 @@
 "use client";
 
 import Head from "next/head";
-import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import BottomNav from "../../../components/BottomNav";
@@ -10,6 +9,7 @@ import ProgramMetaStep from "../../../components/program-create/ProgramMetaStep"
 import ProgramScheduleStep, {
   ProgramScheduleItem,
 } from "../../../components/program-create/ProgramScheduleStep";
+import ProgramProgressionStep from "../../../components/program-create/ProgramProgressionStep";
 
 export type ProgramDraft = {
   name: string;
@@ -17,11 +17,19 @@ export type ProgramDraft = {
   weeks: number;
   assigned_to: string[];
   schedule: ProgramScheduleItem[];
+  week_overrides: {
+    [workout_id: string]: {
+      weeks: {
+        [week: number]: {
+          percent_1rm?: number | null;
+        };
+      };
+    };
+  };
 };
 
 export default function CreateProgramPage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
   const role = (session?.user as any)?.role || "user";
 
   if (status === "loading") {
@@ -44,6 +52,7 @@ export default function CreateProgramPage() {
     weeks: 12,
     assigned_to: [],
     schedule: [],
+    week_overrides: {},
   });
 
   return (
@@ -72,9 +81,20 @@ export default function CreateProgramPage() {
           />
         )}
 
-        {/* Step 3: Per-week % progression (next batch) */}
-        {/* Step 4: Review & create */}
+        {step === 3 && (
+          <ProgramProgressionStep
+            weeks={program.weeks}
+            schedule={program.schedule}
+            value={program.week_overrides}
+            onChange={(week_overrides) =>
+              setProgram({ ...program, week_overrides })
+            }
+            onBack={() => setStep(2)}
+            onNext={() => setStep(4)}
+          />
+        )}
 
+        {/* Step 4: Review + create (next batch) */}
       </main>
 
       <BottomNav />
