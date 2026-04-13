@@ -139,7 +139,7 @@ export default function QuickAddExerciseModal({
 
           <div className="small text-dim mt-2">
             Need the full editor instead?{" "}
-            /admin/exercises/create
+            <Link href="/admin/exercises/create">
               Open Create Exercise
             </Link>
           </div>
