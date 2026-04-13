@@ -74,31 +74,14 @@ export default function IronAcreTasks({
     ? `Completed for ${fridayYMD}`
     : `Next check-in: ${fridayYMD || "Friday"}`;
 
-  // pick workout for the card:
-  // 1) today recurring
-  // 2) next upcoming recurring in week
-  // 3) most recent recurring in week
-  const picked = (() => {
-    const daysWith = (weekDays || []).filter((d) => (d.recurringWorkouts || []).length > 0);
-
-    const todayHit = daysWith.find((d) => d.dateKey === todayKey);
-    if (todayHit) return { day: todayHit, ref: todayHit.recurringWorkouts[0] };
-
-    const next = daysWith.find((d) => d.dateKey >= todayKey);
-    if (next) return { day: next, ref: next.recurringWorkouts[0] };
-
-    const last = daysWith.length ? daysWith[daysWith.length - 1] : undefined;
-    if (last) return { day: last, ref: last.recurringWorkouts[0] };
-
-    return { day: undefined as any, ref: undefined as any };
-  })();
-
-  const sessionId: string = picked?.ref?.id || "";
-  const sessionDone = Boolean(picked?.day?.recurringDone);
+  // ✅ Only today's workout (do NOT pick next)
+  const sessionRef = todayData?.recurringWorkouts?.[0];
+  const sessionId = sessionRef?.id || "";
+  const sessionDone = Boolean(todayData?.recurringDone);
 
   const durationMinutes =
-    typeof picked?.day?.workoutSummary?.duration === "number"
-      ? picked.day.workoutSummary.duration
+    typeof todayData?.workoutSummary?.duration === "number"
+      ? todayData!.workoutSummary!.duration
       : null;
 
   const { data: workoutData } = useSWR<WorkoutApi>(
@@ -116,6 +99,7 @@ export default function IronAcreTasks({
         rightMeta={checkinDone ? "✓" : undefined}
         onCta={() => router.push(`/checkin?date=${encodeURIComponent(checkinTargetDate)}`)}
         variant="neon"
+        highlight
       />
 
       <IronAcreWorkoutCard
@@ -124,11 +108,12 @@ export default function IronAcreTasks({
         workoutId={sessionId}
         done={sessionDone}
         durationMinutes={durationMinutes}
-        dateKey={picked?.day?.dateKey || todayKey}
+        dateKey={todayKey}
         weekDays={weekDays}
         weekStartYMD={weekStartYMD}
         weekEndYMD={weekEndYMD}
         weeklyTotals={weeklyTotals}
+        hasWorkoutToday={Boolean(sessionId)}
       />
 
       <IronAcreTaskCard
@@ -138,12 +123,6 @@ export default function IronAcreTasks({
         onCta={() => router.push("/iron-acre/strength")}
         variant="neon"
       />
-
-      {!sessionId && (
-        <div className="text-dim small mt-2">
-          No recurring gym sessions found for this week.
-        </div>
-      )}
     </div>
   );
 }
