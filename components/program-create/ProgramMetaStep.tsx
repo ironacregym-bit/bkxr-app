@@ -1,37 +1,47 @@
 "use client";
 
-import { ProgramDraft } from "../../pages/admin/programs/create";
+import React, { useMemo, useState } from "react";
+
+type ProgramMeta = {
+  name: string;
+  start_date: string; // YYYY-MM-DD
+  weeks: number;
+  assigned_to: string[];
+};
 
 export default function ProgramMetaStep({
   value,
   onChange,
   onNext,
 }: {
-  value: ProgramDraft;
-  onChange: (v: ProgramDraft) => void;
+  value: ProgramMeta;
+  onChange: (patch: Partial<ProgramMeta>) => void;
   onNext: () => void;
 }) {
-  function addAssignee(email: string) {
+  const [assigneeInput, setAssigneeInput] = useState("");
+
+  function addAssignee(emailRaw: string) {
+    const email = String(emailRaw || "").trim().toLowerCase();
     if (!email) return;
     if (value.assigned_to.includes(email)) return;
-    onChange({
-      ...value,
-      assigned_to: [...value.assigned_to, email],
-    });
+
+    onChange({ assigned_to: [...value.assigned_to, email] });
+    setAssigneeInput("");
   }
 
   function removeAssignee(email: string) {
-    onChange({
-      ...value,
-      assigned_to: value.assigned_to.filter((e) => e !== email),
-    });
+    onChange({ assigned_to: value.assigned_to.filter((e) => e !== email) });
   }
 
-  const canContinue =
-    value.name.trim() &&
-    value.start_date &&
-    value.weeks > 0 &&
-    value.assigned_to.length > 0;
+  const canContinue = useMemo(() => {
+    return Boolean(
+      value.name.trim() &&
+        value.start_date &&
+        value.weeks > 0 &&
+        Array.isArray(value.assigned_to) &&
+        value.assigned_to.length > 0
+    );
+  }, [value]);
 
   return (
     <section className="futuristic-card p-3">
@@ -43,7 +53,7 @@ export default function ProgramMetaStep({
           <input
             className="form-control"
             value={value.name}
-            onChange={(e) => onChange({ ...value, name: e.target.value })}
+            onChange={(e) => onChange({ name: e.target.value })}
             placeholder="Iron Acre Strength – Block A"
           />
         </div>
@@ -54,7 +64,7 @@ export default function ProgramMetaStep({
             type="date"
             className="form-control"
             value={value.start_date}
-            onChange={(e) => onChange({ ...value, start_date: e.target.value })}
+            onChange={(e) => onChange({ start_date: e.target.value })}
           />
         </div>
 
@@ -66,12 +76,7 @@ export default function ProgramMetaStep({
             max={24}
             className="form-control"
             value={value.weeks}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                weeks: Number(e.target.value) || 12,
-              })
-            }
+            onChange={(e) => onChange({ weeks: Number(e.target.value) || 12 })}
           />
         </div>
 
@@ -82,11 +87,12 @@ export default function ProgramMetaStep({
             type="email"
             className="form-control"
             placeholder="athlete@example.com"
+            value={assigneeInput}
+            onChange={(e) => setAssigneeInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                addAssignee((e.target as HTMLInputElement).value.toLowerCase());
-                (e.target as HTMLInputElement).value = "";
+                addAssignee(assigneeInput);
               }
             }}
           />
