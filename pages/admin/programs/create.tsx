@@ -6,7 +6,9 @@ import { useState } from "react";
 import BottomNav from "../../../components/BottomNav";
 
 import ProgramMetaStep from "../../../components/program-create/ProgramMetaStep";
-import ProgramScheduleStep, { ProgramScheduleItem } from "../../../components/program-create/ProgramScheduleStep";
+import ProgramScheduleStep, {
+  ProgramScheduleItem,
+} from "../../../components/program-create/ProgramScheduleStep";
 import ProgramProgressionStep from "../../../components/program-create/ProgramProgressionStep";
 import ProgramReviewStep from "../../../components/program-create/ProgramReviewStep";
 
@@ -28,20 +30,9 @@ export type ProgramDraft = {
 };
 
 export default function CreateProgramPage() {
+  // ✅ Hooks MUST be called unconditionally at the top level
   const { data: session, status } = useSession();
   const role = (session?.user as any)?.role || "user";
-
-  if (status === "loading") {
-    return <div className="container py-4">Checking access…</div>;
-  }
-
-  if (!session || (role !== "admin" && role !== "gym")) {
-    return (
-      <div className="container py-4">
-        <h3>Access denied</h3>
-      </div>
-    );
-  }
 
   const [step, setStep] = useState(1);
   const [creating, setCreating] = useState(false);
@@ -66,12 +57,24 @@ export default function CreateProgramPage() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to create program");
       alert("Program created ✅");
-      // optional: router.push(`/admin/programs/${json.program_id}`)
     } catch (e: any) {
       alert(e?.message || "Failed to create program");
     } finally {
       setCreating(false);
     }
+  }
+
+  // ✅ Now it’s safe to early-return (hooks already ran)
+  if (status === "loading") {
+    return <div className="container py-4">Checking access…</div>;
+  }
+
+  if (!session || (role !== "admin" && role !== "gym")) {
+    return (
+      <div className="container py-4">
+        <h3>Access denied</h3>
+      </div>
+    );
   }
 
   return (
