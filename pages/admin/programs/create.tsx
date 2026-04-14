@@ -6,10 +6,9 @@ import { useState } from "react";
 import BottomNav from "../../../components/BottomNav";
 
 import ProgramMetaStep from "../../../components/program-create/ProgramMetaStep";
-import ProgramScheduleStep, {
-  ProgramScheduleItem,
-} from "../../../components/program-create/ProgramScheduleStep";
+import ProgramScheduleStep, { ProgramScheduleItem } from "../../../components/program-create/ProgramScheduleStep";
 import ProgramProgressionStep from "../../../components/program-create/ProgramProgressionStep";
+import ProgramReviewStep from "../../../components/program-create/ProgramReviewStep";
 
 export type ProgramDraft = {
   name: string;
@@ -45,6 +44,7 @@ export default function CreateProgramPage() {
   }
 
   const [step, setStep] = useState(1);
+  const [creating, setCreating] = useState(false);
 
   const [program, setProgram] = useState<ProgramDraft>({
     name: "",
@@ -54,6 +54,25 @@ export default function CreateProgramPage() {
     schedule: [],
     week_overrides: {},
   });
+
+  async function createProgram() {
+    try {
+      setCreating(true);
+      const res = await fetch("/api/programs/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(program),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Failed to create program");
+      alert("Program created ✅");
+      // optional: router.push(`/admin/programs/${json.program_id}`)
+    } catch (e: any) {
+      alert(e?.message || "Failed to create program");
+    } finally {
+      setCreating(false);
+    }
+  }
 
   return (
     <>
@@ -66,8 +85,13 @@ export default function CreateProgramPage() {
 
         {step === 1 && (
           <ProgramMetaStep
-            value={program}
-            onChange={(v) => setProgram({ ...program, ...v })}
+            value={{
+              name: program.name,
+              start_date: program.start_date,
+              weeks: program.weeks,
+              assigned_to: program.assigned_to,
+            }}
+            onChange={(patch) => setProgram((p) => ({ ...p, ...patch }))}
             onNext={() => setStep(2)}
           />
         )}
@@ -75,7 +99,7 @@ export default function CreateProgramPage() {
         {step === 2 && (
           <ProgramScheduleStep
             value={program.schedule}
-            onChange={(schedule) => setProgram({ ...program, schedule })}
+            onChange={(schedule) => setProgram((p) => ({ ...p, schedule }))}
             onBack={() => setStep(1)}
             onNext={() => setStep(3)}
           />
@@ -86,15 +110,27 @@ export default function CreateProgramPage() {
             weeks={program.weeks}
             schedule={program.schedule}
             value={program.week_overrides}
-            onChange={(week_overrides) =>
-              setProgram({ ...program, week_overrides })
-            }
+            onChange={(week_overrides) => setProgram((p) => ({ ...p, week_overrides }))}
             onBack={() => setStep(2)}
             onNext={() => setStep(4)}
           />
         )}
 
-        {/* Step 4: Review + create (next batch) */}
+        {step === 4 && (
+          <ProgramReviewStep
+            program={{
+              name: program.name,
+              start_date: program.start_date,
+              weeks: program.weeks,
+              assigned_to: program.assigned_to,
+            }}
+            schedule={program.schedule}
+            week_overrides={program.week_overrides}
+            onBack={() => setStep(3)}
+            onCreate={createProgram}
+            creating={creating}
+          />
+        )}
       </main>
 
       <BottomNav />
