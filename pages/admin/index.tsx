@@ -106,11 +106,10 @@ export default function AdminDashboard() {
     { title: "Notifications", icon: "fas fa-bell", link: "/admin/notifications", color: "danger" },
     { title: "Members", icon: "fas fa-address-book", link: "/admin/members", color: "primary" },
     { title: "Recipes", icon: "fas fa-utensils", link: "/admin/recipes", color: "danger" },
-    // 🆕 Meal Plans admin
     { title: "Meal Plans", icon: "fas fa-clipboard-list", link: "/admin/mealplans", color: "warning" },
-    // 🆕 Supplements admin
     { title: "Supplements", icon: "fas fa-pills", link: "/admin/supplements", color: "warning" },
     { title: "Boxing Combos", icon: "fas fa-dumbbell", link: "/admin/boxing-combos", color: "primary" },
+    { title: "Programs", icon: "fas fa-dumbbell", link: "/admin/programs", color: "success" },
   ];
 
   return (
