@@ -109,7 +109,7 @@ export default function AdminDashboard() {
     { title: "Meal Plans", icon: "fas fa-clipboard-list", link: "/admin/mealplans", color: "warning" },
     { title: "Supplements", icon: "fas fa-pills", link: "/admin/supplements", color: "warning" },
     { title: "Boxing Combos", icon: "fas fa-dumbbell", link: "/admin/boxing-combos", color: "primary" },
-    { title: "Programs", icon: "fas fa-dumbbell", link: "/admin/programs", color: "success" },
+    { title: "Programs", icon: "fas fa-dumbbell", link: "/admin/programs/create", color: "success" },
   ];
 
   return (
