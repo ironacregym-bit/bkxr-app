@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
+
 import BottomNav from "../../../components/BottomNav";
 import StrengthPrescriptionEditor, { StrengthSpec } from "../../../components/gym-create/StrengthPrescriptionEditor";
 import QuickAddExerciseModal from "../../../components/gym-create/QuickAddExerciseModal";
@@ -25,7 +26,6 @@ const mkUid = () => {
   }
 };
 
-// Accepts Firestore Timestamp, Date, number(ms), or string → returns "YYYY-MM-DD" or ""
 function toYMD(input: any): string {
   if (!input) return "";
   try {
@@ -73,7 +73,6 @@ type SupersetSubItem = {
   exercise_id: string;
   reps?: string;
   weight_kg?: number | null;
-  // ✅ NEW: allow % of 1RM per sub item (already supported by APIs)
   strength?: StrengthSpec | null;
 };
 
@@ -85,7 +84,7 @@ type SupersetItem = {
   items: SupersetSubItem[];
   sets: number;
   rest_s?: number | null;
-  notes?: string | null; // use as "instructions" too
+  notes?: string | null;
 };
 
 type GymRound = {
@@ -94,7 +93,7 @@ type GymRound = {
   items: Array<SingleItem | SupersetItem>;
 };
 
-type ExerciseRow = { id: string; exercise_name: string; type?: string; equipment?: string; video_url?: string };
+type ExerciseRow = { id: string; exercise_name: string; type?: string };
 
 type QuickTarget =
   | { kind: "single"; round: "warmup" | "main" | "finisher"; idx: number }
@@ -125,28 +124,31 @@ type StrengthExercisesResp = {
 };
 
 export default function GymCreateWorkoutPage() {
-  // ✅ Hooks first (avoid hook-order issues)
+  // Hooks
   const { data: session, status } = useSession();
   const router = useRouter();
   const ownerEmail = (session?.user?.email || "").toLowerCase();
   const role = (session?.user as any)?.role || "user";
 
+  // Edit mode
   const editIdRaw = (router.query.edit as string) || (router.query.id as string) || "";
   const editId = (typeof editIdRaw === "string" ? editIdRaw.trim() : "") || "";
   const isEdit = Boolean(editId);
 
+  // Exercises list for dropdown
   const { data: exData, mutate: mutateExercises } = useSWR("/api/exercises?limit=1000", fetcher, {
     revalidateOnFocus: false,
   });
-  const exercises: ExerciseRow[] = Array.isArray(exData?.exercises) ? exData!.exercises : [];
+  const exercises: ExerciseRow[] = Array.isArray(exData?.exercises) ? exData.exercises : [];
 
-  // ✅ Load tracked strength exercises once and pass to editors
+  // Tracked strength exercises for basis dropdown
   const { data: strengthList } = useSWR<StrengthExercisesResp>("/api/strength/exercises/list", fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
   const basisOptions = Array.isArray(strengthList?.names) ? strengthList!.names! : [];
 
+  // Meta
   const [meta, setMeta] = useState({
     workout_name: "",
     focus: "",
@@ -160,14 +162,16 @@ export default function GymCreateWorkoutPage() {
     assigned_to: ownerEmail || "",
   });
 
+  // Rounds
   const [warmup, setWarmup] = useState<GymRound | null>({ name: "Warm Up", order: 1, items: [] });
   const [main, setMain] = useState<GymRound>({ name: "Main Set", order: 2, items: [] });
   const [finisher, setFinisher] = useState<GymRound | null>(null);
 
+  // UI state
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // Quick Add Exercise modal
+  // Quick add modal
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
   const [quickErr, setQuickErr] = useState<string | null>(null);
@@ -195,12 +199,11 @@ export default function GymCreateWorkoutPage() {
     setQuickOpen(true);
   };
 
-  /* ---------- Utilities to keep item orders clean ---------- */
-  function renumber(items: Array<SingleItem | SupersetItem>): Array<SingleItem | SupersetItem> {
+  // Helpers
+  function renumber(items: Array<SingleItem | SupersetItem>) {
     return items.map((it, i) => ({ ...it, order: i + 1 }));
   }
 
-  /* ---------- Helpers for Single Items ---------- */
   function addSingle(round: "warmup" | "main" | "finisher") {
     const newItem: SingleItem = {
       uid: mkUid(),
@@ -216,7 +219,9 @@ export default function GymCreateWorkoutPage() {
     };
 
     if (round === "warmup") {
-      setWarmup((prev) => (prev ? { ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) } : prev));
+      setWarmup((prev) =>
+        prev ? { ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) } : prev
+      );
     }
     if (round === "main") {
       setMain((prev) => ({ ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) }));
@@ -250,7 +255,6 @@ export default function GymCreateWorkoutPage() {
     if (round === "finisher") setFinisher((prev) => dropFrom(prev));
   }
 
-  /* ---------- Helpers for Supersets (unlimited items + sets at superset level) ---------- */
   function newSupersetSub(): SupersetSubItem {
     return { uid: mkUid(), exercise_id: "", reps: "", weight_kg: null, strength: null };
   }
@@ -266,8 +270,11 @@ export default function GymCreateWorkoutPage() {
       rest_s: null,
       notes: "",
     };
+
     if (round === "warmup") {
-      setWarmup((prev) => (prev ? { ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) } : prev));
+      setWarmup((prev) =>
+        prev ? { ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) } : prev
+      );
     }
     if (round === "main") {
       setMain((prev) => ({ ...prev, items: renumber([...prev.items, { ...newItem, order: prev.items.length + 1 }]) }));
@@ -303,7 +310,6 @@ export default function GymCreateWorkoutPage() {
             }),
           }
         : r;
-
     if (round === "warmup") setWarmup((prev) => up(prev));
     if (round === "main") setMain((prev) => up(prev) as GymRound);
     if (round === "finisher") setFinisher((prev) => up(prev));
@@ -323,7 +329,6 @@ export default function GymCreateWorkoutPage() {
             }),
           }
         : r;
-
     if (round === "warmup") setWarmup((prev) => up(prev));
     if (round === "main") setMain((prev) => up(prev) as GymRound);
     if (round === "finisher") setFinisher((prev) => up(prev));
@@ -343,7 +348,6 @@ export default function GymCreateWorkoutPage() {
             }),
           }
         : r;
-
     if (round === "warmup") setWarmup((prev) => up(prev));
     if (round === "main") setMain((prev) => up(prev) as GymRound);
     if (round === "finisher") setFinisher((prev) => up(prev));
@@ -358,12 +362,11 @@ export default function GymCreateWorkoutPage() {
               if (i !== idx) return it;
               const ss = it as SupersetItem;
               const newItems = [...ss.items];
-              newItems[subIdx] = { ...newItems[subIdx], strength, weight_kg: null }; // clear kg when using %
+              newItems[subIdx] = { ...newItems[subIdx], strength, weight_kg: null };
               return { ...ss, items: newItems };
             }),
           }
         : r;
-
     if (round === "warmup") setWarmup((prev) => up(prev));
     if (round === "main") setMain((prev) => up(prev) as GymRound);
     if (round === "finisher") setFinisher((prev) => up(prev));
@@ -377,12 +380,10 @@ export default function GymCreateWorkoutPage() {
             items: r.items.map((it, i) => {
               if (i !== idx) return it;
               const ss = it as SupersetItem;
-              const next = [...ss.items, newSupersetSub()];
-              return { ...ss, items: next };
+              return { ...ss, items: [...ss.items, newSupersetSub()] };
             }),
           }
         : r;
-
     if (round === "warmup") setWarmup((prev) => up(prev));
     if (round === "main") setMain((prev) => up(prev) as GymRound);
     if (round === "finisher") setFinisher((prev) => up(prev));
@@ -397,19 +398,20 @@ export default function GymCreateWorkoutPage() {
               if (i !== idx) return it;
               const ss = it as SupersetItem;
               if (!ss.items || ss.items.length <= 1) return ss;
-              const next = ss.items.filter((_, j) => j !== subIdx);
-              return { ...ss, items: next };
+              return { ...ss, items: ss.items.filter((_, j) => j !== subIdx) };
             }),
           }
         : r;
-
     if (round === "warmup") setWarmup((prev) => up(prev));
     if (round === "main") setMain((prev) => up(prev) as GymRound);
     if (round === "finisher") setFinisher((prev) => up(prev));
   }
 
-  /* ---------- Edit: fetch + normalise into UI ---------- */
-  const workoutKey = useMemo(() => (isEdit ? `/api/workouts/admin/${encodeURIComponent(editId)}` : null), [isEdit, editId]);
+  // Admin fetch for edit mode
+  const workoutKey = useMemo(
+    () => (isEdit ? `/api/workouts/admin/${encodeURIComponent(editId)}` : null),
+    [isEdit, editId]
+  );
   const { data: workoutResp } = useSWR<AdminWorkoutFetch>(workoutKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
@@ -498,345 +500,7 @@ export default function GymCreateWorkoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEdit, workoutResp, prefilled, ownerEmail]);
 
-  /* ---------- Save ---------- */
-  function toISODateOrNull(s: string): string | null {
-    if (!s) return null;
-    const dt = new Date(s);
-    if (isNaN(dt.getTime())) return null;
-    dt.setHours(12, 0, 0, 0);
-    return dt.toISOString();
-  }
-
-  function stripRound(r: GymRound | null): any | null {
-    if (!r) return null;
-    return {
-      name: r.name,
-      order: r.order,
-      items: (r.items || []).map((it) => {
-        if (it.type === "Superset") {
-          const ss = it as SupersetItem;
-          return {
-            type: "Superset",
-            order: ss.order,
-            name: ss.name || "",
-            sets: Number.isFinite(ss.sets) ? ss.sets : 3,
-            rest_s: ss.rest_s ?? null,
-            notes: ss.notes ?? null,
-            items: (ss.items || []).map((s) => ({
-              exercise_id: s.exercise_id,
-              reps: s.reps || "",
-              weight_kg: s.weight_kg ?? null,
-              strength: s.strength ?? null,
-            })),
-          };
-        }
-
-        const si = it as SingleItem;
-        return {
-          type: "Single",
-          order: si.order,
-          exercise_id: si.exercise_id,
-          sets: si.sets,
-          reps: si.reps || "",
-          weight_kg: si.weight_kg ?? null,
-          rest_s: si.rest_s ?? null,
-          notes: si.notes ?? null,
-          strength: si.strength
-            ? {
-                basis_exercise: si.strength.basis_exercise ?? null,
-                percent_1rm: si.strength.percent_1rm ?? null,
-                percent_min: si.strength.percent_min ?? null,
-                percent_max: si.strength.percent_max ?? null,
-                rounding_kg: si.strength.rounding_kg ?? null,
-                mode: si.strength.mode ?? null,
-              }
-            : null,
-        };
-      }),
-    };
-  }
-
-  async function save() {
-    setSaving(true);
-    setMsg(null);
-    try {
-      // Client-side validation for recurring fields
-      if (meta.recurring) {
-        if (!meta.assigned_to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(meta.assigned_to)) {
-          throw new Error("Please enter a valid email for 'Assigned To'.");
-        }
-        if (!DAYS.includes(meta.recurring_day)) {
-          throw new Error("Please choose a valid recurring day.");
-        }
-        if (!meta.recurring_start || !meta.recurring_end) {
-          throw new Error("Please choose both a start and end date for recurrence.");
-        }
-        const start = new Date(meta.recurring_start);
-        const end = new Date(meta.recurring_end);
-        if (start > end) {
-          throw new Error("Recurring start date must be before end date.");
-        }
-      }
-
-      const body: any = {
-        ...(isEdit ? { workout_id: editId } : null),
-        visibility: meta.visibility,
-        owner_email: meta.visibility === "private" ? ownerEmail : undefined,
-        workout_name: meta.workout_name.trim(),
-        focus: meta.focus.trim() || undefined,
-        notes: meta.notes.trim() || undefined,
-        video_url: meta.video_url.trim() || undefined,
-        warmup: stripRound(warmup),
-        main: stripRound(main),
-        finisher: stripRound(finisher),
-
-        recurring: !!meta.recurring,
-        recurring_day: meta.recurring ? meta.recurring_day : null,
-        recurring_start: meta.recurring ? toISODateOrNull(meta.recurring_start) : null,
-        recurring_end: meta.recurring ? toISODateOrNull(meta.recurring_end) : null,
-        assigned_to: meta.recurring ? meta.assigned_to.trim().toLowerCase() : null,
-      };
-
-      const url = isEdit ? "/api/workouts/admin/update" : "/api/workouts/gym-create";
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || (isEdit ? "Failed to update workout" : "Failed to create workout"));
-
-      setMsg(isEdit ? "Saved changes ✅" : "Created ✅");
-      const newId = json?.workout_id || editId;
-      setTimeout(() => router.push(`/admin/workouts/${newId}`), 700);
-    } catch (e: any) {
-      setMsg(e?.message || (isEdit ? "Failed to save workout" : "Failed to create workout"));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function createQuickExercise() {
-    try {
-      setQuickBusy(true);
-      setQuickErr(null);
-
-      const body = {
-        exercise_name: quickForm.exercise_name.trim(),
-        type: quickForm.type.trim(),
-        equipment: quickForm.equipment.trim(),
-        video_url: quickForm.video_url.trim(),
-        met_value:
-          quickForm.met_value === ""
-            ? null
-            : Number.isFinite(Number(quickForm.met_value))
-            ? Number(quickForm.met_value)
-            : null,
-        description: quickForm.description.trim(),
-      };
-
-      if (!body.exercise_name) {
-        setQuickErr("Exercise name is required");
-        return;
-      }
-
-      const res = await fetch("/api/exercises/create?upsert=true", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to create exercise");
-
-      await mutateExercises();
-      const newId: string = json?.exercise_id || body.exercise_name;
-
-      if (quickTarget) {
-        if (quickTarget.kind === "single") {
-          updateSingle(quickTarget.round, quickTarget.idx, { exercise_id: newId });
-        } else {
-          setSupersetExercise(quickTarget.round, quickTarget.idx, quickTarget.subIdx, newId);
-        }
-      }
-
-      setQuickOpen(false);
-    } catch (e: any) {
-      setQuickErr(e?.message || "Failed to create exercise");
-    } finally {
-      setQuickBusy(false);
-    }
-  }
-
-  // ✅ Safe conditional returns (after hooks)
-  if (status === "loading") return <div className="container py-4">Checking access…</div>;
-  if (!session || (role !== "admin" && role !== "gym")) {
-    return (
-      <div className="container py-4">
-        <h3>Access Denied</h3>
-        <p>You do not have permission to view this page.</p>
-      </div>
-    );
-  }
-
-  function ExerciseSelect({
-    value,
-    onChange,
-    label = "Exercise",
-    quickTarget,
-  }: {
-    value: string;
-    onChange: (id: string) => void;
-    label?: string;
-    quickTarget: QuickTarget;
-  }) {
-    return (
-      <div className="d-flex align-items-end gap-2">
-        <div className="flex-fill">
-          <label className="form-label">{label}</label>
-          <select className="form-select" value={value} onChange={(e) => onChange(e.target.value)}>
-            <option value="">— Select —</option>
-            {exercises.map((e: any) => (
-              <option key={e.id} value={e.id}>
-                {e.exercise_name} {e.type ? `• ${e.type}` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button
-          type="button"
-          className="btn btn-sm"
-          style={neonButtonStyle({ borderRadius: 24, whiteSpace: "nowrap" })}
-          onClick={() => openQuickFor(quickTarget)}
-          title="Quick add exercise"
-        >
-          ＋ Quick add
-        </button>
-      </div>
-    );
-  }
-
-  function SupersetBlock({ round, it, idx }: { round: "warmup" | "main" | "finisher"; it: SupersetItem; idx: number }) {
-    return (
-      <>
-        <div className="col-12 col-md-4">
-          <label className="form-label">Superset name</label>
-          <input className="form-control" value={it.name ?? ""} onChange={(e) => updateSuperset(round, idx, { name: e.target.value })} />
-
-          <div className="row mt-2 g-2">
-            <div className="col-6">
-              <label className="form-label">Sets (rounds)</label>
-              <input
-                className="form-control"
-                type="number"
-                min={1}
-                value={Number.isFinite(it.sets) ? it.sets : 3}
-                onChange={(e) => updateSuperset(round, idx, { sets: Math.max(1, Number(e.target.value) || 3) })}
-              />
-            </div>
-
-            <div className="col-6">
-              <label className="form-label">Rest between sets (s)</label>
-              <input
-                className="form-control"
-                type="number"
-                min={0}
-                value={it.rest_s ?? ""}
-                onChange={(e) => updateSuperset(round, idx, { rest_s: Number(e.target.value) || 0 })}
-              />
-            </div>
-          </div>
-
-          <div className="mt-2">
-            <label className="form-label">Instructions / notes</label>
-            <textarea
-              className="form-control"
-              rows={3}
-              value={it.notes ?? ""}
-              onChange={(e) => updateSuperset(round, idx, { notes: e.target.value })}
-              placeholder='e.g. "Cluster: 4-4-4 with 15s intra-rest" or "Contrast: 80% then 60%"'
-            />
-          </div>
-
-          <div className="mt-3">
-            <button type="button" className="btn btn-outline-danger" onClick={() => removeItem(round, idx)} style={{ borderRadius: 12 }}>
-              Delete superset
-            </button>
-          </div>
-        </div>
-
-        <div className="col-12 col-md-8">
-          {Array.isArray(it.items) && it.items.length > 0 ? (
-            it.items.map((s, sidx) => (
-              <div key={s.uid} className="row g-2 align-items-end mb-2">
-                <div className="col-12 col-md-5">
-                  <ExerciseSelect
-                    label="Exercise"
-                    value={s.exercise_id}
-                    onChange={(id) => setSupersetExercise(round, idx, sidx, id)}
-                    quickTarget={{ kind: "superset", round, idx, subIdx: sidx }}
-                  />
-                </div>
-
-                <div className="col-6 col-md-3">
-                  <label className="form-label">Reps</label>
-                  <input className="form-control" value={s.reps ?? ""} onChange={(e) => setSupersetReps(round, idx, sidx, e.target.value)} />
-                </div>
-
-                {/* Absolute kg only when no strength */}
-                {!s.strength ? (
-                  <div className="col-4 col-md-2">
-                    <label className="form-label">Weight (kg)</label>
-                    <input
-                      className="form-control"
-                      type="number"
-                      min={0}
-                      value={s.weight_kg ?? ""}
-                      onChange={(e) => setSupersetWeight(round, idx, sidx, Number(e.target.value) || null)}
-                    />
-                  </div>
-                ) : (
-                  <div className="col-4 col-md-2">
-                    <div className="text-dim small" style={{ paddingBottom: 6 }}>
-                      Weight
-                    </div>
-                    <div className="text-dim small">%</div>
-                  </div>
-                )}
-
-                <div className="col-2 col-md-2 d-flex">
-                  <button type="button" className="btn btn-outline-danger ms-auto" onClick={() => removeExerciseFromSuperset(round, idx, sidx)} title="Remove">
-                    ✕
-                  </button>
-                </div>
-
-                {/* ✅ Strength editor per sub-item */}
-                <div className="col-12">
-                  <StrengthPrescriptionEditor
-                    value={s.strength ?? null}
-                    basisOptions={basisOptions}
-                    onChange={(strength) => setSupersetStrength(round, idx, sidx, strength)}
-                  />
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-dim small">No exercises yet.</div>
-          )}
-
-          <button
-            type="button"
-            className="btn btn-sm"
-            style={neonButtonStyle({ borderRadius: 24 })}
-            onClick={() => addExerciseToSuperset(round, idx)}
-          >
-            + Add Exercise to Superset
-          </button>
-        </div>
-      </>
-    );
-  }
-
+  // ✅ IMPORTANT: useMemo BEFORE any early return (fixes React #310)
   const AssignmentSection = useMemo(() => {
     return (
       <section className="futuristic-card p-3 mb-3" style={neonCardStyle()}>
@@ -915,6 +579,323 @@ export default function GymCreateWorkoutPage() {
     );
   }, [meta]);
 
+  // Early returns AFTER hooks
+  if (status === "loading") return <div className="container py-4">Checking access…</div>;
+  if (!session || (role !== "admin" && role !== "gym")) {
+    return (
+      <div className="container py-4">
+        <h3>Access Denied</h3>
+        <p>You do not have permission to view this page.</p>
+      </div>
+    );
+  }
+
+  // UI helpers (no hooks here)
+  function ExerciseSelect({
+    value,
+    onChange,
+    label = "Exercise",
+    quickTarget: qt,
+  }: {
+    value: string;
+    onChange: (id: string) => void;
+    label?: string;
+    quickTarget: QuickTarget;
+  }) {
+    return (
+      <div className="d-flex align-items-end gap-2">
+        <div className="flex-fill">
+          <label className="form-label">{label}</label>
+          <select className="form-select" value={value} onChange={(e) => onChange(e.target.value)}>
+            <option value="">— Select —</option>
+            {exercises.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.exercise_name} {e.type ? `• ${e.type}` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="button"
+          className="btn btn-sm"
+          style={neonButtonStyle({ borderRadius: 24, whiteSpace: "nowrap" })}
+          onClick={() => openQuickFor(qt)}
+          title="Quick add exercise"
+        >
+          ＋ Quick add
+        </button>
+      </div>
+    );
+  }
+
+  function SupersetBlock({ round, it, idx }: { round: "warmup" | "main" | "finisher"; it: SupersetItem; idx: number }) {
+    return (
+      <>
+        <div className="col-12 col-md-4">
+          <label className="form-label">Superset name</label>
+          <input className="form-control" value={it.name ?? ""} onChange={(e) => updateSuperset(round, idx, { name: e.target.value })} />
+
+          <div className="row mt-2 g-2">
+            <div className="col-6">
+              <label className="form-label">Sets (rounds)</label>
+              <input
+                className="form-control"
+                type="number"
+                min={1}
+                value={Number.isFinite(it.sets) ? it.sets : 3}
+                onChange={(e) => updateSuperset(round, idx, { sets: Math.max(1, Number(e.target.value) || 3) })}
+              />
+            </div>
+
+            <div className="col-6">
+              <label className="form-label">Rest between sets (s)</label>
+              <input
+                className="form-control"
+                type="number"
+                min={0}
+                value={it.rest_s ?? ""}
+                onChange={(e) => updateSuperset(round, idx, { rest_s: Number(e.target.value) || 0 })}
+              />
+            </div>
+          </div>
+
+          <div className="mt-2">
+            <label className="form-label">Instructions / notes</label>
+            <textarea
+              className="form-control"
+              rows={3}
+              value={it.notes ?? ""}
+              onChange={(e) => updateSuperset(round, idx, { notes: e.target.value })}
+              placeholder='e.g. "Cluster: 4-4-4 with 15s intra-rest" or "Contrast: 80% then 60%"'
+            />
+          </div>
+
+          <div className="mt-3">
+            <button type="button" className="btn btn-outline-danger" onClick={() => removeItem(round, idx)} style={{ borderRadius: 12 }}>
+              Delete superset
+            </button>
+          </div>
+        </div>
+
+        <div className="col-12 col-md-8">
+          {Array.isArray(it.items) && it.items.length > 0 ? (
+            it.items.map((s, sidx) => (
+              <div key={s.uid} className="row g-2 align-items-end mb-2">
+                <div className="col-12 col-md-5">
+                  <ExerciseSelect
+                    label="Exercise"
+                    value={s.exercise_id}
+                    onChange={(id) => setSupersetExercise(round, idx, sidx, id)}
+                    quickTarget={{ kind: "superset", round, idx, subIdx: sidx }}
+                  />
+                </div>
+
+                <div className="col-6 col-md-3">
+                  <label className="form-label">Reps</label>
+                  <input className="form-control" value={s.reps ?? ""} onChange={(e) => setSupersetReps(round, idx, sidx, e.target.value)} />
+                </div>
+
+                {!s.strength ? (
+                  <div className="col-4 col-md-2">
+                    <label className="form-label">Weight (kg)</label>
+                    <input
+                      className="form-control"
+                      type="number"
+                      min={0}
+                      value={s.weight_kg ?? ""}
+                      onChange={(e) => setSupersetWeight(round, idx, sidx, Number(e.target.value) || null)}
+                    />
+                  </div>
+                ) : (
+                  <div className="col-4 col-md-2">
+                    <div className="text-dim small" style={{ paddingBottom: 6 }}>
+                      Weight
+                    </div>
+                    <div className="text-dim small">%</div>
+                  </div>
+                )}
+
+                <div className="col-2 col-md-2 d-flex">
+                  <button type="button" className="btn btn-outline-danger ms-auto" onClick={() => removeExerciseFromSuperset(round, idx, sidx)} title="Remove">
+                    ✕
+                  </button>
+                </div>
+
+                <div className="col-12">
+                  <StrengthPrescriptionEditor
+                    value={s.strength ?? null}
+                    basisOptions={basisOptions}
+                    onChange={(strength) => setSupersetStrength(round, idx, sidx, strength)}
+                  />
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-dim small">No exercises yet.</div>
+          )}
+
+          <button type="button" className="btn btn-sm" style={neonButtonStyle({ borderRadius: 24 })} onClick={() => addExerciseToSuperset(round, idx)}>
+            + Add Exercise to Superset
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  function stripRound(r: GymRound | null): any | null {
+    if (!r) return null;
+    return {
+      name: r.name,
+      order: r.order,
+      items: (r.items || []).map((it) => {
+        if (it.type === "Superset") {
+          const ss = it as SupersetItem;
+          return {
+            type: "Superset",
+            order: ss.order,
+            name: ss.name || "",
+            sets: Number.isFinite(ss.sets) ? ss.sets : 3,
+            rest_s: ss.rest_s ?? null,
+            notes: ss.notes ?? null,
+            items: (ss.items || []).map((s) => ({
+              exercise_id: s.exercise_id,
+              reps: s.reps || "",
+              weight_kg: s.weight_kg ?? null,
+              strength: s.strength ?? null,
+            })),
+          };
+        }
+
+        const si = it as SingleItem;
+        return {
+          type: "Single",
+          order: si.order,
+          exercise_id: si.exercise_id,
+          sets: si.sets,
+          reps: si.reps || "",
+          weight_kg: si.weight_kg ?? null,
+          rest_s: si.rest_s ?? null,
+          notes: si.notes ?? null,
+          strength: si.strength
+            ? {
+                basis_exercise: si.strength.basis_exercise ?? null,
+                percent_1rm: si.strength.percent_1rm ?? null,
+                percent_min: si.strength.percent_min ?? null,
+                percent_max: si.strength.percent_max ?? null,
+                rounding_kg: si.strength.rounding_kg ?? null,
+                mode: si.strength.mode ?? null,
+              }
+            : null,
+        };
+      }),
+    };
+  }
+
+  function toISODateOrNull(s: string): string | null {
+    if (!s) return null;
+    const dt = new Date(s);
+    if (isNaN(dt.getTime())) return null;
+    dt.setHours(12, 0, 0, 0);
+    return dt.toISOString();
+  }
+
+  async function saveWorkout() {
+    setSaving(true);
+    setMsg(null);
+    try {
+      if (meta.recurring) {
+        if (!meta.assigned_to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(meta.assigned_to)) {
+          throw new Error("Please enter a valid email for 'Assigned To'.");
+        }
+        if (!DAYS.includes(meta.recurring_day)) throw new Error("Please choose a valid recurring day.");
+        if (!meta.recurring_start || !meta.recurring_end) throw new Error("Please choose both a start and end date.");
+        const start = new Date(meta.recurring_start);
+        const end = new Date(meta.recurring_end);
+        if (start > end) throw new Error("Recurring start date must be before end date.");
+      }
+
+      const body: any = {
+        ...(isEdit ? { workout_id: editId } : null),
+        visibility: meta.visibility,
+        owner_email: meta.visibility === "private" ? ownerEmail : undefined,
+        workout_name: meta.workout_name.trim(),
+        focus: meta.focus.trim() || undefined,
+        notes: meta.notes.trim() || undefined,
+        video_url: meta.video_url.trim() || undefined,
+        warmup: stripRound(warmup),
+        main: stripRound(main),
+        finisher: stripRound(finisher),
+        recurring: !!meta.recurring,
+        recurring_day: meta.recurring ? meta.recurring_day : null,
+        recurring_start: meta.recurring ? toISODateOrNull(meta.recurring_start) : null,
+        recurring_end: meta.recurring ? toISODateOrNull(meta.recurring_end) : null,
+        assigned_to: meta.recurring ? meta.assigned_to.trim().toLowerCase() : null,
+      };
+
+      const url = isEdit ? "/api/workouts/admin/update" : "/api/workouts/gym-create";
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || (isEdit ? "Failed to update workout" : "Failed to create workout"));
+
+      setMsg(isEdit ? "Saved changes ✅" : "Created ✅");
+      const newId = json?.workout_id || editId;
+      setTimeout(() => router.push(`/admin/workouts/${newId}`), 700);
+    } catch (e: any) {
+      setMsg(e?.message || (isEdit ? "Failed to save workout" : "Failed to create workout"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createQuickExercise() {
+    try {
+      setQuickBusy(true);
+      setQuickErr(null);
+
+      const body = {
+        exercise_name: quickForm.exercise_name.trim(),
+        type: quickForm.type.trim(),
+        equipment: quickForm.equipment.trim(),
+        video_url: quickForm.video_url.trim(),
+        met_value:
+          quickForm.met_value === ""
+            ? null
+            : Number.isFinite(Number(quickForm.met_value))
+            ? Number(quickForm.met_value)
+            : null,
+        description: quickForm.description.trim(),
+      };
+
+      if (!body.exercise_name) {
+        setQuickErr("Exercise name is required");
+        return;
+      }
+
+      const res = await fetch("/api/exercises/create?upsert=true", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Failed to create exercise");
+
+      await mutateExercises();
+      const newId: string = json?.exercise_id || body.exercise_name;
+
+      if (quickTarget) {
+        if (quickTarget.kind === "single") updateSingle(quickTarget.round, quickTarget.idx, { exercise_id: newId });
+        else setSupersetExercise(quickTarget.round, quickTarget.idx, quickTarget.subIdx, newId);
+      }
+
+      setQuickOpen(false);
+    } catch (e: any) {
+      setQuickErr(e?.message || "Failed to create exercise");
+    } finally {
+      setQuickBusy(false);
+    }
+  }
+
   return (
     <>
       <Head>
@@ -923,7 +904,7 @@ export default function GymCreateWorkoutPage() {
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <div className="mb-3">
-          <Link href="/">      
+          /admin
             ← Back to Admin
           </Link>
         </div>
@@ -952,7 +933,7 @@ export default function GymCreateWorkoutPage() {
 
             <div className="col-6 col-md-3">
               <label className="form-label">Focus</label>
-              <input className="form-control" value={meta.focus} onChange={(e) => setMeta({ ...meta, focus: e.target.value })} placeholder="e.g., Upper Body" />
+              <input className="form-control" value={meta.focus} onChange={(e) => setMeta({ ...meta, focus: e.target.value })} placeholder="e.g., Lower Body" />
             </div>
 
             <div className="col-12">
@@ -975,89 +956,52 @@ export default function GymCreateWorkoutPage() {
 
         {AssignmentSection}
 
-        {/* Warm Up */}
         <section className="futuristic-card p-3 mb-3" style={neonCardStyle()}>
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h6 className="m-0">Warm Up</h6>
             <div className="d-flex gap-2">
-              <button
-                className="btn btn-sm"
-                style={neonPrimaryStyle({ borderRadius: 24, paddingLeft: 14, paddingRight: 14 })}
-                onClick={() => addSingle("warmup")}
-              >
+              <button className="btn btn-sm" style={neonPrimaryStyle({ borderRadius: 24, paddingLeft: 14, paddingRight: 14 })} onClick={() => addSingle("warmup")}>
                 + Single
               </button>
-
               <button className="btn btn-sm" style={neonButtonStyle({ borderRadius: 24 })} onClick={() => addSuperset("warmup")}>
                 + Superset
               </button>
             </div>
           </div>
 
-          {warmup?.items.length ? (
+          {warmup?.items?.length ? (
             warmup.items.map((it, idx) => (
               <div key={it.uid} className="row g-2 mb-2">
                 {it.type === "Single" ? (
                   <>
                     <div className="col-12 col-md-4">
-                      <ExerciseSelect
-                        value={(it as SingleItem).exercise_id}
-                        onChange={(id) => updateSingle("warmup", idx, { exercise_id: id })}
-                        quickTarget={{ kind: "single", round: "warmup", idx }}
-                      />
+                      <ExerciseSelect value={(it as SingleItem).exercise_id} onChange={(id) => updateSingle("warmup", idx, { exercise_id: id })} quickTarget={{ kind: "single", round: "warmup", idx }} />
                     </div>
 
                     <div className="col-4 col-md-2">
                       <label className="form-label">Sets</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        min={1}
-                        value={(it as SingleItem).sets ?? ""}
-                        onChange={(e) => updateSingle("warmup", idx, { sets: Number(e.target.value) || undefined })}
-                      />
+                      <input className="form-control" type="number" min={1} value={(it as SingleItem).sets ?? ""} onChange={(e) => updateSingle("warmup", idx, { sets: Number(e.target.value) || undefined })} />
                     </div>
 
                     <div className="col-8 col-md-3">
                       <label className="form-label">Reps</label>
-                      <input
-                        className="form-control"
-                        value={(it as SingleItem).reps ?? ""}
-                        onChange={(e) => updateSingle("warmup", idx, { reps: e.target.value })}
-                        placeholder="e.g., 10 or 10-8-6"
-                      />
+                      <input className="form-control" value={(it as SingleItem).reps ?? ""} onChange={(e) => updateSingle("warmup", idx, { reps: e.target.value })} placeholder="e.g. 10" />
                     </div>
 
                     {!(it as SingleItem).strength ? (
                       <div className="col-6 col-md-2">
                         <label className="form-label">Weight (kg)</label>
-                        <input
-                          className="form-control"
-                          type="number"
-                          min={0}
-                          value={(it as SingleItem).weight_kg ?? ""}
-                          onChange={(e) => updateSingle("warmup", idx, { weight_kg: Number(e.target.value) || null })}
-                        />
+                        <input className="form-control" type="number" min={0} value={(it as SingleItem).weight_kg ?? ""} onChange={(e) => updateSingle("warmup", idx, { weight_kg: Number(e.target.value) || null })} />
                       </div>
                     ) : null}
 
                     <div className="col-6 col-md-1">
                       <label className="form-label">Rest (s)</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        min={0}
-                        value={(it as SingleItem).rest_s ?? ""}
-                        onChange={(e) => updateSingle("warmup", idx, { rest_s: Number(e.target.value) || null })}
-                      />
+                      <input className="form-control" type="number" min={0} value={(it as SingleItem).rest_s ?? ""} onChange={(e) => updateSingle("warmup", idx, { rest_s: Number(e.target.value) || null })} />
                     </div>
 
                     <div className="col-12">
-                      <StrengthPrescriptionEditor
-                        value={(it as SingleItem).strength}
-                        basisOptions={basisOptions}
-                        onChange={(strength) => updateSingle("warmup", idx, { strength, weight_kg: null })}
-                      />
+                      <StrengthPrescriptionEditor value={(it as SingleItem).strength} basisOptions={basisOptions} onChange={(strength) => updateSingle("warmup", idx, { strength, weight_kg: null })} />
                     </div>
 
                     <div className="col-12 d-flex">
@@ -1076,16 +1020,11 @@ export default function GymCreateWorkoutPage() {
           )}
         </section>
 
-        {/* Main */}
         <section className="futuristic-card p-3 mb-3" style={neonCardStyle()}>
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h6 className="m-0">Main Set</h6>
             <div className="d-flex gap-2">
-              <button
-                className="btn btn-sm"
-                style={neonPrimaryStyle({ borderRadius: 24, paddingLeft: 14, paddingRight: 14 })}
-                onClick={() => addSingle("main")}
-              >
+              <button className="btn btn-sm" style={neonPrimaryStyle({ borderRadius: 24, paddingLeft: 14, paddingRight: 14 })} onClick={() => addSingle("main")}>
                 + Single
               </button>
               <button className="btn btn-sm" style={neonButtonStyle({ borderRadius: 24 })} onClick={() => addSuperset("main")}>
@@ -1100,22 +1039,12 @@ export default function GymCreateWorkoutPage() {
                 {it.type === "Single" ? (
                   <>
                     <div className="col-12 col-md-4">
-                      <ExerciseSelect
-                        value={(it as SingleItem).exercise_id}
-                        onChange={(id) => updateSingle("main", idx, { exercise_id: id })}
-                        quickTarget={{ kind: "single", round: "main", idx }}
-                      />
+                      <ExerciseSelect value={(it as SingleItem).exercise_id} onChange={(id) => updateSingle("main", idx, { exercise_id: id })} quickTarget={{ kind: "single", round: "main", idx }} />
                     </div>
 
                     <div className="col-4 col-md-2">
                       <label className="form-label">Sets</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        min={1}
-                        value={(it as SingleItem).sets ?? ""}
-                        onChange={(e) => updateSingle("main", idx, { sets: Number(e.target.value) || undefined })}
-                      />
+                      <input className="form-control" type="number" min={1} value={(it as SingleItem).sets ?? ""} onChange={(e) => updateSingle("main", idx, { sets: Number(e.target.value) || undefined })} />
                     </div>
 
                     <div className="col-8 col-md-3">
@@ -1126,33 +1055,17 @@ export default function GymCreateWorkoutPage() {
                     {!(it as SingleItem).strength ? (
                       <div className="col-6 col-md-2">
                         <label className="form-label">Weight (kg)</label>
-                        <input
-                          className="form-control"
-                          type="number"
-                          min={0}
-                          value={(it as SingleItem).weight_kg ?? ""}
-                          onChange={(e) => updateSingle("main", idx, { weight_kg: Number(e.target.value) || null })}
-                        />
+                        <input className="form-control" type="number" min={0} value={(it as SingleItem).weight_kg ?? ""} onChange={(e) => updateSingle("main", idx, { weight_kg: Number(e.target.value) || null })} />
                       </div>
                     ) : null}
 
                     <div className="col-6 col-md-1">
                       <label className="form-label">Rest (s)</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        min={0}
-                        value={(it as SingleItem).rest_s ?? ""}
-                        onChange={(e) => updateSingle("main", idx, { rest_s: Number(e.target.value) || null })}
-                      />
+                      <input className="form-control" type="number" min={0} value={(it as SingleItem).rest_s ?? ""} onChange={(e) => updateSingle("main", idx, { rest_s: Number(e.target.value) || null })} />
                     </div>
 
                     <div className="col-12">
-                      <StrengthPrescriptionEditor
-                        value={(it as SingleItem).strength}
-                        basisOptions={basisOptions}
-                        onChange={(strength) => updateSingle("main", idx, { strength, weight_kg: null })}
-                      />
+                      <StrengthPrescriptionEditor value={(it as SingleItem).strength} basisOptions={basisOptions} onChange={(strength) => updateSingle("main", idx, { strength, weight_kg: null })} />
                     </div>
 
                     <div className="col-12 d-flex">
@@ -1171,16 +1084,11 @@ export default function GymCreateWorkoutPage() {
           )}
         </section>
 
-        {/* Finisher */}
         <section className="futuristic-card p-3 mb-3" style={neonCardStyle()}>
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h6 className="m-0">Finisher</h6>
             <div className="d-flex gap-2">
-              <button
-                className="btn btn-sm"
-                style={neonPrimaryStyle({ borderRadius: 24, paddingLeft: 14, paddingRight: 14 })}
-                onClick={() => addSingle("finisher")}
-              >
+              <button className="btn btn-sm" style={neonPrimaryStyle({ borderRadius: 24, paddingLeft: 14, paddingRight: 14 })} onClick={() => addSingle("finisher")}>
                 + Single
               </button>
               <button className="btn btn-sm" style={neonButtonStyle({ borderRadius: 24 })} onClick={() => addSuperset("finisher")}>
@@ -1197,22 +1105,12 @@ export default function GymCreateWorkoutPage() {
                 {it.type === "Single" ? (
                   <>
                     <div className="col-12 col-md-4">
-                      <ExerciseSelect
-                        value={(it as SingleItem).exercise_id}
-                        onChange={(id) => updateSingle("finisher", idx, { exercise_id: id })}
-                        quickTarget={{ kind: "single", round: "finisher", idx }}
-                      />
+                      <ExerciseSelect value={(it as SingleItem).exercise_id} onChange={(id) => updateSingle("finisher", idx, { exercise_id: id })} quickTarget={{ kind: "single", round: "finisher", idx }} />
                     </div>
 
                     <div className="col-4 col-md-2">
                       <label className="form-label">Sets</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        min={1}
-                        value={(it as SingleItem).sets ?? ""}
-                        onChange={(e) => updateSingle("finisher", idx, { sets: Number(e.target.value) || undefined })}
-                      />
+                      <input className="form-control" type="number" min={1} value={(it as SingleItem).sets ?? ""} onChange={(e) => updateSingle("finisher", idx, { sets: Number(e.target.value) || undefined })} />
                     </div>
 
                     <div className="col-8 col-md-3">
@@ -1223,33 +1121,17 @@ export default function GymCreateWorkoutPage() {
                     {!(it as SingleItem).strength ? (
                       <div className="col-6 col-md-2">
                         <label className="form-label">Weight (kg)</label>
-                        <input
-                          className="form-control"
-                          type="number"
-                          min={0}
-                          value={(it as SingleItem).weight_kg ?? ""}
-                          onChange={(e) => updateSingle("finisher", idx, { weight_kg: Number(e.target.value) || null })}
-                        />
+                        <input className="form-control" type="number" min={0} value={(it as SingleItem).weight_kg ?? ""} onChange={(e) => updateSingle("finisher", idx, { weight_kg: Number(e.target.value) || null })} />
                       </div>
                     ) : null}
 
                     <div className="col-6 col-md-1">
                       <label className="form-label">Rest (s)</label>
-                      <input
-                        className="form-control"
-                        type="number"
-                        min={0}
-                        value={(it as SingleItem).rest_s ?? ""}
-                        onChange={(e) => updateSingle("finisher", idx, { rest_s: Number(e.target.value) || null })}
-                      />
+                      <input className="form-control" type="number" min={0} value={(it as SingleItem).rest_s ?? ""} onChange={(e) => updateSingle("finisher", idx, { rest_s: Number(e.target.value) || null })} />
                     </div>
 
                     <div className="col-12">
-                      <StrengthPrescriptionEditor
-                        value={(it as SingleItem).strength}
-                        basisOptions={basisOptions}
-                        onChange={(strength) => updateSingle("finisher", idx, { strength, weight_kg: null })}
-                      />
+                      <StrengthPrescriptionEditor value={(it as SingleItem).strength} basisOptions={basisOptions} onChange={(strength) => updateSingle("finisher", idx, { strength, weight_kg: null })} />
                     </div>
 
                     <div className="col-12 d-flex">
@@ -1266,12 +1148,7 @@ export default function GymCreateWorkoutPage() {
           )}
         </section>
 
-        <button
-          className="btn w-100 mt-2"
-          onClick={save}
-          disabled={saving}
-          style={neonPrimaryStyle({ borderRadius: 24 })}
-        >
+        <button className="btn w-100 mt-2" onClick={saveWorkout} disabled={saving} style={neonPrimaryStyle({ borderRadius: 24 })}>
           {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Gym Workout"}
         </button>
       </main>
