@@ -1,6 +1,6 @@
 // pages/api/workouts/admin/[id].ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { adminDb as db } from "../../../../lib/firebaseAdmin";
+import { adminDb as db } from "../../../lib/firebaseAdmin";
 
 /**
  * Admin workout fetch (hardened)
