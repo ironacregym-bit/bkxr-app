@@ -923,7 +923,8 @@ export default function GymCreateWorkoutPage() {
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <div className="mb-3">
-          <Link href="/      ← Back to Admin
+          <Link href="/">      
+            ← Back to Admin
           </Link>
         </div>
 
