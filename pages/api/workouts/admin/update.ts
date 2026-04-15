@@ -1,9 +1,17 @@
-// pages/api/workouts/admin/update.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../../lib/firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
 
-/* ---------- Types (aligned with your create route) ---------- */
+/* ---------- Types (aligned with create route + strength support) ---------- */
+type StrengthSpec = {
+  basis_exercise?: string | null;
+  percent_1rm?: number | null;
+  percent_min?: number | null;
+  percent_max?: number | null;
+  rounding_kg?: number | null;
+  mode?: "straight" | "top_set" | "backoff" | "emom" | "test" | null;
+};
+
 type SingleItem = {
   type: "Single";
   order: number;
@@ -13,24 +21,32 @@ type SingleItem = {
   weight_kg?: number | null;
   rest_s?: number | null;
   notes?: string | null;
+
+  // ✅ NEW: strength (% of 1RM)
+  strength?: StrengthSpec | null;
+};
+
+type SupersetSubItem = {
+  exercise_id: string;
+  reps?: string;
+  weight_kg?: number | null;
+
+  // ✅ NEW: strength (% of 1RM) per sub-item
+  strength?: StrengthSpec | null;
 };
 
 type SupersetItem = {
   type: "Superset";
   order: number;
   name?: string | null;
-  items: Array<{
-    exercise_id: string;
-    reps?: string;
-    weight_kg?: number | null;
-  }>;
+  items: SupersetSubItem[];
   sets?: number | null;
   rest_s?: number | null;
   notes?: string | null;
 };
 
 type GymRound = {
-  name: string; // "Warm Up" | "Main Set" | "Finisher"
+  name: string;
   order: number;
   items: Array<SingleItem | SupersetItem>;
 };
@@ -52,13 +68,13 @@ type GymUpdatePayload = {
 
   recurring?: boolean;
   recurring_day?: DayName | null;
-  recurring_start?: string | null; // ISO or parseable
-  recurring_end?: string | null;   // ISO or parseable
-  assigned_to?: string | string[] | null; // accept single/multiple; normalised to string[]
+  recurring_start?: string | null;
+  recurring_end?: string | null;
+  assigned_to?: string | string[] | null;
 };
 
 /* ---------- Helpers (same behaviour as create) ---------- */
-const ALLOWED_DAYS: DayName[] = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const ALLOWED_DAYS: DayName[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 function isEmail(s: string): boolean {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
@@ -68,12 +84,10 @@ function parseDateToTimestamp(s: string | null | undefined): Timestamp | null {
   if (!s) return null;
   const dt = new Date(s);
   if (Number.isNaN(dt.getTime())) return null;
-  // Normalise to midday to avoid TZ-midnight drift
   dt.setHours(12, 0, 0, 0);
   return Timestamp.fromDate(dt);
 }
 
-/** Normalise assigned_to into a clean string[] (lowercased, unique). */
 function normaliseAssignedTo(input: string | string[] | null | undefined): string[] {
   if (Array.isArray(input)) {
     return Array.from(
@@ -92,6 +106,25 @@ function normaliseAssignedTo(input: string | string[] | null | undefined): strin
     return Array.from(new Set(parts.filter(isEmail)));
   }
   return [];
+}
+
+function clamp01(n: any): number | null {
+  if (n === null || n === undefined || n === "") return null;
+  const v = Number(n);
+  if (!Number.isFinite(v)) return null;
+  return Math.max(0, Math.min(1.5, v));
+}
+
+function normaliseStrength(strength?: StrengthSpec | null) {
+  if (!strength) return null;
+  return {
+    basis_exercise: strength.basis_exercise ?? null,
+    percent_1rm: clamp01(strength.percent_1rm),
+    percent_min: clamp01(strength.percent_min),
+    percent_max: clamp01(strength.percent_max),
+    rounding_kg: strength.rounding_kg == null ? null : strength.rounding_kg,
+    mode: (strength.mode ?? null) as any,
+  };
 }
 
 /** Chunked batch helpers to avoid Firestore's 500-op limit */
@@ -184,26 +217,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const now = Timestamp.now();
 
     // Update top-level doc (merge; keep created_at, workout_type, etc.)
-    const topLevelUpdate = {
-      workout_name: p.workout_name,
-      focus: p.focus ?? null,
-      notes: p.notes ?? null,
-      video_url: p.video_url ?? null,
-      visibility: p.visibility,
-      owner_email: p.visibility === "private" ? (p.owner_email || null) : null,
-      updated_at: now,
+    await workoutRef.set(
+      {
+        workout_name: p.workout_name,
+        focus: p.focus ?? null,
+        notes: p.notes ?? null,
+        video_url: p.video_url ?? null,
+        visibility: p.visibility,
+        owner_email: p.visibility === "private" ? (p.owner_email || null) : null,
+        updated_at: now,
 
-      // Recurrence fields
-      recurring: isRecurring,
-      recurring_day: isRecurring ? dayName : null,
-      recurring_start: isRecurring ? tsStart : null,
-      recurring_end: isRecurring ? tsEnd : null,
+        recurring: isRecurring,
+        recurring_day: isRecurring ? dayName : null,
+        recurring_start: isRecurring ? tsStart : null,
+        recurring_end: isRecurring ? tsEnd : null,
 
-      // Always array form (empty [] if not provided)
-      assigned_to: assignedToList,
-    };
-
-    await workoutRef.set(topLevelUpdate, { merge: true });
+        assigned_to: assignedToList,
+      },
+      { merge: true }
+    );
 
     // Rebuild rounds subcollection
     // 1) Gather existing round + item refs
@@ -220,7 +252,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const newRounds: GymRound[] = [];
     if (p.warmup) newRounds.push({ ...p.warmup, order: 1 });
     newRounds.push({ ...p.main, order: p.warmup ? 2 : 1 });
-    if (p.finisher) newRounds.push({ ...p.finisher, order: p.warmup ? 3 : (p.main ? 2 : 1) });
+    if (p.finisher) newRounds.push({ ...p.finisher, order: p.warmup ? 3 : 2 });
 
     // 3) Prepare sets for rounds/items and commit in chunks
     const sets: { ref: FirebaseFirestore.DocumentReference; data: FirebaseFirestore.DocumentData }[] = [];
@@ -239,11 +271,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
       });
 
-      const sorted = [...(r.items || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+      const sorted = [...(r.items || [])].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+
       for (const it of sorted) {
         const itemRef = roundRef.collection("items").doc();
+
         if (it.type === "Single") {
           const s = it as SingleItem;
+          const strength = normaliseStrength(s.strength);
+
+          // ✅ Guard: do not allow both absolute kg and % prescription
+          if (strength && s.weight_kg != null) {
+            return res.status(400).json({
+              error: `Single item "${s.exercise_id}" cannot specify weight_kg when using strength (% 1RM).`,
+            });
+          }
+
           sets.push({
             ref: itemRef,
             data: {
@@ -252,13 +295,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               exercise_id: s.exercise_id,
               sets: s.sets ?? null,
               reps: s.reps ?? null,
-              weight_kg: s.weight_kg ?? null,
+              weight_kg: strength ? null : (s.weight_kg ?? null),
               rest_s: s.rest_s ?? null,
               notes: s.notes ?? null,
+              strength,
             },
           });
         } else {
           const ss = it as SupersetItem;
+
+          const superset_items = (Array.isArray(ss.items) ? ss.items : []).map((x) => {
+            const subStrength = normaliseStrength(x.strength);
+
+            // ✅ Guard per sub-item
+            if (subStrength && x.weight_kg != null) {
+              throw new Error(
+                `Superset sub-item "${x.exercise_id}" cannot specify weight_kg when using strength (% 1RM).`
+              );
+            }
+
+            return {
+              exercise_id: x.exercise_id,
+              reps: x.reps ?? null,
+              weight_kg: subStrength ? null : (x.weight_kg ?? null),
+              strength: subStrength,
+            };
+          });
+
           sets.push({
             ref: itemRef,
             data: {
@@ -268,11 +331,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               sets: ss.sets ?? null,
               rest_s: ss.rest_s ?? null,
               notes: ss.notes ?? null,
-              superset_items: (Array.isArray(ss.items) ? ss.items : []).map((x) => ({
-                exercise_id: x.exercise_id,
-                reps: x.reps ?? null,
-                weight_kg: x.weight_kg ?? null,
-              })),
+              superset_items,
             },
           });
         }
@@ -284,6 +343,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ ok: true, workout_id: id });
   } catch (err: any) {
     console.error("[workouts/admin/update] error:", err?.message || err);
-    return res.status(500).json({ error: "Failed to update gym workout" });
+    return res.status(500).json({ error: err?.message || "Failed to update gym workout" });
   }
 }
