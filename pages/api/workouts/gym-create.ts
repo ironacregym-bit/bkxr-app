@@ -23,15 +23,19 @@ type SingleItem = {
   strength?: StrengthSpec | null;
 };
 
+type SupersetSubItem = {
+  exercise_id: string;
+  reps?: string;
+  weight_kg?: number | null;
+  // ✅ NEW: allow % of 1RM per sub-item
+  strength?: StrengthSpec | null;
+};
+
 type SupersetItem = {
   type: "Superset";
   order: number;
   name?: string | null;
-  items: Array<{
-    exercise_id: string;
-    reps?: string;
-    weight_kg?: number | null;
-  }>;
+  items: SupersetSubItem[];
   sets?: number | null;
   rest_s?: number | null;
   notes?: string | null;
@@ -117,6 +121,18 @@ function clamp01(n: any): number | null {
   const v = Number(n);
   if (!Number.isFinite(v)) return null;
   return Math.max(0, Math.min(1.5, v));
+}
+
+function normaliseStrength(strength?: StrengthSpec | null) {
+  if (!strength) return null;
+  return {
+    basis_exercise: strength.basis_exercise ?? null,
+    percent_1rm: clamp01(strength.percent_1rm),
+    percent_min: clamp01(strength.percent_min),
+    percent_max: clamp01(strength.percent_max),
+    rounding_kg: strength.rounding_kg == null ? null : strength.rounding_kg,
+    mode: (strength.mode ?? null) as any,
+  };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -226,16 +242,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (it.type === "Single") {
           const s = it as SingleItem;
 
-          const strength = s.strength
-            ? {
-                basis_exercise: s.strength.basis_exercise ?? null,
-                percent_1rm: clamp01(s.strength.percent_1rm),
-                percent_min: clamp01(s.strength.percent_min),
-                percent_max: clamp01(s.strength.percent_max),
-                rounding_kg: s.strength.rounding_kg == null ? null : s.strength.rounding_kg,
-                mode: (s.strength.mode ?? null) as any,
-              }
-            : null;
+          const strength = normaliseStrength(s.strength);
 
           // ✅ Guard: do not allow both absolute kg and % prescription
           if (strength && s.weight_kg != null) {
@@ -257,6 +264,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         } else {
           const ss = it as SupersetItem;
+
+          // ✅ NEW: support strength in each sub item
+          const superset_items = (Array.isArray(ss.items) ? ss.items : []).map((x) => {
+            const subStrength = normaliseStrength(x.strength);
+
+            // Guard per sub-item: no kg when strength exists
+            if (subStrength && x.weight_kg != null) {
+              throw new Error(
+                `Superset item "${x.exercise_id}" cannot specify weight_kg when using strength (% 1RM).`
+              );
+            }
+
+            return {
+              exercise_id: x.exercise_id,
+              reps: x.reps ?? null,
+              weight_kg: subStrength ? null : (x.weight_kg ?? null),
+              strength: subStrength,
+            };
+          });
+
           batch.set(itemRef, {
             type: "Superset",
             order: ss.order,
@@ -264,11 +291,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             sets: ss.sets ?? null,
             rest_s: ss.rest_s ?? null,
             notes: ss.notes ?? null,
-            superset_items: (Array.isArray(ss.items) ? ss.items : []).map((x) => ({
-              exercise_id: x.exercise_id,
-              reps: x.reps ?? null,
-              weight_kg: x.weight_kg ?? null,
-            })),
+            superset_items,
           });
         }
       }
@@ -278,6 +301,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(201).json({ ok: true, workout_id: workoutRef.id });
   } catch (err: any) {
     console.error("[workouts/gym-create] error:", err?.message || err);
-    return res.status(500).json({ error: "Failed to create gym workout" });
+    return res.status(500).json({ error: err?.message || "Failed to create gym workout" });
   }
 }
