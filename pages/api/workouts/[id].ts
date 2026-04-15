@@ -1,220 +1,147 @@
+// pages/api/workouts/admin/[id].ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import firestore from "../../../lib/firestoreClient";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../auth/[...nextauth]";
-import { hasRole } from "../../../lib/rbac";
+import { adminDb as db } from "../../../../lib/firebaseAdmin";
 
-type StrengthSpecOut = {
-  basis_exercise?: string | null;
-  percent_1rm?: number | null;
-  percent_min?: number | null;
-  percent_max?: number | null;
-  rounding_kg?: number | null;
-  mode?: "straight" | "top_set" | "backoff" | "emom" | "test" | null;
-};
+/**
+ * Admin workout fetch (hardened)
+ * - Loads workout doc + rounds + items
+ * - Normalises Superset inner array: `superset_items` -> `items`
+ * - Preserves strength blocks:
+ *    - Single.strength
+ *    - Superset.items[].strength
+ * - Tolerates missing `order` by sorting in-memory
+ */
 
-type SingleItemOut = {
-  type: "Single";
-  order: number;
-  exercise_id: string;
-  exercise_name?: string;
-  sets?: number | null;
-  reps?: string | null;
-  weight_kg?: number | null;
-  rest_s?: number | null;
-  notes?: string | null;
-  strength?: StrengthSpecOut | null;
-};
+export const config = { api: { bodyParser: false } };
 
-type SupersetSubOut = {
-  exercise_id: string;
-  exercise_name?: string;
-  reps?: string | null;
-  weight_kg?: number | null;
-};
+type ApiError = { error: string; where?: string; details?: string };
 
-type SupersetItemOut = {
-  type: "Superset";
-  order: number;
-  name?: string | null;
-  items: SupersetSubOut[];
-  sets?: number | null;
-  rest_s?: number | null;
-  notes?: string | null;
-};
+function fail(res: NextApiResponse<ApiError>, whereStr: string, e?: any) {
+  const msg = (e && (e.message || String(e))) || "Unknown error";
+  console.error(`[workouts/admin/[id]] ${whereStr}:`, msg);
+  return res.status(500).json({
+    error: "Failed to load workout for admin",
+    where: whereStr,
+    details: msg,
+  });
+}
 
-type GymRoundOut = {
-  name: string;
-  order: number;
-  items: Array<SingleItemOut | SupersetItemOut>;
-};
-
-type GymWorkoutOut = {
-  workout_id: string;
-  workout_name: string;
-  focus?: string | null;
-  notes?: string | null;
-  video_url?: string | null;
-  warmup?: GymRoundOut | null;
-  main: GymRoundOut;
-  finisher?: GymRoundOut | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-};
-
-const WORKOUTS_COLLECTION = "workouts";
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<GymWorkoutOut | { error: string }>
-) {
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
+export default async function handler(req: NextApiRequest, res: NextApiResponse<any | ApiError>) {
   try {
-    const session = await getServerSession(req, res, authOptions);
-    if (!session) return res.status(401).json({ error: "Not signed in" });
-    if (!hasRole(session, ["user", "gym", "admin"])) {
-      return res.status(403).json({ error: "Forbidden" });
+    const idParam = Array.isArray(req.query.id) ? req.query.id[0] : req.query.id;
+    const workout_id = (idParam || "").trim();
+    if (!workout_id) return res.status(400).json({ error: "id is required" });
+
+    // 1) Load workout doc
+    let doc;
+    try {
+      doc = await db.collection("workouts").doc(workout_id).get();
+    } catch (e) {
+      return fail(res, "get(workout)", e);
     }
+    if (!doc.exists) return res.status(404).json({ error: "Workout not found" });
 
-    const { id } = req.query;
-    const workoutId = Array.isArray(id) ? id[0] : id;
-    if (!workoutId) return res.status(400).json({ error: "Missing workout id" });
+    const base = doc.data() || {};
 
-    const db = firestore;
-
-    let docRef = db.collection(WORKOUTS_COLLECTION).doc(workoutId);
-    let docSnap = await docRef.get();
-
-    if (!docSnap.exists) {
-      const q = await db.collection(WORKOUTS_COLLECTION).where("workout_id", "==", workoutId).limit(1).get();
-      if (!q.empty) {
-        docSnap = q.docs[0];
-        docRef = docSnap.ref;
+    // 2) Load rounds (ordered if possible)
+    let roundsSnap;
+    try {
+      roundsSnap = await db.collection("workouts").doc(workout_id).collection("rounds").orderBy("order", "asc").get();
+    } catch (e) {
+      console.warn("[workouts/admin/[id]] orderBy(order) on rounds failed; retrying without orderBy");
+      try {
+        roundsSnap = await db.collection("workouts").doc(workout_id).collection("rounds").get();
+      } catch (ee) {
+        return fail(res, "get(rounds)", ee);
       }
     }
 
-    if (!docSnap.exists) {
-      return res.status(404).json({ error: "Workout not found" });
-    }
+    // 3) Map rounds + items
+    const rounds: any[] = [];
 
-    const w = docSnap.data() || {};
-    const rootId = String((w as any).workout_id || docSnap.id);
+    for (const rDoc of roundsSnap.docs) {
+      const rData = rDoc.data() || {};
 
-    const roundsSnap = await docRef.collection("rounds").orderBy("order", "asc").get();
-
-    async function loadItems(
-      roundDoc: FirebaseFirestore.QueryDocumentSnapshot
-    ): Promise<Array<SingleItemOut | SupersetItemOut>> {
-      const itemsSnap = await roundDoc.ref.collection("items").orderBy("order", "asc").get();
-      const items: Array<SingleItemOut | SupersetItemOut> = [];
-
-      itemsSnap.forEach((itemDoc) => {
-        const d = itemDoc.data() || {};
-
-        if (d.type === "Single") {
-          const strengthRaw = d.strength ?? null;
-          const strength: StrengthSpecOut | null = strengthRaw
-            ? {
-                basis_exercise: strengthRaw.basis_exercise ?? null,
-                percent_1rm: strengthRaw.percent_1rm ?? null,
-                percent_min: strengthRaw.percent_min ?? null,
-                percent_max: strengthRaw.percent_max ?? null,
-                rounding_kg: strengthRaw.rounding_kg ?? null,
-                mode: (strengthRaw.mode ?? null) as any,
-              }
-            : null;
-
-          items.push({
-            type: "Single",
-            order: Number(d.order ?? 0),
-            exercise_id: String(d.exercise_id || ""),
-            exercise_name: typeof d.exercise_name === "string" ? d.exercise_name : undefined,
-            sets: d.sets ?? null,
-            reps: d.reps ?? null,
-            weight_kg: d.weight_kg ?? null,
-            rest_s: d.rest_s ?? null,
-            notes: d.notes ?? null,
-            strength,
-          });
-          return;
+      let itemsSnap;
+      try {
+        try {
+          itemsSnap = await db
+            .collection("workouts").doc(workout_id)
+            .collection("rounds").doc(rDoc.id)
+            .collection("items")
+            .orderBy("order", "asc")
+            .get();
+        } catch {
+          itemsSnap = await db
+            .collection("workouts").doc(workout_id)
+            .collection("rounds").doc(rDoc.id)
+            .collection("items")
+            .get();
         }
+      } catch (e) {
+        return fail(res, `get(items) for round ${rDoc.id}`, e);
+      }
 
-        if (d.type === "Superset") {
-          // ✅ support both new 'items' and legacy 'superset_items'
-          const subs = Array.isArray(d.items) ? d.items : Array.isArray(d.superset_items) ? d.superset_items : [];
-          const mappedSubs: SupersetSubOut[] = subs.map((s: any) => ({
-            exercise_id: String(s.exercise_id || ""),
-            exercise_name: typeof s.exercise_name === "string" ? s.exercise_name : undefined,
-            reps: s.reps ?? null,
-            weight_kg: s.weight_kg ?? null,
+      const items = itemsSnap.docs.map((iDoc) => {
+        const d = iDoc.data() || {};
+        const out: any = { item_id: iDoc.id, ...d };
+
+        const isSuperset =
+          (d.type && String(d.type).toLowerCase() === "superset") ||
+          d.is_superset === true;
+
+        if (isSuperset) {
+          // Prefer explicit items if present, else use superset_items
+          if (!Array.isArray(out.items) && Array.isArray(d.superset_items)) {
+            out.items = d.superset_items;
+          }
+          if (!Array.isArray(out.items)) out.items = [];
+
+          // Ensure each sub item preserves strength (if present)
+          out.items = out.items.map((s: any) => ({
+            exercise_id: s?.exercise_id ?? "",
+            reps: s?.reps ?? null,
+            weight_kg: s?.weight_kg ?? null,
+            strength: s?.strength ?? null,
           }));
-
-          items.push({
-            type: "Superset",
-            order: Number(d.order ?? 0),
-            name: d.name ?? null,
-            items: mappedSubs,
-            sets: d.sets ?? null,
-            rest_s: d.rest_s ?? null,
-            notes: d.notes ?? null,
-          });
         }
+
+        // Ensure Single.strength preserved (no-op if missing)
+        if (String(d.type || "").toLowerCase() === "single") {
+          out.strength = d?.strength ?? null;
+        }
+
+        return out;
       });
 
-      return items;
-    }
+      items.sort((a: any, b: any) => (a?.order ?? 0) - (b?.order ?? 0));
 
-    const roundDocs = roundsSnap.docs.sort((a, b) => Number(a.data().order || 0) - Number(b.data().order || 0));
-
-    const roundBlocks: GymRoundOut[] = [];
-    for (const rDoc of roundDocs) {
-      const r = rDoc.data() || {};
-      const items = await loadItems(rDoc);
-      roundBlocks.push({
-        name: String((r as any).name || "Round"),
-        order: Number((r as any).order || 0),
+      rounds.push({
+        round_id: rDoc.id,
+        ...rData,
         items,
       });
     }
 
-    let warmup: GymRoundOut | null = null;
-    let main: GymRoundOut | null = null;
-    let finisher: GymRoundOut | null = null;
+    rounds.sort((a: any, b: any) => (a?.order ?? 0) - (b?.order ?? 0));
 
-    if (roundBlocks.length === 1) main = roundBlocks[0];
-    else if (roundBlocks.length === 2) {
-      warmup = roundBlocks[0];
-      main = roundBlocks[1];
-    } else if (roundBlocks.length >= 3) {
-      warmup = roundBlocks[0];
-      main = roundBlocks[1];
-      finisher = roundBlocks[2];
-    }
+    // 4) Normalise to warmup/main/finisher by name
+    const key = (s: any) => String(s || "").toLowerCase().replace(/\s+/g, "");
+    const byName = (n: string) => rounds.find((r) => key(r.name) === key(n)) || null;
 
-    const created_at = (w as any).created_at?.toDate?.()?.toISOString?.() || null;
-    const updated_at = (w as any).updated_at?.toDate?.()?.toISOString?.() || null;
+    const warmup = byName("Warm Up") || byName("Warmup");
+    const main = byName("Main Set") || byName("Main") || rounds.find((r) => (r?.order ?? 0) === 2) || null;
+    const finisher = byName("Finisher");
 
-    const payload: GymWorkoutOut = {
-      workout_id: rootId,
-      workout_name: String((w as any).workout_name || "Workout"),
-      focus: (w as any).focus ?? null,
-      notes: (w as any).notes ?? null,
-      video_url: (w as any).video_url ?? null,
+    return res.status(200).json({
+      workout_id: doc.id,
+      ...base,
       warmup,
-      main: main || { name: "Main Set", order: 1, items: [] },
+      main,
       finisher,
-      created_at,
-      updated_at,
-    };
-
-    res.setHeader("Cache-Control", "private, max-age=30, stale-while-revalidate=60");
-    return res.status(200).json(payload);
+      _rounds: rounds,
+    });
   } catch (err: any) {
-    console.error("[api/workouts/[id]] error:", err?.message || err);
-    return res.status(500).json({ error: "Failed to load workout" });
+    return fail(res, "unhandled", err);
   }
 }
