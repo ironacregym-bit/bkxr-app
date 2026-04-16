@@ -3,13 +3,7 @@
 import React, { useMemo } from "react";
 import Link from "next/link";
 
-import type {
-  DayName,
-  ExerciseRow,
-  GymRound,
-  SingleItem,
-  SupersetItem,
-} from "./GymCreateWorkout.constants";
+import type { DayName, ExerciseRow, GymRound, SingleItem, SupersetItem } from "./GymCreateWorkout.constants";
 import { DAYS } from "./GymCreateWorkout.constants";
 
 import SingleExerciseEditor from "./SingleExerciseEditor";
@@ -59,7 +53,18 @@ export default function GymCreateWorkoutForm({
     recurring_end: string;
     assigned_to: string;
   };
-  setMeta: (patch: Partial<typeof meta>) => void;
+  setMeta: (patch: Partial<{
+    workout_name: string;
+    focus: string;
+    notes: string;
+    video_url: string;
+    visibility: "global" | "private";
+    recurring: boolean;
+    recurring_day: DayName;
+    recurring_start: string;
+    recurring_end: string;
+    assigned_to: string;
+  }>) => void;
 
   warmup: GymRound | null;
   main: GymRound;
@@ -84,6 +89,7 @@ export default function GymCreateWorkoutForm({
     return (
       <section className="futuristic-card p-3 mb-3" style={neonCardStyle()}>
         <h6 className="m-0 mb-2">Assignment & Recurrence</h6>
+
         <div className="row g-2">
           <div className="col-12 col-md-4">
             <div className="form-check form-switch mt-1">
@@ -98,6 +104,7 @@ export default function GymCreateWorkoutForm({
                 Recurring (weekly)
               </label>
             </div>
+
             <small className="text-dim d-block mt-1">
               When on: this session repeats weekly and becomes the user’s mandatory workout for that weekday.
             </small>
@@ -173,18 +180,22 @@ export default function GymCreateWorkoutForm({
       <section className="futuristic-card p-3 mb-3" style={neonCardStyle()}>
         <div className="d-flex justify-content-between align-items-center mb-2">
           <h6 className="m-0">{title}</h6>
+
           <div className="d-flex gap-2">
             <button
               className="btn btn-sm"
               style={neonPrimaryStyle({ borderRadius: 24, paddingLeft: 14, paddingRight: 14 })}
               onClick={() => onAddSingle(roundKey)}
+              type="button"
             >
               + Single
             </button>
+
             <button
               className="btn btn-sm"
               style={neonButtonStyle({ borderRadius: 24 })}
               onClick={() => onAddSuperset(roundKey)}
+              type="button"
             >
               + Superset
             </button>
@@ -198,19 +209,18 @@ export default function GymCreateWorkoutForm({
             if (it.type === "Single") {
               return (
                 <div key={(it as SingleItem).uid} className="mb-2">
-                  {/* NOTE: SingleExerciseEditor currently uses a text input for exercise_id.
-                      We will upgrade it in the next file batch to use ExerciseSelect + Quick Add. */}
                   <SingleExerciseEditor
                     value={it as any}
                     basisOptions={basisOptions}
                     onChange={(patch) => onUpdateSingle(roundKey, idx, patch)}
                     onDelete={() => onRemoveItem(roundKey, idx)}
                   />
+
                   <div className="d-flex justify-content-end">
                     <button
                       type="button"
-                      className="btn btn-sm btn-outline-light"
-                      style={{ borderRadius: 24 }}
+                      className="btn btn-sm"
+                      style={neonButtonStyle({ borderRadius: 24 })}
                       onClick={() => onQuickAddSingle(roundKey, idx)}
                       title="Quick add/select exercise"
                     >
@@ -257,20 +267,12 @@ export default function GymCreateWorkoutForm({
         <div className="row g-2">
           <div className="col-12 col-md-6">
             <label className="form-label">Workout Name</label>
-            <input
-              className="form-control"
-              value={meta.workout_name}
-              onChange={(e) => setMeta({ workout_name: e.target.value })}
-            />
+            <input className="form-control" value={meta.workout_name} onChange={(e) => setMeta({ workout_name: e.target.value })} />
           </div>
 
           <div className="col-6 col-md-3">
             <label className="form-label">Visibility</label>
-            <select
-              className="form-select"
-              value={meta.visibility}
-              onChange={(e) => setMeta({ visibility: e.target.value as any })}
-            >
+            <select className="form-select" value={meta.visibility} onChange={(e) => setMeta({ visibility: e.target.value as any })}>
               <option value="global">Global</option>
               <option value="private">Private</option>
             </select>
@@ -279,31 +281,17 @@ export default function GymCreateWorkoutForm({
 
           <div className="col-6 col-md-3">
             <label className="form-label">Focus</label>
-            <input
-              className="form-control"
-              value={meta.focus}
-              onChange={(e) => setMeta({ focus: e.target.value })}
-              placeholder="e.g., Lower Body"
-            />
+            <input className="form-control" value={meta.focus} onChange={(e) => setMeta({ focus: e.target.value })} placeholder="e.g., Lower Body" />
           </div>
 
           <div className="col-12">
             <label className="form-label">Notes</label>
-            <textarea
-              className="form-control"
-              value={meta.notes}
-              onChange={(e) => setMeta({ notes: e.target.value })}
-            />
+            <textarea className="form-control" value={meta.notes} onChange={(e) => setMeta({ notes: e.target.value })} />
           </div>
 
           <div className="col-12 col-md-6">
             <label className="form-label">Video URL</label>
-            <input
-              className="form-control"
-              value={meta.video_url}
-              onChange={(e) => setMeta({ video_url: e.target.value })}
-              placeholder="https://…"
-            />
+            <input className="form-control" value={meta.video_url} onChange={(e) => setMeta({ video_url: e.target.value })} placeholder="https://…" />
           </div>
 
           <div className="col-12">
@@ -318,4 +306,11 @@ export default function GymCreateWorkoutForm({
 
       <RoundSection title="Warm Up" roundKey="warmup" round={warmup} />
       <RoundSection title="Main Set" roundKey="main" round={main} />
-      <RoundSection title
+      <RoundSection title="Finisher" roundKey="finisher" round={finisher} allowEmpty />
+
+      <button className="btn w-100 mt-2" onClick={onSave} disabled={saving} style={neonPrimaryStyle({ borderRadius: 24 })} type="button">
+        {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Gym Workout"}
+      </button>
+    </>
+  );
+}
