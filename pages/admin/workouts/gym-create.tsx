@@ -27,6 +27,7 @@ type DayName =
   | "Sunday";
 
 type AdminRoundFetch = { name: string; order: number; items?: any[] };
+
 type AdminWorkoutFetch = {
   workout_id: string;
   workout_name: string;
@@ -108,7 +109,7 @@ export default function GymCreateWorkoutPage() {
           basisOptions={basisOptions}
           initialWorkout={workoutResp ?? null}
           initialWorkoutError={workoutErr ? String((workoutErr as any)?.message || workoutErr) : null}
-          onExercisesCreated={async () => mutateExercises()}
+          onExercisesCreated={() => mutateExercises()}
           onDone={(workoutId) => router.push(`/admin/workouts/${workoutId}`)}
         />
       </main>
