@@ -251,11 +251,6 @@ export default function GymCreateWorkoutForm({
 
   return (
     <>
-      <div className="mb-3">
-        <Link href="/admin" className="btn btn-outline-secondary">
-          ← Back to Admin
-        </Link>
-      </div>
 
       <h2 className="mb-3">{isEdit ? "Edit Gym Workout" : "Create Gym Workout"}</h2>
 
