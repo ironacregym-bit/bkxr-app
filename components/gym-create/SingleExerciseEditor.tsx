@@ -1,8 +1,6 @@
 "use client";
 
-import StrengthPrescriptionEditor, {
-  StrengthSpec,
-} from "./StrengthPrescriptionEditor";
+import StrengthPrescriptionEditor, { StrengthSpec } from "./StrengthPrescriptionEditor";
 
 export type SingleItem = {
   uid: string;
@@ -21,10 +19,13 @@ export default function SingleExerciseEditor({
   value,
   onChange,
   onDelete,
+  basisOptions,
 }: {
   value: SingleItem;
   onChange: (patch: Partial<SingleItem>) => void;
   onDelete: () => void;
+  /** Optional: pass tracked strength exercise names so the basis exercise uses a dropdown */
+  basisOptions?: string[];
 }) {
   return (
     <div
@@ -64,7 +65,7 @@ export default function SingleExerciseEditor({
           <label className="form-label">Reps</label>
           <input
             className="form-control"
-            placeholder="e.g. 5 or 5-3-1"
+            placeholder="e.g. 5 or 5-3-1 or 4-4-4"
             value={value.reps ?? ""}
             onChange={(e) => onChange({ reps: e.target.value })}
           />
@@ -80,8 +81,7 @@ export default function SingleExerciseEditor({
               value={value.weight_kg ?? ""}
               onChange={(e) =>
                 onChange({
-                  weight_kg:
-                    e.target.value === "" ? null : Number(e.target.value),
+                  weight_kg: e.target.value === "" ? null : Number(e.target.value),
                 })
               }
             />
@@ -102,6 +102,7 @@ export default function SingleExerciseEditor({
 
       <StrengthPrescriptionEditor
         value={value.strength}
+        basisOptions={basisOptions}
         onChange={(strength) =>
           onChange({
             strength,
@@ -109,6 +110,17 @@ export default function SingleExerciseEditor({
           })
         }
       />
+
+      <div className="mt-2">
+        <label className="form-label">Notes / instructions</label>
+        <textarea
+          className="form-control"
+          rows={2}
+          value={value.notes ?? ""}
+          onChange={(e) => onChange({ notes: e.target.value })}
+          placeholder='e.g. "Cluster: 4-4-4 with 15s intra-set rest" or "Tempo: 3-1-1"'
+        />
+      </div>
     </div>
   );
 }
