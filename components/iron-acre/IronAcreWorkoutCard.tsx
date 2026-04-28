@@ -106,30 +106,38 @@ export default function IronAcreWorkoutCard({
 
   const [showWeek, setShowWeek] = useState(false);
 
-  // Build week rows, but remove duplicates of today's workout (same date) so it doesn't appear twice.
   const weekRows = useMemo(() => {
     const rows = (weekDays || [])
       .filter((d) => (d.recurringWorkouts || []).length > 0)
       .map((d) => {
-        const dayWorkouts = (d.recurringWorkouts || []).filter((w) => {
-          // If this is today's date and this workout is the one already shown above, hide it here.
-          if (d.dateKey === dateKey && workoutId && w.id === workoutId) return false;
+        const isCompletedDay = Boolean(d.recurringDone);
+  
+        const workouts = (d.recurringWorkouts || []).filter((w) => {
+          const isToday = d.dateKey === dateKey;
+          const isSameWorkout = workoutId && w.id === workoutId;
+  
+          // ✅ Only hide TODAY'S workout when it is still pending
+          if (isToday && isSameWorkout && !isCompletedDay) {
+            return false;
+          }
+  
+          // ✅ If completed, always keep it
           return true;
         });
-
+  
         return {
           ymd: d.dateKey,
           day: dayLabelFromYMD(d.dateKey),
-          workouts: dayWorkouts,
-          done: Boolean(d.recurringDone),
+          workouts,
+          done: isCompletedDay,
         };
       })
-      // Drop any day row that became empty after filtering
-      .filter((r) => (r.workouts || []).length > 0);
-
+      // Remove empty rows AFTER filtering
+      .filter((r) => r.workouts.length > 0);
+  
     return {
-      completed: rows.filter((r) => r.done),
       pending: rows.filter((r) => !r.done),
+      completed: rows.filter((r) => r.done),
       all: rows,
     };
   }, [weekDays, dateKey, workoutId]);
