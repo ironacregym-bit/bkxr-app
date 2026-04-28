@@ -152,10 +152,7 @@ export default function IronAcreWorkoutCard({
   return (
     <section
       className="futuristic-card p-3 mb-3"
-      style={neonCardStyle({
-        border: cardBorder,
-        boxShadow: cardGlow,
-      })}
+      style={neonCardStyle()}
     >
       <div className="d-flex justify-content-between align-items-center mb-2">
         <div className="text-dim small" style={{ letterSpacing: 0.9, display: "flex", alignItems: "center", gap: 8 }}>
