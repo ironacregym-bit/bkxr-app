@@ -1,3 +1,4 @@
+// components/iron-acre/IronAcreWorkoutCard.tsx
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { IA, neonCardStyle, neonButtonStyle, neonPrimaryStyle } from "./theme";
@@ -105,35 +106,49 @@ export default function IronAcreWorkoutCard({
 
   const [showWeek, setShowWeek] = useState(false);
 
+  // Build week rows, but remove duplicates of today's workout (same date) so it doesn't appear twice.
   const weekRows = useMemo(() => {
     const rows = (weekDays || [])
       .filter((d) => (d.recurringWorkouts || []).length > 0)
-      .map((d) => ({
-        ymd: d.dateKey,
-        day: dayLabelFromYMD(d.dateKey),
-        workouts: d.recurringWorkouts,
-        done: Boolean(d.recurringDone),
-      }));
+      .map((d) => {
+        const dayWorkouts = (d.recurringWorkouts || []).filter((w) => {
+          // If this is today's date and this workout is the one already shown above, hide it here.
+          if (d.dateKey === dateKey && workoutId && w.id === workoutId) return false;
+          return true;
+        });
+
+        return {
+          ymd: d.dateKey,
+          day: dayLabelFromYMD(d.dateKey),
+          workouts: dayWorkouts,
+          done: Boolean(d.recurringDone),
+        };
+      })
+      // Drop any day row that became empty after filtering
+      .filter((r) => (r.workouts || []).length > 0);
 
     return {
       completed: rows.filter((r) => r.done),
-      pending: rows.filter((r) => !r.done), // includes past + future (missed shows here too)
+      pending: rows.filter((r) => !r.done),
       all: rows,
     };
-  }, [weekDays]);
+  }, [weekDays, dateKey, workoutId]);
 
-  const startHref = workoutId
-    ? `/gymworkout/${encodeURIComponent(workoutId)}?date=${encodeURIComponent(dateKey)}`
-    : "#";
+  const startHref = workoutId ? `/gymworkout/${encodeURIComponent(workoutId)}?date=${encodeURIComponent(dateKey)}` : "#";
 
-  const weekProgress = useMemo(() => {
-    const total = weekRows.all.length;
-    const doneCount = weekRows.completed.length;
-    return { total, doneCount };
-  }, [weekRows]);
+  const cardBorder = done ? `1px solid ${IA.neon}` : `1px solid ${IA.borderSoft}`;
+  const cardGlow = done
+    ? `0 0 0 1px rgba(24,255,154,0.20) inset, 0 0 26px rgba(24,255,154,0.18)`
+    : `0 0 0 1px rgba(24,255,154,0.07) inset, 0 18px 40px rgba(0,0,0,0.45)`;
 
   return (
-    <section className="futuristic-card p-3 mb-3" style={neonCardStyle()}>
+    <section
+      className="futuristic-card p-3 mb-3"
+      style={neonCardStyle({
+        border: cardBorder,
+        boxShadow: cardGlow,
+      })}
+    >
       <div className="d-flex justify-content-between align-items-center mb-2">
         <div className="text-dim small" style={{ letterSpacing: 0.9, display: "flex", alignItems: "center", gap: 8 }}>
           <i className="fas fa-dumbbell" style={{ color: IA.neon, filter: `drop-shadow(0 0 8px ${IA.neon}66)` }} />
@@ -164,9 +179,7 @@ export default function IronAcreWorkoutCard({
           <div className="fw-bold" style={{ fontSize: "1.25rem", lineHeight: 1.1 }}>
             No workout scheduled today
           </div>
-          <div className="text-dim small mt-1">
-            Check the “This week” section for upcoming sessions.
-          </div>
+          <div className="text-dim small mt-1">Check the “This week” section for upcoming sessions.</div>
 
           <div className="mt-3">
             <button
@@ -181,8 +194,28 @@ export default function IronAcreWorkoutCard({
         </>
       ) : (
         <>
-          <div className="fw-bold" style={{ fontSize: "1.25rem", lineHeight: 1.1 }}>
-            {workout?.workout_name || "Gym session"}
+          <div className="d-flex justify-content-between align-items-start gap-2">
+            <div className="fw-bold" style={{ fontSize: "1.25rem", lineHeight: 1.1 }}>
+              {workout?.workout_name || "Gym session"}
+            </div>
+
+            {done ? (
+              <span
+                className="badge"
+                style={{
+                  background: `rgba(24,255,154,0.12)`,
+                  color: IA.neon,
+                  border: `1px solid ${IA.borderSoft}`,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+                title="Completed"
+              >
+                <i className="fas fa-check" />
+                Completed
+              </span>
+            ) : null}
           </div>
 
           <div className="text-dim small mt-1" style={{ maxWidth: 520 }}>
@@ -243,14 +276,6 @@ export default function IronAcreWorkoutCard({
                   </div>
                 </div>
               ))}
-
-              {exCount > preview.length && (
-                <div className="mt-1">
-                  <Link href={`/gymworkout/${encodeURIComponent(workoutId)}?date=${encodeURIComponent(dateKey)}`} className="text-dim small" style={{ textDecoration: "none" }}>
-                    View all {exCount} exercises <i className="fas fa-chevron-right" style={{ marginLeft: 6 }} />
-                  </Link>
-                </div>
-              )}
             </div>
           )}
 
@@ -266,24 +291,6 @@ export default function IronAcreWorkoutCard({
             >
               START <i className="fas fa-play" style={{ marginLeft: 10 }} />
             </Link>
-
-            <div className="d-flex justify-content-between align-items-center mt-2">
-              {done ? (
-                <div className="text-dim small">
-                  <i className="fas fa-check" style={{ color: IA.neon, marginRight: 6 }} />
-                  Completed this week
-                </div>
-              ) : (
-                <div className="text-dim small">Week {weekStartYMD} → {weekEndYMD}</div>
-              )}
-
-              <div className="text-dim small">
-                {weekProgress.doneCount}/{weekProgress.total} done
-                {weeklyTotals?.completedTasks != null && weeklyTotals?.totalTasks != null ? (
-                  <span> • {weeklyTotals.completedTasks}/{weeklyTotals.totalTasks} tasks</span>
-                ) : null}
-              </div>
-            </div>
           </div>
         </>
       )}
@@ -295,6 +302,7 @@ export default function IronAcreWorkoutCard({
           {weekRows.pending.length > 0 && (
             <>
               <div className="text-dim small mb-1">Pending</div>
+
               {weekRows.pending.map((r) => (
                 <div
                   key={`pending-${r.ymd}`}
@@ -316,15 +324,34 @@ export default function IronAcreWorkoutCard({
                     </span>
                   </div>
 
-                  <div className="text-dim small mt-1">
-                    {(r.workouts || []).map((w, idx) => (
-                      <span key={w.id}>
-                        <Link href={`/gymworkout/${encodeURIComponent(w.id)}?date=${encodeURIComponent(r.ymd)}`} className="text-dim" style={{ textDecoration: "none" }}>
-                          {w.name || w.id}
+                  <div className="mt-2 d-flex flex-column" style={{ gap: 8 }}>
+                    {(r.workouts || []).map((w) => {
+                      const href = `/gymworkout/${encodeURIComponent(w.id)}?date=${encodeURIComponent(r.ymd)}`;
+                      return (
+                        <Link
+                          key={w.id}
+                          href={href}
+                          className="text-decoration-none"
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 10,
+                            padding: "10px 10px",
+                            borderRadius: 10,
+                            border: `1px solid rgba(255,255,255,0.10)`,
+                            background: "rgba(255,255,255,0.03)",
+                            color: "#fff",
+                          }}
+                        >
+                          <div className="text-truncate" style={{ minWidth: 0 }}>
+                            <div className="fw-semibold text-truncate">{w.name || w.id}</div>
+                            <div className="text-dim small">Open workout</div>
+                          </div>
+                          <i className="fas fa-chevron-right text-dim" />
                         </Link>
-                        {idx < r.workouts.length - 1 ? " • " : ""}
-                      </span>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -336,36 +363,68 @@ export default function IronAcreWorkoutCard({
               <div className="text-dim small mb-1" style={{ marginTop: 10 }}>
                 Completed
               </div>
+
               {weekRows.completed.map((r) => (
                 <div
                   key={`done-${r.ymd}`}
                   style={{
                     padding: "10px 10px",
                     borderRadius: 12,
-                    border: `1px solid ${IA.border}`,
+                    border: `1px solid ${IA.neon}`,
                     background: "rgba(24,255,154,0.06)",
                     marginBottom: 8,
-                    boxShadow: IA.glowSoft,
+                    boxShadow: `0 0 0 1px rgba(24,255,154,0.16) inset, ${IA.glowSoft}`,
                   }}
                 >
                   <div className="d-flex justify-content-between align-items-center">
                     <div className="fw-semibold">
                       {r.day} <span className="text-dim">({r.ymd})</span>
                     </div>
-                    <span className="badge" style={{ background: `rgba(24,255,154,0.12)`, color: IA.neon, border: `1px solid ${IA.borderSoft}` }}>
+
+                    <span
+                      className="badge"
+                      style={{
+                        background: `rgba(24,255,154,0.12)`,
+                        color: IA.neon,
+                        border: `1px solid ${IA.borderSoft}`,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <i className="fas fa-check" />
                       Completed
                     </span>
                   </div>
 
-                  <div className="text-dim small mt-1">
-                    {(r.workouts || []).map((w, idx) => (
-                      <span key={w.id}>
-                        <Link href={`/gymworkout/${encodeURIComponent(w.id)}?date=${encodeURIComponent(r.ymd)}`} className="text-dim" style={{ textDecoration: "none" }}>
-                          {w.name || w.id}
+                  <div className="mt-2 d-flex flex-column" style={{ gap: 8 }}>
+                    {(r.workouts || []).map((w) => {
+                      const href = `/gymworkout/${encodeURIComponent(w.id)}?date=${encodeURIComponent(r.ymd)}`;
+                      return (
+                        <Link
+                          key={w.id}
+                          href={href}
+                          className="text-decoration-none"
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 10,
+                            padding: "10px 10px",
+                            borderRadius: 10,
+                            border: `1px solid rgba(24,255,154,0.35)`,
+                            background: "rgba(24,255,154,0.05)",
+                            color: "#fff",
+                          }}
+                        >
+                          <div className="text-truncate" style={{ minWidth: 0 }}>
+                            <div className="fw-semibold text-truncate">{w.name || w.id}</div>
+                            <div className="text-dim small">View workout</div>
+                          </div>
+                          <i className="fas fa-chevron-right text-dim" />
                         </Link>
-                        {idx < r.workouts.length - 1 ? " • " : ""}
-                      </span>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
