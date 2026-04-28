@@ -1,4 +1,18 @@
-// lib/iron-acre/strengthLifts.ts?: number | null;
+// lib/iron-acre/strengthLifts.tsProfile = {
+  training_maxes?: Record<string, number>; // may be keyed by exercise_name in older data
+  true_1rms?: Record<string, number>; // may be keyed by exercise_name in older data
+  rounding_increment_kg?: number;
+  updated_at?: any;
+};
+
+// Canonical strength exercise record (from Firestore strength_exercises)
+export type StrengthExercise = {
+  id: string; // doc id e.g. barbell_back_squat
+  exercise_name: string; // display name e.g. "Barbell Back Squat"
+  tracked?: boolean;
+  rounding_kg?: number | null;
+  max_rep_for_e1rm?: number | null;
+  training_max_factor?: number | null;
 };
 
 export type LiftDef = {
@@ -66,7 +80,6 @@ export function matchesLiftExerciseId(exerciseIdFromCompletion: string, lift: Li
  * Resolve current headline numbers (True 1RM / Training max) from profile.
  * Your profile maps are currently keyed by exercise_name (from your API),
  * so we check name aliases first.
- * Later we can migrate profile storage to canonical IDs if you want.
  */
 export function resolveProfileLift(profile: StrengthProfile | undefined, lift: LiftDef) {
   let true1rm: number | null = null;
@@ -92,19 +105,3 @@ export function resolveProfileLift(profile: StrengthProfile | undefined, lift: L
 
   return { true1rm, trainingMax };
 }
-``
-
-export type StrengthProfile = {
-  training_maxes?: Record<string, number>; // may be keyed by exercise_name in older data
-  true_1rms?: Record<string, number>; // may be keyed by exercise_name in older data
-  rounding_increment_kg?: number;
-  updated_at?: any;
-};
-
-// Canonical strength exercise record (from Firestore strength_exercises)
-export type StrengthExercise = {
-  id: string; // doc id e.g. barbell_back_squat
-  exercise_name: string; // display name e.g. "Barbell Back Squat"
-  tracked?: boolean;
-  rounding_kg?: number | null;
-  max_rep_for_e1rm?: number | null;
