@@ -1,63 +1,7 @@
 // components/iron-acre/IronAcreStrengthSummary.tsx
 import Link from "next/link";
 import { IA, neonCardStyle } from "./theme";
-
-type StrengthProfile = {
-  training_maxes?: Record<string, number>;
-  true_1rms?: Record<string, number>;
-};
-
-type LiftDef = {
-  key: string;
-  label: string;
-  exerciseNames: string[]; // exact names as stored in Firestore
-};
-
-const BIG_LIFTS: LiftDef[] = [
-  {
-    key: "deadlift",
-    label: "Deadlift",
-    exerciseNames: ["Deadlift", "Barbell Deadlift"],
-  },
-  {
-    key: "back_squat",
-    label: "Back Squat",
-    exerciseNames: ["Back Squat", "Barbell Back Squat"],
-  },
-  {
-    key: "bench_press",
-    label: "Bench Press",
-    exerciseNames: ["Barbell Bench Press", "Bench Press"],
-  },
-  {
-    key: "overhead_press",
-    label: "Overhead Press",
-    exerciseNames: ["Overhead Press", "Barbell Overhead Press", "Strict Press"],
-  },
-];
-
-function resolveLiftValue(
-  profile: StrengthProfile | undefined,
-  lift: LiftDef
-): { value: number | null; source: "true" | "training" | null } {
-  if (!profile) return { value: null, source: null };
-
-  for (const name of lift.exerciseNames) {
-    const trueVal = profile.true_1rms?.[name];
-    if (typeof trueVal === "number") {
-      return { value: trueVal, source: "true" };
-    }
-  }
-
-  for (const name of lift.exerciseNames) {
-    const tm = profile.training_maxes?.[name];
-    if (typeof tm === "number") {
-      return { value: tm, source: "training" };
-    }
-  }
-
-  return { value: null, source: null };
-}
+import { BIG_LIFTS, resolveProfileLift, type StrengthProfile } from "../../lib/iron-acre/strengthLifts";
 
 export default function IronAcreStrengthSummary({ profile }: { profile?: StrengthProfile }) {
   return (
@@ -73,36 +17,35 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
             border: `1px solid ${IA.borderSoft}`,
           }}
         >
-          1RM
+          e1RM + 1RM
         </span>
       </div>
 
       <div className="d-flex flex-column" style={{ gap: 10 }}>
-        {BIG_LIFTS.map((lift) => {
-          const { value, source } = resolveLiftValue(profile, lift);
+        {BIG_LIFTS.map((lift, idx) => {
+          const { true1rm, trainingMax } = resolveProfileLift(profile, lift);
+
+          // Home summary: show true 1RM if available, else training max, else —
+          const value = true1rm ?? trainingMax ?? null;
+          const source = true1rm != null ? "True 1RM" : trainingMax != null ? "Training max" : "Not set";
 
           return (
             <Link
               key={lift.key}
               href={`/iron-acre/strength/${lift.key}`}
+              aria-label={`View ${lift.label} strength details`}
               className="d-flex justify-content-between align-items-center"
               style={{
                 paddingTop: 10,
                 paddingBottom: 10,
-                borderTop: "1px solid rgba(255,255,255,0.08)",
+                borderTop: idx === 0 ? "none" : "1px solid rgba(255,255,255,0.08)",
                 textDecoration: "none",
                 color: "#fff",
               }}
             >
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <div className="fw-semibold">{lift.label}</div>
-                <div className="text-dim small">
-                  {source === "true"
-                    ? "True 1RM"
-                    : source === "training"
-                    ? "Training max"
-                    : "Not set"}
-                </div>
+                <div className="text-dim small">{source}</div>
               </div>
 
               <div className="d-flex align-items-center gap-2">
@@ -112,8 +55,9 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
                     fontWeight: 900,
                     fontSize: "1.1rem",
                     textShadow: value != null ? `0 0 10px ${IA.neon}40` : "none",
-                    minWidth: 56,
+                    minWidth: 70,
                     textAlign: "right",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {value != null ? `${value}kg` : "—"}
@@ -127,11 +71,7 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
       </div>
 
       <div className="mt-3">
-        <Link
-          href="/iron-acre/strength"
-          className="text-dim small"
-          style={{ textDecoration: "none" }}
-        >
+        <Link href="/iron-acre/strength" className="text-dim small" style={{ textDecoration: "none" }}>
           View strength details <i className="fas fa-chevron-right" style={{ marginLeft: 6 }} />
         </Link>
       </div>
