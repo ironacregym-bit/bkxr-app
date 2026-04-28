@@ -1,9 +1,24 @@
+// components/gymworkout/RoundSection.tsx
 import React, { useMemo } from "react";
 import type { CompletionSet, UIRound, UISingleItem, UISupersetItem } from "./types";
 import ExerciseSingleCard from "./ExerciseSingleCard";
 import ExerciseSupersetCard from "./ExerciseSupersetCard";
 
 type RoundItem = UISingleItem | UISupersetItem;
+
+function normalizeItem(it: any): RoundItem {
+  if (it?.type !== "Superset") return it;
+
+  // ✅ Support both new + legacy superset shapes
+  const items =
+    Array.isArray(it.items)
+      ? it.items
+      : Array.isArray(it.superset_items)
+      ? it.superset_items
+      : [];
+
+  return { ...it, items };
+}
 
 export default function RoundSection({
   title,
@@ -29,9 +44,11 @@ export default function RoundSection({
   onOpenMedia: (exercise_id: string) => void;
 }) {
   const sorted = useMemo<RoundItem[]>(() => {
-    const items = (round.items || []) as RoundItem[];
-    return [...items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }, [round.items]);
+    const safeItems = Array.isArray(round?.items) ? round.items : [];
+    return safeItems
+      .map(normalizeItem)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }, [round]);
 
   return (
     <section className="gx-round">
@@ -43,25 +60,21 @@ export default function RoundSection({
         <div className="text-dim small mt-2">No items.</div>
       ) : (
         <div className="gx-round-body">
-          {sorted.map((it, idx) => {
-            if (it.type === "Single") {
-              return (
-                <ExerciseSingleCard
-                  key={`${title}-single-${idx}`}
-                  item={it}
-                  media={media[it.exercise_id]}
-                  prevByKey={prevByKey}
-                  trainingMaxes={trainingMaxes}
-                  defaultRounding={defaultRounding}
-                  onUpdateSet={onUpdateSet}
-                  onToggleTick={onToggleTick}
-                  tickKeys={tickKeys}
-                  onOpenMedia={onOpenMedia}
-                />
-              );
-            }
-
-            return (
+          {sorted.map((it, idx) =>
+            it.type === "Single" ? (
+              <ExerciseSingleCard
+                key={`${title}-single-${idx}`}
+                item={it}
+                media={media[it.exercise_id]}
+                prevByKey={prevByKey}
+                trainingMaxes={trainingMaxes}
+                defaultRounding={defaultRounding}
+                onUpdateSet={onUpdateSet}
+                onToggleTick={onToggleTick}
+                tickKeys={tickKeys}
+                onOpenMedia={onOpenMedia}
+              />
+            ) : (
               <ExerciseSupersetCard
                 key={`${title}-ss-${idx}`}
                 item={it}
@@ -72,8 +85,8 @@ export default function RoundSection({
                 tickKeys={tickKeys}
                 onOpenMedia={onOpenMedia}
               />
-            );
-          })}
+            )
+          )}
         </div>
       )}
     </section>
