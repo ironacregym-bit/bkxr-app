@@ -73,30 +73,31 @@ export default function IronAcreStrengthIndexPage() {
     shouldRetryOnError: false,
   });
 
-  // Style tokens to match your reference (borderless, soft grey tiles)
+  // Style tokens to match the reference
   const tileBg = "rgba(255,255,255,0.06)";
   const tileShadow = "0 18px 40px rgba(0,0,0,0.35)";
   const tileRadius = 18;
 
   const weightDerived = useMemo(() => {
+    const subtitle = rangeDays === 7 ? "Last 7 days" : rangeDays === 30 ? "Last 30 days" : "Last 90 days";
+
     const empty = {
       latestWeight: null as number | null,
       startWeight: null as number | null,
       delta: null as number | null,
       chartData: null as ChartData<"line"> | null,
       chartOptions: null as ChartOptions<"line"> | null,
-      subtitle: "" as string,
+      subtitle,
     };
 
     const rows = Array.isArray(checkins?.results) ? [...checkins!.results!] : [];
-    const subtitle = rangeDays === 7 ? "Last 7 days" : rangeDays === 30 ? "Last 30 days" : "Last 90 days";
-
-    if (!rows.length) return { ...empty, subtitle };
+    if (!rows.length) return empty;
 
     rows.sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
+    // Correct window: from today-(rangeDays-1) to today
     const today = new Date();
-    const start = addDays(today, -rangeDays + 1);
+    const start = addDays(today, -(rangeDays - 1));
     const startKey = ymd(start);
 
     const windowRows = rows.filter((r) => String(r.date).slice(0, 10) >= startKey);
@@ -121,7 +122,7 @@ export default function IronAcreStrengthIndexPage() {
           label: "Weight (kg)",
           data: series as (number | null)[],
           borderColor: IA.neon,
-          borderWidth: 2, // keep line (you asked remove chart lines = grid/axes; not the trend line)
+          borderWidth: 2,
           pointRadius: 0,
           pointHoverRadius: 0,
           tension: 0.35,
@@ -139,6 +140,7 @@ export default function IronAcreStrengthIndexPage() {
       ],
     };
 
+    // ✅ Axis numbers ON, grid lines OFF
     const opts: ChartOptions<"line"> = {
       responsive: true,
       maintainAspectRatio: false,
@@ -147,16 +149,22 @@ export default function IronAcreStrengthIndexPage() {
         tooltip: { intersect: false, mode: "index" },
       },
       scales: {
-        // ✅ FIX: this must be "display: false", NOT "x: false"
         x: {
-          display: false,
+          display: false, // keep x labels hidden like reference
           grid: { display: false },
           ticks: { display: false },
         },
         y: {
-          display: false,
-          grid: { display: false },
-          ticks: { display: false },
+          display: true, // show numbers
+          grid: { display: false }, // no horizontal lines across
+          border: { display: false }, // no axis line
+          ticks: {
+            display: true,
+            color: "#9fb0c3",
+            padding: 6,
+            // Keep it minimal like the screenshot
+            maxTicksLimit: 6,
+          },
         },
       },
     };
@@ -227,7 +235,8 @@ export default function IronAcreStrengthIndexPage() {
                 href="/iron-acre"
                 className="btn btn-sm"
                 style={{
-                  borderRadius: 24,
+                  borderRadius: 18,
+                  padding: "6px 10px",
                   background: "rgba(255,255,255,0.08)",
                   color: "#fff",
                   border: "none",
@@ -253,7 +262,7 @@ export default function IronAcreStrengthIndexPage() {
               </div>
             </div>
 
-            {/* Range pills */}
+            {/* Range pills (correct order) */}
             <div className="d-flex align-items-center gap-2">
               {[7, 30, 90].map((d) => {
                 const active = rangeDays === d;
@@ -311,7 +320,9 @@ export default function IronAcreStrengthIndexPage() {
                 <span style={{ color: "#fff", fontWeight: 800 }}>
                   {weightDerived.startWeight != null ? weightDerived.startWeight.toFixed(1) : "—"}kg
                 </span>
-                <span style={{ marginLeft: 10, color: deltaColor, fontWeight: 900 }}>{deltaText}</span>
+                <span style={{ marginLeft: 10, color: deltaColor, fontWeight: 900 }}>
+                  {deltaText}
+                </span>
               </div>
             </div>
 
@@ -319,10 +330,11 @@ export default function IronAcreStrengthIndexPage() {
               href="/checkin"
               className="btn btn-sm"
               style={{
-                borderRadius: 24,
-                border: "none",
+                borderRadius: 18,
+                padding: "6px 10px",
                 background: "rgba(255,255,255,0.08)",
                 color: "#fff",
+                border: "none",
               }}
             >
               Add check-in
@@ -340,16 +352,9 @@ export default function IronAcreStrengthIndexPage() {
           </div>
         </section>
 
-        {/* Strength tiles */}
-        <section
-          className="futuristic-card p-3 mb-3"
-          style={{
-            borderRadius: tileRadius,
-            background: tileBg,
-            boxShadow: tileShadow,
-          }}
-        >
-          <div className="d-flex justify-content-between align-items-center mb-2">
+        {/* Strength tiles (NO grey background wrapper; only tiles have grey bg) */}
+        <section className="mb-3">
+          <div className="d-flex justify-content-between align-items-center mb-2" style={{ paddingLeft: 4, paddingRight: 4 }}>
             <div className="text-dim small" style={{ letterSpacing: 0.9, textTransform: "uppercase" }}>
               STRENGTH
             </div>
