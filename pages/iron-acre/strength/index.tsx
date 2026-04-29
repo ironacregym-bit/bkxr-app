@@ -54,14 +54,9 @@ function addDays(d: Date, n: number) {
 function toYMD(v: any): string | null {
   try {
     if (!v) return null;
-
-    // If it's already YYYY-MM-DD
     if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-
-    // If it's ISO string or Date string
     const d = new Date(v);
     if (!isNaN(d.getTime())) return ymd(d);
-
     return null;
   } catch {
     return null;
@@ -97,65 +92,50 @@ export default function IronAcreStrengthIndexPage() {
     shouldRetryOnError: false,
   });
 
-  // Style tokens to match the reference
-  const tileBg = "rgba(255,255,255,0.06)";
-  const tileShadow = "0 18px 40px rgba(0,0,0,0.35)";
-  const tileRadius = 18;
-
   const weightDerived = useMemo(() => {
     const subtitle = rangeDays === 7 ? "Last 7 days" : rangeDays === 30 ? "Last 30 days" : "Last 90 days";
 
     const empty = {
       latestWeight: null as number | null,
-      startWeight: null as number | null,
       avgWeight: null as number | null,
       delta: null as number | null,
       chartData: null as ChartData<"line"> | null,
       chartOptions: null as ChartOptions<"line"> | null,
       subtitle,
-      windowCount: 0,
     };
 
     const raw = Array.isArray(checkins?.results) ? checkins!.results! : [];
     if (!raw.length) return empty;
 
-    // Normalise + keep only rows that have a valid date
     const rows = raw
-      .map((r) => ({
-        ...r,
-        ymd: toYMD(r.date),
-      }))
+      .map((r) => ({ ...r, ymd: toYMD(r.date) }))
       .filter((r) => Boolean(r.ymd)) as Array<CheckinRow & { ymd: string }>;
 
     if (!rows.length) return empty;
 
-    // Sort ascending by YMD
     rows.sort((a, b) => a.ymd.localeCompare(b.ymd));
 
-    // Correct window: inclusive start -> today
     const today = new Date();
     const endKey = ymd(today);
     const start = addDays(today, -(rangeDays - 1));
     const startKey = ymd(start);
 
     const windowRows = rows.filter((r) => r.ymd >= startKey && r.ymd <= endKey);
-
-    // If no rows in the window (e.g. no recent check-ins), fall back to latest N check-ins
-    const usable = windowRows.length
-      ? windowRows
-      : rows.slice(Math.max(0, rows.length - rangeDays));
+    const usable = windowRows.length ? windowRows : rows.slice(Math.max(0, rows.length - rangeDays));
 
     const latest = [...usable].reverse().find((r) => typeof r.weight_kg === "number") || null;
-    const first = usable.find((r) => typeof r.weight_kg === "number") || null;
 
     const latestWeight = latest?.weight_kg ?? null;
-    const startWeight = first?.weight_kg ?? null;
-    const delta = latestWeight != null && startWeight != null ? +(latestWeight - startWeight).toFixed(1) : null;
 
-    const weightVals = usable.map((r) => (typeof r.weight_kg === "number" ? r.weight_kg : null)).filter((x): x is number => x != null);
+    const weightVals = usable
+      .map((r) => (typeof r.weight_kg === "number" ? r.weight_kg : null))
+      .filter((x): x is number => x != null);
+
     const avgWeight = weightVals.length ? +(weightVals.reduce((a, b) => a + b, 0) / weightVals.length).toFixed(1) : null;
 
-    // X labels (dates)
+    const firstW = usable.find((r) => typeof r.weight_kg === "number")?.weight_kg ?? null;
+    const delta = latestWeight != null && firstW != null ? +(latestWeight - firstW).toFixed(1) : null;
+
     const labels = usable.map((r) => fmtShortDay(r.ymd));
     const series = usable.map((r) => (typeof r.weight_kg === "number" ? r.weight_kg : null));
 
@@ -184,7 +164,6 @@ export default function IronAcreStrengthIndexPage() {
       ],
     };
 
-    // ✅ X axis ON (labels), Y axis numbers ON, NO grid lines
     const opts: ChartOptions<"line"> = {
       responsive: true,
       maintainAspectRatio: false,
@@ -195,8 +174,8 @@ export default function IronAcreStrengthIndexPage() {
       scales: {
         x: {
           display: true,
-          grid: { display: false },        // no vertical grid lines
-          border: { display: false },      // no axis baseline line
+          grid: { display: false },
+          border: { display: false },
           ticks: {
             display: true,
             color: "#9fb0c3",
@@ -209,8 +188,8 @@ export default function IronAcreStrengthIndexPage() {
         },
         y: {
           display: true,
-          grid: { display: false },        // no horizontal grid lines
-          border: { display: false },      // no axis line
+          grid: { display: false },
+          border: { display: false },
           ticks: {
             display: true,
             color: "#9fb0c3",
@@ -221,17 +200,13 @@ export default function IronAcreStrengthIndexPage() {
       },
     };
 
-    return { latestWeight, startWeight, avgWeight, delta, chartData: cd, chartOptions: opts, subtitle, windowCount: usable.length };
+    return { latestWeight, avgWeight, delta, chartData: cd, chartOptions: opts, subtitle };
   }, [checkins, rangeDays]);
 
   if (!mounted) return null;
 
   if (status === "loading") {
-    return (
-      <main className="container py-4" style={{ color: "#fff" }}>
-        Loading…
-      </main>
-    );
+    return <main className="container py-4" style={{ color: "#fff" }}>Loading…</main>;
   }
 
   if (!session) {
@@ -242,9 +217,8 @@ export default function IronAcreStrengthIndexPage() {
           <title>Progress • Iron Acre</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         </Head>
-
         <main className="container py-4" style={{ color: "#fff", paddingBottom: 90 }}>
-          <section className="futuristic-card p-3" style={{ borderRadius: tileRadius, background: tileBg, boxShadow: tileShadow }}>
+          <section className="futuristic-card ia-tile ia-tile-pad">
             <h2 className="m-0">Progress</h2>
             <div className="text-dim mt-2">Please sign in to view your progress.</div>
             <div className="mt-3">
@@ -254,7 +228,6 @@ export default function IronAcreStrengthIndexPage() {
             </div>
           </section>
         </main>
-
         <BottomNav />
       </>
     );
@@ -272,50 +245,21 @@ export default function IronAcreStrengthIndexPage() {
       </Head>
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
-        {/* Header */}
-        <section
-          className="futuristic-card p-3 mb-3"
-          style={{
-            borderRadius: tileRadius,
-            background: tileBg,
-            boxShadow: tileShadow,
-          }}
-        >
-          <div className="d-flex justify-content-between align-items-start gap-2">
-            <div className="d-flex align-items-start gap-3" style={{ minWidth: 0 }}>
-              <Link
-                href="/iron-acre"
-                className="btn btn-sm btn-outline-light"
-                style={{
-                  borderRadius: 999,
-                  padding: "8px 12px",
-                  color: "#fff",
-                  border: "none",
-                  background: "rgba(255,255,255,0.08)",
-                }}
-              >
+        <section className="futuristic-card ia-tile ia-tile-pad mb-3">
+          <div className="ia-progress-header">
+            <div className="ia-header-left">
+              <Link href="/iron-acre" className="btn btn-sm ia-back-btn">
                 <i className="fas fa-chevron-left" style={{ marginRight: 8 }} />
                 Back
               </Link>
 
               <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: "1.65rem",
-                    fontWeight: 950,
-                    letterSpacing: 1.2,
-                    textTransform: "uppercase",
-                    lineHeight: 1.1,
-                  }}
-                >
-                  PROGRESS
-                </div>
-                <div className="text-dim small mt-1">{weightDerived.subtitle}</div>
+                <div className="ia-progress-title">PROGRESS</div>
+                <div className="ia-subtitle">{weightDerived.subtitle}</div>
               </div>
             </div>
 
-            {/* Range pills */}
-            <div className="d-flex align-items-center gap-2">
+            <div className="ia-range">
               {[7, 30, 90].map((d) => {
                 const active = rangeDays === d;
                 return (
@@ -323,17 +267,7 @@ export default function IronAcreStrengthIndexPage() {
                     key={d}
                     type="button"
                     onClick={() => setRangeDays(d as 7 | 30 | 90)}
-                    className="btn btn-sm"
-                    style={{
-                      borderRadius: 18,
-                      padding: "6px 10px",
-                      border: "none",
-                      background: active ? "rgba(24,255,154,0.18)" : "rgba(255,255,255,0.08)",
-                      color: active ? IA.neon : "#fff",
-                      fontWeight: 900,
-                      letterSpacing: 0.5,
-                      boxShadow: active ? `0 0 14px rgba(24,255,154,0.18)` : "none",
-                    }}
+                    className={`btn btn-sm ia-pill ${active ? "ia-pill-active" : ""}`}
                   >
                     {d}D
                   </button>
@@ -343,52 +277,28 @@ export default function IronAcreStrengthIndexPage() {
           </div>
         </section>
 
-        {/* Weight tile */}
-        <section
-          className="futuristic-card p-3 mb-3"
-          style={{
-            borderRadius: tileRadius,
-            background: tileBg,
-            boxShadow: tileShadow,
-          }}
-        >
+        <section className="futuristic-card ia-tile ia-tile-pad mb-3">
           <div className="d-flex justify-content-between align-items-start gap-2">
             <div style={{ minWidth: 0 }}>
-              <div className="text-dim small" style={{ letterSpacing: 0.9, textTransform: "uppercase" }}>
-                WEIGHT
-              </div>
+              <div className="ia-section-label">WEIGHT</div>
 
               <div className="d-flex align-items-end gap-2" style={{ marginTop: 6 }}>
-                <div style={{ fontSize: "2.1rem", fontWeight: 950, lineHeight: 1, color: "#fff" }}>
+                <div className="ia-weight-value">
                   {weightDerived.latestWeight != null ? weightDerived.latestWeight.toFixed(1) : "—"}
                 </div>
-                <div className="text-dim" style={{ paddingBottom: 4 }}>
-                  kg
-                </div>
+                <div className="ia-weight-unit">kg</div>
               </div>
 
-              <div className="text-dim small mt-1">
+              <div className="ia-weight-meta">
                 {rangeDays}d avg:{" "}
-                <span style={{ color: "#fff", fontWeight: 800 }}>
-                  {weightDerived.avgWeight != null ? weightDerived.avgWeight.toFixed(1) : "—"}kg
-                </span>
-                <span style={{ marginLeft: 10, color: deltaColor, fontWeight: 900 }}>
+                <strong>{weightDerived.avgWeight != null ? weightDerived.avgWeight.toFixed(1) : "—"}kg</strong>
+                <span className="ia-delta" style={{ color: deltaColor }}>
                   {deltaText}
                 </span>
               </div>
             </div>
 
-            <Link
-              href="/checkin"
-              className="btn btn-sm"
-              style={{
-                borderRadius: 999,
-                padding: "8px 12px",
-                background: "rgba(255,255,255,0.08)",
-                color: "#fff",
-                border: "none",
-              }}
-            >
+            <Link href="/checkin" className="btn btn-sm ia-back-btn">
               Add check-in
             </Link>
           </div>
@@ -404,21 +314,10 @@ export default function IronAcreStrengthIndexPage() {
           </div>
         </section>
 
-        {/* Strength tiles wrapper remains transparent */}
         <section className="mb-3">
-          <div className="d-flex justify-content-between align-items-center mb-2" style={{ paddingLeft: 4, paddingRight: 4 }}>
-            <div className="text-dim small" style={{ letterSpacing: 0.9, textTransform: "uppercase" }}>
-              STRENGTH
-            </div>
-
-            <span
-              className="badge"
-              style={{
-                background: `rgba(24,255,154,0.12)`,
-                color: IA.neon,
-                border: "none",
-              }}
-            >
+          <div className="ia-strength-head mb-2">
+            <div className="ia-section-label">STRENGTH</div>
+            <span className="badge" style={{ background: `rgba(24,255,154,0.12)`, color: IA.neon, border: "none" }}>
               e1RM + 1RM
             </span>
           </div>
@@ -430,53 +329,29 @@ export default function IronAcreStrengthIndexPage() {
 
               return (
                 <div key={lift.key} className="col-6">
-                  <Link href={`/iron-acre/strength/${lift.key}`} style={{ textDecoration: "none", color: "#fff" }}>
-                    <div
-                      className="p-3"
-                      style={{
-                        borderRadius: 16,
-                        border: "none",
-                        background: "rgba(255,255,255,0.07)",
-                        boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
-                        minHeight: 112,
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "space-between",
-                      }}
-                    >
+                  <Link href={`/iron-acre/strength/${lift.key}`} className="ia-link">
+                    <div className="p-3 ia-lift-tile">
                       <div>
-                        <div className="text-dim small" style={{ letterSpacing: 0.8, textTransform: "uppercase" }}>
-                          {lift.label}
-                        </div>
+                        <div className="ia-lift-title">{lift.label}</div>
 
-                        <div style={{ marginTop: 6, fontSize: "1.4rem", fontWeight: 950 }}>
+                        <div className="ia-lift-value">
                           {value != null ? (
                             <span style={{ color: IA.neon, textShadow: `0 0 10px ${IA.neon}40` }}>{value}</span>
                           ) : (
                             <span className="text-dim">—</span>
                           )}
-                          <span className="text-dim" style={{ marginLeft: 6, fontSize: ".95rem", fontWeight: 800 }}>
-                            kg
-                          </span>
+                          <span className="ia-lift-unit">kg</span>
                         </div>
 
-                        <div className="text-dim small mt-1">
+                        <div className="ia-lift-sub">
                           {true1rm != null ? "True 1RM" : trainingMax != null ? "Training max" : "No data"}
                         </div>
                       </div>
 
-                      <div
-                        style={{
-                          height: 8,
-                          borderRadius: 999,
-                          background: "rgba(255,255,255,0.08)",
-                          overflow: "hidden",
-                          marginTop: 10,
-                        }}
-                      >
+                      <div className="ia-mini-bar">
                         <div
+                          className="ia-mini-bar-fill"
                           style={{
-                            height: "100%",
                             width: value != null ? "72%" : "22%",
                             background: `linear-gradient(90deg, ${IA.neon}CC, ${IA.neon2}99)`,
                             opacity: value != null ? 1 : 0.35,
