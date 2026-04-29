@@ -1,4 +1,6 @@
-// lib/iron-acre/strengthLifts.tsProfile = {
+// lib/iron-acre/strengthLifts.ts
+
+export type StrengthProfile = {
   training_maxes?: Record<string, number>; // may be keyed by exercise_name in older data
   true_1rms?: Record<string, number>; // may be keyed by exercise_name in older data
   rounding_increment_kg?: number;
@@ -18,13 +20,11 @@ export type StrengthExercise = {
 export type LiftDef = {
   key: string; // route key: deadlift | back_squat | bench_press | overhead_press
   label: string; // display label
-  // Canonical IDs in strength_exercises (underscore doc ids)
-  exerciseIds: string[];
-  // Display-name aliases that may exist in old completions / old profile maps
-  exerciseNameAliases: string[];
+  exerciseIds: string[]; // canonical underscore doc ids
+  exerciseNameAliases: string[]; // legacy/display names that may appear in completions/profile
 };
 
-// IMPORTANT: set the deadlift doc id once you confirm it exists in strength_exercises
+// IMPORTANT: set the deadlift doc id once you confirm it exists in strength_exercises.
 // Common candidates: "barbell_deadlift", "barbell_conventional_deadlift"
 const DEADLIFT_IDS = ["barbell_deadlift"];
 
@@ -77,9 +77,8 @@ export function matchesLiftExerciseId(exerciseIdFromCompletion: string, lift: Li
 }
 
 /**
- * Resolve current headline numbers (True 1RM / Training max) from profile.
- * Your profile maps are currently keyed by exercise_name (from your API),
- * so we check name aliases first.
+ * Resolve headline numbers (True 1RM / Training max) from profile.
+ * Your profile maps are keyed by exercise_name, so we check aliases.
  */
 export function resolveProfileLift(profile: StrengthProfile | undefined, lift: LiftDef) {
   let true1rm: number | null = null;
