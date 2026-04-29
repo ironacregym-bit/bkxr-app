@@ -1,7 +1,13 @@
-// components/iron-acre/IronAcreStrengthSummary.tsx
 import Link from "next/link";
 import { IA, neonCardStyle } from "./theme";
-import { BIG_LIFTS, resolveProfileLift, type StrengthProfile } from "../../lib/iron-acre/strengthLifts";
+import { BIG_LIFTS, resolveProfileLift } from "../../lib/iron-acre/strengthLifts";
+
+type StrengthProfile = {
+  training_maxes?: Record<string, number>;
+  true_1rms?: Record<string, number>;
+  rounding_increment_kg?: number;
+  updated_at?: any;
+};
 
 export default function IronAcreStrengthSummary({ profile }: { profile?: StrengthProfile }) {
   return (
@@ -23,9 +29,7 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
 
       <div className="d-flex flex-column" style={{ gap: 10 }}>
         {BIG_LIFTS.map((lift, idx) => {
-          const { true1rm, trainingMax } = resolveProfileLift(profile, lift);
-
-          // Home summary: show true 1RM if available, else training max, else —
+          const { true1rm, trainingMax } = resolveProfileLift(profile as any, lift);
           const value = true1rm ?? trainingMax ?? null;
           const source = true1rm != null ? "True 1RM" : trainingMax != null ? "Training max" : "Not set";
 
@@ -33,7 +37,6 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
             <Link
               key={lift.key}
               href={`/iron-acre/strength/${lift.key}`}
-              aria-label={`View ${lift.label} strength details`}
               className="d-flex justify-content-between align-items-center"
               style={{
                 paddingTop: 10,
@@ -42,6 +45,7 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
                 textDecoration: "none",
                 color: "#fff",
               }}
+              aria-label={`Open ${lift.label} strength details`}
             >
               <div style={{ minWidth: 0 }}>
                 <div className="fw-semibold">{lift.label}</div>
