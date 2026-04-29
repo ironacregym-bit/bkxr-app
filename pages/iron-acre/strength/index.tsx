@@ -73,7 +73,8 @@ export default function IronAcreStrengthIndexPage() {
     shouldRetryOnError: false,
   });
 
-  const tileBg = "rgba(255,255,255,0.06)"; // light grey tile background like the reference
+  // Style tokens to match your reference (borderless, soft grey tiles)
+  const tileBg = "rgba(255,255,255,0.06)";
   const tileShadow = "0 18px 40px rgba(0,0,0,0.35)";
   const tileRadius = 18;
 
@@ -88,10 +89,9 @@ export default function IronAcreStrengthIndexPage() {
     };
 
     const rows = Array.isArray(checkins?.results) ? [...checkins!.results!] : [];
-    if (!rows.length) {
-      const subtitle = rangeDays === 7 ? "Last 7 days" : rangeDays === 30 ? "Last 30 days" : "Last 90 days";
-      return { ...empty, subtitle };
-    }
+    const subtitle = rangeDays === 7 ? "Last 7 days" : rangeDays === 30 ? "Last 30 days" : "Last 90 days";
+
+    if (!rows.length) return { ...empty, subtitle };
 
     rows.sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
@@ -114,7 +114,6 @@ export default function IronAcreStrengthIndexPage() {
     );
     const series = usable.map((r) => (typeof r.weight_kg === "number" ? r.weight_kg : null));
 
-    // Clean “no grid lines” chart like the reference
     const cd: ChartData<"line"> = {
       labels,
       datasets: [
@@ -122,7 +121,7 @@ export default function IronAcreStrengthIndexPage() {
           label: "Weight (kg)",
           data: series as (number | null)[],
           borderColor: IA.neon,
-          borderWidth: 2,
+          borderWidth: 2, // keep line (you asked remove chart lines = grid/axes; not the trend line)
           pointRadius: 0,
           pointHoverRadius: 0,
           tension: 0.35,
@@ -147,11 +146,10 @@ export default function IronAcreStrengthIndexPage() {
         legend: { display: false },
         tooltip: { intersect: false, mode: "index" },
       },
-      elements: {
-        line: { capBezierPoints: true },
-      },
       scales: {
-        x: {x: false,
+        // ✅ FIX: this must be "display: false", NOT "x: false"
+        x: {
+          display: false,
           grid: { display: false },
           ticks: { display: false },
         },
@@ -163,10 +161,8 @@ export default function IronAcreStrengthIndexPage() {
       },
     };
 
-    const subtitle = rangeDays === 7 ? "Last 7 days" : rangeDays === 30 ? "Last 30 days" : "Last 90 days";
-
     return { latestWeight, startWeight, delta, chartData: cd, chartOptions: opts, subtitle };
-  }, [checkins, rangeDays, IA.neon]);
+  }, [checkins, rangeDays]);
 
   if (!mounted) return null;
 
@@ -216,7 +212,7 @@ export default function IronAcreStrengthIndexPage() {
       </Head>
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
-        {/* Header (match ref: Back + PROGRESS bigger, no emoji, no Overview word) */}
+        {/* Header */}
         <section
           className="futuristic-card p-3 mb-3"
           style={{
@@ -232,7 +228,7 @@ export default function IronAcreStrengthIndexPage() {
                 className="btn btn-sm"
                 style={{
                   borderRadius: 24,
-                  background: "rgba(0,0,0,0.18)",
+                  background: "rgba(255,255,255,0.08)",
                   color: "#fff",
                   border: "none",
                 }}
@@ -244,7 +240,7 @@ export default function IronAcreStrengthIndexPage() {
               <div style={{ minWidth: 0 }}>
                 <div
                   style={{
-                    fontSize: "1.55rem",
+                    fontSize: "1.65rem",
                     fontWeight: 950,
                     letterSpacing: 1.2,
                     textTransform: "uppercase",
@@ -253,7 +249,6 @@ export default function IronAcreStrengthIndexPage() {
                 >
                   PROGRESS
                 </div>
-
                 <div className="text-dim small mt-1">{weightDerived.subtitle}</div>
               </div>
             </div>
@@ -287,7 +282,7 @@ export default function IronAcreStrengthIndexPage() {
           </div>
         </section>
 
-        {/* Weight card (borderless, light grey background) */}
+        {/* Weight tile */}
         <section
           className="futuristic-card p-3 mb-3"
           style={{
@@ -326,7 +321,7 @@ export default function IronAcreStrengthIndexPage() {
               style={{
                 borderRadius: 24,
                 border: "none",
-                background: "rgba(0,0,0,0.18)",
+                background: "rgba(255,255,255,0.08)",
                 color: "#fff",
               }}
             >
@@ -345,7 +340,7 @@ export default function IronAcreStrengthIndexPage() {
           </div>
         </section>
 
-        {/* Strength tiles (borderless light grey tiles) */}
+        {/* Strength tiles */}
         <section
           className="futuristic-card p-3 mb-3"
           style={{
@@ -413,7 +408,6 @@ export default function IronAcreStrengthIndexPage() {
                         </div>
                       </div>
 
-                      {/* subtle bottom bar like the reference (visual only) */}
                       <div
                         style={{
                           height: 8,
