@@ -6,7 +6,12 @@ import useSWR from "swr";
 import useSWRInfinite from "swr/infinite";
 import BottomNav from "../../../components/BottomNav";
 import { IA, neonCardStyle } from "../../../components/iron-acre/theme";
-import { getLiftDef, normaliseName, resolveProfileLift, type StrengthProfile } from "../../../lib/iron-acre/strengthLifts";
+import {
+  getLiftDef,
+  resolveProfileLift,
+  matchesLiftExerciseId,
+  type StrengthProfile,
+} from "../../../lib/iron-acre/strengthLifts";
 
 // Chart.js
 import {
@@ -80,12 +85,15 @@ function epleyE1RM(weight: number, reps: number) {
 
 export default function IronAcreStrengthLiftPage() {
   const router = useRouter();
-  const { liftKey } = router.query;
+  const { liftkey, liftKey } = router.query as any;
+
+  // Support either param casing just in case
+  const keyFromRoute = typeof liftKey === "string" ? liftKey : typeof liftkey === "string" ? liftkey : undefined;
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const lift = useMemo(() => (typeof liftKey === "string" ? getLiftDef(liftKey) : undefined), [liftKey]);
+  const lift = useMemo(() => (typeof keyFromRoute === "string" ? getLiftDef(keyFromRoute) : undefined), [keyFromRoute]);
 
   const { data: profResp, error: profErr } = useSWR(mounted ? "/api/strength/profile/get" : null, fetcher, {
     revalidateOnFocus: false,
@@ -100,18 +108,16 @@ export default function IronAcreStrengthLiftPage() {
   const getKey = (pageIndex: number, previousPageData: CompletionsIndexResp | null) => {
     if (!mounted || !email || !lift) return null;
     if (previousPageData && !previousPageData.nextCursor) return null;
+
     const params = new URLSearchParams();
     params.set("user_email", email);
     params.set("limit", String(PAGE_LIMIT));
     if (pageIndex > 0 && previousPageData?.nextCursor) params.set("cursor", previousPageData.nextCursor);
+
     return `/api/completions?${params.toString()}`;
   };
 
-  const {
-    data: pages,
-    error: compsErr,
-    isValidating,
-  } = useSWRInfinite<CompletionsIndexResp>(getKey, fetcher, {
+  const { data: pages, error: compsErr, isValidating } = useSWRInfinite<CompletionsIndexResp>(getKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
@@ -132,7 +138,6 @@ export default function IronAcreStrengthLiftPage() {
 
   const derived = useMemo(() => {
     const empty = {
-      labels: [] as string[],
       chartData: null as ChartData<"line"> | null,
       chartOptions: null as ChartOptions<"line"> | null,
       recentRows: [] as Array<{ ymd: string; weight: number; reps: number; e1rm: number; workoutName?: string | null }>,
@@ -145,8 +150,6 @@ export default function IronAcreStrengthLiftPage() {
 
     if (!lift) return empty;
 
-    const nameSet = new Set(lift.exerciseNames.map((n) => normaliseName(n)));
-
     // Aggregate per-day: max e1RM, max true 1RM (singles)
     const perDay = new Map<string, { maxE1RM: number; maxTrue1RM: number | null }>();
 
@@ -154,22 +157,19 @@ export default function IronAcreStrengthLiftPage() {
     const recent: Array<{ ymd: string; weight: number; reps: number; e1rm: number; workoutName?: string | null }> = [];
 
     for (const c of allCompletions) {
-      const iso =
-        toISO((c as any).completed_date) ||
-        toISO((c as any).date_completed) ||
-        toISO((c as any).created_at);
-
+      const iso = toISO((c as any).completed_date) || toISO((c as any).date_completed) || toISO((c as any).created_at);
       if (!iso) continue;
-      const ymd = iso.slice(0, 10);
 
+      const ymd = iso.slice(0, 10);
       const sets = Array.isArray((c as any).sets) ? ((c as any).sets as CompletionSet[]) : [];
+
       for (const s of sets) {
-        const ex = normaliseName(s.exercise_id);
-        if (!nameSet.has(ex)) continue;
+        // ✅ THIS IS THE KEY CHANGE:
+        // use canonical mapping (underscore IDs) AND allow legacy names
+        if (!s?.exercise_id || !matchesLiftExerciseId(String(s.exercise_id), lift)) continue;
 
         const w = Number(s.weight);
         const r = Number(s.reps);
-
         if (!Number.isFinite(w) || !Number.isFinite(r) || w <= 0 || r <= 0) continue;
 
         const e1 = epleyE1RM(w, r);
@@ -184,6 +184,7 @@ export default function IronAcreStrengthLiftPage() {
         const row = perDay.get(ymd) || { maxE1RM: 0, maxTrue1RM: null };
         if (e1 > row.maxE1RM) row.maxE1RM = e1;
 
+        // True 1RM overlay points: best single per day
         if (r === 1) {
           row.maxTrue1RM = row.maxTrue1RM == null ? w : Math.max(row.maxTrue1RM, w);
         }
@@ -252,7 +253,6 @@ export default function IronAcreStrengthLiftPage() {
       .map((r) => ({ ...r, e1rm: Math.round(r.e1rm * 10) / 10 }));
 
     return {
-      labels,
       chartData: cd,
       chartOptions: opts,
       recentRows,
@@ -268,10 +268,12 @@ export default function IronAcreStrengthLiftPage() {
         <Head>
           <title>Strength • Iron Acre</title>
         </Head>
+
         <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
           <section className="futuristic-card p-3" style={neonCardStyle()}>
             <div className="fw-bold">Unknown lift</div>
             <div className="text-dim small mt-1">That lift key isn’t recognised.</div>
+
             <div className="mt-3">
               <Link href="/iron-acre/strength" className="btn btn-outline-light btn-sm" style={{ borderRadius: 24 }}>
                 Back
@@ -279,6 +281,7 @@ export default function IronAcreStrengthLiftPage() {
             </div>
           </section>
         </main>
+
         <BottomNav />
       </>
     );
@@ -384,6 +387,7 @@ export default function IronAcreStrengthLiftPage() {
                       {new Date(r.ymd + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" })}
                     </div>
                   </div>
+
                   {r.workoutName ? <div className="text-dim small mt-1">{r.workoutName}</div> : null}
                 </div>
               ))}
