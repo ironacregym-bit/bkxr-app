@@ -151,14 +151,13 @@ export default function IronAcreStrengthIndexPage() {
         line: { capBezierPoints: true },
       },
       scales: {
-        x: {
-          display: false, // removes axis + ticks + baseline
-          grid: { display: false, drawBorder: false },
+        x: {x: false,
+          grid: { display: false },
           ticks: { display: false },
         },
         y: {
-          display: false, // removes axis + ticks + baseline
-          grid: { display: false, drawBorder: false },
+          display: false,
+          grid: { display: false },
           ticks: { display: false },
         },
       },
