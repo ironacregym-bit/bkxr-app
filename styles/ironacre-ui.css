@@ -1,0 +1,195 @@
+/* styles/ironacre-ui.css */
+
+/* Reusable UI primitives for Iron Acre (and BXKR if you want later) */
+:root {
+  --ia-tile-bg: rgba(255, 255, 255, 0.06);
+  --ia-tile-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  --ia-tile-radius: 18px;
+  --ia-tile-inner: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+
+  --ia-pill-bg: rgba(255, 255, 255, 0.08);
+  --ia-pill-active-bg: rgba(24, 255, 154, 0.18);
+
+  --ia-muted: #9fb0c3;
+
+  /* Global weight calibration */
+  --ia-fw-title: 650;     /* was 950 */
+  --ia-fw-kpi: 650;       /* big numbers */
+  --ia-fw-pill: 550;
+  --ia-fw-body-strong: 600;
+}
+
+/* Generic tile container (borderless, soft grey background) */
+.ia-tile {
+  border-radius: var(--ia-tile-radius);
+  background: var(--ia-tile-bg);
+  box-shadow: var(--ia-tile-shadow);
+}
+
+/* Optional: tighter tile padding variants */
+.ia-tile-pad {
+  padding: 1rem;
+}
+
+/* Header layout */
+.ia-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.ia-header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.ia-back-btn {
+  border-radius: 999px !important;
+  padding: 8px 12px !important;
+  color: #fff !important;
+  border: none !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.ia-progress-title {
+  font-size: 1.65rem;
+  font-weight: var(--ia-fw-title);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.ia-subtitle {
+  color: var(--ia-muted);
+  font-size: 0.825rem;
+}
+
+/* Range pills */
+.ia-range {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ia-pill {
+  border-radius: 18px !important;
+  padding: 6px 10px !important;
+  border: none !important;
+  background: var(--ia-pill-bg) !important;
+  color: #fff !important;
+  font-weight: var(--ia-fw-pill) !important;
+  letter-spacing: 0.5px;
+}
+
+.ia-pill-active {
+  background: var(--ia-pill-active-bg) !important;
+  color: var(--ia-neon, #18ff9a) !important;
+  box-shadow: 0 0 14px rgba(24, 255, 154, 0.18);
+}
+
+/* Section labels like WEIGHT / STRENGTH */
+.ia-section-label {
+  color: var(--ia-muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+}
+
+/* Weight KPI */
+.ia-weight-value {
+  font-size: 2.1rem;
+  font-weight: var(--ia-fw-kpi);
+  line-height: 1;
+  color: #fff;
+}
+
+.ia-weight-unit {
+  color: var(--ia-muted);
+  padding-bottom: 4px;
+}
+
+.ia-weight-meta {
+  color: var(--ia-muted);
+  font-size: 0.825rem;
+}
+
+.ia-weight-meta strong {
+  color: #fff;
+  font-weight: 500;
+}
+
+.ia-delta {
+  margin-left: 10px;
+  font-weight: var(--ia-fw-body-strong);
+}
+
+/* Strength header row (transparent wrapper, just a row) */
+.ia-strength-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+/* Lift tile */
+.ia-lift-tile {
+  border-radius: 16px;
+  border: none;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: var(--ia-tile-inner);
+  min-height: 112px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.ia-lift-title {
+  color: var(--ia-muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.ia-lift-value {
+  margin-top: 6px;
+  font-size: 1.4rem;
+  font-weight: 650;
+}
+
+.ia-lift-unit {
+  color: var(--ia-muted);
+  margin-left: 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.ia-lift-sub {
+  color: var(--ia-muted);
+  font-size: 0.825rem;
+  margin-top: 4px;
+}
+
+/* Tiny bar at bottom of lift tile */
+.ia-mini-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.ia-mini-bar-fill {
+  height: 100%;
+  opacity: 0.35;
+}
+
+/* Utility: remove link underline but keep block clickable */
+.ia-link {
+  text-decoration: none;
+  color: #fff;
+  display: block;
+}
