@@ -1,10 +1,10 @@
-
 // pages/_app.tsx
 import { useEffect } from "react";
 import { SessionProvider } from "next-auth/react";
 import type { AppProps } from "next/app";
 import "../styles/bootstrap.css";
 import "../styles/gymworkout.css";
+import { appFont } from "../lib/fonts";
 
 import NotificationsInit from "../components/NotificationsInit";
 import BillingTrialBanner from "../components/BillingTrialBanner";
@@ -21,10 +21,12 @@ export default function App({ Component, pageProps }: AppProps) {
 
   return (
     <SessionProvider session={(pageProps as any).session}>
-      {/* Headless initialiser: asks permission, subscribes to push, posts subscription to server */}
-      <NotificationsInit />
-      <BillingTrialBanner />
-      <Component {...pageProps} />
+      {/* ✅ Apply global font here */}
+      <div className={appFont.variable}>
+        <NotificationsInit />
+        <BillingTrialBanner />
+        <Component {...pageProps} />
+      </div>
     </SessionProvider>
   );
 }
