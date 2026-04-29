@@ -1,5 +1,4 @@
-import Head from "next/head";
-import Link from "next/link";
+import Head from "next/head"; Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import useSWR from "swr";
@@ -50,6 +49,30 @@ function addDays(d: Date, n: number) {
   return x;
 }
 
+// Robust date normaliser -> YYYY-MM-DD or null
+function toYMD(v: any): string | null {
+  try {
+    if (!v) return null;
+
+    // If it's already YYYY-MM-DD
+    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+
+    // If it's ISO string or Date string
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) return ymd(d);
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Format X-axis labels compact like the reference (e.g. 19/01, 27/01)
+function fmtShortDay(ymdStr: string) {
+  const d = new Date(`${ymdStr}T00:00:00`);
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" });
+}
+
 export default function IronAcreStrengthIndexPage() {
   const { data: session, status } = useSession();
   const [mounted, setMounted] = useState(false);
@@ -84,24 +107,42 @@ export default function IronAcreStrengthIndexPage() {
     const empty = {
       latestWeight: null as number | null,
       startWeight: null as number | null,
+      avgWeight: null as number | null,
       delta: null as number | null,
       chartData: null as ChartData<"line"> | null,
       chartOptions: null as ChartOptions<"line"> | null,
       subtitle,
+      windowCount: 0,
     };
 
-    const rows = Array.isArray(checkins?.results) ? [...checkins!.results!] : [];
+    const raw = Array.isArray(checkins?.results) ? checkins!.results! : [];
+    if (!raw.length) return empty;
+
+    // Normalise + keep only rows that have a valid date
+    const rows = raw
+      .map((r) => ({
+        ...r,
+        ymd: toYMD(r.date),
+      }))
+      .filter((r) => Boolean(r.ymd)) as Array<CheckinRow & { ymd: string }>;
+
     if (!rows.length) return empty;
 
-    rows.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    // Sort ascending by YMD
+    rows.sort((a, b) => a.ymd.localeCompare(b.ymd));
 
-    // Correct window: from today-(rangeDays-1) to today
+    // Correct window: inclusive start -> today
     const today = new Date();
+    const endKey = ymd(today);
     const start = addDays(today, -(rangeDays - 1));
     const startKey = ymd(start);
 
-    const windowRows = rows.filter((r) => String(r.date).slice(0, 10) >= startKey);
-    const usable = windowRows.length ? windowRows : rows;
+    const windowRows = rows.filter((r) => r.ymd >= startKey && r.ymd <= endKey);
+
+    // If no rows in the window (e.g. no recent check-ins), fall back to latest N check-ins
+    const usable = windowRows.length
+      ? windowRows
+      : rows.slice(Math.max(0, rows.length - rangeDays));
 
     const latest = [...usable].reverse().find((r) => typeof r.weight_kg === "number") || null;
     const first = usable.find((r) => typeof r.weight_kg === "number") || null;
@@ -110,9 +151,11 @@ export default function IronAcreStrengthIndexPage() {
     const startWeight = first?.weight_kg ?? null;
     const delta = latestWeight != null && startWeight != null ? +(latestWeight - startWeight).toFixed(1) : null;
 
-    const labels = usable.map((r) =>
-      new Date(String(r.date)).toLocaleDateString(undefined, { day: "numeric", month: "short" })
-    );
+    const weightVals = usable.map((r) => (typeof r.weight_kg === "number" ? r.weight_kg : null)).filter((x): x is number => x != null);
+    const avgWeight = weightVals.length ? +(weightVals.reduce((a, b) => a + b, 0) / weightVals.length).toFixed(1) : null;
+
+    // X labels (dates)
+    const labels = usable.map((r) => fmtShortDay(r.ymd));
     const series = usable.map((r) => (typeof r.weight_kg === "number" ? r.weight_kg : null));
 
     const cd: ChartData<"line"> = {
@@ -140,7 +183,7 @@ export default function IronAcreStrengthIndexPage() {
       ],
     };
 
-    // ✅ Axis numbers ON, grid lines OFF
+    // ✅ X axis ON (labels), Y axis numbers ON, NO grid lines
     const opts: ChartOptions<"line"> = {
       responsive: true,
       maintainAspectRatio: false,
@@ -150,26 +193,34 @@ export default function IronAcreStrengthIndexPage() {
       },
       scales: {
         x: {
-          display: false, // keep x labels hidden like reference
-          grid: { display: false },
-          ticks: { display: false },
+          display: true,
+          grid: { display: false },        // no vertical grid lines
+          border: { display: false },      // no axis baseline line
+          ticks: {
+            display: true,
+            color: "#9fb0c3",
+            autoSkip: true,
+            maxTicksLimit: rangeDays === 7 ? 7 : rangeDays === 30 ? 6 : 7,
+            maxRotation: 0,
+            minRotation: 0,
+            padding: 6,
+          },
         },
         y: {
-          display: true, // show numbers
-          grid: { display: false }, // no horizontal lines across
-          border: { display: false }, // no axis line
+          display: true,
+          grid: { display: false },        // no horizontal grid lines
+          border: { display: false },      // no axis line
           ticks: {
             display: true,
             color: "#9fb0c3",
             padding: 6,
-            // Keep it minimal like the screenshot
             maxTicksLimit: 6,
           },
         },
       },
     };
 
-    return { latestWeight, startWeight, delta, chartData: cd, chartOptions: opts, subtitle };
+    return { latestWeight, startWeight, avgWeight, delta, chartData: cd, chartOptions: opts, subtitle, windowCount: usable.length };
   }, [checkins, rangeDays]);
 
   if (!mounted) return null;
@@ -233,13 +284,13 @@ export default function IronAcreStrengthIndexPage() {
             <div className="d-flex align-items-start gap-3" style={{ minWidth: 0 }}>
               <Link
                 href="/iron-acre"
-                className="btn btn-sm"
+                className="btn btn-sm btn-outline-light"
                 style={{
-                  borderRadius: 18,
-                  padding: "6px 10px",
-                  background: "rgba(255,255,255,0.08)",
+                  borderRadius: 999,
+                  padding: "8px 12px",
                   color: "#fff",
                   border: "none",
+                  background: "rgba(255,255,255,0.08)",
                 }}
               >
                 <i className="fas fa-chevron-left" style={{ marginRight: 8 }} />
@@ -262,7 +313,7 @@ export default function IronAcreStrengthIndexPage() {
               </div>
             </div>
 
-            {/* Range pills (correct order) */}
+            {/* Range pills */}
             <div className="d-flex align-items-center gap-2">
               {[7, 30, 90].map((d) => {
                 const active = rangeDays === d;
@@ -318,7 +369,7 @@ export default function IronAcreStrengthIndexPage() {
               <div className="text-dim small mt-1">
                 {rangeDays}d avg:{" "}
                 <span style={{ color: "#fff", fontWeight: 800 }}>
-                  {weightDerived.startWeight != null ? weightDerived.startWeight.toFixed(1) : "—"}kg
+                  {weightDerived.avgWeight != null ? weightDerived.avgWeight.toFixed(1) : "—"}kg
                 </span>
                 <span style={{ marginLeft: 10, color: deltaColor, fontWeight: 900 }}>
                   {deltaText}
@@ -330,8 +381,8 @@ export default function IronAcreStrengthIndexPage() {
               href="/checkin"
               className="btn btn-sm"
               style={{
-                borderRadius: 18,
-                padding: "6px 10px",
+                borderRadius: 999,
+                padding: "8px 12px",
                 background: "rgba(255,255,255,0.08)",
                 color: "#fff",
                 border: "none",
@@ -352,7 +403,7 @@ export default function IronAcreStrengthIndexPage() {
           </div>
         </section>
 
-        {/* Strength tiles (NO grey background wrapper; only tiles have grey bg) */}
+        {/* Strength tiles wrapper remains transparent */}
         <section className="mb-3">
           <div className="d-flex justify-content-between align-items-center mb-2" style={{ paddingLeft: 4, paddingRight: 4 }}>
             <div className="text-dim small" style={{ letterSpacing: 0.9, textTransform: "uppercase" }}>
