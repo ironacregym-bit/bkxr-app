@@ -1,4 +1,5 @@
-/* styles/ironacre-ui.css */  --ia-tile-title-lh: 1.2;
+/* styles/ironacre-ui.css */ { 
+--ia-tile-title-lh: 1.2;
 
   /* Kicker label (TODAY’S WORKOUT / CLASSES / STRENGTH) */
   --ia-kicker-size: 0.78rem;
