@@ -1,157 +1,263 @@
-/* styles/ironacre-ui.css */
+/* styles/ironacre-ui.css */, 255, 255, 0.09);
+  --ia-inner-stroke: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --ia-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
 
-/* Reusable UI primitives for Iron Acre (and BXKR if you want later) */
-:root {
-  --ia-tile-bg: rgba(255, 255, 255, 0.06);
-  --ia-tile-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
-  --ia-tile-radius: 18px;
-  --ia-tile-inner: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  /* Radius */
+  --ia-r-lg: 18px;
+  --ia-r-md: 16px;
+  --ia-r-pill: 999px;
 
+  /* Spacing */
+  --ia-pad: 16px;
+  --ia-gap: 12px;
+
+  /* Global font weight calibration (this fixes “everything too heavy”) */
+  --ia-fw-body: 400;
+  --ia-fw-medium: 500;
+  --ia-fw-semi: 600;
+  --ia-fw-bold: 700;
+
+  /* Titles and labels (match your dashboard) */
+  --ia-title-size: 1.35rem;       /* “Good morning…” size */
+  --ia-title-fw: 700;
+  --ia-subtitle-size: 0.9rem;
+  --ia-subtitle-fw: 500;
+
+  /* Tile titles (“Today’s workout”, “Weekly check-in”) */
+  --ia-tile-title-size: 1.05rem;
+  --ia-tile-title-fw: 650;
+
+  /* Kicker / section label (“TODAY’S WORKOUT”, “STRENGTH”) */
+  --ia-kicker-size: 0.78rem;
+  --ia-kicker-fw: 650;
+  --ia-kicker-letter: 0.9px;
+
+  /* KPI / big numbers */
+  --ia-kpi-size: 2.1rem;
+  --ia-kpi-fw: 650;
+
+  /* Buttons */
+  --ia-btn-bg: rgba(255, 255, 255, 0.08);
+  --ia-btn-bg-hover: rgba(255, 255, 255, 0.12);
+  --ia-btn-primary-bg: rgba(24, 255, 154, 0.18);
+  --ia-btn-primary-text: var(--ia-neon);
+  --ia-btn-primary-shadow: 0 0 14px rgba(24, 255, 154, 0.18);
+
+  /* Pills */
   --ia-pill-bg: rgba(255, 255, 255, 0.08);
-  --ia-pill-active-bg: rgba(24, 255, 154, 0.18);
+  --ia-pill-bg-active: rgba(24, 255, 154, 0.18);
 
-  --ia-muted: #9fb0c3;
-
-  /* Global weight calibration */
-  --ia-fw-title: 650;     /* was 950 */
-  --ia-fw-kpi: 650;       /* big numbers */
-  --ia-fw-pill: 550;
-  --ia-fw-body-strong: 600;
+  /* Focus ring */
+  --ia-focus: 0 0 0 3px rgba(24, 255, 154, 0.22);
 }
 
-/* Generic tile container (borderless, soft grey background) */
-.ia-tile {
-  border-radius: var(--ia-tile-radius);
-  background: var(--ia-tile-bg);
-  box-shadow: var(--ia-tile-shadow);
+/* Global typography baseline */
+html, body {
+  font-family: var(--font-sans), system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  font-weight: var(--ia-fw-body);
+  color: var(--ia-text);
+  background: var(--ia-bg);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Optional: tighter tile padding variants */
-.ia-tile-pad {
-  padding: 1rem;
+strong, b {
+  font-weight: var(--ia-fw-semi);
 }
 
-/* Header layout */
-.ia-progress-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.75rem;
+/* Consistent page title (use for all page headers) */
+.ia-page-title {
+  font-size: var(--ia-title-size);
+  font-weight: var(--ia-title-fw);
+  line-height: 1.2;
+  margin: 0;
 }
 
-.ia-header-left {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  min-width: 0;
-}
-
-.ia-back-btn {
-  border-radius: 999px !important;
-  padding: 8px 12px !important;
-  color: #fff !important;
-  border: none !important;
-  background: rgba(255, 255, 255, 0.08) !important;
-}
-
-.ia-progress-title {
-  font-size: 1.65rem;
-  font-weight: var(--ia-fw-title);
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  line-height: 1.1;
-}
-
-.ia-subtitle {
+.ia-page-subtitle {
+  font-size: var(--ia-subtitle-size);
+  font-weight: var(--ia-subtitle-fw);
   color: var(--ia-muted);
-  font-size: 0.825rem;
+  margin-top: 6px;
 }
 
-/* Range pills */
-.ia-range {
+/* Kicker label (TODAY'S WORKOUT / STRENGTH etc) */
+.ia-kicker {
+  font-size: var(--ia-kicker-size);
+  font-weight: var(--ia-kicker-fw);
+  letter-spacing: var(--ia-kicker-letter);
+  text-transform: uppercase;
+  color: var(--ia-muted);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
+/* Tile title (Weekly check-in, etc) */
+.ia-tile-title {
+  font-size: var(--ia-tile-title-size);
+  font-weight: var(--ia-tile-title-fw);
+  line-height: 1.2;
+  margin: 0;
+}
+
+/* Muted body */
+.ia-muted {
+  color: var(--ia-muted);
+}
+
+/* Surface tiles/cards */
+.ia-tile {
+  border-radius: var(--ia-r-lg);
+  background: var(--ia-surface);
+  box-shadow: var(--ia-shadow);
+}
+
+.ia-tile-pad {
+  padding: var(--ia-pad);
+}
+
+/* “Flat” sections (no background) */
+.ia-section {
+  padding: 0;
+  margin: 0;
+}
+
+/* Section header row (label + badge) */
+.ia-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-left: 4px;
+  padding-right: 4px;
+  margin-bottom: 10px;
+}
+
+/* Buttons */
+.ia-btn {
+  border-radius: var(--ia-r-pill) !important;
+  padding: 8px 12px !important;
+  border: none !important;
+  background: var(--ia-btn-bg) !important;
+  color: #fff !important;
+  font-weight: var(--ia-fw-semi) !important;
+}
+
+.ia-btn:hover {
+  background: var(--ia-btn-bg-hover) !important;
+}
+
+.ia-btn:focus-visible {
+  outline: none !important;
+  box-shadow: var(--ia-focus) !important;
+}
+
+/* Primary neon-ish (used for “Open”, primary CTAs) */
+.ia-btn-primary {
+  background: var(--ia-btn-primary-bg) !important;
+  color: var(--ia-btn-primary-text) !important;
+  box-shadow: var(--ia-btn-primary-shadow) !important;
+}
+
+.ia-btn-primary:hover {
+  background: rgba(24, 255, 154, 0.22) !important;
+}
+
+/* Range pills (7D/30D/90D) */
 .ia-pill {
   border-radius: 18px !important;
   padding: 6px 10px !important;
   border: none !important;
   background: var(--ia-pill-bg) !important;
   color: #fff !important;
-  font-weight: var(--ia-fw-pill) !important;
+  font-weight: var(--ia-fw-medium) !important;
   letter-spacing: 0.5px;
 }
 
+.ia-pill:focus-visible {
+  outline: none !important;
+  box-shadow: var(--ia-focus) !important;
+}
+
 .ia-pill-active {
-  background: var(--ia-pill-active-bg) !important;
-  color: var(--ia-neon, #18ff9a) !important;
-  box-shadow: 0 0 14px rgba(24, 255, 154, 0.18);
+  background: var(--ia-pill-bg-active) !important;
+  color: var(--ia-neon) !important;
+  box-shadow: var(--ia-btn-primary-shadow);
 }
 
-/* Section labels like WEIGHT / STRENGTH */
-.ia-section-label {
-  color: var(--ia-muted);
-  font-size: 0.8rem;
-  letter-spacing: 0.9px;
-  text-transform: uppercase;
-}
-
-/* Weight KPI */
-.ia-weight-value {
-  font-size: 2.1rem;
-  font-weight: var(--ia-fw-kpi);
-  line-height: 1;
+/* Badges */
+.ia-badge {
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: var(--ia-fw-semi);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
-.ia-weight-unit {
+.ia-badge-neon {
+  background: rgba(24, 255, 154, 0.12);
+  color: var(--ia-neon);
+}
+
+/* KPI block (Weight value style) */
+.ia-kpi {
+  font-size: var(--ia-kpi-size);
+  font-weight: var(--ia-kpi-fw);
+  line-height: 1;
+}
+
+.ia-kpi-unit {
   color: var(--ia-muted);
   padding-bottom: 4px;
 }
 
-.ia-weight-meta {
-  color: var(--ia-muted);
-  font-size: 0.825rem;
-}
-
-.ia-weight-meta strong {
-  color: #fff;
-  font-weight: 500;
-}
-
+/* Delta */
 .ia-delta {
   margin-left: 10px;
-  font-weight: var(--ia-fw-body-strong);
+  font-weight: var(--ia-fw-semi);
 }
 
-/* Strength header row (transparent wrapper, just a row) */
-.ia-strength-head {
+/* Progress header layout */
+.ia-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding-left: 4px;
-  padding-right: 4px;
+  align-items: flex-start;
+  gap: var(--ia-gap);
 }
 
-/* Lift tile */
+.ia-header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ia-gap);
+  min-width: 0;
+}
+
+/* PROGRESS style (if you still want uppercase) */
+.ia-progress-word {
+  font-size: 1.65rem;
+  font-weight: 600; /* intentionally lighter */
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+/* Strength lift tiles */
 .ia-lift-tile {
-  border-radius: 16px;
-  border: none;
-  background: rgba(255, 255, 255, 0.07);
-  box-shadow: var(--ia-tile-inner);
+  border-radius: var(--ia-r-md);
+  background: var(--ia-surface-2);
+  box-shadow: var(--ia-inner-stroke);
   min-height: 112px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
 
-.ia-lift-title {
-  color: var(--ia-muted);
+.ia-lift-kicker {
   font-size: 0.8rem;
   letter-spacing: 0.8px;
   text-transform: uppercase;
+  color: var(--ia-muted);
 }
 
 .ia-lift-value {
@@ -164,7 +270,7 @@
   color: var(--ia-muted);
   margin-left: 6px;
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: var(--ia-fw-medium);
 }
 
 .ia-lift-sub {
@@ -173,7 +279,7 @@
   margin-top: 4px;
 }
 
-/* Tiny bar at bottom of lift tile */
+/* Mini bar */
 .ia-mini-bar {
   height: 8px;
   border-radius: 999px;
@@ -187,9 +293,39 @@
   opacity: 0.35;
 }
 
-/* Utility: remove link underline but keep block clickable */
+/* Link utility for tile clickability */
 .ia-link {
   text-decoration: none;
   color: #fff;
   display: block;
 }
+.ia-link:hover {
+  color: #fff;
+}
+
+/* State accents without “green border everywhere” */
+.ia-state-complete {
+  color: var(--ia-neon);
+}
+.ia-state-pending {
+  color: #fff;
+}
+``
+
+/* Iron Acre UI system
+   Goal: consistent typography + consistent tiles + consistent buttons
+   Keep most tuning in variables below. */
+
+:root {
+  /* Core colours */
+  --ia-bg: #070a0f;
+  --ia-text: #ffffff;
+  --ia-muted: #9fb0c3;
+
+  /* Neon accents (keep in sync with IA.neon if you want later) */
+  --ia-neon: #18ff9a;
+  --ia-neon2: #ff8c42;
+
+  /* Surfaces */
+  --ia-surface: rgba(255, 255, 255, 0.06);
+  --ia-surface-2: rgba(255, 255, 255, 0.07);
