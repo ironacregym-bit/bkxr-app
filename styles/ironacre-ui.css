@@ -224,7 +224,6 @@ b {
 .ia-link:hover {
   color: #fff;
 }
-``
 /* Iron Acre UI primitives: typography + tiles + buttons */
 
 :root {
@@ -245,3 +244,4 @@ b {
   /* Tile heading (Weekly check-in etc) */
   --ia-tile-title-size: 1.05rem;
   --ia-tile-title-fw: 650;
+}
