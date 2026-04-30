@@ -1,5 +1,4 @@
-import Head from "next/head";
-import Link from "next/link";
+import Head from "next/head";import Head from from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import useSWR from "swr";
@@ -25,12 +24,7 @@ import { Line } from "react-chartjs-2";
 
 ChartJS.register(LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend, Filler);
 
-const fetcher = async (u: string) => {
-  const r = await fetch(u);
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j?.error || `Request failed (${r.status})`);
-  return j;
-};
+/* ----------------------------- Types ----------------------------- */
 
 type CheckinRow = {
   date: string;
@@ -38,7 +32,29 @@ type CheckinRow = {
   body_fat_pct: number | null;
 };
 
-type CheckinsSeriesResp = { results: CheckinRow[] };
+type CheckinsSeriesResp = {
+  results: CheckinRow[];
+};
+
+type RangeDays = 7 | 30 | 90;
+
+type WeightDerived = {
+  latestWeight: number | null;
+  avgWeight: number | null;
+  delta: number | null;
+  subtitle: string;
+  chartData: ChartData<"line"> | null;
+  chartOptions: ChartOptions<"line"> | null;
+};
+
+/* ---------------------------- Helpers ---------------------------- */
+
+const fetcher = async (u: string) => {
+  const r = await fetch(u);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j?.error || `Request failed (${r.status})`);
+  return j;
+};
 
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -50,278 +66,120 @@ function addDays(d: Date, n: number) {
   return x;
 }
 
-// Robust date normaliser -> YYYY-MM-DD or null
-function toYMD(v: any): string | null {
-  try {
-    if (!v) return null;
-    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-    const d = new Date(v);
-    if (!isNaN(d.getTime())) return ymd(d);
-    return null;
-  } catch {
-    return null;
-  }
+function subtitleForRange(range: RangeDays) {
+  if (range === 7) return "Last 7 days";
+  if (range === 30) return "Last 30 days";
+  return "Last 90 days";
 }
 
-// Format X-axis labels compact like the reference (e.g. 19/01, 27/01)
+function toYMD(v: any): string | null {
+  if (!v) return null;
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : ymd(d);
+}
+
 function fmtShortDay(ymdStr: string) {
   const d = new Date(`${ymdStr}T00:00:00`);
   return d.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" });
 }
 
+/* --------------------------- Component --------------------------- */
+
 export default function IronAcreStrengthIndexPage() {
   const { data: session, status } = useSession();
   const [mounted, setMounted] = useState(false);
+  const [rangeDays, setRangeDays] = useState<RangeDays>(30);
+
   useEffect(() => setMounted(true), []);
 
-  const [rangeDays, setRangeDays] = useState<7 | 30 | 90>(30);
+  const { data: profResp } = useSWR(mounted ? "/api/strength/profile/get" : null, fetcher);
+  const profile: StrengthProfile | undefined = profResp?.profile;
 
-  const { data } = useSWR(mounted ? "/api/strength/profile/get" : null, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 60_000,
-  });
+  const email = session?.user?.email ?? null;
+  const checkinsKey =
+    mounted && email
+      ? `/api/checkins/series?email=${encodeURIComponent(email)}&limit=1000`
+      : null;
 
-  const profile: StrengthProfile | undefined = data?.profile;
-  const email: string | null = session?.user?.email ? String(session.user.email) : null;
+  const { data: checkins } = useSWR<CheckinsSeriesResp>(checkinsKey, fetcher);
 
-  const checkinsKey = mounted && email ? `/api/checkins/series?email=${encodeURIComponent(email)}&limit=1000` : null;
+  const weightDerived = useMemo<WeightDerived>(() => {
+    const subtitle = subtitleForRange(rangeDays);
 
-  const { data: checkins, error: checkinsErr } = useSWR<CheckinsSeriesResp>(checkinsKey, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 60_000,
-    shouldRetryOnError: false,
-  });
+    if (!checkins?.results?.length) {
+      return { latestWeight: null, avgWeight: null, delta: null, subtitle, chartData: null, chartOptions: null };
+    }
 
-  const weightDerived = useMemo(() => {
-    const subtitle = rangeDays === 7 ? "Last 7 days" : rangeDays === 30 ? "Last 30 days" : "Last 90 days";
-
-    const empty = {
-      latestWeight: null as number | null,
-      avgWeight: null as number | null,
-      delta: null as number | null,
-      chartData: null as ChartData<"line"> | null,
-      chartOptions: null as ChartOptions<"line"> | null,
-      subtitle,
-    };
-
-    const raw = Array.isArray(checkins?.results) ? checkins!.results! : [];
-    if (!raw.length) return empty;
-
-    const rows = raw
+    const rows = checkins.results
       .map((r) => ({ ...r, ymd: toYMD(r.date) }))
-      .filter((r) => Boolean(r.ymd)) as Array<CheckinRow & { ymd: string }>;
-
-    if (!rows.length) return empty;
-
-    rows.sort((a, b) => a.ymd.localeCompare(b.ymd));
+      .filter((r): r is CheckinRow & { ymd: string } => Boolean(r.ymd))
+      .sort((a, b) => a.ymd.localeCompare(b.ymd));
 
     const today = new Date();
+    const startKey = ymd(addDays(today, -(rangeDays - 1)));
     const endKey = ymd(today);
-    const start = addDays(today, -(rangeDays - 1));
-    const startKey = ymd(start);
 
-    const windowRows = rows.filter((r) => r.ymd >= startKey && r.ymd <= endKey);
-    const usable = windowRows.length ? windowRows : rows.slice(Math.max(0, rows.length - rangeDays));
+    const usable = rows.filter((r) => r.ymd >= startKey && r.ymd <= endKey);
+    const data = usable.length ? usable : rows.slice(-rangeDays);
 
-    const latest = [...usable].reverse().find((r) => typeof r.weight_kg === "number") || null;
+    const weights = data.map((r) => r.weight_kg).filter((v): v is number => v != null);
+    const latestWeight = weights.at(-1) ?? null;
+    const avgWeight = weights.length ? +(weights.reduce((a, b) => a + b, 0) / weights.length).toFixed(1) : null;
+    const delta = weights.length > 1 ? +(weights.at(-1)! - weights[0]).toFixed(1) : null;
 
-    const latestWeight = latest?.weight_kg ?? null;
-
-    const weightVals = usable
-      .map((r) => (typeof r.weight_kg === "number" ? r.weight_kg : null))
-      .filter((x): x is number => x != null);
-
-    const avgWeight = weightVals.length ? +(weightVals.reduce((a, b) => a + b, 0) / weightVals.length).toFixed(1) : null;
-
-    const firstW = usable.find((r) => typeof r.weight_kg === "number")?.weight_kg ?? null;
-    const delta = latestWeight != null && firstW != null ? +(latestWeight - firstW).toFixed(1) : null;
-
-    const labels = usable.map((r) => fmtShortDay(r.ymd));
-    const series = usable.map((r) => (typeof r.weight_kg === "number" ? r.weight_kg : null));
-
-    const cd: ChartData<"line"> = {
-      labels,
+    const chartData: ChartData<"line"> = {
+      labels: data.map((r) => fmtShortDay(r.ymd)),
       datasets: [
         {
           label: "Weight (kg)",
-          data: series as (number | null)[],
+          data: data.map((r) => r.weight_kg),
           borderColor: IA.neon,
           borderWidth: 2,
           pointRadius: 0,
-          pointHoverRadius: 0,
           tension: 0.35,
           fill: true,
-          backgroundColor: (ctx: any) => {
-            const chart = ctx.chart;
-            const { ctx: c, chartArea } = chart;
-            if (!chartArea) return "rgba(24,255,154,0.12)";
-            const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-            g.addColorStop(0, "rgba(24,255,154,0.22)");
-            g.addColorStop(1, "rgba(24,255,154,0.00)");
-            return g;
-          },
         } as ChartDataset<"line">,
       ],
     };
 
-    const opts: ChartOptions<"line"> = {
+    const chartOptions: ChartOptions<"line"> = {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { intersect: false, mode: "index" },
-      },
+      plugins: { legend: { display: false } },
       scales: {
-        x: {
-          display: true,
-          grid: { display: false },
-          border: { display: false },
-          ticks: {
-            display: true,
-            color: "#9fb0c3",
-            autoSkip: true,
-            maxTicksLimit: rangeDays === 7 ? 7 : rangeDays === 30 ? 6 : 7,
-            maxRotation: 0,
-            minRotation: 0,
-            padding: 6,
-          },
-        },
-        y: {
-          display: true,
-          grid: { display: false },
-          border: { display: false },
-          ticks: {
-            display: true,
-            color: "#9fb0c3",
-            padding: 6,
-            maxTicksLimit: 6,
-          },
-        },
+        x: { grid: { display: false } },
+        y: { grid: { display: false } },
       },
     };
 
-    return { latestWeight, avgWeight, delta, chartData: cd, chartOptions: opts, subtitle };
+    return { latestWeight, avgWeight, delta, subtitle, chartData, chartOptions };
   }, [checkins, rangeDays]);
 
-  if (!mounted) return null;
-
-  if (status === "loading") {
-    return <main className="container py-4" style={{ color: "#fff" }}>Loading…</main>;
-  }
-
-  if (!session) {
-    const cb = encodeURIComponent("/iron-acre/strength");
-    return (
-      <>
-        <Head>
-          <title>Progress • Iron Acre</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        </Head>
-        <main className="container py-4" style={{ color: "#fff", paddingBottom: 90 }}>
-          <section className="futuristic-card ia-tile ia-tile-pad">
-            <h2 className="m-0">Progress</h2>
-            <div className="text-dim mt-2">Please sign in to view your progress.</div>
-            <div className="mt-3">
-              <Link href={`/register?callbackUrl=${cb}`} className="btn btn-outline-light" style={{ borderRadius: 24 }}>
-                Sign in
-              </Link>
-            </div>
-          </section>
-        </main>
-        <BottomNav />
-      </>
-    );
-  }
-
-  const delta = weightDerived.delta;
-  const deltaText = delta == null ? "—" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}kg`;
-  const deltaColor = delta == null ? "#9fb0c3" : delta <= 0 ? IA.neon : IA.neon2;
+  if (!mounted || status === "loading") return null;
 
   return (
     <>
       <Head>
         <title>Progress • Iron Acre</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <section className="futuristic-card ia-tile ia-tile-pad mb-3">
-          <div className="ia-progress-header">
-            <div className="ia-header-left">
-              <Link href="/iron-acre" className="btn btn-sm ia-back-btn">
-                <i className="fas fa-chevron-left" style={{ marginRight: 8 }} />
-                Back
-              </Link>
-
-              <div style={{ minWidth: 0 }}>
-                <div className="ia-progress-title">PROGRESS</div>
-                <div className="ia-subtitle">{weightDerived.subtitle}</div>
-              </div>
-            </div>
-
-            <div className="ia-range">
-              {[7, 30, 90].map((d) => {
-                const active = rangeDays === d;
-                return (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setRangeDays(d as 7 | 30 | 90)}
-                    className={`btn btn-sm ia-pill ${active ? "ia-pill-active" : ""}`}
-                  >
-                    {d}D
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <div className="ia-page-title">Progress</div>
+          <div className="ia-page-subtitle">{weightDerived.subtitle}</div>
         </section>
 
         <section className="futuristic-card ia-tile ia-tile-pad mb-3">
-          <div className="d-flex justify-content-between align-items-start gap-2">
-            <div style={{ minWidth: 0 }}>
-              <div className="ia-section-label">WEIGHT</div>
-
-              <div className="d-flex align-items-end gap-2" style={{ marginTop: 6 }}>
-                <div className="ia-weight-value">
-                  {weightDerived.latestWeight != null ? weightDerived.latestWeight.toFixed(1) : "—"}
-                </div>
-                <div className="ia-weight-unit">kg</div>
-              </div>
-
-              <div className="ia-weight-meta">
-                {rangeDays}d avg:{" "}
-                <strong>{weightDerived.avgWeight != null ? weightDerived.avgWeight.toFixed(1) : "—"}kg</strong>
-                <span className="ia-delta" style={{ color: deltaColor }}>
-                  {deltaText}
-                </span>
-              </div>
-            </div>
-
-            <Link href="/checkin" className="btn btn-sm ia-back-btn">
-              Add check-in
-            </Link>
-          </div>
-
-          <div className="mt-3" style={{ height: 240 }}>
-            {checkinsErr ? (
-              <div className="text-dim">No check-ins yet.</div>
-            ) : weightDerived.chartData ? (
-              <Line data={weightDerived.chartData} options={weightDerived.chartOptions as any} />
-            ) : (
-              <div className="text-dim">No check-ins yet.</div>
+          <div style={{ height: 240 }}>
+            {weightDerived.chartData && (
+              <Line data={weightDerived.chartData} options={weightDerived.chartOptions!} />
             )}
           </div>
         </section>
 
         <section className="mb-3">
-          <div className="ia-strength-head mb-2">
-            <div className="ia-section-label">STRENGTH</div>
-            <span className="badge" style={{ background: `rgba(24,255,154,0.12)`, color: IA.neon, border: "none" }}>
-              e1RM + 1RM
-            </span>
-          </div>
-
+          <div className="ia-kicker mb-2">Strength</div>
           <div className="row g-2">
             {BIG_LIFTS.map((lift) => {
               const { true1rm, trainingMax } = resolveProfileLift(profile as any, lift);
@@ -331,32 +189,10 @@ export default function IronAcreStrengthIndexPage() {
                 <div key={lift.key} className="col-6">
                   <Link href={`/iron-acre/strength/${lift.key}`} className="ia-link">
                     <div className="p-3 ia-lift-tile">
-                      <div>
-                        <div className="ia-lift-title">{lift.label}</div>
-
-                        <div className="ia-lift-value">
-                          {value != null ? (
-                            <span style={{ color: IA.neon, textShadow: `0 0 10px ${IA.neon}40` }}>{value}</span>
-                          ) : (
-                            <span className="text-dim">—</span>
-                          )}
-                          <span className="ia-lift-unit">kg</span>
-                        </div>
-
-                        <div className="ia-lift-sub">
-                          {true1rm != null ? "True 1RM" : trainingMax != null ? "Training max" : "No data"}
-                        </div>
-                      </div>
-
-                      <div className="ia-mini-bar">
-                        <div
-                          className="ia-mini-bar-fill"
-                          style={{
-                            width: value != null ? "72%" : "22%",
-                            background: `linear-gradient(90deg, ${IA.neon}CC, ${IA.neon2}99)`,
-                            opacity: value != null ? 1 : 0.35,
-                          }}
-                        />
+                      <div className="ia-lift-kicker">{lift.label}</div>
+                      <div className="ia-lift-value">
+                        {value ?? "—"}
+                        <span className="ia-lift-unit">kg</span>
                       </div>
                     </div>
                   </Link>
