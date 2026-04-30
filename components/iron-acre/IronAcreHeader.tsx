@@ -1,34 +1,39 @@
 import { useEffect, useMemo, useState } from "react";
-import { IA, neonCardStyle } from "./theme";
 
-function greetingForHour(h: number) {
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
+type IronAcreHeaderProps = {
+  userName: string;
+  dateLabel: string;
+};
+
+const TIME_UPDATE_MS = 30_000;
+
+function greetingForHour(hour: number): string {
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
   return "Good evening";
 }
 
-export default function IronAcreHeader({ userName, dateLabel }: { userName: string; dateLabel: string }) {
-  const [timeText, setTimeText] = useState("");
+function formatHHMM(d: Date): string {
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
 
-  const greet = useMemo(() => {
-    const h = new Date().getHours();
-    return greetingForHour(h);
-  }, []);
+export default function IronAcreHeader({ userName, dateLabel }: IronAcreHeaderProps) {
+  const [timeText, setTimeText] = useState<string>("");
+
+  const greeting = useMemo(() => greetingForHour(new Date().getHours()), []);
 
   useEffect(() => {
-    const update = () => {
-      const d = new Date();
-      const hh = String(d.getHours()).padStart(2, "0");
-      const mm = String(d.getMinutes()).padStart(2, "0");
-      setTimeText(`${hh}:${mm}`);
-    };
-    update();
-    const t = setInterval(update, 30_000);
-    return () => clearInterval(t);
+    const tick = () => setTimeText(formatHHMM(new Date()));
+    tick();
+
+    const timer = window.setInterval(tick, TIME_UPDATE_MS);
+    return () => window.clearInterval(timer);
   }, []);
 
   return (
-    <section className="futuristic-card p-3 mb-3" style={neonCardStyle()}>
+    <section className="futuristic-card ia-tile ia-tile-pad mb-3">
       <div className="d-flex justify-content-between align-items-start gap-2">
         <div style={{ minWidth: 0 }}>
           <div className="d-flex align-items-center gap-2 text-dim small">
@@ -37,29 +42,26 @@ export default function IronAcreHeader({ userName, dateLabel }: { userName: stri
             <span>{dateLabel}</span>
           </div>
 
-          <div className="fw-bold" style={{ fontSize: "1.35rem", lineHeight: 1.2 }}>
-            {greet}, {userName}
+          <div className="ia-page-title">
+            {greeting}, {userName}
           </div>
 
-          <div className="text-dim small mt-1">Iron Acre performance dashboard</div>
+          <div className="ia-page-subtitle">Iron Acre performance dashboard</div>
         </div>
 
         <button
           type="button"
-          className="btn btn-sm"
+          className="btn btn-sm ia-btn-outline"
           style={{
             width: 40,
             height: 40,
-            borderRadius: 999,
-            border: `1px solid ${IA.border}`,
-            background: "rgba(0,0,0,0.22)",
-            color: IA.neon,
+            padding: 0,
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            boxShadow: `0 0 16px rgba(24,255,154,0.12)`,
           }}
           title="Notifications"
+          aria-label="Notifications"
         >
           <i className="fas fa-bell" />
         </button>
