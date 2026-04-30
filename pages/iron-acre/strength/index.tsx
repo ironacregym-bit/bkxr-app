@@ -1,4 +1,5 @@
-import Head from "next/head";import Head from from "next/link";
+import Head from "next/head";
+import Link from from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import useSWR from "swr";
