@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { IA, neonCardStyle } from "./theme";
 import { BIG_LIFTS, resolveProfileLift } from "../../lib/iron-acre/strengthLifts";
 
 type StrengthProfile = {
@@ -9,69 +8,77 @@ type StrengthProfile = {
   updated_at?: any;
 };
 
-export default function IronAcreStrengthSummary({ profile }: { profile?: StrengthProfile }) {
-  return (
-    <section className="futuristic-card p-3 mb-3" style={neonCardStyle()}>
-      <div className="d-flex justify-content-between align-items-center mb-2">
-        <h6 className="m-0">Strength</h6>
+type LiftRow = {
+  key: string;
+  label: string;
+  href: string;
+  value: number | null;
+  sourceLabel: string;
+};
 
-        <span
-          className="badge"
-          style={{
-            background: `rgba(24,255,154,0.12)`,
-            color: IA.neon,
-            border: `1px solid ${IA.borderSoft}`,
-          }}
-        >
-          e1RM + 1RM
-        </span>
+function sourceLabel(true1rm: number | null, trainingMax: number | null): string {
+  if (true1rm != null) return "True 1RM";
+  if (trainingMax != null) return "Training max";
+  return "Not set";
+}
+
+function buildRows(profile?: StrengthProfile): LiftRow[] {
+  return BIG_LIFTS.map((lift) => {
+    const { true1rm, trainingMax } = resolveProfileLift(profile as any, lift);
+    const value = true1rm ?? trainingMax ?? null;
+
+    return {
+      key: lift.key,
+      label: lift.label,
+      href: `/iron-acre/strength/${lift.key}`,
+      value,
+      sourceLabel: sourceLabel(true1rm ?? null, trainingMax ?? null),
+    };
+  });
+}
+
+function formatKg(value: number | null): string {
+  return value == null ? "—" : `${value}kg`;
+}
+
+export default function IronAcreStrengthSummary({ profile }: { profile?: StrengthProfile }) {
+  const rows = buildRows(profile);
+
+  return (
+    <section className="futuristic-card ia-tile ia-tile-pad mb-3">
+      <div className="d-flex justify-content-between align-items-center mb-2">
+        <div className="ia-tile-title">Strength</div>
+        <span className="ia-badge ia-badge-neon">e1RM + 1RM</span>
       </div>
 
-      <div className="d-flex flex-column" style={{ gap: 10 }}>
-        {BIG_LIFTS.map((lift, idx) => {
-          const { true1rm, trainingMax } = resolveProfileLift(profile as any, lift);
-          const value = true1rm ?? trainingMax ?? null;
-          const source = true1rm != null ? "True 1RM" : trainingMax != null ? "Training max" : "Not set";
-
-          return (
-            <Link
-              key={lift.key}
-              href={`/iron-acre/strength/${lift.key}`}
-              className="d-flex justify-content-between align-items-center"
-              style={{
-                paddingTop: 10,
-                paddingBottom: 10,
-                borderTop: idx === 0 ? "none" : "1px solid rgba(255,255,255,0.08)",
-                textDecoration: "none",
-                color: "#fff",
-              }}
-              aria-label={`Open ${lift.label} strength details`}
-            >
-              <div style={{ minWidth: 0 }}>
-                <div className="fw-semibold">{lift.label}</div>
-                <div className="text-dim small">{source}</div>
+      <div className="d-flex flex-column">
+        {rows.map((r, idx) => (
+          <Link
+            key={r.key}
+            href={r.href}
+            className="ia-link d-flex justify-content-between align-items-center"
+            style={{
+              paddingTop: 10,
+              paddingBottom: 10,
+              borderTop: idx === 0 ? "none" : "1px solid rgba(255,255,255,0.08)",
+            }}
+            aria-label={`Open ${r.label} strength details`}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div className="ia-tile-title" style={{ fontSize: "1rem" }}>
+                {r.label}
               </div>
+              <div className="ia-lift-sub">{r.sourceLabel}</div>
+            </div>
 
-              <div className="d-flex align-items-center gap-2">
-                <div
-                  style={{
-                    color: value != null ? IA.neon : "#888",
-                    fontWeight: 900,
-                    fontSize: "1.1rem",
-                    textShadow: value != null ? `0 0 10px ${IA.neon}40` : "none",
-                    minWidth: 70,
-                    textAlign: "right",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {value != null ? `${value}kg` : "—"}
-                </div>
-
-                <i className="fas fa-chevron-right text-dim" />
+            <div className="d-flex align-items-center gap-2">
+              <div className="ia-lift-value" style={{ marginTop: 0 }}>
+                <span style={{ color: "var(--ia-neon)" }}>{formatKg(r.value)}</span>
               </div>
-            </Link>
-          );
-        })}
+              <i className="fas fa-chevron-right text-dim" />
+            </div>
+          </Link>
+        ))}
       </div>
 
       <div className="mt-3">
