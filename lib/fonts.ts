@@ -1,7 +1,7 @@
 // lib/fonts.ts
-import { Manrope } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 
-export const appFont = Manrope({
+export const appFont = Plus_Jakarta_Sans({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-sans",
