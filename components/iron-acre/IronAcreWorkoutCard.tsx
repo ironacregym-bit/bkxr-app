@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 type WorkoutItem =
@@ -62,7 +63,6 @@ type IronAcreWorkoutCardProps = {
   hasWorkoutToday: boolean;
 };
 
-
 function flattenExercisesWithReps(w?: Workout | null) {
   const workout = w ?? null;
   if (!workout) return [] as Array<{ name: string; reps?: string | null }>;
@@ -87,29 +87,24 @@ function flattenExercisesWithReps(w?: Workout | null) {
   return out;
 }
 
-
-
 function estimateSets(w?: Workout | null) {
-  if (!w) return 0;
+  const workout = w ?? null;
+  if (!workout) return 0;
 
   const rounds: Round[] = [];
-  if (w.warmup) rounds.push(w.warmup);
-  if (w.main) rounds.push(w.main);
-  if (w.finisher) rounds.push(w.finisher);
+  if (workout.warmup) rounds.push(workout.warmup);
+  if (workout.main) rounds.push(workout.main);
+  if (workout.finisher) rounds.push(workout.finisher);
 
   let total = 0;
   for (const r of rounds) {
     for (const it of r.items || []) {
-      if (it.type === "Single") {
-        total += Number(it.sets ?? 3);
-      } else {
-        total += Number(it.sets ?? 3) * (it.items?.length || 1);
-      }
+      if (it.type === "Single") total += Number(it.sets ?? 3);
+      else total += Number(it.sets ?? 3) * (it.items?.length || 1);
     }
   }
   return total;
 }
-
 
 function dayLabelFromYMD(ymd: string) {
   const d = new Date(`${ymd}T00:00:00`);
@@ -147,6 +142,7 @@ function buildWeekRows(weekDays: DayOverview[], dateKey: string, workoutId: stri
     completed: rows.filter((r) => r.done),
   };
 }
+
 export default function IronAcreWorkoutCard({
   workout,
   workoutId,
@@ -158,14 +154,14 @@ export default function IronAcreWorkoutCard({
   weekEndYMD,
   weeklyTotals,
   hasWorkoutToday,
-}: Props) {
+}: IronAcreWorkoutCardProps) {
   const flat = useMemo(() => flattenExercisesWithReps(workout), [workout]);
   const exCount = flat.length;
+
   const setCount = useMemo(() => estimateSets(workout), [workout]);
   const preview = useMemo(() => flat.slice(0, 3), [flat]);
 
   const [showWeek, setShowWeek] = useState(false);
-
   const weekRows = useMemo(() => buildWeekRows(weekDays, dateKey, workoutId), [weekDays, dateKey, workoutId]);
 
   const startHref = workoutId ? `/gymworkout/${encodeURIComponent(workoutId)}?date=${encodeURIComponent(dateKey)}` : "#";
@@ -218,7 +214,9 @@ export default function IronAcreWorkoutCard({
           </div>
 
           <div className="text-dim small mt-1" style={{ maxWidth: 520 }}>
-            {(workout?.focus || workout?.notes || "Strength session targeting key patterns with varied angles and equipment.").toString()}
+            {(workout?.focus ||
+              workout?.notes ||
+              "Strength session targeting key patterns with varied angles and equipment.").toString()}
           </div>
 
           <div
@@ -398,4 +396,3 @@ export default function IronAcreWorkoutCard({
     </section>
   );
 }
-
