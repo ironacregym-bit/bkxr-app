@@ -1,8 +1,9 @@
+// components/iron-acre/IronAcreClassesList.tsx
+
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import { toMillis } from "../../lib/time";
-import { IA, neonCardStyle, neonPrimaryStyle, neonButtonStyle } from "./theme";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -21,7 +22,7 @@ type SessionItem = {
   location: string | null;
 };
 
-type UserAccess = {
+ type UserAccess = {
   membership_status?: string | null;
   payment_type?: string | null;
 };
@@ -36,6 +37,7 @@ function startOfAlignedWeek(d: Date) {
   s.setHours(0, 0, 0, 0);
   return s;
 }
+
 function endOfAlignedWeek(d: Date) {
   const s = startOfAlignedWeek(d);
   const e = new Date(s);
@@ -43,6 +45,7 @@ function endOfAlignedWeek(d: Date) {
   e.setHours(23, 59, 59, 999);
   return e;
 }
+
 function ymdLocal(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -50,26 +53,27 @@ function ymdLocal(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
+function renderStartStr(start_time: string | null) {
+  if (!start_time) return "TBC";
+  const d = new Date(start_time);
+  return isNaN(d.getTime()) ? "TBC" : d.toLocaleString();
+}
+
 export default function IronAcreClassesList() {
   const { data: authSession } = useSession();
   const isAuthed = Boolean(authSession?.user?.email);
   const authedEmail = authSession?.user?.email || "";
 
-  // We still load gyms so we can auto-pick the Iron Acre gym location,
-  // but we do NOT render the select UI.
+  // Load gyms so we can auto-pick the first gym silently (no select UI)
   const { data: gymsResp } = useSWR("/api/gyms/list", fetcher, { revalidateOnFocus: false });
   const gyms: Gym[] = gymsResp?.gyms ?? [];
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Auto-select first gym silently
     if (!selectedGymId && gyms.length > 0) setSelectedGymId(gyms[0].id);
   }, [gyms, selectedGymId]);
 
-  const selectedGym = useMemo(
-    () => gyms.find((g) => g.id === selectedGymId) || null,
-    [gyms, selectedGymId]
-  );
+  const selectedGym = useMemo(() => gyms.find((g) => g.id === selectedGymId) || null, [gyms, selectedGymId]);
 
   const profileKey = authedEmail ? `/api/profile?email=${encodeURIComponent(authedEmail)}` : null;
   const { data: profile } = useSWR<UserAccess>(profileKey, fetcher, {
@@ -195,7 +199,7 @@ export default function IronAcreClassesList() {
 
     return (
       <div className="mb-3">
-        <div className="fw-semibold mb-2">{title}</div>
+        <div className="ia-kicker mb-2">{title.toUpperCase()}</div>
 
         {days.map((ymd) => (
           <div key={ymd} className="mb-2">
@@ -203,20 +207,22 @@ export default function IronAcreClassesList() {
 
             {(groups[ymd] || []).map((s) => {
               const full = s.max_attendance > 0 && s.current_attendance >= s.max_attendance;
-              const startStr = s.start_time ? new Date(s.start_time).toLocaleString() : "TBC";
+              const startStr = renderStartStr(s.start_time);
 
               return (
-                <section
+                <div
                   key={s.id}
-                  className="futuristic-card p-3 mb-2"
-                  style={neonCardStyle({
-                    border: `1px solid ${IA.borderSoft}`,
-                    boxShadow: IA.glowSoft,
-                  })}
+                  className="mb-2"
+                  style={{
+                    padding: "12px 12px",
+                    borderRadius: 14,
+                    background: "rgba(255,255,255,0.05)",
+                    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+                  }}
                 >
                   <div className="d-flex justify-content-between align-items-start gap-2">
                     <div style={{ minWidth: 0 }}>
-                      <div className="fw-semibold">
+                      <div className="ia-tile-title" style={{ fontSize: "1rem" }}>
                         {s.class_id || "Class"} {s.gym_name ? `• ${s.gym_name}` : ""}
                       </div>
 
@@ -231,34 +237,30 @@ export default function IronAcreClassesList() {
                       </div>
                     </div>
 
-                    <div className="d-flex flex-column gap-2">
+                    <div className="d-flex flex-column gap-2" style={{ minWidth: 120 }}>
                       <button
-                        className="btn btn-sm"
-                        style={neonPrimaryStyle({
-                          borderRadius: 14,
-                          paddingLeft: 14,
-                          paddingRight: 14,
-                          opacity: full ? 0.6 : 1,
-                        })}
+                        type="button"
+                        className="btn btn-sm ia-btn-primary"
                         disabled={full || bookingBusy === s.id}
                         onClick={() => book(s.id, false)}
+                        style={{ opacity: full ? 0.6 : 1 }}
                       >
                         {full ? "Full" : bookingBusy === s.id ? "…" : "Book"}
                       </button>
 
-                      {!isGymMember && (
+                      {!isGymMember ? (
                         <button
-                          className="btn btn-sm"
-                          style={neonButtonStyle({ borderRadius: 14 })}
+                          type="button"
+                          className="btn btn-sm ia-btn"
                           disabled={full || bookingBusy === s.id}
                           onClick={() => book(s.id, true)}
                         >
                           Pay on day
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
-                </section>
+                </div>
               );
             })}
           </div>
@@ -272,45 +274,34 @@ export default function IronAcreClassesList() {
   const emptyAll = emptyThis && emptyNext;
 
   return (
-    <section className="futuristic-card p-3 mb-3" style={neonCardStyle()}>
-      {/* Header row styled like Today's workout */}
+    <section className="futuristic-card ia-tile ia-tile-pad mb-3">
       <div className="d-flex justify-content-between align-items-center mb-2">
-        <div className="text-dim small" style={{ letterSpacing: 0.9, display: "flex", alignItems: "center", gap: 8 }}>
-          <i className="fas fa-calendar-alt" style={{ color: IA.neon, filter: `drop-shadow(0 0 8px ${IA.neon}66)` }} />
+        <div className="ia-kicker">
+          <i className="fas fa-calendar-alt" style={{ color: "var(--ia-neon)" }} />
           CLASSES
         </div>
 
-        <span
-          className="badge"
-          style={{
-            background: `rgba(24,255,154,0.12)`,
-            color: IA.neon,
-            border: `1px solid ${IA.borderSoft}`,
-          }}
-        >
-          This week + next
-        </span>
+        <span className="ia-badge ia-badge-neon">This week + next</span>
       </div>
 
-      {msg && (
+      {msg ? (
         <div
           className="mb-2"
           style={{
             borderRadius: 999,
             padding: "8px 12px",
-            background: `rgba(24,255,154,0.14)`,
-            color: IA.neon,
-            border: `1px solid ${IA.borderSoft}`,
-            boxShadow: IA.glowSoft,
-            fontWeight: 800,
+            background: "rgba(24,255,154,0.14)",
+            color: "var(--ia-neon)",
+            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+            fontWeight: 600,
             fontSize: ".85rem",
           }}
         >
           {msg}
         </div>
-      )}
+      ) : null}
 
-      {err && <div className="alert alert-danger mb-2">{err}</div>}
+      {err ? <div className="alert alert-danger mb-2">{err}</div> : null}
 
       {emptyAll ? (
         <div className="text-dim small">No classes scheduled.</div>
