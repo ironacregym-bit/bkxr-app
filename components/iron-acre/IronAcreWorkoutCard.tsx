@@ -291,94 +291,97 @@ export default function IronAcreWorkoutCard({
         <div className="mt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12 }}>
           {weekRows.pending.length > 0 ? (
             <>
-              <div className="text-dim small mb-2">Pending</div>
-
-              {weekRows.pending.map((r) => (
-                <div key={`pending-${r.ymd}`} style={{ marginBottom: 12 }}>
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <div className="fw-semibold">
-                      {r.day} <span className="text-dim">({r.ymd})</span>
-                    </div>
-                    <span className="ia-badge">Pending</span>
-                  </div>
-
-                  <div className="d-flex flex-column" style={{ gap: 8 }}>
-                    {r.workouts.map((w) => {
-                      const href = `/gymworkout/${encodeURIComponent(w.id)}?date=${encodeURIComponent(r.ymd)}`;
-                      return (
-                        <Link key={w.id} href={href} className="ia-link">
-                          <div
-                            style={{
-                              padding: "10px 12px",
-                              borderRadius: 14,
-                              background: "rgba(255,255,255,0.05)",
-                              boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              gap: 10,
-                            }}
-                          >
-                            <div className="text-truncate" style={{ minWidth: 0 }}>
-                              <div className="fw-semibold text-truncate">{w.name || w.id}</div>
-                            </div>
+              <div className="ia-kicker mb-2">PENDING</div>
+          
+              <div className="d-flex flex-column" style={{ gap: 8 }}>
+                {weekRows.pending.flatMap((r) =>
+                  r.workouts.map((w) => {
+                    const href = `/gymworkout/${encodeURIComponent(w.id)}?date=${encodeURIComponent(r.ymd)}`;
+          
+                    return (
+                      {href}
+                        <div
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: 14,
+                            background: "rgba(255,255,255,0.05)",
+                            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 12,
+                          }}
+                        >
+                          <div className="text-truncate" style={{ minWidth: 0 }}>
+                            <span className="fw-semibold text-truncate">{w.name || w.id}</span>
+                            <span className="text-dim" style={{ margin: "0 8px" }}>
+                              |
+                            </span>
+                            <span className="text-dim">
+                              {r.day} ({r.ymd})
+                            </span>
+                          </div>
+          
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="ia-badge">Pending</span>
                             <i className="fas fa-chevron-right text-dim" />
                           </div>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+                        </div>
+                      </Link>
+                    );
+                  })
+                )}
+              </div>
             </>
           ) : null}
-
           {weekRows.completed.length > 0 ? (
             <>
-              <div className="text-dim small mb-2" style={{ marginTop: weekRows.pending.length ? 6 : 0 }}>
-                Completed
+              <div className="ia-kicker mb-2" style={{ marginTop: weekRows.pending.length ? 6 : 0 }}>
+                COMPLETED
               </div>
-
-              {weekRows.completed.map((r) => (
-                <div key={`done-${r.ymd}`} style={{ marginBottom: 12 }}>
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <div className="fw-semibold">
-                      {r.day} <span className="text-dim">({r.ymd})</span>
-                    </div>
-                    <span className="ia-badge ia-badge-neon" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-                      <i className="fas fa-check" />
-                      Completed
-                    </span>
-                  </div>
-
-                  <div className="d-flex flex-column" style={{ gap: 8 }}>
-                    {r.workouts.map((w) => {
-                      const href = `/gymworkout/${encodeURIComponent(w.id)}?date=${encodeURIComponent(r.ymd)}`;
-                      return (
-                        <Link key={w.id} href={href} className="ia-link">
-                          <div
-                            style={{
-                              padding: "10px 12px",
-                              borderRadius: 14,
-                              background: "rgba(255,255,255,0.05)",
-                              boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              gap: 10,
-                            }}
-                          >
-                            <div className="text-truncate" style={{ minWidth: 0 }}>
-                              <div className="fw-semibold text-truncate">{w.name || w.id}</div>
-                            </div>
+          
+              <div className="d-flex flex-column" style={{ gap: 8 }}>
+                {weekRows.completed.flatMap((r) =>
+                  r.workouts.map((w) => {
+                    const href = `/gymworkout/${encodeURIComponent(w.id)}?date=${encodeURIComponent(r.ymd)}`;
+          
+                    return (
+                      {href}
+                        <div
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: 14,
+                            background: "rgba(255,255,255,0.05)",
+                            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 12,
+                          }}
+                        >
+                          <div className="text-truncate" style={{ minWidth: 0 }}>
+                            <span className="fw-semibold text-truncate">{w.name || w.id}</span>
+                            <span className="text-dim" style={{ margin: "0 8px" }}>
+                              |
+                            </span>
+                            <span className="text-dim">
+                              {r.day} ({r.ymd})
+                            </span>
+                          </div>
+          
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="ia-badge ia-badge-neon" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                              <i className="fas fa-check" />
+                              Completed
+                            </span>
                             <i className="fas fa-chevron-right text-dim" />
                           </div>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+                        </div>
+                      </Link>
+                    );
+                  })
+                )}
+              </div>
             </>
           ) : null}
 
