@@ -5,8 +5,12 @@
    Design tokens
 ───────────────────────── */
 :root {
-  /* Font stack (uses next/font variable --font-sans) */
-  --ia-font: var(--font-sans), system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  /* Font stack
+     IMPORTANT:
+     - Use a fallback value for --font-sans so it never invalidates.
+     - The actual Google font variable (--font-sans) is provided by next/font on the element
+       that has appFont.variable applied (we use .ia-app for that). */
+  --ia-font: var(--font-sans, ui-sans-serif), system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 
   /* Weights */
   --ia-fw-body: 400;
@@ -65,12 +69,22 @@
 }
 
 /* ─────────────────────────
-   Global baseline
+   Global baseline (IMPORTANT)
+   Apply typography to .ia-app because that element has appFont.variable
+   which defines --font-sans. html/body do NOT inherit CSS variables from children.
 ───────────────────────── */
-html,
-body {
+.ia-app {
   font-family: var(--ia-font);
   font-weight: var(--ia-fw-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Keep html/body sane even before React mounts */
+html,
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -247,7 +261,9 @@ b {
   height: 100%;
 }
 
-/* Clickable tiles */
+/* ─────────────────────────
+   Clickable tiles
+───────────────────────── */
 .ia-link {
   text-decoration: none;
   color: #fff;
