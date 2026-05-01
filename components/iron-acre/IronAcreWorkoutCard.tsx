@@ -299,7 +299,7 @@ export default function IronAcreWorkoutCard({
                     const href = `/gymworkout/${encodeURIComponent(w.id)}?date=${encodeURIComponent(r.ymd)}`;
           
                     return (
-                      {href}
+                      <Link key={`${r.ymd}-${w.id}`} href={href} className="ia-link">
                         <div
                           style={{
                             padding: "10px 12px",
@@ -312,6 +312,7 @@ export default function IronAcreWorkoutCard({
                             gap: 12,
                           }}
                         >
+                      </Link>
                           <div className="text-truncate" style={{ minWidth: 0 }}>
                             <span className="fw-semibold text-truncate">{w.name || w.id}</span>
                             <span className="text-dim" style={{ margin: "0 8px" }}>
