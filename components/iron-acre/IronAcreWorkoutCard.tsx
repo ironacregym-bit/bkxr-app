@@ -64,7 +64,13 @@ type IronAcreWorkoutCardProps = {
 
 
 function flattenExercisesWithReps(w?: Workout | null) {
-  if (w.finisher) rounds.push(w.finisher);
+  const workout = w ?? null;
+  if (!workout) return [] as Array<{ name: string; reps?: string | null }>;
+
+  const rounds: Round[] = [];
+  if (workout.warmup) rounds.push(workout.warmup);
+  if (workout.main) rounds.push(workout.main);
+  if (workout.finisher) rounds.push(workout.finisher);
 
   const out: Array<{ name: string; reps?: string | null }> = [];
   for (const r of rounds) {
