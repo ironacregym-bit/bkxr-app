@@ -63,7 +63,7 @@ type IronAcreWorkoutCardProps = {
 };
 
 
-function flattenExercisesWithReps(w?: Workout | null) {);
+function flattenExercisesWithReps(w?: Workout | null) {
   if (w.finisher) rounds.push(w.finisher);
 
   const out: Array<{ name: string; reps?: string | null }> = [];
