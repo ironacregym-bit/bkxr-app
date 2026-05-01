@@ -111,7 +111,7 @@ function estimateSets(w?: Workout | null) {
 }
 
 
-unction dayLabelFromYMD(ymd: string) {
+function dayLabelFromYMD(ymd: string) {
   const d = new Date(`${ymd}T00:00:00`);
   return d.toLocaleDateString(undefined, { weekday: "short" });
 }
