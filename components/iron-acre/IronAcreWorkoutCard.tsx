@@ -398,58 +398,6 @@ export default function IronAcreWorkoutCard({
     </section>
   );
 }
-``
-import Link from "next/link";);
-  if (w.main) rounds.push(w.main);
-  if (w.finisher) rounds.push(w.finisher);
-
-  let total = 0;
-  for (const r of rounds) {
-    for (const it of r.items || []) {
-      if (it.type === "Single") total += Number(it.sets ?? 3);
-      else total += Number(it.sets ?? 3) * (it.items?.length || 1);
-    }
-  }
-  return total;
-}
-
-function dayLabelFromYMD(ymd: string) {
-  const d = new Date(`${ymd}T00:00:00`);
-  return d.toLocaleDateString(undefined, { weekday: "short" });
-}
-
-function buildWeekRows(weekDays: DayOverview[], dateKey: string, workoutId: string): WeekRows {
-  const rows: WeekRow[] = (weekDays || [])
-    .filter((d) => (d.recurringWorkouts || []).length > 0)
-    .map((d) => {
-      const isCompletedDay = Boolean(d.recurringDone);
-
-      const workouts = (d.recurringWorkouts || []).filter((w) => {
-        const isToday = d.dateKey === dateKey;
-        const isSameWorkout = workoutId && w.id === workoutId;
-
-        // Only hide today's workout when it is still pending (avoid duplicates)
-        if (isToday && isSameWorkout && !isCompletedDay) return false;
-
-        // If completed, always keep it visible under Completed
-        return true;
-      });
-
-      return {
-        ymd: d.dateKey,
-        day: dayLabelFromYMD(d.dateKey),
-        workouts,
-        done: isCompletedDay,
-      };
-    })
-    .filter((r) => r.workouts.length > 0);
-
-  return {
-    pending: rows.filter((r) => !r.done),
-    completed: rows.filter((r) => r.done),
-  };
-}
-
 export default function IronAcreWorkoutCard({
   workout,
   workoutId,
