@@ -191,12 +191,6 @@ export default function IronAcreWorkoutCard({
             No workout scheduled today
           </div>
           <div className="text-dim small mt-1">Check the “This week” section for upcoming sessions.</div>
-
-          <div className="mt-3">
-            <button type="button" className="btn btn-sm ia-btn" onClick={() => setShowWeek(true)}>
-              View this week <i className="fas fa-chevron-down" style={{ marginLeft: 8 }} />
-            </button>
-          </div>
         </>
       ) : (
         <>
