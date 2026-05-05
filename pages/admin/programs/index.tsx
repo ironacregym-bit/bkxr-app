@@ -1,6 +1,6 @@
 // File: pages/admin/programs/index.tsx
-import Head from "next/head;
-import Link from next/link";
+import Head from "next/head";
+import Link from "next/link";
 import useSWR from "swr";
 import { useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -95,43 +95,47 @@ export default function AdminProgramsPage() {
   const [addWorkoutId, setAddWorkoutId] = useState<string>("");
   const [addDay, setAddDay] = useState<number | null>(1);
   const [addOrder, setAddOrder] = useState<number>(1);
-  const [saving, setSaving] = useState<boolean>(false);
+  const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const { data: programsResp, error: programsErr, isLoading: programsLoading } = useSWR<ProgramsListResp>(
-    canAccess ? "/api/programs/admin/list" : null,
-    fetcher,
-    { revalidateOnFocus: false }
-  );
+  const { data: programsResp, error: programsErr, isLoading: programsLoading } =
+    useSWR<ProgramsListResp>(canAccess ? "/api/programs/admin/list" : null, fetcher, {
+      revalidateOnFocus: false,
+    });
 
-  const { data: workoutsResp, error: workoutsErr, isLoading: workoutsLoading } = useSWR<WorkoutsListResp>(
-    canAccess ? "/api/workouts/admin/list" : null,
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 30_000 }
-  );
+  const { data: workoutsResp, error: workoutsErr, isLoading: workoutsLoading } =
+    useSWR<WorkoutsListResp>(canAccess ? "/api/workouts/admin/list" : null, fetcher, {
+      revalidateOnFocus: false,
+      dedupingInterval: 30_000,
+    });
 
   const programs = Array.isArray(programsResp?.programs) ? programsResp!.programs! : [];
   const workouts = Array.isArray(workoutsResp?.workouts) ? workoutsResp!.workouts! : [];
 
-  const selectedProgram = useMemo(() => {
-    return programs.find((p) => p.program_id === selectedProgramId) || null;
-  }, [programs, selectedProgramId]);
+  const selectedProgram = useMemo(
+    () => programs.find((p) => p.program_id === selectedProgramId) || null,
+    [programs, selectedProgramId]
+  );
 
-  const scheduleKey = selectedProgramId ? `/api/programs/admin/${encodeURIComponent(selectedProgramId)}/schedule` : null;
+  const scheduleKey = selectedProgramId
+    ? `/api/programs/admin/${encodeURIComponent(selectedProgramId)}/schedule`
+    : null;
+
   const {
     data: scheduleResp,
     error: scheduleErr,
     isLoading: scheduleLoading,
     mutate: mutateSchedule,
-  } = useSWR<ScheduleResp>(canAccess ? scheduleKey : null, fetcher, { revalidateOnFocus: false });
+  } = useSWR<ScheduleResp>(canAccess ? scheduleKey : null, fetcher, {
+    revalidateOnFocus: false,
+  });
 
   const schedule = Array.isArray(scheduleResp?.schedule) ? scheduleResp!.schedule! : [];
 
   const workoutNameById = useMemo(() => {
     const m = new Map<string, string>();
     for (const w of workouts) {
-      if (!w?.workout_id) continue;
-      m.set(w.workout_id, String(w.workout_name || "Untitled workout"));
+      if (w?.workout_id) m.set(w.workout_id, w.workout_name || "Untitled workout");
     }
     return m;
   }, [workouts]);
@@ -149,8 +153,7 @@ export default function AdminProgramsPage() {
   }, [workouts, workoutSearch]);
 
   async function addWorkoutToProgram() {
-    if (!selectedProgramId) return;
-    if (!addWorkoutId) return;
+    if (!selectedProgramId || !addWorkoutId) return;
 
     try {
       setSaving(true);
@@ -165,7 +168,6 @@ export default function AdminProgramsPage() {
 
       await postJson(url, payload);
       await mutateSchedule();
-
       setAddWorkoutId("");
       setAddOrder(1);
     } catch (e: any) {
@@ -221,7 +223,9 @@ export default function AdminProgramsPage() {
         <div className="d-flex justify-content-between align-items-center mb-3">
           <div>
             <div className="ia-page-title">Programs</div>
-            <div className="ia-page-subtitle text-dim">Manage programs and attach workouts to schedules.</div>
+            <div className="ia-page-subtitle text-dim">
+              Manage programs and attach workouts to schedules.
+            </div>
           </div>
 
           <div className="d-flex gap-2">
@@ -240,182 +244,122 @@ export default function AdminProgramsPage() {
         <div className="row g-3">
           <div className="col-12 col-lg-5">
             <div className="ia-tile ia-tile-pad">
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="ia-kicker">Programs</div>
-                <div className="text-dim small">{programs.length} total</div>
-              </div>
+              <div className="ia-kicker">Programs</div>
 
-              <div className="mt-2">
-                <input
-                  className="form-control"
-                  placeholder="Search programs…"
-                  value={programSearch}
-                  onChange={(e) => setProgramSearch(e.target.value)}
-                />
-              </div>
+              <input
+                className="form-control mt-2"
+                placeholder="Search programs…"
+                value={programSearch}
+                onChange={(e) => setProgramSearch(e.target.value)}
+              />
 
-              <div className="mt-3">
-                {!programsLoading && programsErr && (
-                  <div className="text-danger">Failed to load programs.</div>
-                )}
-
-                {programsLoading && <div className="text-dim">Loading…</div>}
-
-                {!programsLoading && !programsErr && filteredPrograms.length === 0 && (
-                  <div className="text-dim">No programs found.</div>
-                )}
-
-                <div className="d-flex flex-column gap-2">
-                  {filteredPrograms.map((p) => {
-                    const isActive = p.program_id === selectedProgramId;
-                    const start = safeDateLabel(p.start_date);
-                    const weeks = p.weeks ?? "—";
-
-                    return (
-                      <button
-                        key={p.program_id}
-                        type="button"
-                        className={`ia-tile ia-tile-pad ia-tile-flat text-start ${isActive ? "ia-badge-neon" : ""}`}
-                        onClick={() => setSelectedProgramId(p.program_id)}
-                      >
-                        <div className="d-flex justify-content-between align-items-center">
-                          <div className="ia-tile-title">{p.name || "Untitled program"}</div>
-                          <div className="text-dim small">{weeks}w</div>
-                        </div>
-                        <div className="text-dim small">Start: {start}</div>
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="mt-3 d-flex flex-column gap-2">
+                {filteredPrograms.map((p) => {
+                  const isActive = p.program_id === selectedProgramId;
+                  return (
+                    <button
+                      key={p.program_id}
+                      type="button"
+                      className={`ia-tile ia-tile-pad ia-tile-flat text-start ${
+                        isActive ? "ia-badge-neon" : ""
+                      }`}
+                      onClick={() => setSelectedProgramId(p.program_id)}
+                    >
+                      <div className="d-flex justify-content-between">
+                        <div className="ia-tile-title">{p.name || "Untitled program"}</div>
+                        <div className="text-dim small">{p.weeks ?? "—"}w</div>
+                      </div>
+                      <div className="text-dim small">Start: {safeDateLabel(p.start_date)}</div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
 
           <div className="col-12 col-lg-7">
             <div className="ia-tile ia-tile-pad">
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="ia-kicker">Schedule</div>
-                <div className="text-dim small">
-                  {selectedProgram ? selectedProgram.name : "Select a program"}
-                </div>
-              </div>
+              <div className="ia-kicker">Schedule</div>
 
               {!selectedProgram && (
-                <div className="mt-3 text-dim">
-                  Pick a program on the left to view and edit its workout schedule.
-                </div>
+                <div className="text-dim mt-2">Select a program to view its schedule.</div>
               )}
 
               {selectedProgram && (
                 <>
-                  <div className="mt-3 ia-tile ia-tile-pad ia-tile-flat">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <div className="ia-tile-title">Add workout</div>
-                      <div className="text-dim small">Writes to programs/{selectedProgramId}/schedule</div>
+                  <div className="ia-tile ia-tile-pad ia-tile-flat mt-3">
+                    <div className="ia-tile-title mb-2">Add workout</div>
+
+                    <input
+                      className="form-control mb-2"
+                      placeholder="Search workouts…"
+                      value={workoutSearch}
+                      onChange={(e) => setWorkoutSearch(e.target.value)}
+                    />
+
+                    <select
+                      className="form-select mb-2"
+                      value={addWorkoutId}
+                      onChange={(e) => setAddWorkoutId(e.target.value)}
+                    >
+                      <option value="">Select workout…</option>
+                      {filteredWorkouts.map((w) => (
+                        <option key={w.workout_id} value={w.workout_id}>
+                          {w.workout_name || "Untitled workout"}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="d-flex gap-2">
+                      <select
+                        className="form-select"
+                        value={addDay ?? ""}
+                        onChange={(e) => setAddDay(e.target.value === "" ? null : Number(e.target.value))}
+                      >
+                        {DAY_OPTIONS.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
+
+                      <input
+                        className="form-control"
+                        type="number"
+                        value={addOrder}
+                        onChange={(e) => setAddOrder(Number(e.target.value))}
+                      />
                     </div>
 
-                    <div className="row g-2 mt-2">
-                      <div className="col-12">
-                        <input
-                          className="form-control"
-                          placeholder="Search workouts…"
-                          value={workoutSearch}
-                          onChange={(e) => setWorkoutSearch(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="col-12">
-                        <select
-                          className="form-select"
-                          value={addWorkoutId}
-                          onChange={(e) => setAddWorkoutId(e.target.value)}
-                        >
-                          <option value="">Select a workout…</option>
-                          {filteredWorkouts.map((w) => (
-                            <option key={w.workout_id} value={w.workout_id}>
-                              {w.workout_name || "Untitled workout"}
-                            </option>
-                          ))}
-                        </select>
-                        {!workoutsLoading && workoutsErr && (
-                          <div className="text-danger small mt-1">Failed to load workouts.</div>
-                        )}
-                      </div>
-
-                      <div className="col-7 col-md-8">
-                        <select
-                          className="form-select"
-                          value={addDay === null ? "" : String(addDay)}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            if (v === "") setAddDay(null);
-                            else setAddDay(Number(v));
-                          }}
-                        >
-                          {DAY_OPTIONS.map((d) => (
-                            <option key={d.value} value={String(d.value)}>
-                              {d.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="col-5 col-md-4">
-                        <input
-                          className="form-control"
-                          type="number"
-                          min={0}
-                          step={1}
-                          value={String(addOrder)}
-                          onChange={(e) => setAddOrder(Number(e.target.value))}
-                          placeholder="Order"
-                        />
-                      </div>
-
-                      <div className="col-12 d-flex justify-content-between align-items-center">
-                        <div className="text-dim small">
-                          Tip: keep “order” tight (1,2,3) to avoid messy schedules.
-                        </div>
-                        <button
-                          type="button"
-                          className="ia-btn ia-btn-primary"
-                          disabled={!addWorkoutId || saving}
-                          onClick={addWorkoutToProgram}
-                        >
-                          {saving ? "Adding…" : "Add"}
-                        </button>
-                      </div>
-
-                      {saveError && <div className="col-12 text-danger small">{saveError}</div>}
+                    <div className="mt-2 d-flex justify-content-end">
+                      <button
+                        type="button"
+                        className="ia-btn ia-btn-primary"
+                        disabled={!addWorkoutId || saving}
+                        onClick={addWorkoutToProgram}
+                      >
+                        {saving ? "Adding…" : "Add"}
+                      </button>
                     </div>
+
+                    {saveError && <div className="text-danger small mt-2">{saveError}</div>}
                   </div>
 
-                  <div className="mt-3">
-                    {scheduleLoading && <div className="text-dim">Loading schedule…</div>}
-                    {!scheduleLoading && scheduleErr && (
-                      <div className="text-danger">Failed to load schedule.</div>
-                    )}
-
-                    {!scheduleLoading && !scheduleErr && schedule.length === 0 && (
-                      <div className="text-dim">No workouts in this program yet.</div>
-                    )}
-
-                    <div className="d-flex flex-column gap-2">
-                      {schedule.map((row) => {
-                        const wName = workoutNameById.get(row.workout_id) || row.workout_id;
-                        return (
-                          <div key={row.schedule_id} className="ia-tile ia-tile-pad ia-tile-flat">
-                            <div className="d-flex justify-content-between align-items-center">
-                              <div className="ia-tile-title">{wName}</div>
-                              <div className="text-dim small">
-                                {dayLabel(row.day_of_week)} • #{row.order}
-                              </div>
-                            </div>
-                            <div className="text-dim small">Workout ID: {row.workout_id}</div>
+                  <div className="mt-3 d-flex flex-column gap-2">
+                    {schedule.map((row) => (
+                      <div key={row.schedule_id} className="ia-tile ia-tile-pad ia-tile-flat">
+                        <div className="d-flex justify-content-between">
+                          <div className="ia-tile-title">
+                            {workoutNameById.get(row.workout_id) || row.workout_id}
                           </div>
-                        );
-                      })}
-                    </div>
+                          <div className="text-dim small">
+                            {dayLabel(row.day_of_week)} • #{row.order}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {scheduleLoading && <div className="text-dim">Loading schedule…</div>}
+                    {scheduleErr && <div className="text-danger">Failed to load schedule.</div>}
                   </div>
                 </>
               )}
@@ -425,3 +369,4 @@ export default function AdminProgramsPage() {
       </main>
     </>
   );
+}
