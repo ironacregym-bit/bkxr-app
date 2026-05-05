@@ -1,3 +1,4 @@
+// File: components/gym-create/QuickAddExerciseModal.tsx
 "use client";
 
 import Link from "next/link";
@@ -38,21 +39,21 @@ export default function QuickAddExerciseModal({
       role="dialog"
       aria-modal="true"
       className="position-fixed top-0 start-0 w-100 h-100"
-      style={{ background: "rgba(0,0,0,0.6)", zIndex: 1050 }}
+      style={{ background: "rgba(0,0,0,0.62)", zIndex: 1050 }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="position-absolute top-50 start-50 translate-middle" style={{ width: "92vw", maxWidth: 680 }}>
-        <div className="futuristic-card p-3" onClick={(e) => e.stopPropagation()}>
+      <div className="position-absolute top-50 start-50 translate-middle" style={{ width: "92vw", maxWidth: 720 }}>
+        <div className="ia-tile ia-tile-pad" onClick={(e) => e.stopPropagation()}>
           <div className="d-flex align-items-center justify-content-between mb-2">
-            <h5 className="m-0">Quick add exercise</h5>
-            <button className="btn btn-sm btn-outline-light" style={{ borderRadius: 999 }} onClick={onClose}>
+            <div className="ia-tile-title">Quick add exercise</div>
+            <button className="ia-btn ia-btn-outline" onClick={onClose} disabled={busy} style={{ borderRadius: 999 }}>
               ✕
             </button>
           </div>
 
-          {error ? <div className="alert alert-danger py-2">{error}</div> : null}
+          {error ? <div className="alert alert-danger py-2 mb-3">{error}</div> : null}
 
           <div className="row g-2">
             <div className="col-12 col-md-6">
@@ -61,7 +62,7 @@ export default function QuickAddExerciseModal({
                 className="form-control"
                 value={form.exercise_name}
                 onChange={(e) => setForm((f) => ({ ...f, exercise_name: e.target.value }))}
-                placeholder="e.g., Barbell Row"
+                placeholder="e.g. Barbell Row"
               />
             </div>
 
@@ -71,7 +72,7 @@ export default function QuickAddExerciseModal({
                 className="form-control"
                 value={form.type}
                 onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-                placeholder="e.g., Pull"
+                placeholder="e.g. Pull"
               />
             </div>
 
@@ -81,7 +82,7 @@ export default function QuickAddExerciseModal({
                 className="form-control"
                 value={form.equipment}
                 onChange={(e) => setForm((f) => ({ ...f, equipment: e.target.value }))}
-                placeholder="e.g., Barbell"
+                placeholder="e.g. Barbell"
               />
             </div>
 
@@ -103,7 +104,7 @@ export default function QuickAddExerciseModal({
                 step="0.1"
                 value={form.met_value}
                 onChange={(e) => setForm((f) => ({ ...f, met_value: e.target.value }))}
-                placeholder="e.g., 6.0"
+                placeholder="e.g. 6.0"
               />
             </div>
 
@@ -120,18 +121,17 @@ export default function QuickAddExerciseModal({
           </div>
 
           <div className="d-flex justify-content-end gap-2 mt-3">
-            <button className="btn btn-outline-light" style={{ borderRadius: 24 }} onClick={onClose} disabled={busy}>
+            <button className="ia-btn ia-btn-outline" onClick={onClose} disabled={busy}>
               Cancel
             </button>
+
             <button
-              className="btn btn-primary"
-              style={{
-                borderRadius: 24,
-                background: `linear-gradient(135deg, ${accent}, #ff7f32)`,
-                border: "none",
-              }}
+              className="ia-btn ia-btn-primary"
               onClick={onSave}
               disabled={busy}
+              style={{
+                background: `linear-gradient(90deg, ${accent}, var(--ia-neon2))`,
+              }}
             >
               {busy ? "Saving…" : "Save & select"}
             </button>
@@ -139,10 +139,7 @@ export default function QuickAddExerciseModal({
 
           <div className="small text-dim mt-2">
             Need the full editor instead?{" "}
-            <Link href="/admin/exercises/create">
-              Open Create Exercise
-            </Link>
-          </div>
+            <Link href="/admin/exercises/create" className="ia-link" style={{ display: "inline"      </div>
         </div>
       </div>
     </div>
