@@ -41,7 +41,7 @@ type AdminWorkoutFetch = {
   recurring_day?: DayName | string | null;
   recurring_start?: any;
   recurring_end?: any;
-  assigned_to?: string[] | string | null;
+  assigned_to?: string | null;
 };
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
@@ -71,8 +71,9 @@ export default function GymCreateWorkoutPage() {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
+
   const basisOptions = useMemo(() => {
-    return Array.isArray(strengthList?.names) ? strengthList!.names! : [];
+    return Array.isArray(strengthList?.names) ? strengthList.names : [];
   }, [strengthList?.names]);
 
   const workoutKey = isEdit ? `/api/workouts/admin/${encodeURIComponent(editId)}` : null;
@@ -92,7 +93,7 @@ export default function GymCreateWorkoutPage() {
     }
 
     if (workoutResp && !initialWorkout) {
-      // Behaviour: freeze the first loaded workout snapshot so the form doesn't re-initialise
+      // Freeze the first loaded workout snapshot so the form doesn't re-initialise
       // if SWR revalidates or returns a new object reference.
       setInitialWorkout(workoutResp);
     }
