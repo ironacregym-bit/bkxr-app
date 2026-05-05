@@ -1,6 +1,6 @@
 // File: pages/admin/programs/index.tsx
 import Head from "next/head;
-import Link from "next/link";
+import Link from next/link";
 import useSWR from "swr";
 import { useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
