@@ -1,7 +1,9 @@
+// File: components/gym-create/RoundEditor.tsx
 "use client";
 
 import React from "react";
 import SingleExerciseEditor, { SingleItem } from "./SingleExerciseEditor";
+import type { ExerciseRow } from "./GymCreateWorkout.constants";
 
 export type GymRound = {
   name: string;
@@ -13,18 +15,28 @@ function renumber(items: SingleItem[]): SingleItem[] {
   return items.map((it, i) => ({ ...it, order: i + 1 }));
 }
 
+function newUid() {
+  return (globalThis.crypto as any)?.randomUUID?.() ?? `uid_${Math.random().toString(36).slice(2)}`;
+}
+
 export default function RoundEditor({
   title,
   value,
+  exercises,
+  basisOptions,
   onChange,
+  onQuickAddSingle,
 }: {
   title: string;
   value: GymRound;
+  exercises: ExerciseRow[];
+  basisOptions?: string[];
   onChange: (r: GymRound) => void;
+  onQuickAddSingle: (idx: number) => void;
 }) {
   function addSingle() {
     const next: SingleItem = {
-      uid: (globalThis.crypto as any)?.randomUUID?.() ?? `uid_${Math.random().toString(36).slice(2)}`,
+      uid: newUid(),
       type: "Single",
       order: (value.items?.length || 0) + 1,
       exercise_id: "",
@@ -54,16 +66,11 @@ export default function RoundEditor({
   }
 
   return (
-    <section className="futuristic-card p-3 mb-3">
+    <section className="ia-tile ia-tile-pad mb-3">
       <div className="d-flex justify-content-between align-items-center mb-2">
-        <h6 className="m-0">{title}</h6>
+        <div className="ia-tile-title">{title}</div>
 
-        <button
-          type="button"
-          className="btn btn-sm"
-          style={{ borderRadius: 24 }}
-          onClick={addSingle}
-        >
+        <button type="button" className="ia-btn ia-btn-primary" onClick={addSingle}>
           + Single
         </button>
       </div>
@@ -71,19 +78,19 @@ export default function RoundEditor({
       {(value.items || []).length === 0 ? (
         <div className="small text-dim">No exercises yet.</div>
       ) : (
-        (value.items || []).map((it, idx) => (
-
-      <SingleExerciseEditor
-        key={it.uid}
-        value={it}
-        exercises={exercises}
-        basisOptions={basisOptions}
-        onChange={(patch) => updateItem(idx, patch)}
-        onDelete={() => removeItem(idx)}
-        onQuickAdd={() => onQuickAddSingle(idx)}
-      />
-
-        ))
+        <div className="d-flex flex-column gap-2">
+          {(value.items || []).map((it, idx) => (
+            <SingleExerciseEditor
+              key={it.uid}
+              value={it}
+              exercises={exercises}
+              basisOptions={basisOptions}
+              onChange={(patch) => updateItem(idx, patch)}
+              onDelete={() => removeItem(idx)}
+              onQuickAdd={() => onQuickAddSingle(idx)}
+            />
+          ))}
+        </div>
       )}
     </section>
   );
