@@ -1,10 +1,7 @@
-"use client";
-
 import Head from "next/head";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import BottomNav from "../../../components/BottomNav";
-
 import ProgramMetaStep from "../../../components/program-create/ProgramMetaStep";
 import ProgramScheduleStep, {
   ProgramScheduleItem,
@@ -29,8 +26,19 @@ export type ProgramDraft = {
   };
 };
 
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const json = (await res.json().catch(() => ({}))) as any;
+  if (!res.ok) throw new Error(json?.error || "Request failed");
+  return json as T;
+}
+
 export default function CreateProgramPage() {
-  // ✅ Hooks MUST be called unconditionally at the top level
   const { data: session, status } = useSession();
   const role = (session?.user as any)?.role || "user";
 
@@ -49,13 +57,7 @@ export default function CreateProgramPage() {
   async function createProgram() {
     try {
       setCreating(true);
-      const res = await fetch("/api/programs/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(program),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to create program");
+      await postJson<{ ok?: boolean; program_id?: string }>("/api/programs/create", program);
       alert("Program created ✅");
     } catch (e: any) {
       alert(e?.message || "Failed to create program");
@@ -64,15 +66,23 @@ export default function CreateProgramPage() {
     }
   }
 
-  // ✅ Now it’s safe to early-return (hooks already ran)
   if (status === "loading") {
-    return <div className="container py-4">Checking access…</div>;
+    return (
+      <div className="container py-4 text-white">
+        <div className="ia-tile ia-tile-pad">
+          <div className="text-dim">Checking access…</div>
+        </div>
+      </div>
+    );
   }
 
   if (!session || (role !== "admin" && role !== "gym")) {
     return (
-      <div className="container py-4">
-        <h3>Access denied</h3>
+      <div className="container py-4 text-white">
+        <div className="ia-tile ia-tile-pad">
+          <div className="ia-page-title">Access denied</div>
+          <div className="text-dim">You do not have permission to view this page.</div>
+        </div>
       </div>
     );
   }
@@ -83,57 +93,60 @@ export default function CreateProgramPage() {
         <title>Create Training Program • Admin</title>
       </Head>
 
-      <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
-        <h2 className="mb-3">Create Training Program</h2>
+      <main className="container py-3 text-white" style={{ paddingBottom: 90 }}>
+        <div className="ia-page-title">Create training program</div>
+        <div className="ia-page-subtitle text-dim">Build a 12-week block, schedule workouts, and set weekly %.</div>
 
-        {step === 1 && (
-          <ProgramMetaStep
-            value={{
-              name: program.name,
-              start_date: program.start_date,
-              weeks: program.weeks,
-              assigned_to: program.assigned_to,
-            }}
-            onChange={(patch) => setProgram((p) => ({ ...p, ...patch }))}
-            onNext={() => setStep(2)}
-          />
-        )}
+        <div className="mt-3 ia-tile ia-tile-pad">
+          {step === 1 && (
+            <ProgramMetaStep
+              value={{
+                name: program.name,
+                start_date: program.start_date,
+                weeks: program.weeks,
+                assigned_to: program.assigned_to,
+              }}
+              onChange={(patch) => setProgram((p) => ({ ...p, ...patch }))}
+              onNext={() => setStep(2)}
+            />
+          )}
 
-        {step === 2 && (
-          <ProgramScheduleStep
-            value={program.schedule}
-            onChange={(schedule) => setProgram((p) => ({ ...p, schedule }))}
-            onBack={() => setStep(1)}
-            onNext={() => setStep(3)}
-          />
-        )}
+          {step === 2 && (
+            <ProgramScheduleStep
+              value={program.schedule}
+              onChange={(schedule) => setProgram((p) => ({ ...p, schedule }))}
+              onBack={() => setStep(1)}
+              onNext={() => setStep(3)}
+            />
+          )}
 
-        {step === 3 && (
-          <ProgramProgressionStep
-            weeks={program.weeks}
-            schedule={program.schedule}
-            value={program.week_overrides}
-            onChange={(week_overrides) => setProgram((p) => ({ ...p, week_overrides }))}
-            onBack={() => setStep(2)}
-            onNext={() => setStep(4)}
-          />
-        )}
+          {step === 3 && (
+            <ProgramProgressionStep
+              weeks={program.weeks}
+              schedule={program.schedule}
+              value={program.week_overrides}
+              onChange={(week_overrides) => setProgram((p) => ({ ...p, week_overrides }))}
+              onBack={() => setStep(2)}
+              onNext={() => setStep(4)}
+            />
+          )}
 
-        {step === 4 && (
-          <ProgramReviewStep
-            program={{
-              name: program.name,
-              start_date: program.start_date,
-              weeks: program.weeks,
-              assigned_to: program.assigned_to,
-            }}
-            schedule={program.schedule}
-            week_overrides={program.week_overrides}
-            onBack={() => setStep(3)}
-            onCreate={createProgram}
-            creating={creating}
-          />
-        )}
+          {step === 4 && (
+            <ProgramReviewStep
+              program={{
+                name: program.name,
+                start_date: program.start_date,
+                weeks: program.weeks,
+                assigned_to: program.assigned_to,
+              }}
+              schedule={program.schedule}
+              week_overrides={program.week_overrides}
+              onBack={() => setStep(3)}
+              onCreate={createProgram}
+              creating={creating}
+            />
+          )}
+        </div>
       </main>
 
       <BottomNav />
