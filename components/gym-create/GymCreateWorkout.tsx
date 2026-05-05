@@ -1,3 +1,4 @@
+// File: components/gym-create/GymCreateWorkout.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -19,17 +20,7 @@ import {
 } from "./GymCreateWorkout.constants";
 import { IA } from "../iron-acre/theme";
 
-export default function GymCreateWorkout({
-  isEdit,
-  editId,
-  ownerEmail,
-  exercises,
-  basisOptions,
-  initialWorkout,
-  initialWorkoutError,
-  onExercisesCreated,
-  onDone,
-}: {
+type Props = {
   isEdit: boolean;
   editId: string;
   ownerEmail: string;
@@ -39,9 +30,47 @@ export default function GymCreateWorkout({
   initialWorkoutError: string | null;
   onExercisesCreated: () => Promise<void> | void;
   onDone: (workoutId: string) => void;
-}) {
+};
+
+function normaliseEmail(s: string) {
+  return String(s || "").trim().toLowerCase();
+}
+
+function ensureExerciseInList(list: ExerciseRow[], candidate: ExerciseRow): ExerciseRow[] {
+  const id = String(candidate.id || "").trim();
+  const name = String(candidate.exercise_name || "").trim();
+  if (!id || !name) return list;
+
+  const exists = list.some((e) => String(e.id).trim() === id);
+  if (exists) return list;
+
+  // Prepend new exercise so it’s easy to see/select right away
+  return [{ id, exercise_name: name, type: candidate.type }, ...list];
+}
+
+export default function GymCreateWorkout(props: Props) {
+  const {
+    isEdit,
+    editId,
+    ownerEmail,
+    exercises,
+    basisOptions,
+    initialWorkout,
+    initialWorkoutError,
+    onExercisesCreated,
+    onDone,
+  } = props;
+
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // Local copy so Quick Add can immediately update selects without waiting on SWR/endpoint revalidate
+  const [exerciseOptions, setExerciseOptions] = useState<ExerciseRow[]>(() => exercises || []);
+
+  useEffect(() => {
+    // Sync down any fresh list from parent (SWR mutate)
+    if (Array.isArray(exercises)) setExerciseOptions(exercises);
+  }, [exercises]);
 
   const [meta, setMetaState] = useState({
     workout_name: "",
@@ -54,7 +83,9 @@ export default function GymCreateWorkout({
     recurring_day: "Monday" as (typeof DAYS)[number],
     recurring_start: "" as string,
     recurring_end: "" as string,
-    assigned_to: ownerEmail || "",
+
+    // NOTE: currently this is just an email string; we’ll convert to a proper member picker in GymCreateWorkoutForm
+    assigned_to: normaliseEmail(ownerEmail) || "",
   });
 
   const [warmup, setWarmup] = useState<GymRound | null>({ name: "Warm Up", order: 1, items: [] });
@@ -103,7 +134,7 @@ export default function GymCreateWorkout({
       recurring_day: day,
       recurring_start: toYMD(w.recurring_start),
       recurring_end: toYMD(w.recurring_end),
-      assigned_to: String((w.assigned_to || ownerEmail || "") as any).toLowerCase(),
+      assigned_to: normaliseEmail(String((w.assigned_to || ownerEmail || "") as any)),
     }));
 
     const uiWarm = toUIRound(w.warmup, "Warm Up", 1);
@@ -120,9 +151,7 @@ export default function GymCreateWorkout({
 
   // Surface initialWorkoutError if present
   useEffect(() => {
-    if (initialWorkoutError) {
-      setMsg(initialWorkoutError);
-    }
+    if (initialWorkoutError) setMsg(initialWorkoutError);
   }, [initialWorkoutError]);
 
   function getRoundSetter(round: "warmup" | "main" | "finisher") {
@@ -219,7 +248,6 @@ export default function GymCreateWorkout({
 
     // superset sub
     const { round, idx, subIdx } = quickTarget;
-    // patch the superset item by updating the sub item
     const setter = getRoundSetter(round);
     setter((prev: any) => {
       if (!prev) return prev;
@@ -267,8 +295,15 @@ export default function GymCreateWorkout({
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to create exercise");
 
+      const newId: string = String(json?.exercise_id || body.exercise_name).trim();
+
+      // Optimistically add it so dropdowns update instantly
+      setExerciseOptions((prev) =>
+        ensureExerciseInList(prev, { id: newId, exercise_name: body.exercise_name, type: body.type || undefined })
+      );
+
+      // Still refresh the canonical list (SWR in parent page)
       await Promise.resolve(onExercisesCreated());
-      const newId: string = json?.exercise_id || body.exercise_name;
 
       applyQuickSelection(newId);
       setQuickOpen(false);
@@ -374,7 +409,7 @@ export default function GymCreateWorkout({
         recurring_day: meta.recurring ? meta.recurring_day : null,
         recurring_start: meta.recurring ? toISODateOrNull(meta.recurring_start) : null,
         recurring_end: meta.recurring ? toISODateOrNull(meta.recurring_end) : null,
-        assigned_to: meta.recurring ? meta.assigned_to.trim().toLowerCase() : null,
+        assigned_to: meta.recurring ? normaliseEmail(meta.assigned_to) : null,
       };
 
       const url = isEdit ? "/api/workouts/admin/update" : "/api/workouts/gym-create";
@@ -402,7 +437,7 @@ export default function GymCreateWorkout({
       <GymCreateWorkoutForm
         isEdit={isEdit}
         ownerEmail={ownerEmail}
-        exercises={exercises}
+        exercises={exerciseOptions}
         basisOptions={basisOptions}
         meta={meta}
         setMeta={setMeta}
