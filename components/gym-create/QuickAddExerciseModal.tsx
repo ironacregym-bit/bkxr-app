@@ -139,7 +139,7 @@ export default function QuickAddExerciseModal({
 
           <div className="small text-dim mt-2">
             Need the full editor instead?{" "}
-            <Link href="/admin/exercises/create" className="ia-link" style={{ display: "inline"      </div>
+            <Link href="/admin/exercises/create" className="ia-link" style={{ display: "inline" }} </div>
         </div>
       </div>
     </div>
