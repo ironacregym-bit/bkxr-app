@@ -51,6 +51,36 @@ function normaliseEditId(raw: unknown): string {
   return raw.trim();
 }
 
+function normaliseExercisesPayload(raw: any): ExerciseRow[] {
+  // Be tolerant: different endpoints/pages often return different property names.
+  const arr =
+    (Array.isArray(raw?.exercises) && raw.exercises) ||
+    (Array.isArray(raw?.items) && raw.items) ||
+    (Array.isArray(raw?.results) && raw.results) ||
+    (Array.isArray(raw?.data) && raw.data) ||
+    [];
+
+  const mapped: ExerciseRow[] = arr
+    .map((x: any) => {
+      const id = String(x?.id || x?._id || x?.exercise_id || x?.slug || x?.name || "").trim();
+      const exercise_name = String(x?.exercise_name || x?.name || x?.title || "").trim();
+      const type = x?.type ? String(x.type) : undefined;
+      if (!id || !exercise_name) return null;
+      return { id, exercise_name, type };
+    })
+    .filter(Boolean) as ExerciseRow[];
+
+  // De-dupe by id (avoid dropdown duplicates)
+  const seen = new Set<string>();
+  const deduped: ExerciseRow[] = [];
+  for (const ex of mapped) {
+    if (seen.has(ex.id)) continue;
+    seen.add(ex.id);
+    deduped.push(ex);
+  }
+  return deduped;
+}
+
 export default function GymCreateWorkoutPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -65,7 +95,10 @@ export default function GymCreateWorkoutPage() {
   const { data: exData, mutate: mutateExercises } = useSWR("/api/exercises?limit=1000", fetcher, {
     revalidateOnFocus: false,
   });
-  const exercises: ExerciseRow[] = Array.isArray(exData?.exercises) ? exData.exercises : [];
+
+  const exercises: ExerciseRow[] = useMemo(() => {
+    return normaliseExercisesPayload(exData);
+  }, [exData]);
 
   const { data: strengthList } = useSWR<StrengthExercisesResp>("/api/strength/exercises/list", fetcher, {
     revalidateOnFocus: false,
@@ -118,7 +151,7 @@ export default function GymCreateWorkoutPage() {
       <div className="container py-4 text-white">
         <div className="ia-tile ia-tile-pad">
           <div className="ia-page-title">Access denied</div>
-          <div className="text-dim">You do not have permission to view this page.</div>
+          <div className="ia-page-subtitle">You do not have permission to view this page.</div>
           <div className="mt-3">
             <Link href="/admin" className="ia-btn ia-btn-outline">
               Back to admin
@@ -143,7 +176,7 @@ export default function GymCreateWorkoutPage() {
         </div>
 
         <div className="ia-page-title">{isEdit ? "Edit gym workout" : "Create gym workout"}</div>
-        <div className="ia-page-subtitle text-dim">
+        <div className="ia-page-subtitle">
           {isEdit ? "Update the workout and assignments." : "Build a workout and optionally set recurrence."}
         </div>
 
