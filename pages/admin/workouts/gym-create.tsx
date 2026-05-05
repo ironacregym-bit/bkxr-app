@@ -1,14 +1,12 @@
-"use client";
-
+// File: pages/admin/workouts/gym-create.tsx
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import useSWR from "swr";
+import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../../../components/BottomNav";
 import GymCreateWorkout from "../../../components/gym-create/GymCreateWorkout";
-
-const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 type ExerciseRow = { id: string; exercise_name: string; type?: string };
 
@@ -43,8 +41,15 @@ type AdminWorkoutFetch = {
   recurring_day?: DayName | string | null;
   recurring_start?: any;
   recurring_end?: any;
-  assigned_to?: string | null;
+  assigned_to?: string[] | string | null;
 };
+
+const fetcher = (u: string) => fetch(u).then((r) => r.json());
+
+function normaliseEditId(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  return raw.trim();
+}
 
 export default function GymCreateWorkoutPage() {
   const { data: session, status } = useSession();
@@ -54,7 +59,7 @@ export default function GymCreateWorkoutPage() {
   const role = (session?.user as any)?.role || "user";
 
   const editIdRaw = (router.query.edit as string) || (router.query.id as string) || "";
-  const editId = (typeof editIdRaw === "string" ? editIdRaw.trim() : "") || "";
+  const editId = normaliseEditId(editIdRaw);
   const isEdit = Boolean(editId);
 
   const { data: exData, mutate: mutateExercises } = useSWR("/api/exercises?limit=1000", fetcher, {
@@ -66,7 +71,9 @@ export default function GymCreateWorkoutPage() {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
-  const basisOptions = Array.isArray(strengthList?.names) ? strengthList!.names! : [];
+  const basisOptions = useMemo(() => {
+    return Array.isArray(strengthList?.names) ? strengthList!.names! : [];
+  }, [strengthList?.names]);
 
   const workoutKey = isEdit ? `/api/workouts/admin/${encodeURIComponent(editId)}` : null;
   const { data: workoutResp, error: workoutErr } = useSWR<AdminWorkoutFetch>(workoutKey, fetcher, {
@@ -74,16 +81,49 @@ export default function GymCreateWorkoutPage() {
     dedupingInterval: 30_000,
   });
 
-  // ✅ Early returns AFTER hooks
+  const [initialWorkout, setInitialWorkout] = useState<AdminWorkoutFetch | null>(null);
+  const [initialWorkoutError, setInitialWorkoutError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isEdit) {
+      setInitialWorkout(null);
+      setInitialWorkoutError(null);
+      return;
+    }
+
+    if (workoutResp && !initialWorkout) {
+      // Behaviour: freeze the first loaded workout snapshot so the form doesn't re-initialise
+      // if SWR revalidates or returns a new object reference.
+      setInitialWorkout(workoutResp);
+    }
+
+    if (workoutErr) {
+      setInitialWorkoutError(String((workoutErr as any)?.message || workoutErr));
+    }
+  }, [isEdit, workoutResp, workoutErr, initialWorkout]);
+
   if (status === "loading") {
-    return <div className="container py-4">Checking access…</div>;
+    return (
+      <div className="container py-4 text-white">
+        <div className="ia-tile ia-tile-pad">
+          <div className="text-dim">Checking access…</div>
+        </div>
+      </div>
+    );
   }
 
   if (!session || (role !== "admin" && role !== "gym")) {
     return (
-      <div className="container py-4">
-        <h3>Access Denied</h3>
-        <p>You do not have permission to view this page.</p>
+      <div className="container py-4 text-white">
+        <div className="ia-tile ia-tile-pad">
+          <div className="ia-page-title">Access denied</div>
+          <div className="text-dim">You do not have permission to view this page.</div>
+          <div className="mt-3">
+            <Link href="/admin" className="ia-btn ia-btn-outline">
+              Back to admin
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
@@ -94,24 +134,31 @@ export default function GymCreateWorkoutPage() {
         <title>{isEdit ? "Edit Gym Workout • Admin" : "Create Gym Workout • Admin"}</title>
       </Head>
 
-      <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
+      <main className="container py-3 text-white" style={{ paddingBottom: 90 }}>
         <div className="mb-3">
-          <Link href="/admin" className="btn btn-outline-secondary">
-            ← Back to Admin
+          <Link href="/admin" className="ia-btn ia-btn-outline">
+            ← Back to admin
           </Link>
         </div>
 
-        <GymCreateWorkout
-          isEdit={isEdit}
-          editId={editId}
-          ownerEmail={ownerEmail}
-          exercises={exercises}
-          basisOptions={basisOptions}
-          initialWorkout={workoutResp ?? null}
-          initialWorkoutError={workoutErr ? String((workoutErr as any)?.message || workoutErr) : null}
-          onExercisesCreated={() => mutateExercises()}
-          onDone={(workoutId) => router.push(`/admin/workouts/${workoutId}`)}
-        />
+        <div className="ia-page-title">{isEdit ? "Edit gym workout" : "Create gym workout"}</div>
+        <div className="ia-page-subtitle text-dim">
+          {isEdit ? "Update the workout and assignments." : "Build a workout and optionally set recurrence."}
+        </div>
+
+        <div className="mt-3 ia-tile ia-tile-pad">
+          <GymCreateWorkout
+            isEdit={isEdit}
+            editId={editId}
+            ownerEmail={ownerEmail}
+            exercises={exercises}
+            basisOptions={basisOptions}
+            initialWorkout={initialWorkout}
+            initialWorkoutError={initialWorkoutError}
+            onExercisesCreated={() => mutateExercises()}
+            onDone={(workoutId) => router.push(`/admin/workouts/${workoutId}`)}
+          />
+        </div>
       </main>
 
       <BottomNav />
