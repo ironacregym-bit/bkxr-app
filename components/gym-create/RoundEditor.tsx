@@ -72,12 +72,17 @@ export default function RoundEditor({
         <div className="small text-dim">No exercises yet.</div>
       ) : (
         (value.items || []).map((it, idx) => (
-          <SingleExerciseEditor
-            key={it.uid}
-            value={it}
-            onChange={(patch) => updateItem(idx, patch)}
-            onDelete={() => removeItem(idx)}
-          />
+
+      <SingleExerciseEditor
+        key={it.uid}
+        value={it}
+        exercises={exercises}
+        basisOptions={basisOptions}
+        onChange={(patch) => updateItem(idx, patch)}
+        onDelete={() => removeItem(idx)}
+        onQuickAdd={() => onQuickAddSingle(idx)}
+      />
+
         ))
       )}
     </section>
