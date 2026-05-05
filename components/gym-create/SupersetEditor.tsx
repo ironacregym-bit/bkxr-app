@@ -1,3 +1,4 @@
+// File: components/gym-create/SupersetEditor.tsx
 "use client";
 
 import React from "react";
@@ -50,11 +51,8 @@ export default function SupersetEditor({
     <div className="row g-2 mb-2">
       <div className="col-12 col-md-4">
         <label className="form-label">Superset name</label>
-        <input
-          className="form-control"
-          value={value.name ?? ""}
-          onChange={(e) => onChange({ name: e.target.value })}
-        />
+        <input className="form-control" value={value.name ?? ""} onChange={(e) => onChange({ name: e.target.value })} />
+
         <div className="row mt-2 g-2">
           <div className="col-6">
             <label className="form-label">Sets (rounds)</label>
@@ -77,6 +75,7 @@ export default function SupersetEditor({
             />
           </div>
         </div>
+
         <div className="mt-2">
           <label className="form-label">Instructions / notes</label>
           <textarea
@@ -87,13 +86,9 @@ export default function SupersetEditor({
             placeholder='e.g. "Cluster: 4-4-4 with 15s intra-rest" or "Contrast: 80% then 60%"'
           />
         </div>
+
         <div className="mt-3">
-          <button
-            type="button"
-            className="btn btn-outline-danger"
-            onClick={onDelete}
-            style={{ borderRadius: 12 }}
-          >
+          <button type="button" className="ia-btn ia-btn-outline" onClick={onDelete}>
             Delete superset
           </button>
         </div>
@@ -115,11 +110,7 @@ export default function SupersetEditor({
 
               <div className="col-6 col-md-3">
                 <label className="form-label">Reps</label>
-                <input
-                  className="form-control"
-                  value={s.reps ?? ""}
-                  onChange={(e) => updateSub(sidx, { reps: e.target.value })}
-                />
+                <input className="form-control" value={s.reps ?? ""} onChange={(e) => updateSub(sidx, { reps: e.target.value })} />
               </div>
 
               {!s.strength ? (
@@ -130,9 +121,7 @@ export default function SupersetEditor({
                     type="number"
                     min={0}
                     value={s.weight_kg ?? ""}
-                    onChange={(e) =>
-                      updateSub(sidx, { weight_kg: Number(e.target.value) || null })
-                    }
+                    onChange={(e) => updateSub(sidx, { weight_kg: Number(e.target.value) || null })}
                   />
                 </div>
               ) : (
@@ -147,7 +136,7 @@ export default function SupersetEditor({
               <div className="col-2 col-md-2 d-flex">
                 <button
                   type="button"
-                  className="btn btn-outline-danger ms-auto"
+                  className="ia-btn ia-btn-outline ms-auto"
                   onClick={() => removeSub(sidx)}
                   title="Remove exercise"
                 >
@@ -159,9 +148,7 @@ export default function SupersetEditor({
                 <StrengthPrescriptionEditor
                   value={s.strength ?? null}
                   basisOptions={basisOptions}
-                  onChange={(strength: StrengthSpec | null) =>
-                    updateSub(sidx, { strength, weight_kg: null })
-                  }
+                  onChange={(strength: StrengthSpec | null) => updateSub(sidx, { strength, weight_kg: null })}
                 />
               </div>
             </div>
@@ -170,12 +157,7 @@ export default function SupersetEditor({
           <div className="text-dim small">No exercises yet.</div>
         )}
 
-        <button
-          type="button"
-          className="btn btn-sm"
-          style={neonButtonStyle({ borderRadius: 24 })}
-          onClick={addSub}
-        >
+        <button type="button" className="btn btn-sm" style={neonButtonStyle({ borderRadius: 24 })} onClick={addSub}>
           + Add Exercise to Superset
         </button>
       </div>
