@@ -28,11 +28,13 @@ function pickName(p: any, fallback: string) {
   );
 }
 
-function mapProductsToFoods(products: any[], fallbackQuery: string): Food[] {
+function mapProducts(products: any[], fallbackQuery: string): Food[] {
   return (products || [])
     .filter((p: any) => p?.nutriments)
     .map((p: any) => {
-      const calories = toNum(p.nutriments?.["energy-kcal_100g"] ?? p.nutriments?.["energy_100g"]);
+      const calories = toNum(
+        p.nutriments?.["energy-kcal_100g"] ?? p.nutriments?.["energy_100g"]
+      );
       return {
         id: String(p.code),
         code: String(p.code),
@@ -60,13 +62,11 @@ async function fetchOFF(url: string) {
   const r = await fetch(url, {
     headers: {
       "Accept-Language": "en-GB,en;q=0.9",
-      // Not strictly required, but helps with some proxies/caches
-      "User-Agent": "BXKR/1.0 (nutrition search)",
+      "User-Agent": "BXKR/1.0 (nutrition-search)",
     },
   });
   if (!r.ok) return null;
-  const j = await r.json().catch(() => null);
-  return j;
+  return r.json().catch(() => null);
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -74,7 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const barcode = String(req.query.barcode || "").trim();
 
   try {
-    // Barcode lookup takes precedence when provided
+    // Barcode lookup takes precedence
     if (barcode && barcode.length >= 6) {
       const url = `https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode)}.json`;
       const data = await fetchOFF(url);
@@ -107,26 +107,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const urlUK =
       `https://world.openfoodfacts.org/cgi/search.pl?` +
       `search_terms=${encodeURIComponent(query)}` +
-      `&search_simple=1&action=process&json=1&page_size=30` +
-      `&lc=en&tags_lc=en` +
+      `&search_simple=1` +
+      `&action=process` +
+      `&json=1` +
+      `&page_size=30` +
+      `&lc=en` +
+      `&tags_lc=en` +
       `&countries=United%20Kingdom`;
 
     const dataUK = await fetchOFF(urlUK);
-    const foodsUK = dataUK?.products ? boostSort(mapProductsToFoods(dataUK.products, query)) : [];
+    const foodsUK = dataUK?.products ? boostSort(mapProducts(dataUK.products, query)) : [];
 
     if (foodsUK.length > 0) {
       return res.status(200).json({ foods: foodsUK });
     }
 
-    // 2) Fallback: global English (prevents “chicken” returning nothing)
+    // 2) Fallback: global English
     const urlGlobal =
       `https://world.openfoodfacts.org/cgi/search.pl?` +
       `search_terms=${encodeURIComponent(query)}` +
-      `&search_simple=1&action=process&json=1&page_size=30` +
-      `&lc=en&tags_lc=en`;
+      `&search_simple=1` +
+      `&action=process` +
+      `&json=1` +
+      `&page_size=30` +
+      `&lc=en` +
+      `&tags_lc=en`;
 
     const dataGlobal = await fetchOFF(urlGlobal);
-    const foodsGlobal = dataGlobal?.products ? boostSort(mapProductsToFoods(dataGlobal.products, query)) : [];
+    const foodsGlobal = dataGlobal?.products ? boostSort(mapProducts(dataGlobal.products, query)) : [];
 
     return res.status(200).json({ foods: foodsGlobal });
   } catch (err) {
