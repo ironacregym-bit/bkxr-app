@@ -1,5 +1,6 @@
-
 "use client";
+
+// File: components/nutrition/BarcodeScannerGate.tsx
 
 import React from "react";
 
@@ -12,28 +13,44 @@ export default function BarcodeScannerGate({
 }) {
   if (!isPremium) {
     return (
-      <div className="futuristic-card p-3 mb-2">
-        <div className="d-flex align-items-center justify-content-between">
-          <div>
-            <div className="fw-bold">Barcode scanner</div>
-            <div className="small text-dim">Premium feature — unlock with 14‑day free trial or member code.</div>
+      <div
+        className="d-flex align-items-center justify-content-between"
+        style={{
+          padding: "12px 12px",
+          borderRadius: 14,
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.06)",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div className="fw-semibold">Barcode scanner</div>
+          <div className="text-dim small" style={{ lineHeight: 1.2 }}>
+            Premium feature — unlock with 14‑day free trial or member code.
           </div>
-          <button className="btn btn-bxkr-outline" disabled title="Premium required">
-            <i className="fas fa-lock me-1" /> Locked
-          </button>
         </div>
+
+        <button type="button" className="ia-btn ia-btn-outline" disabled title="Premium required">
+          <i className="fas fa-lock me-1" /> Locked
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="futuristic-card p-3 mb-2">
-      <div className="d-flex align-items-center justify-content-between">
-        <div className="fw-bold">Barcode scanner</div>
-        <button className="btn btn-bxkr" onClick={onScanRequested}>
-          Scan barcode
-        </button>
-      </div>
+    <div
+      className="d-flex align-items-center justify-content-between"
+      style={{
+        padding: "12px 12px",
+        borderRadius: 14,
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.06)",
+      }}
+    >
+      <div className="fw-semibold">Barcode scanner</div>
+
+      <button type="button" className="ia-btn ia-btn-primary" onClick={onScanRequested}>
+        Scan barcode
+      </button>
     </div>
   );
 }
