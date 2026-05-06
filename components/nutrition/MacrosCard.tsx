@@ -73,3 +73,58 @@ export default function MacrosCard({
 
       {/* One row: calories ring + mini rings column */}
       <div className="d-flex align-items-center" style={{ gap: 14 }}>
+        <div style={{ width: 120, height: 120, position: "relative", flex: "0 0 auto" }}>
+          <CircularProgressbar
+            value={clampPct(progress.calories)}
+            strokeWidth={10}
+            styles={buildStyles({
+              pathColor: COLORS.calories,
+              trailColor: "rgba(255,255,255,0.08)",
+              strokeLinecap: "round",
+              pathTransitionDuration: 0.45,
+            })}
+          />
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              pointerEvents: "none",
+            }}
+          >
+            <div className="fw-bold" style={{ fontSize: 24, lineHeight: 1 }}>
+              {fmt0(totals.calories)}
+            </div>
+            <div className="text-dim" style={{ fontSize: 11, marginTop: 2 }}>
+              / {fmt0(goals.calories)} cal
+            </div>
+          </div>
+        </div>
+
+        <div className="d-flex flex-column" style={{ gap: 10, minWidth: 0 }}>
+          <MiniRing
+            label="Protein"
+            color={COLORS.protein}
+            pct={progress.protein}
+            valueText={`${fmt0(totals.protein)}/${fmt0(goals.protein)}g`}
+          />
+          <MiniRing
+            label="Carbs"
+            color={COLORS.carbs}
+            pct={progress.carbs}
+            valueText={`${fmt0(totals.carbs)}/${fmt0(goals.carbs)}g`}
+          />
+          <MiniRing
+            label="Fat"
+            color={COLORS.fat}
+            pct={progress.fat}
+            valueText={`${fmt0(totals.fat)}/${fmt0(goals.fat)}g`}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
