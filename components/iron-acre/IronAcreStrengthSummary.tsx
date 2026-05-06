@@ -45,9 +45,12 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
   const rows = buildRows(profile);
 
   return (
-    <section className="futuristic-card ia-tile ia-tile-pad mb-3">
+    <section className="ia-tile ia-tile-pad mb-3">
       <div className="d-flex justify-content-between align-items-center mb-2">
-        <div className="ia-tile-title">Strength</div>
+        <div className="ia-kicker">
+          <i className="fas fa-dumbbell" style={{ color: "var(--ia-neon)" }} />
+          Strength
+        </div>
         <span className="ia-badge ia-badge-neon">e1RM + 1RM</span>
       </div>
 
@@ -65,14 +68,14 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
             aria-label={`Open ${r.label} strength details`}
           >
             <div style={{ minWidth: 0 }}>
-              <div className="ia-tile-title" style={{ fontSize: "1rem" }}>
+              <div className="fw-semibold" style={{ fontSize: "1rem" }}>
                 {r.label}
               </div>
               <div className="ia-lift-sub">{r.sourceLabel}</div>
             </div>
 
             <div className="d-flex align-items-center gap-2">
-              <div className="ia-lift-value" style={{ marginTop: 0 }}>
+              <div className="ia-lift-value" style={{ marginTop: 0, fontSize: "1.15rem" }}>
                 <span style={{ color: "var(--ia-neon)" }}>{formatKg(r.value)}</span>
               </div>
               <i className="fas fa-chevron-right text-dim" />
