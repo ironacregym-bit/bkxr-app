@@ -1,11 +1,11 @@
-// File: components/nutrition/AddFoodSheet.tsx
 "use client";
+
+// File: components/nutrition/AddFoodSheet.tsx
 
 import { useEffect, useMemo, useState } from "react";
 import FoodEditor, { Food } from "./FoodEditor";
 import BarcodeScannerGate from "./BarcodeScannerGate";
-import { NUTRITION_ACCENT as ACCENT } from "./nutritionTheme";
-import { NUTRITION_COLORS as COLORS } from "./nutritionTheme";
+import { NUTRITION_ACCENT as ACCENT, NUTRITION_COLORS as COLORS } from "./nutritionTheme";
 
 function parseServingGrams(servingSize?: string | null): number | null {
   if (!servingSize) return null;
@@ -58,6 +58,7 @@ export default function AddFoodSheet({
   onClose: () => void;
   isPremium: boolean;
   onScanRequested: () => void;
+
   selectedFood: Food | null;
   usingServing: "per100" | "serving";
   setUsingServing: (v: "per100" | "serving") => void;
@@ -67,6 +68,10 @@ export default function AddFoodSheet({
   onChangeFood: (patch: Partial<Food>) => void;
 }) {
   const [grams, setGrams] = useState<number>(100);
+  const [showAllFavs, setShowAllFavs] = useState(false);
+
+  const qTrim = query.trim();
+  const inSearchMode = qTrim.length >= 1;
 
   useEffect(() => {
     if (!open) return;
@@ -93,6 +98,10 @@ export default function AddFoodSheet({
     setGrams(g && g > 0 ? g : 100);
   }, [selectedFood]);
 
+  useEffect(() => {
+    if (inSearchMode) setShowAllFavs(false);
+  }, [inSearchMode]);
+
   const servingG = useMemo(() => {
     if (!selectedFood) return null;
     return parseServingGrams(selectedFood.servingSize);
@@ -101,6 +110,9 @@ export default function AddFoodSheet({
   const chips = useMemo(() => [25, 50, 75, 100], []);
 
   const sheetTitle = meal ? `Add food to ${meal}` : "Add food";
+
+  const favsCompact = useMemo(() => favourites.slice(0, 10), [favourites]);
+  const favsToShow = showAllFavs ? favourites : favsCompact;
 
   if (!open || !meal) return null;
 
@@ -135,10 +147,11 @@ export default function AddFoodSheet({
             <div className="fw-bold" style={{ fontSize: 16 }}>
               {sheetTitle}
             </div>
+
             <button
               className="btn btn-sm btn-outline-light"
               onClick={onClose}
-              style={{ borderRadius: 999, minHeight: 40, minWidth: 40 }}
+              style={{ borderRadius: 999, minWidth: 40, minHeight: 40 }}
               aria-label="Close"
             >
               ✕
@@ -147,9 +160,11 @@ export default function AddFoodSheet({
 
           {selectedFood ? (
             <>
+              {/* Grams chips (non-manual only) */}
               {!String(selectedFood.id || "").startsWith("manual-") && (
                 <div className="mb-2">
                   <div className="small text-dim mb-1">Amount</div>
+
                   <div className="d-flex flex-wrap" style={{ gap: 8 }}>
                     {chips.map((g) => (
                       <button
@@ -195,6 +210,7 @@ export default function AddFoodSheet({
             </>
           ) : (
             <>
+              {/* Search row */}
               <div className="d-flex gap-2 mb-2">
                 <input
                   className="form-control"
@@ -204,6 +220,7 @@ export default function AddFoodSheet({
                   style={{ minHeight: 44 }}
                   autoFocus
                 />
+
                 <button
                   className="btn btn-sm"
                   style={{
@@ -220,32 +237,78 @@ export default function AddFoodSheet({
                 </button>
               </div>
 
-              {favourites.length > 0 && (
+              {/* Favourites (compact rail; hidden when typing) */}
+              {!inSearchMode && favourites.length > 0 && (
                 <div className="mb-3">
-                  <div className="small text-dim mb-1">Favourites</div>
-                  <div className="d-flex flex-wrap" style={{ gap: 8 }}>
-                    {favourites.slice(0, 24).map((f) => (
+                  <div className="d-flex justify-content-between align-items-center mb-1">
+                    <div className="small text-dim">Favourites</div>
+
+                    {favourites.length > 10 ? (
                       <button
-                        key={(f.id || f.code || f.name) + "-fav"}
-                        className="btn btn-sm"
-                        style={{
-                          minHeight: 40,
-                          borderRadius: 999,
-                          border: `1px solid ${ACCENT}55`,
-                          background: "rgba(255,255,255,0.04)",
-                          color: "#fff",
-                        }}
-                        onClick={() => onSelectFood(f)}
-                        title="Use favourite"
+                        className="btn btn-sm btn-link p-0"
+                        style={{ color: ACCENT, textDecoration: "none" }}
+                        onClick={() => setShowAllFavs((v) => !v)}
                       >
-                        ⭐ {f.name || f.code || "Food"}
+                        {showAllFavs ? "Less" : "More"}
                       </button>
-                    ))}
+                    ) : null}
                   </div>
+
+                  {!showAllFavs ? (
+                    <div
+                      className="d-flex"
+                      style={{
+                        gap: 8,
+                        overflowX: "auto",
+                        WebkitOverflowScrolling: "touch",
+                        paddingBottom: 4,
+                      }}
+                    >
+                      {favsToShow.map((f) => (
+                        <button
+                          key={(f.id || f.code || f.name) + "-fav"}
+                          className="btn btn-sm"
+                          style={{
+                            minHeight: 40,
+                            borderRadius: 999,
+                            border: `1px solid ${ACCENT}55`,
+                            background: "rgba(255,255,255,0.04)",
+                            color: "#fff",
+                            whiteSpace: "nowrap",
+                          }}
+                          onClick={() => onSelectFood(f)}
+                          title="Use favourite"
+                        >
+                          ⭐ {f.name || f.code || "Food"}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="d-flex flex-wrap" style={{ gap: 8 }}>
+                      {favsToShow.map((f) => (
+                        <button
+                          key={(f.id || f.code || f.name) + "-fav-all"}
+                          className="btn btn-sm"
+                          style={{
+                            minHeight: 40,
+                            borderRadius: 999,
+                            border: `1px solid ${ACCENT}55`,
+                            background: "rgba(255,255,255,0.04)",
+                            color: "#fff",
+                          }}
+                          onClick={() => onSelectFood(f)}
+                          title="Use favourite"
+                        >
+                          ⭐ {f.name || f.code || "Food"}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {query.trim().length >= 2 && (
+              {/* Results */}
+              {qTrim.length >= 2 && (
                 <div className="mb-2">
                   {loading ? (
                     <div className="text-dim small">Searching…</div>
@@ -257,6 +320,7 @@ export default function AddFoodSheet({
                         const fav = isFavourite(food);
                         const name = food.name || food.code || "Food";
                         const brand = (food as any)?.brand ? String((food as any).brand) : "";
+
                         return (
                           <div
                             key={(food.id || food.code || name) + "-res"}
@@ -272,16 +336,29 @@ export default function AddFoodSheet({
                           >
                             <button
                               className="btn btn-link text-start p-0"
-                              style={{ color: "#fff", textDecoration: "none", flex: 1, minWidth: 0 }}
+                              style={{
+                                color: "#fff",
+                                textDecoration: "none",
+                                flex: 1,
+                                minWidth: 0,
+                              }}
                               onClick={() => onSelectFood(food)}
                             >
-                              <div className="fw-semibold" style={{ lineHeight: 1.2, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              <div
+                                className="fw-semibold"
+                                style={{
+                                  lineHeight: 1.2,
+                                  fontSize: 14,
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}
+                              >
                                 {name}
                               </div>
+
                               <div className="small text-dim" style={{ lineHeight: 1.2 }}>
-                                {brand ? (
-                                  <span style={{ marginRight: 10 }}>{brand}</span>
-                                ) : null}
+                                {brand ? <span style={{ marginRight: 10 }}>{brand}</span> : null}
                                 <span style={{ color: COLORS.calories }}>{fmt0(food.calories)} kcal</span>
                                 <span className="text-dim"> /100g</span>
                               </div>
