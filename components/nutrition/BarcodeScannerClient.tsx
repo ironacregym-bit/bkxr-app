@@ -1,4 +1,6 @@
-"use client";"use client/nutrition/BarcodeScannerClient.tsx
+"use client";
+
+// File: components/nutrition/BarcodeScannerClient.tsx
 
 import React, { useEffect, useRef, useState } from "react";
 import type { Food } from "./FoodEditor";
@@ -23,7 +25,6 @@ export default function BarcodeScannerClient({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const readerRef = useRef<any>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
-
   const scannedLockRef = useRef(false);
 
   const [scanError, setScanError] = useState<string | null>(null);
@@ -71,21 +72,22 @@ export default function BarcodeScannerClient({
 
   async function startScanner(mountedRef: { current: boolean }) {
     setScanError(null);
+    setHasCamera(true);
     scannedLockRef.current = false;
-
-    if (videoRef.current) {
-      videoRef.current.setAttribute("playsinline", "true");
-      videoRef.current.muted = true;
-      videoRef.current.autoplay = true;
-    }
-
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
-      setHasCamera(false);
-      return;
-    }
 
     try {
       setScanning(true);
+
+      if (videoRef.current) {
+        videoRef.current.setAttribute("playsinline", "true");
+        videoRef.current.muted = true;
+        videoRef.current.autoplay = true;
+      }
+
+      if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
+        setHasCamera(false);
+        return;
+      }
 
       const { BrowserMultiFormatReader } = await import("@zxing/browser");
       const reader = new BrowserMultiFormatReader();
@@ -120,12 +122,12 @@ export default function BarcodeScannerClient({
 
           try {
             setLookupLoading(true);
+
             const found = await onLookupBarcode(code);
 
             if (!found) {
               setScanError("No product found for this barcode.");
-              setQuickForm((f) => ({
-                ...f,
+              setQuickForm({
                 code,
                 name: "",
                 brand: "",
@@ -135,7 +137,8 @@ export default function BarcodeScannerClient({
                 protein: "",
                 carbs: "",
                 fat: "",
-              }));
+              });
+              setQuickMsg(null);
               setQuickOpen(true);
               return;
             }
@@ -192,9 +195,11 @@ export default function BarcodeScannerClient({
   }, [isOpen, restartTick]);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (quickOpen) {
       teardown();
-    } else if (isOpen) {
+    } else {
       setRestartTick((t) => t + 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -212,14 +217,20 @@ export default function BarcodeScannerClient({
       scannedLockRef.current = true;
 
       const found = await onLookupBarcode(code);
+
       if (!found) {
         setScanError("No product found for this barcode.");
         setQuickForm((f) => ({ ...f, code }));
+        setQuickMsg(null);
         setQuickOpen(true);
-      } else {
-        onFoundFood(found);
-        onClose();
+        return;
       }
+
+      onFoundFood(found);
+      onClose();
+    } catch {
+      setScanError("Barcode lookup failed. Please try again or add manually.");
+      scannedLockRef.current = false;
     } finally {
       setLookupLoading(false);
     }
@@ -259,7 +270,8 @@ export default function BarcodeScannerClient({
       if (!res.ok) throw new Error(json?.error || "Failed to save");
 
       const food: Food =
-        json.food || ({
+        json.food ||
+        ({
           id: payload.code,
           code: payload.code,
           name: payload.name,
@@ -291,7 +303,6 @@ export default function BarcodeScannerClient({
     <div className="bxkr-modal">
       <div className="bxkr-modal-backdrop" onClick={onClose} />
 
-      {/* Iron Acre modal surface */}
       <div
         className="bxkr-modal-dialog ia-tile ia-tile-pad"
         role="dialog"
@@ -314,6 +325,7 @@ export default function BarcodeScannerClient({
                   Restart
                 </button>
               )}
+
               <button type="button" className="ia-btn ia-btn-outline" onClick={onClose}>
                 Close
               </button>
@@ -324,12 +336,14 @@ export default function BarcodeScannerClient({
             <div>
               <div className="d-flex justify-content-between align-items-center mb-2">
                 <div className="ia-tile-title">Add barcode item</div>
+
                 <button
                   type="button"
                   className="ia-btn ia-btn-outline"
                   onClick={() => {
                     setQuickOpen(false);
                     setScanError(null);
+                    setQuickMsg(null);
                     scannedLockRef.current = false;
                   }}
                   title="Back to scanner"
@@ -475,9 +489,14 @@ export default function BarcodeScannerClient({
                       height: 280,
                     }}
                   >
-                    <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
 
-                    {/* Scan frame */}
                     <div
                       style={{
                         position: "absolute",
@@ -502,7 +521,8 @@ export default function BarcodeScannerClient({
                         background: "rgba(0,0,0,0.35)",
                       }}
                     >
-                      Align the barcode within the frame. {lookupLoading ? "Looking up…" : scanning ? "Scanning…" : "Ready"}
+                      Align the barcode within the frame.{" "}
+                      {lookupLoading ? "Looking up…" : scanning ? "Scanning…" : "Ready"}
                     </div>
                   </div>
 
@@ -545,6 +565,7 @@ export default function BarcodeScannerClient({
               ) : (
                 <div className="mb-2">
                   <div className="mb-2 text-dim">Camera not available. Enter the barcode manually:</div>
+
                   <div className="d-flex gap-2">
                     <input
                       className="form-control"
@@ -553,18 +574,19 @@ export default function BarcodeScannerClient({
                       onChange={(e) => setBarcodeInput(e.target.value)}
                       inputMode="numeric"
                     />
-                    <button type="button" className="ia-btn ia-btn-outline" onClick={lookupManualBarcode} disabled={lookupLoading}>
+                    <button
+                      type="button"
+                      className="ia-btn ia-btn-outline"
+                      onClick={lookupManualBarcode}
+                      disabled={lookupLoading}
+                    >
                       {lookupLoading ? "Looking up…" : "Lookup"}
                     </button>
                   </div>
 
                   {scanError ? <div className="mt-2 text-danger">{scanError}</div> : null}
 
-                  <button
-                    type="button"
-                    className="ia-btn ia-btn-outline mt-2"
-                    onClick={() => setQuickOpen(true)}
-                  >
+                  <button type="button" className="ia-btn ia-btn-outline mt-2" onClick={() => setQuickOpen(true)}>
                     + Add manually
                   </button>
                 </div>
