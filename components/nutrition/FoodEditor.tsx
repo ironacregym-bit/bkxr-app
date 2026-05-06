@@ -1,7 +1,8 @@
-// File: components/nutrition/FoodEditor.tsx
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+// File: components/nutrition/FoodEditor.tsx
+
+import React, { useEffect, useMemo, useState } from "react";
 import { NUTRITION_COLORS as COLORS } from "./nutritionTheme";
 
 function round2(n: number | undefined | null): string {
@@ -24,6 +25,109 @@ export type Food = {
   carbsPerServing?: number | null;
   fatPerServing?: number | null;
 };
+
+type PortionPreset = {
+  key: string;
+  label: string;
+  grams: number;
+  hint?: string;
+};
+
+function parseServingGrams(s?: string | null): number | null {
+  if (!s) return null;
+  const match = s.match(/(\d+(\.\d+)?)\s*g/i);
+  if (match) {
+    const n = Number(match[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  return null;
+}
+
+/**
+ * Lightweight “best effort” portion presets.
+ * These are approximate, but massively improve UX (MyFitnessPal-style).
+ * You can later move these into Firestore/admin if you want.
+ */
+function getPortionPresets(food: Food): PortionPreset[] {
+  const name = String(food?.name || "").toLowerCase();
+  const brand = String(food?.brand || "").toLowerCase();
+  const text = `${name} ${brand}`;
+
+  const presets: PortionPreset[] = [];
+
+  // Bacon rashers (UK-ish typical)
+  if (/(bacon|rashers|rasher|back bacon|streaky)/i.test(text)) {
+    presets.push({
+      key: "rasher",
+      label: "1 rasher",
+      grams: 30,
+      hint: "Approx. 30g per rasher (varies by brand/cut)",
+    });
+  }
+
+  // Bread slice
+  if (/(bread|toast|loaf|sandwich)/i.test(text)) {
+    presets.push({
+      key: "slice",
+      label: "1 slice",
+      grams: 40,
+      hint: "Approx. 40g per slice (varies by bread type)",
+    });
+  }
+
+  // Egg
+  if (/(egg|eggs)/i.test(text)) {
+    presets.push({
+      key: "egg",
+      label: "1 egg",
+      grams: 50,
+      hint: "Approx. 50g edible weight (large egg varies)",
+    });
+  }
+
+  // Wrap/tortilla
+  if (/(wrap|tortilla)/i.test(text)) {
+    presets.push({
+      key: "wrap",
+      label: "1 wrap",
+      grams: 60,
+      hint: "Approx. 60g per wrap (varies by size)",
+    });
+  }
+
+  // Protein powder scoop
+  if (/(whey|protein powder|protein|casein|mass gainer|iso whey|wpc|wpi)/i.test(text)) {
+    presets.push({
+      key: "scoop",
+      label: "1 scoop",
+      grams: 30,
+      hint: "Common scoop ≈ 30g (check tub label)",
+    });
+  }
+
+  // Rice cake
+  if (/(rice cake|ricecake)/i.test(text)) {
+    presets.push({
+      key: "ricecake",
+      label: "1 cake",
+      grams: 9,
+      hint: "Typical rice cake ≈ 9g",
+    });
+  }
+
+  // Sausage
+  if (/(sausage|sausages)/i.test(text)) {
+    presets.push({
+      key: "sausage",
+      label: "1 sausage",
+      grams: 50,
+      hint: "Approx. 50g (varies by type/brand)",
+    });
+  }
+
+  // If nothing matched, keep it empty.
+  return presets;
+}
 
 export default function FoodEditor({
   meal,
@@ -63,28 +167,33 @@ export default function FoodEditor({
     } catch {}
   };
 
+  // =========================
+  // Manual mode (unchanged logic, updated styling)
+  // =========================
   if (manualMode) {
     return (
-      <div className="futuristic-card p-3" style={{ scrollMarginTop: 12 }}>
+      <div className="ia-tile ia-tile-pad" style={{ scrollMarginTop: 12 }}>
         <div className="d-flex justify-content-between align-items-center mb-2">
-          <div className="fw-semibold">Add item</div>
+          <div className="ia-tile-title">Add item</div>
+
           <div className="d-flex align-items-center" style={{ gap: 8 }}>
             <button
               type="button"
-              className="btn btn-sm btn-outline-light"
+              className="ia-btn ia-btn-outline"
               onClick={onToggleFavourite}
               title={isFavourite ? "Unfavourite" : "Favourite"}
-              style={{ borderRadius: 999 }}
+              style={{ borderRadius: 999, minWidth: 40, minHeight: 40, padding: 0 }}
             >
               <i className={isFavourite ? "fas fa-star text-warning" : "far fa-star"} />
             </button>
+
             {onCancel && (
               <button
                 type="button"
-                className="btn btn-sm btn-outline-light"
+                className="ia-btn ia-btn-outline"
                 onClick={onCancel}
                 aria-label="Cancel"
-                style={{ borderRadius: 999 }}
+                style={{ borderRadius: 999, minWidth: 40, minHeight: 40, padding: 0 }}
               >
                 ✕
               </button>
@@ -116,6 +225,7 @@ export default function FoodEditor({
               placeholder="kcal"
             />
           </div>
+
           <div className="col-6 col-md-3">
             <label className="form-label small text-dim mb-1">Protein (g)</label>
             <input
@@ -128,6 +238,7 @@ export default function FoodEditor({
               placeholder="grams"
             />
           </div>
+
           <div className="col-6 col-md-3">
             <label className="form-label small text-dim mb-1">Carbs (g)</label>
             <input
@@ -140,6 +251,7 @@ export default function FoodEditor({
               placeholder="grams"
             />
           </div>
+
           <div className="col-6 col-md-3">
             <label className="form-label small text-dim mb-1">Fat (g)</label>
             <input
@@ -161,33 +273,27 @@ export default function FoodEditor({
           <span style={{ color: COLORS.fat }}>{round2(food.fat)}f</span>
         </div>
 
-        <div className="d-flex gap-2">
-          <button
-            className="btn btn-bxkr w-100"
-            onClick={() => addEntry(meal, food)}
-            disabled={
-              Number(food.calories) <= 0 &&
-              Number(food.protein) <= 0 &&
-              Number(food.carbs) <= 0 &&
-              Number(food.fat) <= 0
-            }
-          >
-            Add to {meal}
-          </button>
-        </div>
+        <button
+          type="button"
+          className="ia-btn ia-btn-primary w-100"
+          onClick={() => addEntry(meal, food)}
+          disabled={
+            Number(food.calories) <= 0 &&
+            Number(food.protein) <= 0 &&
+            Number(food.carbs) <= 0 &&
+            Number(food.fat) <= 0
+          }
+        >
+          Add to {meal}
+        </button>
       </div>
     );
   }
 
-  function parseServingGrams(s?: string | null): number | null {
-    if (!s) return null;
-    const match = s.match(/(\d+(\.\d+)?)\s*g/i);
-    if (match) {
-      const n = Number(match[1]);
-      return Number.isFinite(n) && n > 0 ? n : null;
-    }
-    return null;
-  }
+  // =========================
+  // Non-manual mode (grams + serving + portion chips)
+  // =========================
+  const servingG = parseServingGrams(food.servingSize);
 
   const hasPer100 =
     Number.isFinite(food.calories) ||
@@ -195,36 +301,93 @@ export default function FoodEditor({
     Number.isFinite(food.carbs) ||
     Number.isFinite(food.fat);
 
-  const servingG = parseServingGrams(food.servingSize);
   const hasPerServing =
     food.caloriesPerServing != null ||
     food.proteinPerServing != null ||
     food.carbsPerServing != null ||
     food.fatPerServing != null;
 
+  const portionPresets = useMemo(() => getPortionPresets(food), [food.id]);
+
   const [grams, setGrams] = useState<number>(100);
 
+  // Portion mode state
+  const [mode, setMode] = useState<"grams" | "portion">("grams");
+  const [portionKey, setPortionKey] = useState<string | null>(null);
+  const [portionBaseG, setPortionBaseG] = useState<number | null>(null);
+  const [portionQty, setPortionQty] = useState<number>(1);
+
+  // Default grams when switching foods
   useEffect(() => {
+    setMode("grams");
+    setPortionKey(null);
+    setPortionBaseG(null);
+    setPortionQty(1);
+
     if (servingG && servingG > 0) setGrams(servingG);
     else setGrams(100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [food.id]);
 
+  // Respect gramsOverride from AddFoodSheet chips
   useEffect(() => {
     if (gramsOverride == null) return;
     if (!Number.isFinite(gramsOverride)) return;
     if (Math.round(gramsOverride) === Math.round(grams)) return;
+
+    setMode("grams");
+    setPortionKey(null);
+    setPortionBaseG(null);
+    setPortionQty(1);
     setGrams(Math.max(0, Number(gramsOverride)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gramsOverride]);
 
+  // Report grams up
   useEffect(() => {
     if (onGramsChange) onGramsChange(grams);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grams]);
 
+  // When in portion mode, recompute grams from base * qty
+  useEffect(() => {
+    if (mode !== "portion") return;
+    if (!portionBaseG) return;
+    const next = Math.max(0, portionBaseG * Math.max(1, portionQty));
+    if (Math.round(next) === Math.round(grams)) return;
+    setGrams(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, portionBaseG, portionQty]);
+
+  function setPortion(p: PortionPreset) {
+    setMode("portion");
+    setPortionKey(p.key);
+    setPortionBaseG(p.grams);
+    setPortionQty(1);
+    setGrams(p.grams);
+  }
+
+  function setServingAsPortion() {
+    if (!servingG) return;
+    setMode("portion");
+    setPortionKey("serving");
+    setPortionBaseG(servingG);
+    setPortionQty(1);
+    setGrams(servingG);
+  }
+
+  function set100g() {
+    setMode("grams");
+    setPortionKey(null);
+    setPortionBaseG(null);
+    setPortionQty(1);
+    setGrams(100);
+  }
+
   function calcFromGrams(g: number) {
     const safeG = Math.max(0, g || 0);
+
+    // Per 100g baseline
     if (hasPer100) {
       const perGram = {
         cal: Number(food.calories || 0) / 100,
@@ -240,6 +403,7 @@ export default function FoodEditor({
       };
     }
 
+    // Per serving + serving grams known
     if (hasPerServing && servingG && servingG > 0) {
       const perGram = {
         cal: Number(food.caloriesPerServing || 0) / servingG,
@@ -255,6 +419,7 @@ export default function FoodEditor({
       };
     }
 
+    // Last resort: per serving only (treat any positive grams as 1 serving)
     if (hasPerServing) {
       const multiplier = safeG > 0 ? 1 : 0;
       return {
@@ -278,29 +443,37 @@ export default function FoodEditor({
     fat: derived.fat,
   };
 
+  const showServingChip = Boolean(servingG && servingG > 0);
+  const showPortions = portionPresets.length > 0;
+
   return (
-    <div className="futuristic-card p-3" style={{ scrollMarginTop: 12 }}>
+    <div className="ia-tile ia-tile-pad" style={{ scrollMarginTop: 12 }}>
       <div className="d-flex justify-content-between align-items-center mb-2">
-        <div className="fw-semibold" style={{ lineHeight: 1.1 }}>
-          {food.name || food.code || "Food"}
+        <div style={{ minWidth: 0 }}>
+          <div className="ia-tile-title" style={{ margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {food.name || food.code || "Food"}
+          </div>
+          {food.brand ? <div className="text-dim small">{food.brand}</div> : null}
         </div>
+
         <div className="d-flex align-items-center" style={{ gap: 8 }}>
           <button
             type="button"
-            className="btn btn-sm btn-outline-light"
+            className="ia-btn ia-btn-outline"
             onClick={onToggleFavourite}
             title={isFavourite ? "Unfavourite" : "Favourite"}
-            style={{ borderRadius: 999 }}
+            style={{ borderRadius: 999, minWidth: 40, minHeight: 40, padding: 0 }}
           >
             <i className={isFavourite ? "fas fa-star text-warning" : "far fa-star"} />
           </button>
+
           {onCancel && (
             <button
               type="button"
-              className="btn btn-sm btn-outline-light"
+              className="ia-btn ia-btn-outline"
               onClick={onCancel}
               aria-label="Cancel"
-              style={{ borderRadius: 999 }}
+              style={{ borderRadius: 999, minWidth: 40, minHeight: 40, padding: 0 }}
             >
               ✕
             </button>
@@ -308,6 +481,80 @@ export default function FoodEditor({
         </div>
       </div>
 
+      {/* Portion chips */}
+      <div className="mb-2">
+        <div className="ia-kicker mb-1">Portions</div>
+
+        <div className="d-flex flex-wrap" style={{ gap: 8 }}>
+          <button
+            type="button"
+            className={mode === "grams" && Math.round(grams) === 100 ? "ia-btn ia-btn-primary" : "ia-btn ia-btn-outline"}
+            style={{ borderRadius: 999, minHeight: 40, padding: "8px 12px" }}
+            onClick={set100g}
+            title="Standard reference"
+          >
+            100g
+          </button>
+
+          {showServingChip ? (
+            <button
+              type="button"
+              className={mode === "portion" && portionKey === "serving" ? "ia-btn ia-btn-primary" : "ia-btn ia-btn-outline"}
+              style={{ borderRadius: 999, minHeight: 40, padding: "8px 12px" }}
+              onClick={setServingAsPortion}
+              title={food.servingSize || "Serving"}
+            >
+              Serving
+            </button>
+          ) : null}
+
+          {showPortions
+            ? portionPresets.map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  className={mode === "portion" && portionKey === p.key ? "ia-btn ia-btn-primary" : "ia-btn ia-btn-outline"}
+                  style={{ borderRadius: 999, minHeight: 40, padding: "8px 12px" }}
+                  onClick={() => setPortion(p)}
+                  title={p.hint || ""}
+                >
+                  {p.label}
+                </button>
+              ))
+            : null}
+        </div>
+
+        {mode === "portion" && portionBaseG ? (
+          <div className="d-flex align-items-center mt-2" style={{ gap: 10 }}>
+            <div className="text-dim small">
+              {portionQty} × {portionBaseG}g = <span style={{ color: COLORS.calories }}>{Math.round(grams)}g</span>
+            </div>
+
+            <div className="ms-auto d-flex" style={{ gap: 8 }}>
+              <button
+                type="button"
+                className="ia-btn ia-btn-outline"
+                style={{ borderRadius: 999, minWidth: 40, minHeight: 40, padding: 0 }}
+                onClick={() => setPortionQty((q) => Math.max(1, q - 1))}
+                aria-label="Decrease portion"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                className="ia-btn ia-btn-outline"
+                style={{ borderRadius: 999, minWidth: 40, minHeight: 40, padding: 0 }}
+                onClick={() => setPortionQty((q) => Math.min(20, q + 1))}
+                aria-label="Increase portion"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Grams input (still always available; switches mode back to grams when edited) */}
       <div className="row g-2">
         <div className="col-12 col-md-5">
           <label className="form-label small text-dim mb-1">Amount (grams)</label>
@@ -317,16 +564,22 @@ export default function FoodEditor({
             inputMode="decimal"
             min={0}
             value={Number.isFinite(grams) ? grams : 0}
-            onChange={(e) => setGrams(Math.max(0, Number(e.target.value || 0)))}
+            onChange={(e) => {
+              setMode("grams");
+              setPortionKey(null);
+              setPortionBaseG(null);
+              setPortionQty(1);
+              setGrams(Math.max(0, Number(e.target.value || 0)));
+            }}
             onFocus={onSelectAll}
             placeholder={servingG ? `${servingG} g` : "e.g., 75"}
           />
           {servingG ? (
-            <div className="small text-dim mt-1">Typical serving ≈ {servingG} g</div>
+            <div className="small text-dim mt-1">Serving size detected: {food.servingSize}</div>
           ) : hasPerServing ? (
-            <div className="small text-dim mt-1">Using per serving values (serving grams unknown)</div>
+            <div className="small text-dim mt-1">Per serving values available (serving grams unknown)</div>
           ) : (
-            <div className="small text-dim mt-1">Using per 100 g baseline</div>
+            <div className="small text-dim mt-1">Using per 100g baseline</div>
           )}
         </div>
       </div>
@@ -338,21 +591,19 @@ export default function FoodEditor({
         <span style={{ color: COLORS.fat }}>{round2(derived.fat)}f</span>
       </div>
 
-      <div className="d-flex gap-2">
-        <button
-          className="btn btn-bxkr w-100"
-          onClick={() => addEntry(meal, foodForSave)}
-          disabled={
-            Number(derived.calories) <= 0 &&
-            Number(derived.protein) <= 0 &&
-            Number(derived.carbs) <= 0 &&
-            Number(derived.fat) <= 0
-          }
-        >
-          Add to {meal}
-        </button>
-      </div>
+      <button
+        type="button"
+        className="ia-btn ia-btn-primary w-100"
+        onClick={() => addEntry(meal, foodForSave)}
+        disabled={
+          Number(derived.calories) <= 0 &&
+          Number(derived.protein) <= 0 &&
+          Number(derived.carbs) <= 0 &&
+          Number(derived.fat) <= 0
+        }
+      >
+        Add to {meal}
+      </button>
     </div>
   );
 }
-``
