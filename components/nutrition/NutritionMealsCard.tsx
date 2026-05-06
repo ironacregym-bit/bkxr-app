@@ -65,19 +65,14 @@ export default function NutritionMealsCard({
     return map;
   }, [entries, meals]);
 
-  // Collapsed state per meal
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    // Initialise collapse state once entries/meals are available
-    // - Empty meals can start collapsed to reduce scroll
-    // - Non-empty meals start expanded
     const next: Record<string, boolean> = {};
     for (const m of meals) {
       const list = byMeal.get(m) || [];
       next[m] = defaultCollapsedEmpty ? list.length === 0 : false;
     }
-    // Only set if empty object (first run) to avoid fighting user toggles
     setCollapsed((prev) => (Object.keys(prev).length ? prev : next));
   }, [meals, byMeal, defaultCollapsedEmpty]);
 
@@ -87,9 +82,9 @@ export default function NutritionMealsCard({
   }
 
   return (
-    <section className="futuristic-card p-3 mb-3">
+    <section className="ia-tile ia-tile-pad mb-3">
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <h5 className="mb-0">Meals</h5>
+        <div className="ia-tile-title">Meals</div>
       </div>
 
       {meals.map((meal, idx) => {
@@ -99,11 +94,7 @@ export default function NutritionMealsCard({
 
         return (
           <div key={meal}>
-            {/* Meal header row */}
-            <div
-              className="d-flex justify-content-between align-items-center"
-              style={{ paddingTop: idx === 0 ? 0 : 14 }}
-            >
+            <div className="d-flex justify-content-between align-items-center" style={{ paddingTop: idx === 0 ? 0 : 14 }}>
               <button
                 type="button"
                 className="btn btn-link p-0 text-start"
@@ -126,16 +117,11 @@ export default function NutritionMealsCard({
                 <span className="fw-semibold">{meal}</span>
               </button>
 
-              <button
-                className="btn btn-sm btn-bxkr-outline"
-                onClick={() => onAddFood(meal)}
-                style={{ minHeight: 40 }}
-              >
+              <button type="button" className="ia-btn ia-btn-outline" onClick={() => onAddFood(meal)} style={{ minHeight: 40 }}>
                 + Add
               </button>
             </div>
 
-            {/* Meal totals line */}
             <div className="small text-dim" style={{ lineHeight: 1.2, marginTop: 2 }}>
               <span style={{ color: COLORS.calories }}>{fmt0(t.calories)} kcal</span>{" "}
               <span className="text-dim">•</span>{" "}
@@ -146,7 +132,6 @@ export default function NutritionMealsCard({
               <span style={{ color: COLORS.fat }}>F {fmt0(t.fat)}</span>
             </div>
 
-            {/* Meal body */}
             {!isCollapsed && (
               <div style={{ marginTop: 10 }}>
                 {mealEntries.length === 0 ? (
@@ -178,8 +163,8 @@ export default function NutritionMealsCard({
                             borderTop: rowIdx === 0 ? "none" : "1px solid rgba(255,255,255,0.06)",
                           }}
                         >
-                          {/* Clickable row (opens editor) */}
                           <button
+                            type="button"
                             className="btn btn-link text-start p-0"
                             onClick={() => onEditEntry(e)}
                             style={{
@@ -204,10 +189,7 @@ export default function NutritionMealsCard({
                             </div>
 
                             <div className="small text-dim" style={{ lineHeight: 1.2 }}>
-                              {brand ? (
-                                <span style={{ marginRight: 10 }}>{brand}</span>
-                              ) : null}
-
+                              {brand ? <span style={{ marginRight: 10 }}>{brand}</span> : null}
                               <span style={{ color: COLORS.calories }}>{fmt0(e.calories)} kcal</span>{" "}
                               <span className="text-dim">•</span>{" "}
                               <span style={{ color: COLORS.protein }}>P {fmt0(e.protein)}</span>{" "}
@@ -216,24 +198,16 @@ export default function NutritionMealsCard({
                             </div>
                           </button>
 
-                          {/* Remove */}
                           <button
-                            className="btn btn-sm btn-outline-danger"
+                            type="button"
+                            className="ia-btn ia-btn-outline"
                             onClick={(ev) => {
                               stop(ev);
                               onRemoveEntry(e.id);
                             }}
                             title="Remove"
                             aria-label="Remove"
-                            style={{
-                              borderRadius: 999,
-                              minHeight: 40,
-                              minWidth: 40,
-                              padding: 0,
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
+                            style={{ borderRadius: 999, minHeight: 40, minWidth: 40, padding: 0 }}
                           >
                             ✕
                           </button>
@@ -245,7 +219,6 @@ export default function NutritionMealsCard({
               </div>
             )}
 
-            {/* Meal separator */}
             <div
               style={{
                 marginTop: 14,
