@@ -1,13 +1,8 @@
+// File: components/nutrition/FoodEditor.tsx
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
-
-const COLORS = {
-  calories: "#ff7f32",
-  protein: "#32ff7f",
-  carbs: "#ffc107",
-  fat: "#ff4fa3",
-};
+import { NUTRITION_COLORS as COLORS } from "./nutritionTheme";
 
 function round2(n: number | undefined | null): string {
   return n !== undefined && n !== null ? Number(n).toFixed(2) : "-";
@@ -17,13 +12,13 @@ export type Food = {
   id: string;
   code: string;
   name: string;
-  brand: string;               // kept for shape; not shown in manual mode
+  brand: string;
   image: string | null;
-  calories: number;            // manual mode: total calories user enters; non-manual: used for per-100g baseline if present
-  protein: number;             // grams
-  carbs: number;               // grams
-  fat: number;                 // grams
-  servingSize?: string | null; // e.g., "45g" or "1 cup (200g)"; we’ll try to parse grams if present
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  servingSize?: string | null;
   caloriesPerServing?: number | null;
   proteinPerServing?: number | null;
   carbsPerServing?: number | null;
@@ -40,7 +35,9 @@ export default function FoodEditor({
   isFavourite,
   onToggleFavourite,
   onChangeFood,
-  onCancel, // allow closing the editor
+  onCancel,
+  gramsOverride,
+  onGramsChange,
 }: {
   meal: string;
   food: Food;
@@ -52,6 +49,8 @@ export default function FoodEditor({
   onToggleFavourite: () => void;
   onChangeFood: (patch: Partial<Food>) => void;
   onCancel?: () => void;
+  gramsOverride?: number | null;
+  onGramsChange?: (g: number) => void;
 }) {
   const manualMode = useMemo(
     () => food.id?.startsWith("manual-") || (!food.code && !food.name),
@@ -64,11 +63,9 @@ export default function FoodEditor({
     } catch {}
   };
 
-  /* ---------------- Manual mode: macros directly editable ---------------- */
   if (manualMode) {
     return (
       <div className="futuristic-card p-3" style={{ scrollMarginTop: 12 }}>
-        {/* Header row with cancel + favourite */}
         <div className="d-flex justify-content-between align-items-center mb-2">
           <div className="fw-semibold">Add item</div>
           <div className="d-flex align-items-center" style={{ gap: 8 }}>
@@ -182,12 +179,8 @@ export default function FoodEditor({
     );
   }
 
-  /* ---------------- Non-manual mode: grams -> auto-calc macros ---------------- */
-
-  // Try to parse grams from servingSize if present, e.g., "45g", "1 cup (200g)"
   function parseServingGrams(s?: string | null): number | null {
     if (!s) return null;
-    // Find the first number followed by 'g'
     const match = s.match(/(\d+(\.\d+)?)\s*g/i);
     if (match) {
       const n = Number(match[1]);
@@ -196,7 +189,6 @@ export default function FoodEditor({
     return null;
   }
 
-  // per-100g baseline (common for scanned items)
   const hasPer100 =
     Number.isFinite(food.calories) ||
     Number.isFinite(food.protein) ||
@@ -210,23 +202,27 @@ export default function FoodEditor({
     food.carbsPerServing != null ||
     food.fatPerServing != null;
 
-  // grams state (how much the user ate)
   const [grams, setGrams] = useState<number>(100);
 
-  // auto-pick sensible default grams: prefer parsed serving grams; else 100g
   useEffect(() => {
-    if (servingG && servingG > 0) {
-      setGrams(servingG);
-    } else {
-      setGrams(100);
-    }
+    if (servingG && servingG > 0) setGrams(servingG);
+    else setGrams(100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [food.id]);
 
-  // Compute macros from grams:
-  // - If per-100g is available -> perGram = per100 / 100
-  // - Else if per-serving + serving grams parseable -> perGram = perServing / servingG
-  // - Else (no way to convert to per-gram) -> fall back to per-serving and treat grams as 1 serving if grams > 0
+  useEffect(() => {
+    if (gramsOverride == null) return;
+    if (!Number.isFinite(gramsOverride)) return;
+    if (Math.round(gramsOverride) === Math.round(grams)) return;
+    setGrams(Math.max(0, Number(gramsOverride)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gramsOverride]);
+
+  useEffect(() => {
+    if (onGramsChange) onGramsChange(grams);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grams]);
+
   function calcFromGrams(g: number) {
     const safeG = Math.max(0, g || 0);
     if (hasPer100) {
@@ -259,7 +255,6 @@ export default function FoodEditor({
       };
     }
 
-    // Last resort: no per-gram path; interpret any positive grams as "1 serving"
     if (hasPerServing) {
       const multiplier = safeG > 0 ? 1 : 0;
       return {
@@ -270,13 +265,11 @@ export default function FoodEditor({
       };
     }
 
-    // No data; all zero
     return { calories: 0, protein: 0, carbs: 0, fat: 0 };
   }
 
   const derived = calcFromGrams(grams);
 
-  // Build a Food payload with the calculated macros to ensure addEntry uses *these* numbers
   const foodForSave: Food = {
     ...food,
     calories: derived.calories,
@@ -287,7 +280,6 @@ export default function FoodEditor({
 
   return (
     <div className="futuristic-card p-3" style={{ scrollMarginTop: 12 }}>
-      {/* Header row */}
       <div className="d-flex justify-content-between align-items-center mb-2">
         <div className="fw-semibold" style={{ lineHeight: 1.1 }}>
           {food.name || food.code || "Food"}
@@ -316,9 +308,8 @@ export default function FoodEditor({
         </div>
       </div>
 
-      {/* Amount (grams) */}
       <div className="row g-2">
-        <div className="col-12 col-md-4">
+        <div className="col-12 col-md-5">
           <label className="form-label small text-dim mb-1">Amount (grams)</label>
           <input
             type="number"
@@ -340,7 +331,6 @@ export default function FoodEditor({
         </div>
       </div>
 
-      {/* Calculated macros preview */}
       <div className="d-flex justify-content-between small my-2">
         <span style={{ color: COLORS.calories }}>{round2(derived.calories)} kcal</span>
         <span style={{ color: COLORS.protein }}>{round2(derived.protein)}p</span>
@@ -365,3 +355,4 @@ export default function FoodEditor({
     </div>
   );
 }
+``
