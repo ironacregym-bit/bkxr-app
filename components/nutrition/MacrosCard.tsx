@@ -1,23 +1,59 @@
-
+// File: components/nutrition/MacrosCard.tsx
 "use client";
 
 import React from "react";
 import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
-
-const COLORS = {
-  calories: "#ff7f32",
-  protein: "#32ff7f",
-  carbs: "#ffc107",
-  fat: "#ff4fa3",
-};
+import { NUTRITION_COLORS as COLORS } from "./nutritionTheme";
 
 export type MacroTotals = { calories: number; protein: number; carbs: number; fat: number };
 export type MacroGoals = { calories: number; protein: number; carbs: number; fat: number };
 export type MacroProgress = { calories: number; protein: number; carbs: number; fat: number };
 
-function round2(n: number | undefined | null) {
-  return n !== undefined && n !== null ? Number(n).toFixed(2) : "-";
+function clampPct(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, n));
+}
+
+function fmt0(n: number | undefined | null) {
+  return Number.isFinite(Number(n)) ? String(Math.round(Number(n))) : "-";
+}
+
+function fmt1(n: number | undefined | null) {
+  return Number.isFinite(Number(n)) ? String(Number(n).toFixed(0)) : "-";
+}
+
+function MiniRing({
+  label,
+  color,
+  valuePct,
+  valueText,
+}: {
+  label: string;
+  color: string;
+  valuePct: number;
+  valueText: string;
+}) {
+  return (
+    <div className="d-flex align-items-center" style={{ gap: 10 }}>
+      <div style={{ width: 44, height: 44 }}>
+        <CircularProgressbar
+          value={clampPct(valuePct)}
+          strokeWidth={10}
+          styles={buildStyles({
+            pathColor: color,
+            trailColor: "rgba(255,255,255,0.08)",
+            strokeLinecap: "round",
+            pathTransitionDuration: 0.4,
+          })}
+        />
+      </div>
+      <div style={{ lineHeight: 1.1 }}>
+        <div className="small text-dim">{label}</div>
+        <div className="fw-semibold">{valueText}</div>
+      </div>
+    </div>
+  );
 }
 
 export default function MacrosCard({
@@ -29,78 +65,81 @@ export default function MacrosCard({
   goals: MacroGoals;
   progress: MacroProgress;
 }) {
+  const calTextTop = fmt0(totals.calories);
+  const calTextBottom = `${fmt0(goals.calories)} cal`;
+
   return (
-    <div className="row mb-4">
-      <div className="col-6">
-        <div className="futuristic-card p-3">
-          <h5 className="mb-3">Macros</h5>
-          <p style={{ color: COLORS.calories }}>
-            Calories: {round2(totals.calories)} / {goals.calories}
-          </p>
-          <p style={{ color: COLORS.protein }}>
-            Protein: {round2(totals.protein)} / {goals.protein} g
-          </p>
-          <p style={{ color: COLORS.carbs }}>
-            Carbs: {round2(totals.carbs)} / {goals.carbs} g
-          </p>
-          <p style={{ color: COLORS.fat }}>
-            Fat: {round2(totals.fat)} / {goals.fat} g
-          </p>
+    <section className="futuristic-card p-3 mb-3">
+      <div className="d-flex justify-content-between align-items-start mb-2">
+        <div>
+          <div className="text-dim small" style={{ letterSpacing: 0.6, textTransform: "uppercase" }}>
+            Today’s progress
+          </div>
         </div>
+        <div className="text-dim small">{/* optional date label handled by page */}</div>
       </div>
 
-      <div className="col-6 d-flex justify-content-center">
-        <div style={{ position: "relative", width: 180, height: 180 }}>
-          <div style={{ position: "absolute", top: 0, left: 0, width: 180, height: 180 }}>
-            <CircularProgressbar
-              value={progress.calories}
-              strokeWidth={7}
-              styles={buildStyles({
-                pathColor: COLORS.calories,
-                trailColor: "rgba(255,127,50,0.15)",
-                strokeLinecap: "butt",
-                pathTransitionDuration: 0.8,
-              })}
-            />
+      <div className="row g-3 align-items-center">
+        {/* Big calories ring */}
+        <div className="col-12 col-md-6">
+          <div className="d-flex justify-content-center justify-content-md-start">
+            <div style={{ width: 150, height: 150, position: "relative" }}>
+              <CircularProgressbar
+                value={clampPct(progress.calories)}
+                strokeWidth={10}
+                styles={buildStyles({
+                  pathColor: COLORS.calories,
+                  trailColor: "rgba(255,255,255,0.08)",
+                  strokeLinecap: "round",
+                  pathTransitionDuration: 0.5,
+                })}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  pointerEvents: "none",
+                }}
+              >
+                <div className="fw-bold" style={{ fontSize: 28, lineHeight: 1 }}>
+                  {calTextTop}
+                </div>
+                <div className="text-dim small" style={{ marginTop: 2 }}>
+                  / {calTextBottom}
+                </div>
+              </div>
+            </div>
           </div>
-          <div style={{ position: "absolute", top: 14, left: 14, width: 152, height: 152 }}>
-            <CircularProgressbar
-              value={progress.protein}
-              strokeWidth={8}
-              styles={buildStyles({
-                pathColor: COLORS.protein,
-                trailColor: "rgba(50,255,127,0.15)",
-                strokeLinecap: "butt",
-                pathTransitionDuration: 0.8,
-              })}
+        </div>
+
+        {/* Mini rings */}
+        <div className="col-12 col-md-6">
+          <div className="d-flex flex-column" style={{ gap: 12 }}>
+            <MiniRing
+              label="Protein"
+              color={COLORS.protein}
+              valuePct={progress.protein}
+              valueText={`${fmt1(totals.protein)} / ${fmt1(goals.protein)}g`}
             />
-          </div>
-          <div style={{ position: "absolute", top: 28, left: 28, width: 124, height: 124 }}>
-            <CircularProgressbar
-              value={progress.carbs}
-              strokeWidth={10}
-              styles={buildStyles({
-                pathColor: COLORS.carbs,
-                trailColor: "rgba(255,193,7,0.15)",
-                strokeLinecap: "butt",
-                pathTransitionDuration: 0.8,
-              })}
+            <MiniRing
+              label="Carbs"
+              color={COLORS.carbs}
+              valuePct={progress.carbs}
+              valueText={`${fmt1(totals.carbs)} / ${fmt1(goals.carbs)}g`}
             />
-          </div>
-          <div style={{ position: "absolute", top: 42, left: 42, width: 96, height: 96 }}>
-            <CircularProgressbar
-              value={progress.fat}
-              strokeWidth={12}
-              styles={buildStyles({
-                pathColor: COLORS.fat,
-                trailColor: "rgba(255,79,163,0.15)",
-                strokeLinecap: "butt",
-                pathTransitionDuration: 0.8,
-              })}
+            <MiniRing
+              label="Fat"
+              color={COLORS.fat}
+              valuePct={progress.fat}
+              valueText={`${fmt1(totals.fat)} / ${fmt1(goals.fat)}g`}
             />
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
