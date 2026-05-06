@@ -19,7 +19,6 @@ function toNum(n: any): number {
 }
 
 function pickName(p: any, fallback: string) {
-  // Prefer explicit English fields if present, then generic fields
   return (
     String(p?.product_name_en || "").trim() ||
     String(p?.product_name || "").trim() ||
@@ -29,22 +28,56 @@ function pickName(p: any, fallback: string) {
   );
 }
 
+function mapProductsToFoods(products: any[], fallbackQuery: string): Food[] {
+  return (products || [])
+    .filter((p: any) => p?.nutriments)
+    .map((p: any) => {
+      const calories = toNum(p.nutriments?.["energy-kcal_100g"] ?? p.nutriments?.["energy_100g"]);
+      return {
+        id: String(p.code),
+        code: String(p.code),
+        name: pickName(p, fallbackQuery),
+        brand: String(p.brands || "Unknown"),
+        image: p.image_front_small_url || p.image_front_url || null,
+        calories,
+        protein: toNum(p.nutriments?.proteins_100g),
+        carbs: toNum(p.nutriments?.carbohydrates_100g),
+        fat: toNum(p.nutriments?.fat_100g),
+      };
+    });
+}
+
+function boostSort(foods: Food[]) {
+  foods.sort((a, b) => {
+    const aScore = (a.image ? 2 : 0) + (/^[\x00-\x7F]*$/.test(a.name) ? 1 : 0);
+    const bScore = (b.image ? 2 : 0) + (/^[\x00-\x7F]*$/.test(b.name) ? 1 : 0);
+    return bScore - aScore;
+  });
+  return foods;
+}
+
+async function fetchOFF(url: string) {
+  const r = await fetch(url, {
+    headers: {
+      "Accept-Language": "en-GB,en;q=0.9",
+      // Not strictly required, but helps with some proxies/caches
+      "User-Agent": "BXKR/1.0 (nutrition search)",
+    },
+  });
+  if (!r.ok) return null;
+  const j = await r.json().catch(() => null);
+  return j;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const query = String(req.query.query || "").trim();
   const barcode = String(req.query.barcode || "").trim();
 
   try {
-    // Barcode lookup takes precedence
+    // Barcode lookup takes precedence when provided
     if (barcode && barcode.length >= 6) {
       const url = `https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode)}.json`;
-      const response = await fetch(url, {
-        headers: {
-          // Encourage English responses where possible
-          "Accept-Language": "en-GB,en;q=0.9",
-        },
-      });
-      if (!response.ok) return res.status(502).json({ foods: [] });
-      const data = await response.json();
+      const data = await fetchOFF(url);
 
       if (!data || data.status !== 1 || !data.product || !data.product.nutriments) {
         return res.status(200).json({ foods: [] });
@@ -70,48 +103,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!query || query.length < 2) return res.status(200).json({ foods: [] });
 
-    // Bias to English + UK
-    const url =
+    // 1) UK + English first (preferred)
+    const urlUK =
       `https://world.openfoodfacts.org/cgi/search.pl?` +
       `search_terms=${encodeURIComponent(query)}` +
       `&search_simple=1&action=process&json=1&page_size=30` +
       `&lc=en&tags_lc=en` +
       `&countries=United%20Kingdom`;
 
-    const response = await fetch(url, {
-      headers: {
-        "Accept-Language": "en-GB,en;q=0.9",
-      },
-    });
+    const dataUK = await fetchOFF(urlUK);
+    const foodsUK = dataUK?.products ? boostSort(mapProductsToFoods(dataUK.products, query)) : [];
 
-    if (!response.ok) return res.status(502).json({ foods: [] });
-    const data = await response.json();
+    if (foodsUK.length > 0) {
+      return res.status(200).json({ foods: foodsUK });
+    }
 
-    const foods: Food[] = (data.products || [])
-      .filter((p: any) => p?.nutriments)
-      .map((p: any) => {
-        const calories = toNum(p.nutriments?.["energy-kcal_100g"] ?? p.nutriments?.["energy_100g"]);
-        return {
-          id: String(p.code),
-          code: String(p.code),
-          name: pickName(p, query),
-          brand: String(p.brands || "Unknown"),
-          image: p.image_front_small_url || p.image_front_url || null,
-          calories,
-          protein: toNum(p.nutriments?.proteins_100g),
-          carbs: toNum(p.nutriments?.carbohydrates_100g),
-          fat: toNum(p.nutriments?.fat_100g),
-        };
-      });
+    // 2) Fallback: global English (prevents “chicken” returning nothing)
+    const urlGlobal =
+      `https://world.openfoodfacts.org/cgi/search.pl?` +
+      `search_terms=${encodeURIComponent(query)}` +
+      `&search_simple=1&action=process&json=1&page_size=30` +
+      `&lc=en&tags_lc=en`;
 
-    // Optional: small sort boost for “English-ish” names and image presence
-    foods.sort((a, b) => {
-      const aScore = (a.image ? 2 : 0) + (/^[\x00-\x7F]*$/.test(a.name) ? 1 : 0);
-      const bScore = (b.image ? 2 : 0) + (/^[\x00-\x7F]*$/.test(b.name) ? 1 : 0);
-      return bScore - aScore;
-    });
+    const dataGlobal = await fetchOFF(urlGlobal);
+    const foodsGlobal = dataGlobal?.products ? boostSort(mapProductsToFoods(dataGlobal.products, query)) : [];
 
-    return res.status(200).json({ foods });
+    return res.status(200).json({ foods: foodsGlobal });
   } catch (err) {
     console.error("[foods/search] error:", err);
     return res.status(500).json({ foods: [] });
