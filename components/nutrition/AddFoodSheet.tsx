@@ -1,6 +1,5 @@
-"use client";
-
 // File: components/nutrition/AddFoodSheet.tsx
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import FoodEditor, { Food } from "./FoodEditor";
@@ -108,7 +107,6 @@ export default function AddFoodSheet({
   }, [selectedFood]);
 
   const chips = useMemo(() => [25, 50, 75, 100], []);
-
   const sheetTitle = meal ? `Add food to ${meal}` : "Add food";
 
   const favsCompact = useMemo(() => favourites.slice(0, 10), [favourites]);
@@ -133,26 +131,22 @@ export default function AddFoodSheet({
       <div
         className="position-absolute bottom-0 start-0 w-100"
         style={{
-          background: "#0b0f14",
-          borderTopLeftRadius: 18,
-          borderTopRightRadius: 18,
           maxHeight: "85vh",
           overflowY: "auto",
           WebkitOverflowScrolling: "touch",
-          boxShadow: "0 -18px 40px rgba(0,0,0,0.45)",
         }}
       >
-        <div className="p-3">
+        {/* Iron Acre surface */}
+        <div className="ia-tile ia-tile-pad" style={{ borderTopLeftRadius: 18, borderTopRightRadius: 18 }}>
           <div className="d-flex justify-content-between align-items-center mb-2">
-            <div className="fw-bold" style={{ fontSize: 16 }}>
-              {sheetTitle}
-            </div>
+            <div className="ia-tile-title">{sheetTitle}</div>
 
             <button
-              className="btn btn-sm btn-outline-light"
+              className="ia-btn ia-btn-outline"
               onClick={onClose}
-              style={{ borderRadius: 999, minWidth: 40, minHeight: 40 }}
+              style={{ borderRadius: 999, minWidth: 40, minHeight: 40, padding: 0 }}
               aria-label="Close"
+              type="button"
             >
               ✕
             </button>
@@ -163,14 +157,15 @@ export default function AddFoodSheet({
               {/* Grams chips (non-manual only) */}
               {!String(selectedFood.id || "").startsWith("manual-") && (
                 <div className="mb-2">
-                  <div className="small text-dim mb-1">Amount</div>
+                  <div className="ia-kicker mb-1">Amount</div>
 
                   <div className="d-flex flex-wrap" style={{ gap: 8 }}>
                     {chips.map((g) => (
                       <button
                         key={g}
-                        className={`btn btn-sm ${Math.round(grams) === g ? "btn-bxkr" : "btn-bxkr-outline"}`}
-                        style={{ borderRadius: 999, minHeight: 40 }}
+                        type="button"
+                        className={Math.round(grams) === g ? "ia-btn ia-btn-primary" : "ia-btn ia-btn-outline"}
+                        style={{ borderRadius: 999, minHeight: 40, padding: "8px 12px" }}
                         onClick={() => setGrams(g)}
                       >
                         {g}g
@@ -179,10 +174,11 @@ export default function AddFoodSheet({
 
                     {servingG ? (
                       <button
-                        className={`btn btn-sm ${
-                          Math.round(grams) === Math.round(servingG) ? "btn-bxkr" : "btn-bxkr-outline"
-                        }`}
-                        style={{ borderRadius: 999, minHeight: 40 }}
+                        type="button"
+                        className={
+                          Math.round(grams) === Math.round(servingG) ? "ia-btn ia-btn-primary" : "ia-btn ia-btn-outline"
+                        }
+                        style={{ borderRadius: 999, minHeight: 40, padding: "8px 12px" }}
                         onClick={() => setGrams(servingG)}
                         title={selectedFood.servingSize || "Serving"}
                       >
@@ -222,13 +218,13 @@ export default function AddFoodSheet({
                 />
 
                 <button
-                  className="btn btn-sm"
+                  type="button"
+                  className="ia-btn ia-btn-outline"
                   style={{
                     minHeight: 44,
                     borderRadius: 12,
-                    border: `1px solid ${ACCENT}`,
+                    borderColor: ACCENT,
                     color: ACCENT,
-                    background: "transparent",
                     whiteSpace: "nowrap",
                   }}
                   onClick={onCreateManual}
@@ -237,19 +233,20 @@ export default function AddFoodSheet({
                 </button>
               </div>
 
-              {/* Favourites (compact rail; hidden when typing) */}
+              {/* Favourites: compact rail; hidden while typing */}
               {!inSearchMode && favourites.length > 0 && (
                 <div className="mb-3">
                   <div className="d-flex justify-content-between align-items-center mb-1">
-                    <div className="small text-dim">Favourites</div>
+                    <div className="ia-kicker">Favourites</div>
 
                     {favourites.length > 10 ? (
                       <button
-                        className="btn btn-sm btn-link p-0"
-                        style={{ color: ACCENT, textDecoration: "none" }}
+                        type="button"
+                        className="ia-btn"
+                        style={{ padding: "6px 10px", background: "transparent" }}
                         onClick={() => setShowAllFavs((v) => !v)}
                       >
-                        {showAllFavs ? "Less" : "More"}
+                        <span style={{ color: ACCENT }}>{showAllFavs ? "Less" : "More"}</span>
                       </button>
                     ) : null}
                   </div>
@@ -267,13 +264,13 @@ export default function AddFoodSheet({
                       {favsToShow.map((f) => (
                         <button
                           key={(f.id || f.code || f.name) + "-fav"}
-                          className="btn btn-sm"
+                          type="button"
+                          className="ia-btn"
                           style={{
                             minHeight: 40,
                             borderRadius: 999,
                             border: `1px solid ${ACCENT}55`,
                             background: "rgba(255,255,255,0.04)",
-                            color: "#fff",
                             whiteSpace: "nowrap",
                           }}
                           onClick={() => onSelectFood(f)}
@@ -288,13 +285,13 @@ export default function AddFoodSheet({
                       {favsToShow.map((f) => (
                         <button
                           key={(f.id || f.code || f.name) + "-fav-all"}
-                          className="btn btn-sm"
+                          type="button"
+                          className="ia-btn"
                           style={{
                             minHeight: 40,
                             borderRadius: 999,
                             border: `1px solid ${ACCENT}55`,
                             background: "rgba(255,255,255,0.04)",
-                            color: "#fff",
                           }}
                           onClick={() => onSelectFood(f)}
                           title="Use favourite"
@@ -324,10 +321,10 @@ export default function AddFoodSheet({
                         return (
                           <div
                             key={(food.id || food.code || name) + "-res"}
-                            className="futuristic-card p-2"
+                            className="ia-tile"
                             style={{
                               borderRadius: 14,
-                              minHeight: 56,
+                              padding: 12,
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "space-between",
@@ -335,6 +332,7 @@ export default function AddFoodSheet({
                             }}
                           >
                             <button
+                              type="button"
                               className="btn btn-link text-start p-0"
                               style={{
                                 color: "#fff",
@@ -365,8 +363,9 @@ export default function AddFoodSheet({
                             </button>
 
                             <button
-                              className="btn btn-sm btn-outline-light"
-                              style={{ borderRadius: 999, minHeight: 40, minWidth: 40 }}
+                              type="button"
+                              className="ia-btn ia-btn-outline"
+                              style={{ borderRadius: 999, minHeight: 40, minWidth: 40, padding: 0 }}
                               onClick={(e) => {
                                 stop(e);
                                 toggleFavourite(food);
