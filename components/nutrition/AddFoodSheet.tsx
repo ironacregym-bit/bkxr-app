@@ -1,11 +1,11 @@
-// components/nutrition/AddFoodSheet.tsx
-
+// File: components/nutrition/AddFoodSheet.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import FoodEditor, { Food } from "./FoodEditor";
 import BarcodeScannerGate from "./BarcodeScannerGate";
 import { NUTRITION_ACCENT as ACCENT } from "./nutritionTheme";
+import { NUTRITION_COLORS as COLORS } from "./nutritionTheme";
 
 function parseServingGrams(servingSize?: string | null): number | null {
   if (!servingSize) return null;
@@ -13,6 +13,16 @@ function parseServingGrams(servingSize?: string | null): number | null {
   if (!m) return null;
   const n = Number(m[1]);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function fmt0(n: any) {
+  const v = Number(n);
+  return Number.isFinite(v) ? String(Math.round(v)) : "-";
+}
+
+function stop(e: any) {
+  e.preventDefault();
+  e.stopPropagation();
 }
 
 export default function AddFoodSheet({
@@ -48,7 +58,6 @@ export default function AddFoodSheet({
   onClose: () => void;
   isPremium: boolean;
   onScanRequested: () => void;
-
   selectedFood: Food | null;
   usingServing: "per100" | "serving";
   setUsingServing: (v: "per100" | "serving") => void;
@@ -60,13 +69,22 @@ export default function AddFoodSheet({
   const [grams, setGrams] = useState<number>(100);
 
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-      return () => {
-        document.body.style.overflow = "";
-      };
-    }
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   useEffect(() => {
     if (!selectedFood) return;
@@ -82,10 +100,18 @@ export default function AddFoodSheet({
 
   const chips = useMemo(() => [25, 50, 75, 100], []);
 
+  const sheetTitle = meal ? `Add food to ${meal}` : "Add food";
+
   if (!open || !meal) return null;
 
   return (
-    <div className="position-fixed top-0 start-0 w-100 h-100" style={{ zIndex: 1050 }}>
+    <div
+      className="position-fixed top-0 start-0 w-100 h-100"
+      style={{ zIndex: 1050 }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={sheetTitle}
+    >
       <div
         className="position-absolute top-0 start-0 w-100 h-100"
         style={{ background: "rgba(0,0,0,0.6)" }}
@@ -96,23 +122,31 @@ export default function AddFoodSheet({
         className="position-absolute bottom-0 start-0 w-100"
         style={{
           background: "#0b0f14",
-          borderTopLeftRadius: 16,
-          borderTopRightRadius: 16,
+          borderTopLeftRadius: 18,
+          borderTopRightRadius: 18,
           maxHeight: "85vh",
           overflowY: "auto",
+          WebkitOverflowScrolling: "touch",
+          boxShadow: "0 -18px 40px rgba(0,0,0,0.45)",
         }}
       >
         <div className="p-3">
           <div className="d-flex justify-content-between align-items-center mb-2">
-            <div className="fw-bold">Add food to {meal}</div>
-            <button className="btn btn-sm btn-outline-light" onClick={onClose} style={{ borderRadius: 999 }}>
+            <div className="fw-bold" style={{ fontSize: 16 }}>
+              {sheetTitle}
+            </div>
+            <button
+              className="btn btn-sm btn-outline-light"
+              onClick={onClose}
+              style={{ borderRadius: 999, minHeight: 40, minWidth: 40 }}
+              aria-label="Close"
+            >
               ✕
             </button>
           </div>
 
           {selectedFood ? (
             <>
-              {/* Grams chips (non-manual only) */}
               {!String(selectedFood.id || "").startsWith("manual-") && (
                 <div className="mb-2">
                   <div className="small text-dim mb-1">Amount</div>
@@ -121,7 +155,7 @@ export default function AddFoodSheet({
                       <button
                         key={g}
                         className={`btn btn-sm ${Math.round(grams) === g ? "btn-bxkr" : "btn-bxkr-outline"}`}
-                        style={{ borderRadius: 999 }}
+                        style={{ borderRadius: 999, minHeight: 40 }}
                         onClick={() => setGrams(g)}
                       >
                         {g}g
@@ -130,8 +164,10 @@ export default function AddFoodSheet({
 
                     {servingG ? (
                       <button
-                        className={`btn btn-sm ${Math.round(grams) === Math.round(servingG) ? "btn-bxkr" : "btn-bxkr-outline"}`}
-                        style={{ borderRadius: 999 }}
+                        className={`btn btn-sm ${
+                          Math.round(grams) === Math.round(servingG) ? "btn-bxkr" : "btn-bxkr-outline"
+                        }`}
+                        style={{ borderRadius: 999, minHeight: 40 }}
                         onClick={() => setGrams(servingG)}
                         title={selectedFood.servingSize || "Serving"}
                       >
@@ -165,10 +201,13 @@ export default function AddFoodSheet({
                   placeholder="Search foods…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
+                  style={{ minHeight: 44 }}
+                  autoFocus
                 />
                 <button
                   className="btn btn-sm"
                   style={{
+                    minHeight: 44,
                     borderRadius: 12,
                     border: `1px solid ${ACCENT}`,
                     color: ACCENT,
@@ -182,14 +221,15 @@ export default function AddFoodSheet({
               </div>
 
               {favourites.length > 0 && (
-                <div className="mb-2">
+                <div className="mb-3">
                   <div className="small text-dim mb-1">Favourites</div>
                   <div className="d-flex flex-wrap" style={{ gap: 8 }}>
-                    {favourites.map((f) => (
+                    {favourites.slice(0, 24).map((f) => (
                       <button
                         key={(f.id || f.code || f.name) + "-fav"}
                         className="btn btn-sm"
                         style={{
+                          minHeight: 40,
                           borderRadius: 999,
                           border: `1px solid ${ACCENT}55`,
                           background: "rgba(255,255,255,0.04)",
@@ -212,21 +252,56 @@ export default function AddFoodSheet({
                   ) : results.length === 0 ? (
                     <div className="text-dim small">No foods found</div>
                   ) : (
-                    <div className="d-flex flex-column" style={{ gap: 8 }}>
-                      {results.map((food) => (
-                        <button
-                          key={(food.id || food.code || food.name) + "-res"}
-                          className="futuristic-card p-2 text-start"
-                          onClick={() => onSelectFood(food)}
-                        >
-                          <div className="fw-semibold" style={{ lineHeight: 1.2 }}>
-                            {food.name || food.code || "Food"}
+                    <div className="d-flex flex-column" style={{ gap: 10 }}>
+                      {results.map((food) => {
+                        const fav = isFavourite(food);
+                        const name = food.name || food.code || "Food";
+                        const brand = (food as any)?.brand ? String((food as any).brand) : "";
+                        return (
+                          <div
+                            key={(food.id || food.code || name) + "-res"}
+                            className="futuristic-card p-2"
+                            style={{
+                              borderRadius: 14,
+                              minHeight: 56,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 10,
+                            }}
+                          >
+                            <button
+                              className="btn btn-link text-start p-0"
+                              style={{ color: "#fff", textDecoration: "none", flex: 1, minWidth: 0 }}
+                              onClick={() => onSelectFood(food)}
+                            >
+                              <div className="fw-semibold" style={{ lineHeight: 1.2, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {name}
+                              </div>
+                              <div className="small text-dim" style={{ lineHeight: 1.2 }}>
+                                {brand ? (
+                                  <span style={{ marginRight: 10 }}>{brand}</span>
+                                ) : null}
+                                <span style={{ color: COLORS.calories }}>{fmt0(food.calories)} kcal</span>
+                                <span className="text-dim"> /100g</span>
+                              </div>
+                            </button>
+
+                            <button
+                              className="btn btn-sm btn-outline-light"
+                              style={{ borderRadius: 999, minHeight: 40, minWidth: 40 }}
+                              onClick={(e) => {
+                                stop(e);
+                                toggleFavourite(food);
+                              }}
+                              title={fav ? "Unfavourite" : "Favourite"}
+                              aria-label={fav ? "Unfavourite" : "Favourite"}
+                            >
+                              <i className={fav ? "fas fa-star text-warning" : "far fa-star text-dim"} />
+                            </button>
                           </div>
-                          <div className="small text-dim">
-                            {Number(food.calories || 0)} kcal / 100g
-                          </div>
-                        </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
