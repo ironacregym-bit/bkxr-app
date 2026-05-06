@@ -43,9 +43,14 @@ function MiniRing({
           })}
         />
       </div>
-      <div style={{ lineHeight: 1.05 }}>
-        <div className="small text-dim" style={{ fontSize: 12 }}>{label}</div>
-        <div className="fw-semibold" style={{ fontSize: 13 }}>{valueText}</div>
+
+      <div style={{ lineHeight: 1.05, minWidth: 0 }}>
+        <div className="ia-kicker" style={{ fontSize: 0.72 + "rem" }}>
+          {label}
+        </div>
+        <div className="fw-semibold" style={{ fontSize: 13, whiteSpace: "nowrap" }}>
+          {valueText}
+        </div>
       </div>
     </div>
   );
@@ -61,67 +66,10 @@ export default function MacrosCard({
   progress: MacroProgress;
 }) {
   return (
-    <section className="futuristic-card p-3 mb-3">
-      <div className="text-dim small mb-2" style={{ letterSpacing: 0.6, textTransform: "uppercase" }}>
-        Today’s progress
+    <section className="ia-tile ia-tile-pad mb-3">
+      <div className="d-flex justify-content-between align-items-start mb-2">
+        <div className="ia-kicker">Today’s progress</div>
       </div>
 
-      {/* Force a single-row layout even on mobile */}
+      {/* One row: calories ring + mini rings column */}
       <div className="d-flex align-items-center" style={{ gap: 14 }}>
-        {/* Calories ring */}
-        <div style={{ width: 120, height: 120, position: "relative", flex: "0 0 auto" }}>
-          <CircularProgressbar
-            value={clampPct(progress.calories)}
-            strokeWidth={10}
-            styles={buildStyles({
-              pathColor: COLORS.calories,
-              trailColor: "rgba(255,255,255,0.08)",
-              strokeLinecap: "round",
-              pathTransitionDuration: 0.45,
-            })}
-          />
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              pointerEvents: "none",
-            }}
-          >
-            <div className="fw-bold" style={{ fontSize: 24, lineHeight: 1 }}>
-              {fmt0(totals.calories)}
-            </div>
-            <div className="text-dim" style={{ fontSize: 11, marginTop: 2 }}>
-              / {fmt0(goals.calories)} cal
-            </div>
-          </div>
-        </div>
-
-        {/* Mini rings column (still on the same row) */}
-        <div className="d-flex flex-column" style={{ gap: 10, minWidth: 0 }}>
-          <MiniRing
-            label="Protein"
-            color={COLORS.protein}
-            pct={progress.protein}
-            valueText={`${fmt0(totals.protein)}/${fmt0(goals.protein)}g`}
-          />
-          <MiniRing
-            label="Carbs"
-            color={COLORS.carbs}
-            pct={progress.carbs}
-            valueText={`${fmt0(totals.carbs)}/${fmt0(goals.carbs)}g`}
-          />
-          <MiniRing
-            label="Fat"
-            color={COLORS.fat}
-            pct={progress.fat}
-            valueText={`${fmt0(totals.fat)}/${fmt0(goals.fat)}g`}
-          />
-        </div>
-      </div>
-    </section>
-  );
-}
