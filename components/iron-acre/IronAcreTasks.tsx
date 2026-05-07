@@ -1,3 +1,4 @@
+// File: components/iron-acre/IronAcreTasks.tsx// 
 import { useRouter } from "next/router";
 import useSWR from "swr";
 import IronAcreTaskCard from "./IronAcreTaskCard";
@@ -81,7 +82,7 @@ export default function IronAcreTasks({
 
   const durationMinutes =
     typeof todayData?.workoutSummary?.duration === "number"
-      ? todayData!.workoutSummary!.duration
+      ? todayData.workoutSummary.duration
       : null;
 
   const { data: workoutData } = useSWR<WorkoutApi>(
@@ -115,14 +116,6 @@ export default function IronAcreTasks({
         weeklyTotals={weeklyTotals}
         hasWorkoutToday={Boolean(sessionId)}
       />
-
-      <IronAcreTaskCard
-        title="Update your 1RMs"
-        subtitle="Keep your maxes current so % loads stay accurate"
-        ctaLabel="1RMs"
-        onCta={() => router.push("/iron-acre/strength")}
-        variant="neon"
-      />
     </div>
-  );
+  )
 }
