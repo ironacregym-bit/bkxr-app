@@ -1,3 +1,5 @@
+// File: pages/api/weekly/overview.ts
+
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { getServerSession } from "next-auth";
@@ -57,6 +59,7 @@ const NUTRITION_COLLECTION = "nutrition_logs";
 const WORKOUTS_COLLECTION = "workouts";
 const COMPLETIONS_COLLECTION = "workoutCompletions";
 const ASSIGNMENTS_COLLECTION = "workout_assignments"; // Recurring assignments
+const PROGRAMS_COLLECTION = "programs";
 
 /** ===== Helpers ===== */
 function isYMD(s: string): boolean {
@@ -113,6 +116,26 @@ function toDate(v: any): Date | null {
   } catch {
     return null;
   }
+}
+
+function alignedDowMon0(d: Date): number {
+  // JS: 0=Sun..6=Sat -> Monday=0..Sunday=6
+  return (d.getDay() + 6) % 7;
+}
+
+function addDays(d: Date, days: number): Date {
+  const out = new Date(d);
+  out.setDate(out.getDate() + days);
+  return out;
+}
+
+function pushUniqueById(map: Map<string, SimpleWorkoutRef[]>, ymd: string, ref: SimpleWorkoutRef) {
+  const arr = map.get(ymd) || [];
+  const id = String(ref.id || "").trim();
+  if (!id) return;
+  if (arr.some((x) => String(x.id) === id)) return;
+  arr.push(ref);
+  map.set(ymd, arr);
 }
 
 /** Pull every plausible workout identifier from a completion */
@@ -259,6 +282,129 @@ export default async function handler(
       programmedByDay.set(dk, arr);
     });
 
+    /** ===== PROGRAMS (assigned + schedule -> programmedByDay) ===== */
+    type ProgramDoc = {
+      assigned_to?: any;
+      start_date?: any;
+      weeks?: any;
+      status?: string;
+      name?: any;
+    };
+
+    type ProgramScheduleDoc = {
+      workout_id?: any;
+      day_of_week?: any; // 0=Mon .. 6=Sun (confirmed)
+      order?: any;
+    };
+
+    let programs: { id: string; ref: any; data: ProgramDoc }[] = [];
+    try {
+      const snap = await firestore
+        .collection(PROGRAMS_COLLECTION)
+        .where("assigned_to", "array-contains", userEmail)
+        .get();
+      programs = snap.docs.map((d: any) => ({ id: d.id, ref: d.ref, data: (d.data() || {}) as ProgramDoc }));
+    } catch {
+      // Soft fallback if query/index fails
+      const snap = await firestore.collection(PROGRAMS_COLLECTION).get();
+      programs = snap.docs
+        .map((d: any) => ({ id: d.id, ref: d.ref, data: (d.data() || {}) as ProgramDoc }))
+        .filter((p) => {
+          const assigned = p?.data?.assigned_to;
+          if (!assigned) return false;
+          if (Array.isArray(assigned)) {
+            return assigned.map((x: any) => String(x || "").toLowerCase()).includes(userEmail);
+          }
+          return String(assigned || "").toLowerCase() === userEmail;
+        });
+    }
+
+    // Only programs overlapping this week
+    const activePrograms = programs
+      .map((p) => {
+        const start = toDate(p.data.start_date);
+        const weeks = Number(p.data.weeks || 0);
+        if (!start || !weeks) return null;
+
+        // End is exclusive: start + weeks*7 days
+        const endExclusive = addDays(new Date(start), weeks * 7);
+        return { ...p, start, endExclusive };
+      })
+      .filter(Boolean)
+      .filter((p: any) => {
+        // overlap [weekStart..weekEnd] with [start..endExclusive)
+        return !(p.endExclusive <= weekStart || p.start > weekEnd);
+      }) as Array<{ id: string; ref: any; data: ProgramDoc; start: Date; endExclusive: Date }>;
+
+    // Stable ordering across multiple programs (start date then id)
+    activePrograms.sort((a, b) => {
+      const at = a.start.getTime();
+      const bt = b.start.getTime();
+      if (at !== bt) return at - bt;
+      return String(a.id).localeCompare(String(b.id));
+    });
+
+    // Collect required workout IDs (for name resolution)
+    const programWorkoutIds = new Set<string>();
+    const programPlacements: Array<{ ymd: string; workoutId: string }> = [];
+
+    for (const p of activePrograms) {
+      const scheduleSnap = await p.ref.collection("schedule").get();
+      const schedule = scheduleSnap.docs
+        .map((d: any) => ({ id: d.id, ...(d.data() || {}) }))
+        .filter((x: any) => x && x.workout_id && x.day_of_week != null) as any[];
+
+      // order matters (confirmed)
+      schedule.sort((a: any, b: any) => {
+        const da = Number(a.day_of_week);
+        const db = Number(b.day_of_week);
+        if (da !== db) return da - db;
+        const oa = Number(a.order ?? 0);
+        const ob = Number(b.order ?? 0);
+        if (oa !== ob) return oa - ob;
+        return String(a.id).localeCompare(String(b.id));
+      });
+
+      for (const entry of schedule as ProgramScheduleDoc[]) {
+        const wid = String(entry.workout_id || "").trim();
+        const dow = Number(entry.day_of_week);
+        if (!wid || !Number.isFinite(dow)) continue;
+
+        // Only place within the requested week
+        for (const day of weekDays) {
+          const ymd = formatYMD(day);
+
+          // Monday=0..Sunday=6 (confirmed)
+          if (alignedDowMon0(day) !== dow) continue;
+
+          // Active window: [start..endExclusive)
+          if (day < p.start || day >= p.endExclusive) continue;
+
+          programPlacements.push({ ymd, workoutId: wid });
+          programWorkoutIds.add(wid);
+        }
+      }
+    }
+
+    // Resolve names for workouts referenced by program schedule
+    const programNameByWorkoutId = new Map<string, string | undefined>();
+    if (programWorkoutIds.size) {
+      const ids = Array.from(programWorkoutIds);
+      const docSnaps = await Promise.all(ids.map((wid) => firestore.collection(WORKOUTS_COLLECTION).doc(wid).get()));
+      docSnaps.forEach((snap) => {
+        if (!snap.exists) return;
+        const w = snap.data() as any;
+        const name = typeof w?.workout_name === "string" ? w.workout_name : undefined;
+        programNameByWorkoutId.set(snap.id, name);
+      });
+    }
+
+    // Feed program workouts into programmedByDay (so the rest of the API remains unchanged)
+    for (const placement of programPlacements) {
+      const name = programNameByWorkoutId.get(placement.workoutId);
+      pushUniqueById(programmedByDay, placement.ymd, { id: placement.workoutId, name });
+    }
+
     /** ===== RECURRING (assignments) ===== */
     const recurringByDay = new Map<string, SimpleWorkoutRef[]>();
 
@@ -297,9 +443,7 @@ export default async function handler(
     const assignIds = Array.from(new Set(overlapping.map((a) => String(a.workout_id || "").trim()).filter(Boolean)));
     const nameByWorkoutId = new Map<string, string | undefined>();
     if (assignIds.length) {
-      const docSnaps = await Promise.all(
-        assignIds.map((wid) => firestore.collection(WORKOUTS_COLLECTION).doc(wid).get())
-      );
+      const docSnaps = await Promise.all(assignIds.map((wid) => firestore.collection(WORKOUTS_COLLECTION).doc(wid).get()));
       docSnaps.forEach((snap) => {
         if (!snap.exists) return;
         const wid = snap.id;
@@ -423,9 +567,7 @@ export default async function handler(
 
     for (const c of completionsWeek) {
       const completedAt: Date | undefined =
-        c.completed_date?.toDate?.() ||
-        c.date_completed?.toDate?.() ||
-        (c.completed_at?.toDate?.() || undefined);
+        c.completed_date?.toDate?.() || c.date_completed?.toDate?.() || (c.completed_at?.toDate?.() || undefined);
       if (!completedAt || isNaN(completedAt.getTime?.() || NaN)) continue;
 
       // get all plausible IDs and mark them done
@@ -441,10 +583,7 @@ export default async function handler(
             ? c.duration_minutes
             : undefined,
         weight_completed_with:
-          c.weight_completed_with ??
-          c.weight_compelted_with /* legacy typo */ ??
-          c.weight_used ??
-          undefined,
+          c.weight_completed_with ?? c.weight_compelted_with /* legacy typo */ ?? c.weight_used ?? undefined,
         completedAt,
       };
 
@@ -488,10 +627,8 @@ export default async function handler(
       const workoutIds = mandatorySet.map((w) => w.id);
       const hasWorkout = mandatorySet.length > 0;
 
-      const recurringDone =
-        hasRecurringToday && todaysRecurring.some((w) => doneInWeek.has(w.id));
-      const workoutDone =
-        hasWorkout && workoutIds.some((id) => doneInWeek.has(id));
+      const recurringDone = hasRecurringToday && todaysRecurring.some((w) => doneInWeek.has(w.id));
+      const workoutDone = hasWorkout && workoutIds.some((id) => doneInWeek.has(id));
 
       // Per‑week summary (latest completion this week among mandatory IDs)
       let workoutCalories = 0;
@@ -530,9 +667,7 @@ export default async function handler(
           : undefined;
 
       const bfChange =
-        currentBodyFat !== undefined && lastBodyFat !== undefined
-          ? currentBodyFat - lastBodyFat
-          : undefined;
+        currentBodyFat !== undefined && lastBodyFat !== undefined ? currentBodyFat - lastBodyFat : undefined;
 
       const dayTasks = 1 + 1 + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
       totalTasks += dayTasks;
@@ -566,9 +701,7 @@ export default async function handler(
         hasWorkout,
         workoutDone,
         workoutIds,
-        workoutSummary: workoutDone
-          ? { calories: workoutCalories, duration: workoutDuration, weightUsed }
-          : undefined,
+        workoutSummary: workoutDone ? { calories: workoutCalories, duration: workoutDuration, weightUsed } : undefined,
 
         hasRecurringToday,
         recurringWorkouts: todaysRecurring,
