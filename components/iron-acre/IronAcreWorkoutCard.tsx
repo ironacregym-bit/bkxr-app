@@ -1,3 +1,5 @@
+// File: components/iron-acre/IronAcreWorkoutCard.tsx
+
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -25,8 +27,16 @@ type SimpleWorkoutRef = { id: string; name?: string };
 
 type DayOverview = {
   dateKey: string;
+
+  hasWorkout?: boolean;
+  workoutDone?: boolean;
+  workoutIds?: string[];
+
+  hasRecurringToday?: boolean;
   recurringWorkouts: SimpleWorkoutRef[];
   recurringDone: boolean;
+
+  optionalWorkouts?: SimpleWorkoutRef[];
 };
 
 type WeeklyTotals = {
@@ -111,28 +121,53 @@ function dayLabelFromYMD(ymd: string) {
   return d.toLocaleDateString(undefined, { weekday: "short" });
 }
 
+function refsFromIds(ids: string[]) {
+  return (ids || []).map((id) => ({ id: String(id) }));
+}
+
+function workoutsForWeekDay(d: DayOverview): SimpleWorkoutRef[] {
+  const recurring = d.recurringWorkouts || [];
+  if (recurring.length) return recurring;
+
+  const ids = d.workoutIds || [];
+  if (ids.length) return refsFromIds(ids);
+
+  const optional = d.optionalWorkouts || [];
+  if (optional.length) return optional;
+
+  return [];
+}
+
+function doneForWeekDay(d: DayOverview): boolean {
+  const recurring = d.recurringWorkouts || [];
+  if (recurring.length) return Boolean(d.recurringDone);
+
+  const ids = d.workoutIds || [];
+  if (ids.length) return Boolean(d.workoutDone);
+
+  return false;
+}
+
 function buildWeekRows(weekDays: DayOverview[], dateKey: string, workoutId: string): WeekRows {
   const rows: WeekRow[] = (weekDays || [])
-    .filter((d) => (d.recurringWorkouts || []).length > 0)
     .map((d) => {
-      const isCompletedDay = Boolean(d.recurringDone);
+      const workouts = workoutsForWeekDay(d);
+      const done = doneForWeekDay(d);
 
-      const workouts = (d.recurringWorkouts || []).filter((w) => {
+      const filtered = workouts.filter((w) => {
         const isToday = d.dateKey === dateKey;
         const isSameWorkout = Boolean(workoutId) && w.id === workoutId;
 
-        // Only hide TODAY'S workout when it is still pending
-        if (isToday && isSameWorkout && !isCompletedDay) return false;
+        if (isToday && isSameWorkout && !done) return false;
 
-        // If completed, always keep it visible under Completed
         return true;
       });
 
       return {
         ymd: d.dateKey,
         day: dayLabelFromYMD(d.dateKey),
-        workouts,
-        done: isCompletedDay,
+        workouts: filtered,
+        done,
       };
     })
     .filter((r) => r.workouts.length > 0);
@@ -167,7 +202,7 @@ export default function IronAcreWorkoutCard({
   const startHref = workoutId ? `/gymworkout/${encodeURIComponent(workoutId)}?date=${encodeURIComponent(dateKey)}` : "#";
 
   return (
-    <section className="futuristic-card ia-tile ia-tile-pad mb-3">
+    <section className="ia-tile ia-tile-pad mb-3">
       <div className="d-flex justify-content-between align-items-center mb-2">
         <div className="ia-kicker">
           <i className="fas fa-dumbbell" style={{ color: "var(--ia-neon)" }} />
@@ -177,7 +212,7 @@ export default function IronAcreWorkoutCard({
         <button
           type="button"
           onClick={() => setShowWeek((v) => !v)}
-          className="btn btn-sm ia-btn-outline"
+          className="ia-btn ia-btn-outline"
           title="Toggle this week"
         >
           <i className={`fas fa-chevron-${showWeek ? "up" : "down"}`} style={{ marginRight: 8 }} />
@@ -208,9 +243,7 @@ export default function IronAcreWorkoutCard({
           </div>
 
           <div className="text-dim small mt-1" style={{ maxWidth: 520 }}>
-            {(workout?.focus ||
-              workout?.notes ||
-              "Strength session targeting key patterns with varied angles and equipment.").toString()}
+            {(workout?.focus || workout?.notes || "Strength session targeting key patterns with varied angles and equipment.").toString()}
           </div>
 
           <div
@@ -268,7 +301,7 @@ export default function IronAcreWorkoutCard({
           <div className="mt-3">
             <Link
               href={startHref}
-              className="btn btn-sm w-100 ia-btn-primary"
+              className="ia-btn ia-btn-primary w-100"
               style={{
                 pointerEvents: workoutId ? "auto" : "none",
                 opacity: workoutId ? 1 : 0.6,
@@ -320,7 +353,8 @@ export default function IronAcreWorkoutCard({
                             }}
                           >
                             <div className="text-truncate" style={{ minWidth: 0 }}>
-                              <div className="fw-semibold text-truncate">{w.name || w.id}</div>
+                              <div className="fw-semibold text-truncate">{w.name || "Gym session"}</div>
+                              {!w.name ? <div className="text-dim small text-truncate">{w.id}</div> : null}
                             </div>
                             <i className="fas fa-chevron-right text-dim" />
                           </div>
@@ -369,7 +403,8 @@ export default function IronAcreWorkoutCard({
                             }}
                           >
                             <div className="text-truncate" style={{ minWidth: 0 }}>
-                              <div className="fw-semibold text-truncate">{w.name || w.id}</div>
+                              <div className="fw-semibold text-truncate">{w.name || "Gym session"}</div>
+                              {!w.name ? <div className="text-dim small text-truncate">{w.id}</div> : null}
                             </div>
                             <i className="fas fa-chevron-right text-dim" />
                           </div>
@@ -383,7 +418,7 @@ export default function IronAcreWorkoutCard({
           ) : null}
 
           {weekRows.pending.length === 0 && weekRows.completed.length === 0 ? (
-            <div className="text-dim small">No recurring workouts found for this week.</div>
+            <div className="text-dim small">No workouts found for this week.</div>
           ) : null}
         </div>
       ) : null}
