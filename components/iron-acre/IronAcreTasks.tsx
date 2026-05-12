@@ -1,4 +1,5 @@
-// File: components/iron-acre/IronAcreTasks.tsx// 
+// File: components/iron-acre/IronAcreTasks.tsx
+
 import { useRouter } from "next/router";
 import useSWR from "swr";
 import IronAcreTaskCard from "./IronAcreTaskCard";
@@ -76,14 +77,12 @@ export default function IronAcreTasks({
     : `Next check-in: ${fridayYMD || "Friday"}`;
 
   // ✅ Only today's workout (do NOT pick next)
-  const sessionRef = todayData?.recurringWorkouts?.[0];
-  const sessionId = sessionRef?.id || "";
-  const sessionDone = Boolean(todayData?.recurringDone);
+  // Use the API's mandatory workout selection (workoutIds/hasWorkout) which now includes program workouts.
+  const sessionId = String(todayData?.workoutIds?.[0] || "");
+  const sessionDone = Boolean(todayData?.workoutDone);
 
   const durationMinutes =
-    typeof todayData?.workoutSummary?.duration === "number"
-      ? todayData.workoutSummary.duration
-      : null;
+    typeof todayData?.workoutSummary?.duration === "number" ? todayData.workoutSummary.duration : null;
 
   const { data: workoutData } = useSWR<WorkoutApi>(
     sessionId ? `/api/workouts/${encodeURIComponent(sessionId)}` : null,
@@ -117,5 +116,5 @@ export default function IronAcreTasks({
         hasWorkoutToday={Boolean(sessionId)}
       />
     </div>
-  )
+  );
 }
