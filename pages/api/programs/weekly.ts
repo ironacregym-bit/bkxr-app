@@ -72,10 +72,15 @@ function addDays(d: Date, days: number): Date {
   return out;
 }
 
+function startOfDay(d: Date): Date {
+  const out = new Date(d);
+  out.setHours(0, 0, 0, 0);
+  return out;
+}
+
 function normaliseDayName(v: any): string {
   const s = String(v || "").trim();
   if (!s) return "";
-  // Accept "wednesday", "Wednesday", etc.
   const lower = s.toLowerCase();
   const match = DAY_NAMES.find((dn) => dn.toLowerCase() === lower);
   return match || "";
@@ -114,7 +119,6 @@ export default async function handler(
     const days: Record<string, SimpleWorkoutRef[]> = {};
     for (const d of weekDays) days[formatYMD(d)] = [];
 
-    // Pull programs assigned to this user (matches your schema)
     let programsMatched = 0;
     let programsActiveInWeek = 0;
     let scheduleRowsRead = 0;
@@ -131,41 +135,53 @@ export default async function handler(
 
     for (const progDoc of programsSnap.docs) {
       const prog = progDoc.data() as any;
-      const startDate = toDate(prog.start_date);
+      const startDateRaw = toDate(prog.start_date);
       const weeks = Number(prog.weeks || 0);
+      if (!startDateRaw || !weeks) continue;
 
-      if (!startDate || !weeks) continue;
+      // ✅ Critical fix: normalise start to start-of-day so a midday timestamp doesn't drop the first day
+      const startDay = startOfDay(startDateRaw);
 
-      // Active window: [startDate, endExclusive)
-      const endExclusive = addDays(startDate, weeks * 7);
+      // Active window is half-open: [startDay, endExclusive)
+      const endExclusive = startOfDay(addDays(startDay, weeks * 7));
 
-      // Overlap with this week: [weekStart..weekEnd] vs [startDate..endExclusive)
-      if (endExclusive <= weekStart || startDate > weekEnd) continue;
+      // Overlap with this week: [weekStart..weekEnd] vs [startDay..endExclusive)
+      if (endExclusive <= weekStart || startDay > weekEnd) continue;
 
       programsActiveInWeek += 1;
 
       const scheduleSnap = await progDoc.ref.collection("schedule").get();
-
       scheduleRowsRead += scheduleSnap.size;
 
       const scheduleRows = scheduleSnap.docs
         .map((d) => ({ id: d.id, ...(d.data() || {}) }))
         .map((row: any) => {
           const wid = String(row.workout_id || "").trim();
-          const dayName = normaliseDayName(row.day_of_week);
+          const dayName = normaliseDayName(row.day_of_week); // always string (confirmed)
           const order = Number(row.order ?? 0);
-          return { wid, dayName, order };
+          return { wid, dayName, order, id: String(row.id || "") };
         })
         .filter((r: any) => r.wid && r.dayName);
 
-      // For each schedule row, place it onto the matching day in this requested week
+      // Sort by day name order in the week, then order
+      const dayIndex = new Map<string, number>(DAY_NAMES.map((dn, idx) => [dn, idx]));
+      scheduleRows.sort((a: any, b: any) => {
+        const da = dayIndex.get(a.dayName) ?? 999;
+        const db = dayIndex.get(b.dayName) ?? 999;
+        if (da !== db) return da - db;
+        const oa = Number(a.order ?? 0);
+        const ob = Number(b.order ?? 0);
+        if (oa !== ob) return oa - ob;
+        return String(a.id).localeCompare(String(b.id));
+      });
+
       for (const row of scheduleRows) {
         for (const day of weekDays) {
           const dayName = DAY_NAMES[day.getDay()];
           if (dayName !== row.dayName) continue;
 
-          // Respect program active window
-          if (day < startDate || day >= endExclusive) continue;
+          // Respect program active window (using normalised startDay/endExclusive)
+          if (day < startDay || day >= endExclusive) continue;
 
           const ymd = formatYMD(day);
           placements.push({ ymd, workoutId: row.wid, order: row.order, programId: progDoc.id });
@@ -188,24 +204,29 @@ export default async function handler(
     }
 
     // Apply to output (order preserved per day)
-    // Also de-dupe per day by workoutId (keeping lowest order)
-    const perDaySeen = new Map<string, Map<string, number>>(); // ymd -> (wid -> order)
+    // De-dupe per day by workoutId (keeping lowest order)
+    const perDaySeen = new Map<string, Map<string, number>>();
+    const perDayProgram = new Map<string, Map<string, string>>();
     for (const p of placements) {
       const existing = perDaySeen.get(p.ymd) || new Map<string, number>();
+      const existingProg = perDayProgram.get(p.ymd) || new Map<string, string>();
       const prevOrder = existing.get(p.workoutId);
       if (prevOrder == null || p.order < prevOrder) {
         existing.set(p.workoutId, p.order);
+        existingProg.set(p.workoutId, p.programId);
       }
       perDaySeen.set(p.ymd, existing);
+      perDayProgram.set(p.ymd, existingProg);
     }
 
     for (const [ymd, byId] of perDaySeen.entries()) {
+      const byProg = perDayProgram.get(ymd) || new Map<string, string>();
       const arr: SimpleWorkoutRef[] = Array.from(byId.entries())
         .map(([wid, order]) => ({
           id: wid,
           name: nameMap.get(wid),
           order,
-          programId: placements.find((p) => p.ymd === ymd && p.workoutId === wid)?.programId,
+          programId: byProg.get(wid),
         }))
         .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0));
 
