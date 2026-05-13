@@ -1,8 +1,40 @@
+// File: components/gymworkout/ExerciseSingleCard.tsx
+
 import React, { useMemo, useState } from "react";
 import type { CompletionSet, UISingleItem } from "./types";
 import RestTimer from "./RestTimer";
 import SetGrid from "./SetGrid";
 import { computeTargetKg, fixGifUrl, GREEN } from "./utils";
+
+function normaliseBasisName(s: string) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
+function normalisePercent(v: number) {
+  // Accept either 95 or 0.95
+  if (!Number.isFinite(v)) return null;
+  const pct = v <= 1 ? v * 100 : v;
+  const rounded = Math.round(pct * 1000) / 1000;
+  return rounded;
+}
+
+function buildMovementKey(item: UISingleItem) {
+  const strength = item.strength || null;
+  const basisRaw = (strength?.basis_exercise || item.exercise_name || item.exercise_id || "").trim();
+  const basis = normaliseBasisName(basisRaw);
+
+  const pctRaw = strength?.percent_1rm;
+  const pct = pctRaw != null ? normalisePercent(Number(pctRaw)) : null;
+
+  // If no % provided, key is just the basis name (still useful, but won't be used for target)
+  if (pct == null) return basis;
+
+  const mode = strength?.mode ? `|mode:${String(strength.mode)}` : "";
+  return `${basis}|pct:${pct}${mode}`;
+}
 
 export default function ExerciseSingleCard({
   item,
@@ -29,10 +61,21 @@ export default function ExerciseSingleCard({
   const [extraSets, setExtraSets] = useState(0);
   const sets = Math.max(1, baseSets + extraSets);
 
-  const target = useMemo(
-    () => computeTargetKg({ strength: item.strength, trainingMaxes, defaultRounding }),
-    [item.strength, trainingMaxes, defaultRounding]
-  );
+  // ✅ Movement/exposure key uses basis_exercise name (not IDs) + percent when present
+  const movementKeyBase = useMemo(() => buildMovementKey(item), [item]);
+
+  // ✅ Only compute/show target if a % is actually present
+  const hasPct = useMemo(() => {
+    const v = item?.strength?.percent_1rm;
+    if (v == null) return false;
+    const n = Number(v);
+    return Number.isFinite(n);
+  }, [item?.strength?.percent_1rm]);
+
+  const target = useMemo(() => {
+    if (!item.strength || !hasPct) return { targetKg: null as number | null, pctLabel: "" as string };
+    return computeTargetKg({ strength: item.strength, trainingMaxes, defaultRounding });
+  }, [item.strength, hasPct, trainingMaxes, defaultRounding]);
 
   const title = media?.exercise_name || item.exercise_name || item.exercise_id;
   const [note, setNote] = useState<string>("");
@@ -45,7 +88,6 @@ export default function ExerciseSingleCard({
       <div className="gx-ex-head">
         <div className="gx-ex-title">{title}</div>
 
-        {/* ✅ Replace ... with media thumb */}
         <button
           type="button"
           className="gx-more"
@@ -62,16 +104,9 @@ export default function ExerciseSingleCard({
           disabled={!hasMedia}
         >
           {thumbUrl ? (
-            <img
-              src={thumbUrl}
-              alt=""
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-            />
+            <img src={thumbUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           ) : (
-            <div
-              className="d-flex align-items-center justify-content-center"
-              style={{ width: "100%", height: "100%" }}
-            >
+            <div className="d-flex align-items-center justify-content-center" style={{ width: "100%", height: "100%" }}>
               <i className="fas fa-play" />
             </div>
           )}
@@ -82,10 +117,9 @@ export default function ExerciseSingleCard({
         {sets} sets
         {item.reps ? ` • ${item.reps}` : ""}
         {item.rest_s != null ? ` • Rest ${item.rest_s}s` : ""}
-        {item.strength ? (
+        {item.strength && hasPct ? (
           <span className="gx-ex-target" style={{ color: GREEN }}>
-            • Target {target.targetKg != null ? `${target.targetKg}kg` : "—"}{" "}
-            {target.pctLabel ? `(${target.pctLabel})` : ""}
+            • Target {target.targetKg != null ? `${target.targetKg}kg` : "—"} {target.pctLabel ? `(${target.pctLabel})` : ""}
           </span>
         ) : null}
       </div>
@@ -107,19 +141,16 @@ export default function ExerciseSingleCard({
         exerciseId={item.exercise_id}
         sets={sets}
         prevByKey={prevByKey}
-        targetKg={target.targetKg}
-        showUseTarget={Boolean(item.strength)}
+        targetKg={item.strength && hasPct ? target.targetKg : null}
+        showUseTarget={Boolean(item.strength && hasPct)}
+        movementKeyBase={movementKeyBase}
         onUpdateSet={onUpdateSet}
         tickKeys={tickKeys}
         onToggleTick={onToggleTick}
       />
 
       <div className="gx-ex-actions">
-        <button
-          type="button"
-          className="gx-act gx-act-add"
-          onClick={() => setExtraSets((n) => n + 1)}
-        >
+        <button type="button" className="gx-act gx-act-add" onClick={() => setExtraSets((n) => n + 1)}>
           + Add Set
         </button>
 
