@@ -1,3 +1,5 @@
+// File: components/gymworkout/types.ts
+
 export type StrengthSpec = {
   basis_exercise?: string | null;
   percent_1rm?: number | null;
@@ -58,6 +60,9 @@ export type CompletionSet = {
   set: number;
   weight: number | null;
   reps: number | null;
+
+  // ✅ New (additive): lets us match "same % exposure" for Prev + avoid collisions going forward
+  movement_key?: string | null;
 };
 
 export type PreviousCompletion = {
