@@ -4,6 +4,13 @@ import React from "react";
 import type { CompletionSet } from "./types";
 import { GREEN } from "./utils";
 
+function parseNullableNumber(raw: string): number | null {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
 export default function SetGrid({
   exerciseId,
   sets,
@@ -29,9 +36,6 @@ export default function SetGrid({
   prefillReps?: number | null;
   prefillWeight?: number | null;
   showPrevRow?: boolean;
-
-  // ✅ New (optional): used for Prev matching when the same exercise appears multiple times at different % exposures
-  // If not provided, falls back to exerciseId.
   movementKeyBase?: string | null;
 }) {
   const keyBase = (movementKeyBase || exerciseId || "").trim() || exerciseId;
@@ -48,15 +52,13 @@ export default function SetGrid({
       {Array.from({ length: sets }).map((_, i) => {
         const setNum = i + 1;
 
-        // Prefer exposure-aware key, fall back to legacy key so older data still works
-        const prev =
-          prevByKey[`${keyBase}|${setNum}`] ?? prevByKey[`${exerciseId}|${setNum}`];
+        const prev = prevByKey[`${keyBase}|${setNum}`] ?? prevByKey[`${exerciseId}|${setNum}`];
 
-        // Tick remains keyed by exerciseId to avoid breaking existing tick state
-        const tick = Boolean(tickKeys[`${exerciseId}|${setNum}`]);
+        // ✅ Tick scoped by movement key when available so different % blocks do not collide
+        const tickKey = `${keyBase}|${setNum}`;
+        const tick = Boolean(tickKeys[tickKey]);
 
-        const movementPatch =
-          keyBase && keyBase !== exerciseId ? { movement_key: keyBase } : null;
+        const movementPatch = keyBase && keyBase !== exerciseId ? { movement_key: keyBase } : null;
 
         return (
           <div key={i} className="gx-row">
@@ -71,7 +73,7 @@ export default function SetGrid({
                   placeholder={targetKg != null ? String(targetKg) : "kg"}
                   defaultValue={prefillWeight != null ? prefillWeight : undefined}
                   onChange={(e) => {
-                    const weight = Number(e.target.value) || null;
+                    const weight = parseNullableNumber(e.target.value);
                     onUpdateSet(exerciseId, setNum, {
                       weight,
                       ...(movementPatch || {}),
@@ -90,7 +92,7 @@ export default function SetGrid({
                 placeholder="reps"
                 defaultValue={prefillReps != null ? prefillReps : undefined}
                 onChange={(e) => {
-                  const reps = Number(e.target.value) || null;
+                  const reps = parseNullableNumber(e.target.value);
                   onUpdateSet(exerciseId, setNum, {
                     reps,
                     ...(movementPatch || {}),
@@ -108,7 +110,7 @@ export default function SetGrid({
                   color: tick ? "#0b0f14" : GREEN,
                   background: tick ? GREEN : "transparent",
                 }}
-                onClick={() => onToggleTick(exerciseId, setNum)}
+                onClick={() => onToggleTick(keyBase, setNum)}
                 aria-label={tick ? "Unmark set" : "Mark set"}
               >
                 <i className="fas fa-check" />
