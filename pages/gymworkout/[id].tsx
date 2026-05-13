@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+// File: pages/gymworkout/[id].tsx
+
+import React, { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import useSWR from "swr";
@@ -8,7 +10,13 @@ import HeaderBar from "../../components/gymworkout/HeaderBar";
 import MediaModal from "../../components/gymworkout/MediaModal";
 import CompletionModal from "../../components/gymworkout/CompletionModal";
 import RoundSection from "../../components/gymworkout/RoundSection";
-import type { Completion, CompletionSet, GymWorkout, PreviousCompletion, UIRound } from "../../components/gymworkout/types";
+import type {
+  Completion,
+  CompletionSet,
+  GymWorkout,
+  PreviousCompletion,
+  UIRound,
+} from "../../components/gymworkout/types";
 import { fixGifUrl, formatYMD, startOfAlignedWeek, endOfAlignedWeek } from "../../components/gymworkout/utils";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
@@ -26,7 +34,10 @@ function toMediaRounds(w: GymWorkout | undefined | null): MediaRound[] {
     items: r.items.map((it) =>
       it.type === "Single"
         ? { type: "Single" as const, exercise_id: (it as any).exercise_id }
-        : { type: "Superset" as const, items: (it as any).items.map((s: any) => ({ exercise_id: s.exercise_id })) }
+        : {
+            type: "Superset" as const,
+            items: (it as any).items.map((s: any) => ({ exercise_id: s.exercise_id })),
+          }
     ),
   }));
 }
@@ -47,7 +58,7 @@ export default function GymWorkoutViewerPage() {
   const weekStartKey = useMemo(() => formatYMD(startOfAlignedWeek(selectedDate)), [selectedDate]);
   const weekEndKey = useMemo(() => formatYMD(endOfAlignedWeek(selectedDate)), [selectedDate]);
 
-  const workoutUrl = id && !Array.isArray(id) ? `/api/workouts/${id}` : null;
+  const workoutUrl = id && !Array.isArray(id) ? `/api/workouts/${encodeURIComponent(String(id))}` : null;
   const { data, error } = useSWR<GymWorkout>(workoutUrl, fetcher, { revalidateOnFocus: false });
 
   const { data: strengthProfileResp } = useSWR(
@@ -55,6 +66,7 @@ export default function GymWorkoutViewerPage() {
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 }
   );
+
   const trainingMaxes: Record<string, number> = strengthProfileResp?.profile?.training_maxes || {};
   const defaultRounding: number = strengthProfileResp?.profile?.rounding_increment_kg ?? 2.5;
 
@@ -77,7 +89,8 @@ export default function GymWorkoutViewerPage() {
 
   useEffect(() => {
     if (!mounted || !id || Array.isArray(id)) return;
-    fetch(`/api/completions/last?workout_id=${id}`)
+
+    fetch(`/api/completions/last?workout_id=${encodeURIComponent(String(id))}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         const last = json?.last || json;
@@ -88,11 +101,26 @@ export default function GymWorkoutViewerPage() {
 
   const prevByKey = useMemo(() => {
     const m: Record<string, { weight: number | null; reps: number | null }> = {};
-    if (previousSession?.sets?.length) {
-      for (const s of previousSession.sets) {
-        m[`${s.exercise_id}|${s.set}`] = { weight: s.weight ?? null, reps: s.reps ?? null };
+    const sets = previousSession?.sets || [];
+
+    for (const s of sets as any[]) {
+      const exId = String(s?.exercise_id || "").trim();
+      const setNum = Number(s?.set || 0);
+      const weight = typeof s?.weight === "number" ? s.weight : null;
+      const reps = typeof s?.reps === "number" ? s.reps : null;
+      const movementKey = String(s?.movement_key || "").trim();
+
+      if (!exId || !Number.isFinite(setNum) || setNum <= 0) continue;
+
+      // Prefer exposure-aware key (new data)
+      if (movementKey) {
+        m[`${movementKey}|${setNum}`] = { weight, reps };
       }
+
+      // Always keep legacy fallback key (old data + compatibility)
+      m[`${exId}|${setNum}`] = { weight, reps };
     }
+
     return m;
   }, [previousSession]);
 
@@ -109,6 +137,7 @@ export default function GymWorkoutViewerPage() {
   }, [formSets]);
 
   const [tickKeys, setTickKeys] = useState<Record<string, boolean>>({});
+
   function toggleTick(exercise_id: string, setNum: number) {
     const k = `${exercise_id}|${setNum}`;
     setTickKeys((m) => ({ ...m, [k]: !m[k] }));
@@ -128,9 +157,35 @@ export default function GymWorkoutViewerPage() {
   function updateSet(exercise_id: string, setNum: number, patch: Partial<CompletionSet>) {
     setFormSets((prev) => {
       const next = [...prev];
-      const idx = next.findIndex((s) => s.exercise_id === exercise_id && s.set === setNum);
-      if (idx >= 0) next[idx] = { ...next[idx], ...patch };
-      else next.push({ exercise_id, set: setNum, reps: null, weight: null, ...patch });
+
+      const patchMovementKey =
+        typeof (patch as any)?.movement_key === "string" ? String((patch as any).movement_key).trim() : "";
+      const useMovementKey = Boolean(patchMovementKey);
+
+      const idx = next.findIndex((s) => {
+        if (s.set !== setNum) return false;
+
+        // If movement_key exists, use it as identity to avoid collisions across multiple % blocks
+        if (useMovementKey) return String((s as any)?.movement_key || "") === patchMovementKey;
+
+        // Legacy identity
+        return s.exercise_id === exercise_id;
+      });
+
+      if (idx >= 0) {
+        next[idx] = { ...next[idx], ...patch } as any;
+        if (useMovementKey) (next[idx] as any).movement_key = patchMovementKey;
+      } else {
+        next.push({
+          exercise_id,
+          set: setNum,
+          reps: null,
+          weight: null,
+          ...(useMovementKey ? ({ movement_key: patchMovementKey } as any) : {}),
+          ...patch,
+        } as any);
+      }
+
       return next;
     });
   }
@@ -169,13 +224,17 @@ export default function GymWorkoutViewerPage() {
 
   async function submitCompletion() {
     if (!id || Array.isArray(id)) return;
+
     try {
       setSubmitting(true);
+
       const body: any = { workout_id: id, activity_type: "Strength training", sets: formSets };
       if (calories) body.calories_burned = Number(calories);
       if (duration) body.duration_minutes = Number(duration);
+
       const rpe = difficultyToRPE(difficulty);
       if (rpe != null) body.rpe = rpe;
+
       if (notes.trim()) body.notes = notes.trim();
 
       const res = await fetch(`/api/completions/create`, {
@@ -183,8 +242,10 @@ export default function GymWorkoutViewerPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to submit completion");
+
       router.push("/");
     } catch (e) {
       console.error(e);
@@ -202,7 +263,15 @@ export default function GymWorkoutViewerPage() {
         <title>{data?.workout_name || "Gym Workout"}</title>
       </Head>
 
-      <main className="container py-3" style={{ color: "#fff", paddingBottom: 90, ["--kgw" as any]: `88px`, ["--repsw" as any]: `88px` }}>
+      <main
+        className="container py-3"
+        style={{
+          color: "#fff",
+          paddingBottom: 90,
+          ["--kgw" as any]: `88px`,
+          ["--repsw" as any]: `88px`,
+        }}
+      >
         <HeaderBar
           workoutName={data?.workout_name || "Gym Workout"}
           volumeKg={volumeKg}
@@ -221,22 +290,35 @@ export default function GymWorkoutViewerPage() {
             <section className="futuristic-card p-3 mb-3">
               <div className="d-flex justify-content-between align-items-center">
                 <div className="fw-bold">{data.workout_name}</div>
-                {isCompleted ? <span className="badge" style={{ color: "#22c55e", border: "1px solid #22c55eAA", background: "transparent" }}>Completed</span> : null}
+                {isCompleted ? (
+                  <span
+                    className="badge"
+                    style={{ color: "#22c55e", border: "1px solid #22c55eAA", background: "transparent" }}
+                  >
+                    Completed
+                  </span>
+                ) : null}
               </div>
               {data.notes ? <div className="text-dim small mt-1">{data.notes}</div> : null}
             </section>
 
             {previousSession ? (
               <section className="futuristic-card p-3 mb-3">
-                <div className="d-flex justify-content-between align-items-center" style={{ cursor: "pointer" }} onClick={() => setShowPrev((s) => !s)}>
+                <div
+                  className="d-flex justify-content-between align-items-center"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setShowPrev((s) => !s)}
+                >
                   <h5 className="m-0">Previous Session</h5>
                   <i className={`fas fa-chevron-${showPrev ? "up" : "down"}`} />
                 </div>
+
                 {showPrev && previousSession.sets ? (
                   <div className="mt-2 small">
-                    {previousSession.sets.map((s, i) => (
+                    {(previousSession.sets as any[]).map((s, i) => (
                       <div key={i} className="mb-1">
                         <strong>{s.exercise_id}</strong> — Set {s.set}: {s.weight ?? "-"}kg × {s.reps ?? "-"} reps
+                        {s.movement_key ? <span className="text-dim"> • {s.movement_key}</span> : null}
                       </div>
                     ))}
                   </div>
@@ -305,7 +387,13 @@ export default function GymWorkoutViewerPage() {
         onSave={submitCompletion}
       />
 
-      <MediaModal open={mediaOpen} title={mediaTitle} gifUrl={mediaGif} videoUrl={mediaVideo} onClose={() => setMediaOpen(false)} />
+      <MediaModal
+        open={mediaOpen}
+        title={mediaTitle}
+        gifUrl={mediaGif}
+        videoUrl={mediaVideo}
+        onClose={() => setMediaOpen(false)}
+      />
 
       <BottomNav />
     </>
