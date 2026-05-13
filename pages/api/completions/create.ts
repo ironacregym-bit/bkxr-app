@@ -1,3 +1,5 @@
+// File: pages/api/completions/create.ts
+
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
@@ -11,6 +13,9 @@ type GymCompletionSet = {
   set: number;
   weight: number | null;
   reps: number | null;
+
+  // ✅ New (additive): persists exposure/basis identity for "Prev by % move" and strength processing
+  movement_key?: string | null;
 };
 
 type Style = "AMRAP" | "EMOM" | "LADDER" | string;
@@ -25,13 +30,19 @@ type PartName = "engine" | "power" | "core" | "ladder" | "load";
 // Optional nested input that we will flatten into sets[]
 type IncomingExercise = {
   exercise_id: string;
-  sets: Array<{ set: number; weight?: number | null; reps?: number | null }>;
+  sets: Array<{ set: number; weight?: number | null; reps?: number | null; movement_key?: string | null }>;
 };
 
 // ---------- Helpers ----------
 function toNumberOrNull(x: any): number | null {
   const n = Number(x);
   return Number.isFinite(n) ? n : null;
+}
+
+function toStringOrNull(x: any): string | null {
+  if (x == null) return null;
+  const s = String(x).trim();
+  return s ? s : null;
 }
 
 function mapDifficultyToRPE(v: any): number | null {
@@ -41,7 +52,7 @@ function mapDifficultyToRPE(v: any): number | null {
   if (s === "medium") return 6;
   if (s === "hard") return 8;
   const n = Number(v);
-  return Number.isFinite(n) ? n : null; // allow direct numeric rpe too
+  return Number.isFinite(n) ? n : null;
 }
 
 // ---------- Handler ----------
@@ -52,23 +63,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Session-derived user (no client-provided email)
     const session = await getServerSession(req, res, authOptions);
     if (!session?.user?.email) {
       return res.status(401).json({ error: "Not signed in" });
     }
     const user_email = session.user.email.toLowerCase();
 
-    // Body
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
     const workout_id = String(body.workout_id || "").trim();
     if (!workout_id) {
       return res.status(400).json({ error: "workout_id required" });
     }
 
-    // Manual overrides (summary)
     const calories_burned = toNumberOrNull(body.calories_burned);
-    // prefer duration_minutes; allow duration as a fallback
     const duration_minutes =
       body.duration_minutes != null
         ? toNumberOrNull(body.duration_minutes)
@@ -81,7 +88,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? body.activity_type.trim()
         : "Strength training";
 
-    // Accept rpe directly OR infer from difficulty string
     const rpe =
       body.rpe != null && Number.isFinite(Number(body.rpe))
         ? Number(body.rpe)
@@ -89,7 +95,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const notes = typeof body.notes === "string" ? body.notes : null;
 
-    // Normalise weight_completed_with (string or number accepted)
     let weight_completed_with: number | string | null = null;
     if (body.weight_completed_with != null) {
       const asNum = Number(body.weight_completed_with);
@@ -98,29 +103,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const now = new Date();
     const completedDateTS =
-      body.completed_at != null
-        ? Timestamp.fromDate(new Date(body.completed_at))
-        : Timestamp.fromDate(now);
+      body.completed_at != null ? Timestamp.fromDate(new Date(body.completed_at)) : Timestamp.fromDate(now);
 
-    // Derive gym mode inputs
     const incomingSets: any[] = Array.isArray(body.sets) ? body.sets : [];
-    const incomingExercises: IncomingExercise[] = Array.isArray(body.exercises)
-      ? body.exercises
-      : [];
+    const incomingExercises: IncomingExercise[] = Array.isArray(body.exercises) ? body.exercises : [];
 
     // If client sends nested 'exercises', flatten to sets[]
     const flattenedFromExercises: GymCompletionSet[] = [];
     for (const ex of incomingExercises) {
       const exId = String(ex?.exercise_id || "").trim();
       if (!exId || !Array.isArray(ex?.sets)) continue;
+
       for (const s of ex.sets) {
         const setNo = Number(s?.set || 0);
         if (!Number.isFinite(setNo) || setNo <= 0) continue;
+
         flattenedFromExercises.push({
           exercise_id: exId,
           set: setNo,
           weight: toNumberOrNull(s?.weight),
           reps: toNumberOrNull(s?.reps),
+          movement_key: toStringOrNull((s as any)?.movement_key),
         });
       }
     }
@@ -134,16 +137,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           set: Number(s?.set || 0),
           weight: toNumberOrNull(s?.weight),
           reps: toNumberOrNull(s?.reps),
+          movement_key: toStringOrNull(s?.movement_key),
         }))
         .filter((s: GymCompletionSet) => s.exercise_id && s.set > 0),
     ];
 
-    // Determine mode
     const isGym = gymSets.length > 0;
-    const isBenchmarkLike =
-      body.engine || body.power || body.core || body.ladder || body.load || body.is_benchmark;
+    const isBenchmarkLike = body.engine || body.power || body.core || body.ladder || body.load || body.is_benchmark;
 
-    // New doc (keep history; do not overwrite)
     const docRef = firestore.collection("workoutCompletions").doc();
     const docId = docRef.id;
 
@@ -162,7 +163,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         workout_id,
         user_email,
         completed_date: completedDateTS,
-        date_completed: completedDateTS, // legacy field
+        date_completed: completedDateTS,
 
         activity_type,
         created_at: Timestamp.fromDate(now),
@@ -178,13 +179,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       await docRef.set(payload, { merge: true });
 
-      // ✅ NEW: process strength profile after saving completion
-      // (safe + idempotent; does nothing if strength_exercises is empty)
       try {
         await processStrengthFromCompletion({ completionId: docId, userEmail: user_email });
       } catch (e) {
         console.error("[strength/process] error:", (e as any)?.message || e);
-        // do not fail completion creation if strength processing fails
       }
 
       return res.status(201).json({ ok: true, type: "gym", id: docId });
@@ -256,7 +254,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(201).json({ ok: true, type: "bxkr", id: docId });
     }
 
-    // ---------- No valid mode ----------
     return res.status(400).json({
       error:
         "Invalid payload: send (a) gym { sets[] } or nested { exercises[] }, or (b) benchmark metrics/flags, or (c) gym summary fields (calories/duration/rpe/notes).",
