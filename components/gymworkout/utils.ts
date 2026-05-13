@@ -1,3 +1,5 @@
+// File: components/gymworkout/utils.ts
+
 import type { StrengthSpec } from "./types";
 
 export const ACCENT = "#FF8A2A";
@@ -42,6 +44,13 @@ export function hhmm() {
   return `${hh}:${mm}`;
 }
 
+function normKey(s: string) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 export function percentLabel(strength?: StrengthSpec | null): string | null {
   if (!strength) return null;
   if (strength.percent_min != null && strength.percent_max != null) {
@@ -64,15 +73,30 @@ export function computeTargetKg(args: {
   defaultRounding: number;
 }): { targetKg: number | null; pctLabel: string | null; key: string } {
   const { strength, trainingMaxes, defaultRounding } = args;
+
   const pct = pctToUse(strength);
   const pctLbl = percentLabel(strength);
-  const key = String(strength?.basis_exercise || "").trim();
-  if (!strength || pct == null || !key) return { targetKg: null, pctLabel: pctLbl, key };
-  const max = Number(trainingMaxes[key]);
-  if (!Number.isFinite(max) || max <= 0) return { targetKg: null, pctLabel: pctLbl, key };
+
+  const rawKey = String(strength?.basis_exercise || "").trim();
+  const keyNorm = normKey(rawKey);
+
+  if (!strength || pct == null || !rawKey) return { targetKg: null, pctLabel: pctLbl, key: rawKey };
+
+  const maxRaw = Number(trainingMaxes[rawKey]);
+  const maxNorm = Number(trainingMaxes[keyNorm]);
+
+  const max =
+    Number.isFinite(maxRaw) && maxRaw > 0
+      ? maxRaw
+      : Number.isFinite(maxNorm) && maxNorm > 0
+      ? maxNorm
+      : null;
+
+  if (max == null) return { targetKg: null, pctLabel: pctLbl, key: rawKey };
+
   const inc = strength.rounding_kg ?? defaultRounding ?? 2.5;
   const raw = max * pct;
-  return { targetKg: roundToIncrement(raw, inc), pctLabel: pctLbl, key };
+  return { targetKg: roundToIncrement(raw, inc), pctLabel: pctLbl, key: rawKey };
 }
 
 export function formatMMSS(totalSec: number) {
