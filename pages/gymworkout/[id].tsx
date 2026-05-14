@@ -112,12 +112,10 @@ export default function GymWorkoutViewerPage() {
 
       if (!exId || !Number.isFinite(setNum) || setNum <= 0) continue;
 
-      // Prefer exposure-aware key (new data)
       if (movementKey) {
         m[`${movementKey}|${setNum}`] = { weight, reps };
       }
 
-      // Always keep legacy fallback key (old data + compatibility)
       m[`${exId}|${setNum}`] = { weight, reps };
     }
 
@@ -139,6 +137,7 @@ export default function GymWorkoutViewerPage() {
   const [tickKeys, setTickKeys] = useState<Record<string, boolean>>({});
 
   function toggleTick(exercise_id: string, setNum: number) {
+    // Note: SetGrid passes movementKeyBase as exercise_id when available, so ticks do not collide across % blocks.
     const k = `${exercise_id}|${setNum}`;
     setTickKeys((m) => ({ ...m, [k]: !m[k] }));
   }
@@ -165,10 +164,8 @@ export default function GymWorkoutViewerPage() {
       const idx = next.findIndex((s) => {
         if (s.set !== setNum) return false;
 
-        // If movement_key exists, use it as identity to avoid collisions across multiple % blocks
         if (useMovementKey) return String((s as any)?.movement_key || "") === patchMovementKey;
 
-        // Legacy identity
         return s.exercise_id === exercise_id;
       });
 
@@ -257,6 +254,8 @@ export default function GymWorkoutViewerPage() {
 
   if (!mounted) return null;
 
+  const canComplete = loggedSetCount > 0 && !submitting && !isCompleted;
+
   return (
     <>
       <Head>
@@ -267,7 +266,7 @@ export default function GymWorkoutViewerPage() {
         className="container py-3"
         style={{
           color: "#fff",
-          paddingBottom: 90,
+          paddingBottom: 120,
           ["--kgw" as any]: `88px`,
           ["--repsw" as any]: `88px`,
         }}
@@ -368,6 +367,33 @@ export default function GymWorkoutViewerPage() {
                 onOpenMedia={openMedia}
               />
             ) : null}
+
+            {/* ✅ Complete workout CTA at the bottom */}
+            <section className="futuristic-card p-3 mb-3">
+              <div className="d-flex justify-content-between align-items-center">
+                <div className="fw-semibold">Complete workout</div>
+                <div className="text-dim small">
+                  {weekStartKey} → {weekEndKey}
+                </div>
+              </div>
+
+              <div className="text-dim small mt-1">
+                {isCompleted
+                  ? "This workout is already completed this week."
+                  : loggedSetCount === 0
+                  ? "Log at least one set before completing."
+                  : "Add your summary and save."}
+              </div>
+
+              <button
+                type="button"
+                className="ia-btn ia-btn-primary w-100 mt-3"
+                onClick={() => setCompleteOpen(true)}
+                disabled={!canComplete}
+              >
+                {submitting ? "Saving…" : isCompleted ? "Completed" : "Complete workout"}
+              </button>
+            </section>
           </>
         )}
       </main>
