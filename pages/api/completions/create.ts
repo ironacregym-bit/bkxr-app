@@ -35,8 +35,17 @@ type IncomingExercise = {
 
 // ---------- Helpers ----------
 function toNumberOrNull(x: any): number | null {
+  // ✅ Critical: treat empty string as null (Number("") === 0)
+  if (x == null) return null;
+  if (typeof x === "string" && x.trim() === "") return null;
+
   const n = Number(x);
-  return Number.isFinite(n) ? n : null;
+  if (!Number.isFinite(n)) return null;
+
+  // 0 is not meaningful for weight/reps in this app; keep null instead
+  if (n === 0) return null;
+
+  return n;
 }
 
 function toStringOrNull(x: any): string | null {
@@ -76,6 +85,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const calories_burned = toNumberOrNull(body.calories_burned);
+
+    // prefer duration_minutes; allow duration as a fallback
     const duration_minutes =
       body.duration_minutes != null
         ? toNumberOrNull(body.duration_minutes)
@@ -95,16 +106,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const notes = typeof body.notes === "string" ? body.notes : null;
 
+    // Normalise weight_completed_with (string or number accepted)
     let weight_completed_with: number | string | null = null;
     if (body.weight_completed_with != null) {
-      const asNum = Number(body.weight_completed_with);
-      weight_completed_with = Number.isFinite(asNum) ? asNum : String(body.weight_completed_with);
+      if (typeof body.weight_completed_with === "string" && body.weight_completed_with.trim() === "") {
+        weight_completed_with = null;
+      } else {
+        const asNum = Number(body.weight_completed_with);
+        weight_completed_with = Number.isFinite(asNum) ? asNum : String(body.weight_completed_with);
+      }
     }
 
     const now = new Date();
     const completedDateTS =
       body.completed_at != null ? Timestamp.fromDate(new Date(body.completed_at)) : Timestamp.fromDate(now);
 
+    // Derive gym mode inputs
     const incomingSets: any[] = Array.isArray(body.sets) ? body.sets : [];
     const incomingExercises: IncomingExercise[] = Array.isArray(body.exercises) ? body.exercises : [];
 
@@ -142,9 +159,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .filter((s: GymCompletionSet) => s.exercise_id && s.set > 0),
     ];
 
+    // Determine mode
     const isGym = gymSets.length > 0;
     const isBenchmarkLike = body.engine || body.power || body.core || body.ladder || body.load || body.is_benchmark;
 
+    // New doc (keep history; do not overwrite)
     const docRef = firestore.collection("workoutCompletions").doc();
     const docId = docRef.id;
 
@@ -152,18 +171,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (
       isGym ||
       (!isBenchmarkLike &&
-        (calories_burned != null ||
-          duration_minutes != null ||
-          rpe != null ||
-          notes ||
-          weight_completed_with != null))
+        (calories_burned != null || duration_minutes != null || rpe != null || notes || weight_completed_with != null))
     ) {
       const payload: Record<string, any> = {
         id: docId,
         workout_id,
         user_email,
         completed_date: completedDateTS,
-        date_completed: completedDateTS,
+        date_completed: completedDateTS, // legacy field
 
         activity_type,
         created_at: Timestamp.fromDate(now),
@@ -254,6 +269,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(201).json({ ok: true, type: "bxkr", id: docId });
     }
 
+    // ---------- No valid mode ----------
     return res.status(400).json({
       error:
         "Invalid payload: send (a) gym { sets[] } or nested { exercises[] }, or (b) benchmark metrics/flags, or (c) gym summary fields (calories/duration/rpe/notes).",
