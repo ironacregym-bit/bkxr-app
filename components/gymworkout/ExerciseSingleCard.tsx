@@ -6,6 +6,14 @@ import RestTimer from "./RestTimer";
 import SetGrid from "./SetGrid";
 import { computeTargetKg, fixGifUrl, GREEN } from "./utils";
 
+function parseRepsToNumber(reps?: string | null): number | null {
+  if (!reps) return null;
+  const m = String(reps).match(/\d+/);
+  if (!m) return null;
+  const n = Number(m[0]);
+  return Number.isFinite(n) ? n : null;
+}
+
 function normaliseBasisName(s: string) {
   return String(s || "")
     .trim()
@@ -14,7 +22,6 @@ function normaliseBasisName(s: string) {
 }
 
 function normalisePercent(v: number) {
-  // Accept either 95 or 0.95
   if (!Number.isFinite(v)) return null;
   const pct = v <= 1 ? v * 100 : v;
   const rounded = Math.round(pct * 1000) / 1000;
@@ -29,7 +36,6 @@ function buildMovementKey(item: UISingleItem) {
   const pctRaw = strength?.percent_1rm;
   const pct = pctRaw != null ? normalisePercent(Number(pctRaw)) : null;
 
-  // If no % provided, key is just the basis name (still useful, but won't be used for target)
   if (pct == null) return basis;
 
   const mode = strength?.mode ? `|mode:${String(strength.mode)}` : "";
@@ -61,10 +67,8 @@ export default function ExerciseSingleCard({
   const [extraSets, setExtraSets] = useState(0);
   const sets = Math.max(1, baseSets + extraSets);
 
-  // ✅ Movement/exposure key uses basis_exercise name (not IDs) + percent when present
   const movementKeyBase = useMemo(() => buildMovementKey(item), [item]);
 
-  // ✅ Only compute/show target if a % is actually present
   const hasPct = useMemo(() => {
     const v = item?.strength?.percent_1rm;
     if (v == null) return false;
@@ -73,9 +77,18 @@ export default function ExerciseSingleCard({
   }, [item?.strength?.percent_1rm]);
 
   const target = useMemo(() => {
-    if (!item.strength || !hasPct) return { targetKg: null as number | null, pctLabel: "" as string };
+    if (!item.strength || !hasPct) return { targetKg: null as number | null, pctLabel: "" as string | null, key: "" };
     return computeTargetKg({ strength: item.strength, trainingMaxes, defaultRounding });
   }, [item.strength, hasPct, trainingMaxes, defaultRounding]);
+
+  // ✅ Prefill reps from prescription
+  const prefillReps = useMemo(() => parseRepsToNumber(item.reps ?? null), [item.reps]);
+
+  // ✅ Prefill weight from target when % exists
+  const prefillWeight = useMemo(() => {
+    if (!item.strength || !hasPct) return null;
+    return target.targetKg != null ? target.targetKg : null;
+  }, [item.strength, hasPct, target.targetKg]);
 
   const title = media?.exercise_name || item.exercise_name || item.exercise_id;
   const [note, setNote] = useState<string>("");
@@ -143,6 +156,8 @@ export default function ExerciseSingleCard({
         prevByKey={prevByKey}
         targetKg={item.strength && hasPct ? target.targetKg : null}
         showUseTarget={Boolean(item.strength && hasPct)}
+        prefillReps={prefillReps}
+        prefillWeight={prefillWeight}
         movementKeyBase={movementKeyBase}
         onUpdateSet={onUpdateSet}
         tickKeys={tickKeys}
