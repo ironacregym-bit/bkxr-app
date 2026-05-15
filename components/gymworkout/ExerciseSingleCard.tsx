@@ -81,10 +81,8 @@ export default function ExerciseSingleCard({
     return computeTargetKg({ strength: item.strength, trainingMaxes, defaultRounding });
   }, [item.strength, hasPct, trainingMaxes, defaultRounding]);
 
-  // ✅ Prefill reps from prescription
   const prefillReps = useMemo(() => parseRepsToNumber(item.reps ?? null), [item.reps]);
 
-  // ✅ Prefill weight from target when % exists
   const prefillWeight = useMemo(() => {
     if (!item.strength || !hasPct) return null;
     return target.targetKg != null ? target.targetKg : null;
@@ -117,7 +115,11 @@ export default function ExerciseSingleCard({
           disabled={!hasMedia}
         >
           {thumbUrl ? (
-            <img src={thumbUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            <img
+              src={thumbUrl}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            />
           ) : (
             <div className="d-flex align-items-center justify-content-center" style={{ width: "100%", height: "100%" }}>
               <i className="fas fa-play" />
@@ -132,7 +134,8 @@ export default function ExerciseSingleCard({
         {item.rest_s != null ? ` • Rest ${item.rest_s}s` : ""}
         {item.strength && hasPct ? (
           <span className="gx-ex-target" style={{ color: GREEN }}>
-            • Target {target.targetKg != null ? `${target.targetKg}kg` : "—"} {target.pctLabel ? `(${target.pctLabel})` : ""}
+            • Target {target.targetKg != null ? `${target.targetKg}kg` : "—"}{" "}
+            {target.pctLabel ? `(${target.pctLabel})` : ""}
           </span>
         ) : null}
       </div>
