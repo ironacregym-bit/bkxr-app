@@ -40,7 +40,6 @@ export default function SetGrid({
 }) {
   const keyBase = (movementKeyBase || exerciseId || "").trim() || exerciseId;
 
-  // Keep refs so ticking can “commit” whatever is currently in the inputs into state
   const kgRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const repsRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
@@ -122,10 +121,8 @@ export default function SetGrid({
                 onClick={() => {
                   const nextTick = !tick;
 
-                  // Toggle tick first (this is your existing behaviour)
                   onToggleTick(keyBase, setNum);
 
-                  // ✅ If marking as done, commit the current visible values into formSets even if untouched.
                   if (nextTick) {
                     const kgEl = kgRefs.current[setNum];
                     const repsEl = repsRefs.current[setNum];
@@ -133,7 +130,6 @@ export default function SetGrid({
                     const weight = kgEl ? parseNullableNumber(kgEl.value) : null;
                     const reps = repsEl ? parseNullableNumber(repsEl.value) : null;
 
-                    // Only write if we actually have something (prevents writing nulls everywhere)
                     if (weight != null || reps != null || movementPatch) {
                       onUpdateSet(exerciseId, setNum, {
                         weight,
@@ -160,7 +156,6 @@ export default function SetGrid({
                     type="button"
                     className="gx-use"
                     onClick={() => {
-                      // Also update the input visually so it matches state
                       const kgEl = kgRefs.current[setNum];
                       if (kgEl) kgEl.value = String(targetKg);
 
