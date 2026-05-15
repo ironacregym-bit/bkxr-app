@@ -1,3 +1,5 @@
+// File: components/gymworkout/HeaderBar.tsx
+
 import React from "react";
 import BackButton from "../navigation/BackButton";
 import SessionTimer from "./SessionTimer";
@@ -23,21 +25,26 @@ export default function HeaderBar({
   return (
     <>
       <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
-        /
+        <div style={{ flexShrink: 0 }}>
+          <BackButton />
+        </div>
 
         <div className="flex-fill" style={{ minWidth: 0 }}>
           <div className="fw-bold text-truncate" style={{ lineHeight: 1.1 }}>
             {workoutName}
           </div>
+
           <div className="text-dim small">
             Volume {volumeKg} kg • Sets {loggedSetCount}
           </div>
+
           <div className="mt-2">
             <SessionTimer />
           </div>
         </div>
 
         <button
+          type="button"
           className="btn btn-sm"
           style={{
             borderRadius: 14,
@@ -46,13 +53,12 @@ export default function HeaderBar({
             fontWeight: 900,
             paddingLeft: 14,
             paddingRight: 14,
-            opacity: isCompleted ? 0.7 : 1,
             whiteSpace: "nowrap",
+            opacity: isCompleted ? 0.85 : 1,
           }}
           onClick={onFinish}
-          disabled={isCompleted}
         >
-          Finish
+          {isCompleted ? "Edit" : "Finish"}
         </button>
       </div>
 
