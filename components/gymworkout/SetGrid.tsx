@@ -40,12 +40,17 @@ export default function SetGrid({
   prefillWeight?: number | null;
   showPrevRow?: boolean;
   movementKeyBase?: string | null;
-
-  // ✅ When SetGrid is used inside a superset block that already has a set number,
-  // pass setNumberBase so the keys use the correct set (e.g. 2, 3, 4) not always 1.
   setNumberBase?: number | null;
 }) {
   const keyBase = (movementKeyBase || exerciseId || "").trim() || exerciseId;
+
+  function getKey(realSetNum: number) {
+    return `${keyBase}|${realSetNum}`;
+  }
+
+  function getLegacyKey(realSetNum: number) {
+    return `${exerciseId}|${realSetNum}`;
+  }
 
   return (
     <div className="gx-grid">
@@ -59,34 +64,46 @@ export default function SetGrid({
       {Array.from({ length: sets }).map((_, i) => {
         const localSetNum = i + 1;
 
-        // If setNumberBase is provided (superset), use that as the real set number.
-        // If sets > 1 and setNumberBase is provided, we offset (base + i).
         const realSetNum =
           typeof setNumberBase === "number" && Number.isFinite(setNumberBase)
             ? setNumberBase + i
             : localSetNum;
 
-        const prev =
-          prevByKey[`${keyBase}|${realSetNum}`] ?? prevByKey[`${exerciseId}|${realSetNum}`];
+        const key = getKey(realSetNum);
+        const legacyKey = getLegacyKey(realSetNum);
+
+        const prev = prevByKey[key] ?? prevByKey[legacyKey];
+
+        const hasCurrent = Object.prototype.hasOwnProperty.call(currentByKey, key) ||
+          Object.prototype.hasOwnProperty.call(currentByKey, legacyKey);
 
         const current =
-          currentByKey[`${keyBase}|${realSetNum}`] ??
-          currentByKey[`${exerciseId}|${realSetNum}`] ??
+          currentByKey[key] ??
+          currentByKey[legacyKey] ??
           { weight: null, reps: null };
 
         const movementPatch = keyBase && keyBase !== exerciseId ? { movement_key: keyBase } : null;
 
+        // ✅ If we already have a state row for this set, trust state fully.
+        // If we do not, show prefills but don't "lock" the user.
         const displayedWeight =
-          current.weight != null ? current.weight : prefillWeight != null ? prefillWeight : null;
+          hasCurrent
+            ? current.weight
+            : prefillWeight != null
+            ? prefillWeight
+            : null;
 
         const displayedReps =
-          current.reps != null ? current.reps : prefillReps != null ? prefillReps : null;
+          hasCurrent
+            ? current.reps
+            : prefillReps != null
+            ? prefillReps
+            : null;
 
         const weightValue = displayedWeight != null ? String(displayedWeight) : "";
         const repsValue = displayedReps != null ? String(displayedReps) : "";
 
-        const tickKey = `${keyBase}|${realSetNum}`;
-        const tick = Boolean(tickKeys[tickKey]);
+        const tick = Boolean(tickKeys[key]);
 
         return (
           <div key={i} className="gx-row">
@@ -102,13 +119,21 @@ export default function SetGrid({
                   value={weightValue}
                   onChange={(e) => {
                     const weight = parseNullableNumber(e.target.value);
+
+                    // ✅ If user edits weight first and the set doesn't exist yet,
+                    // seed reps into state so reps don't snap back or become locked.
+                    const seedReps = !hasCurrent ? (prefillReps ?? null) : undefined;
+
                     onUpdateSet(exerciseId, realSetNum, {
                       weight,
+                      ...(seedReps !== undefined ? { reps: seedReps } : {}),
                       ...(movementPatch || {}),
                     });
                   }}
                 />
-                {targetKg != null && showUseTarget ? <span className="gx-dot" aria-hidden="true" /> : null}
+                {targetKg != null && showUseTarget ? (
+                  <span className="gx-dot" aria-hidden="true" />
+                ) : null}
               </div>
             </div>
 
@@ -121,8 +146,16 @@ export default function SetGrid({
                 value={repsValue}
                 onChange={(e) => {
                   const reps = parseNullableNumber(e.target.value);
+
+                  // ✅ If user edits reps first and the set doesn't exist yet,
+                  // seed weight into state so KG doesn't drop to blank/0.
+                  const seedWeight = !hasCurrent
+                    ? (prefillWeight != null ? prefillWeight : targetKg != null ? targetKg : null)
+                    : undefined;
+
                   onUpdateSet(exerciseId, realSetNum, {
                     reps,
+                    ...(seedWeight !== undefined ? { weight: seedWeight } : {}),
                     ...(movementPatch || {}),
                   });
                 }}
@@ -142,14 +175,13 @@ export default function SetGrid({
                   const nextTick = !tick;
                   onToggleTick(keyBase, realSetNum);
 
+                  // ✅ When ticking ON, commit displayed values so API always gets them.
                   if (nextTick) {
-                    if (displayedWeight != null || displayedReps != null || movementPatch) {
-                      onUpdateSet(exerciseId, realSetNum, {
-                        weight: displayedWeight,
-                        reps: displayedReps,
-                        ...(movementPatch || {}),
-                      });
-                    }
+                    onUpdateSet(exerciseId, realSetNum, {
+                      weight: displayedWeight ?? null,
+                      reps: displayedReps ?? null,
+                      ...(movementPatch || {}),
+                    });
                   }
                 }}
                 aria-label={tick ? "Unmark set" : "Mark set"}
