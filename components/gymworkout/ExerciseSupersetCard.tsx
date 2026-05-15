@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+// File: components/gymworkout/ExerciseSupersetCard.tsx
+
+import React, { useMemo, useState } from "react";
 import type { CompletionSet, UISupersetItem } from "./types";
 import SetGrid from "./SetGrid";
-import { ACCENT } from "./utils";
+import { GREEN } from "./utils";
 
 function parseRepsToNumber(reps?: string | null): number | null {
   if (!reps) return null;
@@ -9,6 +11,25 @@ function parseRepsToNumber(reps?: string | null): number | null {
   if (!m) return null;
   const n = Number(m[0]);
   return Number.isFinite(n) ? n : null;
+}
+
+function normaliseKeyPart(s: string) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
+/**
+ * Build a stable "movement key base" for a superset sub-exercise.
+ * Important: this key should NOT include set number; SetGrid/tick logic will add set number separately.
+ * We include the superset item's order + name to avoid collisions when the same exercise appears elsewhere.
+ */
+function buildSupersetMovementKey(args: { exerciseId: string; supersetOrder: number; supersetName?: string | null }) {
+  const ex = String(args.exerciseId || "").trim();
+  const order = Number.isFinite(args.supersetOrder) ? args.supersetOrder : 0;
+  const name = normaliseKeyPart(args.supersetName || "superset");
+  return `${ex}|ss:${name}|o:${order}`;
 }
 
 export default function ExerciseSupersetCard({
@@ -32,13 +53,17 @@ export default function ExerciseSupersetCard({
   const rest = item.rest_s ?? null;
   const [expanded, setExpanded] = useState(true);
 
+  const supersetName = useMemo(() => (item.name || "").trim() || "Superset", [item.name]);
+  const supersetOrder = Number.isFinite(item.order) ? Number(item.order) : 0;
+
   return (
     <div className="gx-ss">
       <div className="gx-ss-head">
-        <div className="gx-ss-title">{(item.name || "").trim() || "Superset"}</div>
+        <div className="gx-ss-title">{supersetName}</div>
 
         <div className="gx-ss-right">
-          <span className="gx-chip" style={{ borderColor: `${ACCENT}88`, color: ACCENT }}>
+          {/* ✅ Colour aligned with strength UI (no more orange sets chip) */}
+          <span className="gx-chip" style={{ borderColor: `${GREEN}88`, color: GREEN }}>
             {sets} sets
           </span>
 
@@ -59,7 +84,7 @@ export default function ExerciseSupersetCard({
         {item.notes ? ` • ${item.notes}` : ""}
       </div>
 
-      {expanded && (
+      {expanded ? (
         <div className="gx-ss-body">
           {Array.from({ length: sets }).map((_, sIdx) => {
             const setNum = sIdx + 1;
@@ -75,12 +100,22 @@ export default function ExerciseSupersetCard({
                   const title = m.exercise_name || sub.exercise_id;
                   const hasMedia = Boolean(m.gif_url || m.video_url);
 
-                  const prev = prevByKey[`${sub.exercise_id}|${setNum}`];
+                  // ✅ Superset movementKeyBase for tick scoping + saving movement_key
+                  const movementKeyBase = buildSupersetMovementKey({
+                    exerciseId: sub.exercise_id,
+                    supersetOrder,
+                    supersetName,
+                  });
+
+                  // ✅ Prev prefers exposure-aware movement key first, then legacy fallback
+                  const prev =
+                    prevByKey[`${movementKeyBase}|${setNum}`] ??
+                    prevByKey[`${sub.exercise_id}|${setNum}`];
+
                   const prefillReps = parseRepsToNumber(sub.reps);
 
                   return (
                     <div key={`${sub.exercise_id}|${setNum}`} className="gx-ss-ex">
-                      {/* Name + play button on same row */}
                       <div className="gx-ss-ex-head">
                         <div className="gx-ss-ex-title text-truncate" title={title}>
                           {title}
@@ -98,7 +133,6 @@ export default function ExerciseSupersetCard({
                         </button>
                       </div>
 
-                      {/* Keep only the Prev near the set row (this one) */}
                       <div className="text-dim small" style={{ marginTop: 6 }}>
                         Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
                       </div>
@@ -111,9 +145,8 @@ export default function ExerciseSupersetCard({
                         targetKg={null}
                         showUseTarget={false}
                         showPrevRow={false}
-                        onUpdateSet={(exercise_id, _ignored, patch) =>
-                          onUpdateSet(exercise_id, setNum, patch)
-                        }
+                        movementKeyBase={movementKeyBase}
+                        onUpdateSet={(exercise_id, _ignored, patch) => onUpdateSet(exercise_id, setNum, patch)}
                         tickKeys={tickKeys}
                         onToggleTick={(exercise_id, _ignored) => onToggleTick(exercise_id, setNum)}
                         prefillReps={prefillReps}
@@ -125,7 +158,7 @@ export default function ExerciseSupersetCard({
             );
           })}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
