@@ -46,6 +46,7 @@ export default function ExerciseSingleCard({
   item,
   media,
   prevByKey,
+  currentByKey,
   trainingMaxes,
   defaultRounding,
   onUpdateSet,
@@ -56,6 +57,7 @@ export default function ExerciseSingleCard({
   item: UISingleItem;
   media?: { gif_url?: string; video_url?: string; exercise_name?: string };
   prevByKey: Record<string, { weight: number | null; reps: number | null }>;
+  currentByKey: Record<string, { weight: number | null; reps: number | null }>;
   trainingMaxes: Record<string, number>;
   defaultRounding: number;
   onUpdateSet: (exercise_id: string, set: number, patch: Partial<CompletionSet>) => void;
@@ -115,11 +117,7 @@ export default function ExerciseSingleCard({
           disabled={!hasMedia}
         >
           {thumbUrl ? (
-            <img
-              src={thumbUrl}
-              alt=""
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-            />
+            <img src={thumbUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           ) : (
             <div className="d-flex align-items-center justify-content-center" style={{ width: "100%", height: "100%" }}>
               <i className="fas fa-play" />
@@ -157,6 +155,7 @@ export default function ExerciseSingleCard({
         exerciseId={item.exercise_id}
         sets={sets}
         prevByKey={prevByKey}
+        currentByKey={currentByKey}
         targetKg={item.strength && hasPct ? target.targetKg : null}
         showUseTarget={Boolean(item.strength && hasPct)}
         prefillReps={prefillReps}
