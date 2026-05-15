@@ -139,9 +139,10 @@ export default function ExerciseSupersetCard({
                         showUseTarget={false}
                         showPrevRow={false}
                         movementKeyBase={movementKeyBase}
-                        onUpdateSet={(exercise_id, _ignored, patch) => onUpdateSet(exercise_id, setNum, patch)}
+                        setNumberBase={setNum}
+                        onUpdateSet={onUpdateSet}
                         tickKeys={tickKeys}
-                        onToggleTick={(exercise_id, _ignored) => onToggleTick(exercise_id, setNum)}
+                        onToggleTick={onToggleTick}
                         prefillReps={prefillReps}
                       />
                     </div>
