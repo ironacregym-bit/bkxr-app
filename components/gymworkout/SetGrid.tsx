@@ -1,6 +1,6 @@
 // File: components/gymworkout/SetGrid.tsx
 
-import React from "react";
+import React, { useRef } from "react";
 import type { CompletionSet } from "./types";
 import { GREEN } from "./utils";
 
@@ -40,6 +40,10 @@ export default function SetGrid({
 }) {
   const keyBase = (movementKeyBase || exerciseId || "").trim() || exerciseId;
 
+  // Keep refs so ticking can “commit” whatever is currently in the inputs into state
+  const kgRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const repsRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
   return (
     <div className="gx-grid">
       <div className="gx-grid-head">
@@ -54,7 +58,6 @@ export default function SetGrid({
 
         const prev = prevByKey[`${keyBase}|${setNum}`] ?? prevByKey[`${exerciseId}|${setNum}`];
 
-        // ✅ Tick scoped by movement key when available so different % blocks do not collide
         const tickKey = `${keyBase}|${setNum}`;
         const tick = Boolean(tickKeys[tickKey]);
 
@@ -67,6 +70,9 @@ export default function SetGrid({
             <div className="gx-col-kg">
               <div className="gx-kg-wrap">
                 <input
+                  ref={(el) => {
+                    kgRefs.current[setNum] = el;
+                  }}
                   className="gx-input gx-input-kg"
                   type="number"
                   inputMode="decimal"
@@ -86,6 +92,9 @@ export default function SetGrid({
 
             <div className="gx-col-reps">
               <input
+                ref={(el) => {
+                  repsRefs.current[setNum] = el;
+                }}
                 className="gx-input gx-input-reps"
                 type="number"
                 inputMode="numeric"
@@ -110,7 +119,30 @@ export default function SetGrid({
                   color: tick ? "#0b0f14" : GREEN,
                   background: tick ? GREEN : "transparent",
                 }}
-                onClick={() => onToggleTick(keyBase, setNum)}
+                onClick={() => {
+                  const nextTick = !tick;
+
+                  // Toggle tick first (this is your existing behaviour)
+                  onToggleTick(keyBase, setNum);
+
+                  // ✅ If marking as done, commit the current visible values into formSets even if untouched.
+                  if (nextTick) {
+                    const kgEl = kgRefs.current[setNum];
+                    const repsEl = repsRefs.current[setNum];
+
+                    const weight = kgEl ? parseNullableNumber(kgEl.value) : null;
+                    const reps = repsEl ? parseNullableNumber(repsEl.value) : null;
+
+                    // Only write if we actually have something (prevents writing nulls everywhere)
+                    if (weight != null || reps != null || movementPatch) {
+                      onUpdateSet(exerciseId, setNum, {
+                        weight,
+                        reps,
+                        ...(movementPatch || {}),
+                      });
+                    }
+                  }
+                }}
                 aria-label={tick ? "Unmark set" : "Mark set"}
               >
                 <i className="fas fa-check" />
@@ -127,12 +159,16 @@ export default function SetGrid({
                   <button
                     type="button"
                     className="gx-use"
-                    onClick={() =>
+                    onClick={() => {
+                      // Also update the input visually so it matches state
+                      const kgEl = kgRefs.current[setNum];
+                      if (kgEl) kgEl.value = String(targetKg);
+
                       onUpdateSet(exerciseId, setNum, {
                         weight: targetKg,
                         ...(movementPatch || {}),
-                      })
-                    }
+                      });
+                    }}
                   >
                     Use target
                   </button>
