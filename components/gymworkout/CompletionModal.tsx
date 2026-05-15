@@ -1,9 +1,14 @@
+// File: components/gymworkout/CompletionModal.tsx
+
 import React from "react";
-import { ACCENT } from "./utils";
+import { GREEN } from "./utils";
 
 type CompletionModalProps = {
   open: boolean;
   submitting: boolean;
+
+  // ✅ New
+  isEditing?: boolean;
 
   difficulty: string;
   setDifficulty: (v: string) => void;
@@ -24,14 +29,20 @@ type CompletionModalProps = {
 export default function CompletionModal({
   open,
   submitting,
+  isEditing = false,
+
   difficulty,
   setDifficulty,
+
   calories,
   setCalories,
+
   duration,
   setDuration,
+
   notes,
   setNotes,
+
   onClose,
   onSave,
 }: CompletionModalProps) {
@@ -50,11 +61,15 @@ export default function CompletionModal({
     >
       <div
         className="position-absolute top-50 start-50 translate-middle"
-        style={{ width: "92vw", maxWidth: 720 }}
+        style={{ width: "92vw", maxWidth: 520 }}
       >
         <div className="futuristic-card p-3" onClick={(e) => e.stopPropagation()}>
+          {/* Header */}
           <div className="d-flex align-items-center justify-content-between">
-            <h5 className="m-0">Complete workout</h5>
+            <h5 className="m-0">
+              {isEditing ? "Edit workout" : "Complete workout"}
+            </h5>
+
             <button
               className="btn btn-sm btn-outline-light"
               style={{ borderRadius: 999 }}
@@ -64,15 +79,18 @@ export default function CompletionModal({
             </button>
           </div>
 
+          {/* Subtext */}
           <div className="small text-dim mt-1">
-            We’ll save your logged sets. Add{" "}
-            <strong>Difficulty</strong> and{" "}
-            <strong>Calories burnt</strong> for better tracking.
+            {isEditing
+              ? "Update your stats if anything needs correcting."
+              : "Add a few details to finish your session."}
           </div>
 
-          <div className="row g-2 mt-3">
-            <div className="col-12 col-md-4">
-              <label className="form-label">Difficulty</label>
+          {/* Inputs */}
+          <div className="d-flex flex-column gap-2 mt-3">
+            {/* Difficulty */}
+            <div>
+              <label className="form-label small text-dim mb-1">Difficulty</label>
               <select
                 className="form-select"
                 value={difficulty}
@@ -85,34 +103,42 @@ export default function CompletionModal({
               </select>
             </div>
 
-            <div className="col-6 col-md-4">
-              <label className="form-label">Calories burnt (kcal)</label>
-              <input
-                className="form-control"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                placeholder="e.g. 420"
-                value={calories}
-                onChange={(e) => setCalories(e.target.value)}
-              />
+            {/* Calories + Duration row */}
+            <div className="d-flex gap-2">
+              <div style={{ flex: 1 }}>
+                <label className="form-label small text-dim mb-1">
+                  Calories
+                </label>
+                <input
+                  className="form-control"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  placeholder="420"
+                  value={calories}
+                  onChange={(e) => setCalories(e.target.value)}
+                />
+              </div>
+
+              <div style={{ flex: 1 }}>
+                <label className="form-label small text-dim mb-1">
+                  Duration
+                </label>
+                <input
+                  className="form-control"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  placeholder="55"
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                />
+              </div>
             </div>
 
-            <div className="col-6 col-md-4">
-              <label className="form-label">Duration (min)</label>
-              <input
-                className="form-control"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                placeholder="e.g. 55"
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-              />
-            </div>
-
-            <div className="col-12">
-              <label className="form-label">Notes (optional)</label>
+            {/* Notes */}
+            <div>
+              <label className="form-label small text-dim mb-1">Notes</label>
               <textarea
                 className="form-control"
                 rows={2}
@@ -123,6 +149,7 @@ export default function CompletionModal({
             </div>
           </div>
 
+          {/* Actions */}
           <div className="d-flex justify-content-end gap-2 mt-3">
             <button
               className="btn btn-outline-light"
@@ -134,17 +161,23 @@ export default function CompletionModal({
             </button>
 
             <button
-              className="btn btn-primary"
+              className="btn"
               style={{
                 borderRadius: 24,
-                background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
-                border: "none",
+                background: GREEN,
+                color: "#0b0f14",
                 fontWeight: 700,
+                paddingLeft: 16,
+                paddingRight: 16,
               }}
               onClick={onSave}
               disabled={submitting}
             >
-              {submitting ? "Saving…" : "Save completion"}
+              {submitting
+                ? "Saving…"
+                : isEditing
+                ? "Save changes"
+                : "Save completion"}
             </button>
           </div>
         </div>
