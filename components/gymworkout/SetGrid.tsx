@@ -1,6 +1,6 @@
 // File: components/gymworkout/SetGrid.tsx
 
-import React, { useRef } from "react";
+import React from "react";
 import type { CompletionSet } from "./types";
 import { GREEN } from "./utils";
 
@@ -15,6 +15,7 @@ export default function SetGrid({
   exerciseId,
   sets,
   prevByKey,
+  currentByKey,
   targetKg,
   onUpdateSet,
   tickKeys,
@@ -28,6 +29,7 @@ export default function SetGrid({
   exerciseId: string;
   sets: number;
   prevByKey: Record<string, { weight: number | null; reps: number | null }>;
+  currentByKey: Record<string, { weight: number | null; reps: number | null }>;
   targetKg: number | null;
   onUpdateSet: (exercise_id: string, set: number, patch: Partial<CompletionSet>) => void;
   tickKeys: Record<string, boolean>;
@@ -39,9 +41,6 @@ export default function SetGrid({
   movementKeyBase?: string | null;
 }) {
   const keyBase = (movementKeyBase || exerciseId || "").trim() || exerciseId;
-
-  const kgRefs = useRef<Record<number, HTMLInputElement | null>>({});
-  const repsRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   return (
     <div className="gx-grid">
@@ -57,10 +56,22 @@ export default function SetGrid({
 
         const prev = prevByKey[`${keyBase}|${setNum}`] ?? prevByKey[`${exerciseId}|${setNum}`];
 
-        const tickKey = `${keyBase}|${setNum}`;
-        const tick = Boolean(tickKeys[tickKey]);
+        const current =
+          currentByKey[`${keyBase}|${setNum}`] ?? currentByKey[`${exerciseId}|${setNum}`] ?? { weight: null, reps: null };
 
         const movementPatch = keyBase && keyBase !== exerciseId ? { movement_key: keyBase } : null;
+
+        const displayedWeight =
+          current.weight != null ? current.weight : prefillWeight != null ? prefillWeight : null;
+
+        const displayedReps =
+          current.reps != null ? current.reps : prefillReps != null ? prefillReps : null;
+
+        const weightValue = displayedWeight != null ? String(displayedWeight) : "";
+        const repsValue = displayedReps != null ? String(displayedReps) : "";
+
+        const tickKey = `${keyBase}|${setNum}`;
+        const tick = Boolean(tickKeys[tickKey]);
 
         return (
           <div key={i} className="gx-row">
@@ -69,14 +80,11 @@ export default function SetGrid({
             <div className="gx-col-kg">
               <div className="gx-kg-wrap">
                 <input
-                  ref={(el) => {
-                    kgRefs.current[setNum] = el;
-                  }}
                   className="gx-input gx-input-kg"
                   type="number"
                   inputMode="decimal"
                   placeholder={targetKg != null ? String(targetKg) : "kg"}
-                  defaultValue={prefillWeight != null ? prefillWeight : undefined}
+                  value={weightValue}
                   onChange={(e) => {
                     const weight = parseNullableNumber(e.target.value);
                     onUpdateSet(exerciseId, setNum, {
@@ -91,14 +99,11 @@ export default function SetGrid({
 
             <div className="gx-col-reps">
               <input
-                ref={(el) => {
-                  repsRefs.current[setNum] = el;
-                }}
                 className="gx-input gx-input-reps"
                 type="number"
                 inputMode="numeric"
                 placeholder="reps"
-                defaultValue={prefillReps != null ? prefillReps : undefined}
+                value={repsValue}
                 onChange={(e) => {
                   const reps = parseNullableNumber(e.target.value);
                   onUpdateSet(exerciseId, setNum, {
@@ -120,20 +125,14 @@ export default function SetGrid({
                 }}
                 onClick={() => {
                   const nextTick = !tick;
-
                   onToggleTick(keyBase, setNum);
 
+                  // When ticking on, commit whatever is currently displayed so it goes into formSets
                   if (nextTick) {
-                    const kgEl = kgRefs.current[setNum];
-                    const repsEl = repsRefs.current[setNum];
-
-                    const weight = kgEl ? parseNullableNumber(kgEl.value) : null;
-                    const reps = repsEl ? parseNullableNumber(repsEl.value) : null;
-
-                    if (weight != null || reps != null || movementPatch) {
+                    if (displayedWeight != null || displayedReps != null || movementPatch) {
                       onUpdateSet(exerciseId, setNum, {
-                        weight,
-                        reps,
+                        weight: displayedWeight,
+                        reps: displayedReps,
                         ...(movementPatch || {}),
                       });
                     }
@@ -155,15 +154,12 @@ export default function SetGrid({
                   <button
                     type="button"
                     className="gx-use"
-                    onClick={() => {
-                      const kgEl = kgRefs.current[setNum];
-                      if (kgEl) kgEl.value = String(targetKg);
-
+                    onClick={() =>
                       onUpdateSet(exerciseId, setNum, {
                         weight: targetKg,
                         ...(movementPatch || {}),
-                      });
-                    }}
+                      })
+                    }
                   >
                     Use target
                   </button>
