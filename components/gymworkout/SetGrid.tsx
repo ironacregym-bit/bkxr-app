@@ -25,6 +25,7 @@ export default function SetGrid({
   prefillWeight,
   showPrevRow = true,
   movementKeyBase,
+  setNumberBase,
 }: {
   exerciseId: string;
   sets: number;
@@ -39,6 +40,10 @@ export default function SetGrid({
   prefillWeight?: number | null;
   showPrevRow?: boolean;
   movementKeyBase?: string | null;
+
+  // ✅ When SetGrid is used inside a superset block that already has a set number,
+  // pass setNumberBase so the keys use the correct set (e.g. 2, 3, 4) not always 1.
+  setNumberBase?: number | null;
 }) {
   const keyBase = (movementKeyBase || exerciseId || "").trim() || exerciseId;
 
@@ -52,12 +57,22 @@ export default function SetGrid({
       </div>
 
       {Array.from({ length: sets }).map((_, i) => {
-        const setNum = i + 1;
+        const localSetNum = i + 1;
 
-        const prev = prevByKey[`${keyBase}|${setNum}`] ?? prevByKey[`${exerciseId}|${setNum}`];
+        // If setNumberBase is provided (superset), use that as the real set number.
+        // If sets > 1 and setNumberBase is provided, we offset (base + i).
+        const realSetNum =
+          typeof setNumberBase === "number" && Number.isFinite(setNumberBase)
+            ? setNumberBase + i
+            : localSetNum;
+
+        const prev =
+          prevByKey[`${keyBase}|${realSetNum}`] ?? prevByKey[`${exerciseId}|${realSetNum}`];
 
         const current =
-          currentByKey[`${keyBase}|${setNum}`] ?? currentByKey[`${exerciseId}|${setNum}`] ?? { weight: null, reps: null };
+          currentByKey[`${keyBase}|${realSetNum}`] ??
+          currentByKey[`${exerciseId}|${realSetNum}`] ??
+          { weight: null, reps: null };
 
         const movementPatch = keyBase && keyBase !== exerciseId ? { movement_key: keyBase } : null;
 
@@ -70,12 +85,12 @@ export default function SetGrid({
         const weightValue = displayedWeight != null ? String(displayedWeight) : "";
         const repsValue = displayedReps != null ? String(displayedReps) : "";
 
-        const tickKey = `${keyBase}|${setNum}`;
+        const tickKey = `${keyBase}|${realSetNum}`;
         const tick = Boolean(tickKeys[tickKey]);
 
         return (
           <div key={i} className="gx-row">
-            <div className="gx-col-set">{setNum}</div>
+            <div className="gx-col-set">{realSetNum}</div>
 
             <div className="gx-col-kg">
               <div className="gx-kg-wrap">
@@ -87,7 +102,7 @@ export default function SetGrid({
                   value={weightValue}
                   onChange={(e) => {
                     const weight = parseNullableNumber(e.target.value);
-                    onUpdateSet(exerciseId, setNum, {
+                    onUpdateSet(exerciseId, realSetNum, {
                       weight,
                       ...(movementPatch || {}),
                     });
@@ -106,7 +121,7 @@ export default function SetGrid({
                 value={repsValue}
                 onChange={(e) => {
                   const reps = parseNullableNumber(e.target.value);
-                  onUpdateSet(exerciseId, setNum, {
+                  onUpdateSet(exerciseId, realSetNum, {
                     reps,
                     ...(movementPatch || {}),
                   });
@@ -125,12 +140,11 @@ export default function SetGrid({
                 }}
                 onClick={() => {
                   const nextTick = !tick;
-                  onToggleTick(keyBase, setNum);
+                  onToggleTick(keyBase, realSetNum);
 
-                  // When ticking on, commit whatever is currently displayed so it goes into formSets
                   if (nextTick) {
                     if (displayedWeight != null || displayedReps != null || movementPatch) {
-                      onUpdateSet(exerciseId, setNum, {
+                      onUpdateSet(exerciseId, realSetNum, {
                         weight: displayedWeight,
                         reps: displayedReps,
                         ...(movementPatch || {}),
@@ -155,7 +169,7 @@ export default function SetGrid({
                     type="button"
                     className="gx-use"
                     onClick={() =>
-                      onUpdateSet(exerciseId, setNum, {
+                      onUpdateSet(exerciseId, realSetNum, {
                         weight: targetKg,
                         ...(movementPatch || {}),
                       })
