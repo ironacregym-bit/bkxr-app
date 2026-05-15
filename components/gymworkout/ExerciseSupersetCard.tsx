@@ -31,6 +31,7 @@ export default function ExerciseSupersetCard({
   item,
   media,
   prevByKey,
+  currentByKey,
   onUpdateSet,
   onToggleTick,
   tickKeys,
@@ -39,6 +40,7 @@ export default function ExerciseSupersetCard({
   item: UISupersetItem;
   media: Record<string, { gif_url?: string; video_url?: string; exercise_name?: string }>;
   prevByKey: Record<string, { weight: number | null; reps: number | null }>;
+  currentByKey: Record<string, { weight: number | null; reps: number | null }>;
   onUpdateSet: (exercise_id: string, set: number, patch: Partial<CompletionSet>) => void;
   onToggleTick: (exercise_id: string, set: number) => void;
   tickKeys: Record<string, boolean>;
@@ -132,6 +134,7 @@ export default function ExerciseSupersetCard({
                         exerciseId={sub.exercise_id}
                         sets={1}
                         prevByKey={prevByKey}
+                        currentByKey={currentByKey}
                         targetKg={null}
                         showUseTarget={false}
                         showPrevRow={false}
