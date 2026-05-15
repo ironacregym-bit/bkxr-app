@@ -1,6 +1,6 @@
 // File: pages/gymworkout/[id].tsx
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import useSWR from "swr";
@@ -40,6 +40,14 @@ function toMediaRounds(w: GymWorkout | undefined | null): MediaRound[] {
           }
     ),
   }));
+}
+
+function difficultyFromRPE(rpe: any): string {
+  const n = Number(rpe);
+  if (!Number.isFinite(n)) return "";
+  if (n <= 4) return "Easy";
+  if (n <= 7) return "Medium";
+  return "Hard";
 }
 
 export default function GymWorkoutViewerPage() {
@@ -87,6 +95,11 @@ export default function GymWorkoutViewerPage() {
   const [mediaGif, setMediaGif] = useState<string | undefined>();
   const [mediaVideo, setMediaVideo] = useState<string | undefined>();
 
+  // ✅ Edit mode: completion for THIS workout in THIS week
+  const [editingCompletionId, setEditingCompletionId] = useState<string | null>(null);
+  const hydratedForCompletionId = useRef<string | null>(null);
+
+  // Load previous session (latest overall for this workout) — kept as-is
   useEffect(() => {
     if (!mounted || !id || Array.isArray(id)) return;
 
@@ -98,6 +111,66 @@ export default function GymWorkoutViewerPage() {
       })
       .catch(() => {});
   }, [mounted, id]);
+
+  // ✅ Load completion for the current week window (prefer selected date)
+  useEffect(() => {
+    if (!mounted || !id || Array.isArray(id)) return;
+
+    const url =
+      `/api/completions/last?workout_id=${encodeURIComponent(String(id))}` +
+      `&from=${encodeURIComponent(weekStartKey)}` +
+      `&to=${encodeURIComponent(weekEndKey)}` +
+      `&date=${encodeURIComponent(selectedYMD)}`;
+
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        const last = json?.last || null;
+
+        if (!last?.id) {
+          setEditingCompletionId(null);
+          hydratedForCompletionId.current = null;
+          return;
+        }
+
+        const completionId = String(last.id);
+        setEditingCompletionId(completionId);
+
+        // Hydrate only once per completion id (do not overwrite user edits)
+        if (hydratedForCompletionId.current === completionId) return;
+        hydratedForCompletionId.current = completionId;
+
+        const sets = Array.isArray(last.sets) ? (last.sets as any[]) : [];
+        const mappedSets: CompletionSet[] = sets
+          .map((s: any) => ({
+            exercise_id: String(s?.exercise_id || "").trim(),
+            set: Number(s?.set || 0),
+            weight: typeof s?.weight === "number" ? s.weight : null,
+            reps: typeof s?.reps === "number" ? s.reps : null,
+            movement_key: typeof s?.movement_key === "string" ? s.movement_key : null,
+          }))
+          .filter((s) => s.exercise_id && Number.isFinite(s.set) && s.set > 0);
+
+        setFormSets(mappedSets);
+
+        // Summary fields
+        setCalories(
+          typeof last.calories_burned === "number" && Number.isFinite(last.calories_burned)
+            ? String(last.calories_burned)
+            : ""
+        );
+
+        setDuration(
+          typeof last.duration_minutes === "number" && Number.isFinite(last.duration_minutes)
+            ? String(last.duration_minutes)
+            : ""
+        );
+
+        setNotes(typeof last.notes === "string" ? last.notes : "");
+        setDifficulty(difficultyFromRPE(last.rpe));
+      })
+      .catch(() => {});
+  }, [mounted, id, weekStartKey, weekEndKey, selectedYMD]);
 
   const prevByKey = useMemo(() => {
     const m: Record<string, { weight: number | null; reps: number | null }> = {};
@@ -137,7 +210,6 @@ export default function GymWorkoutViewerPage() {
   const [tickKeys, setTickKeys] = useState<Record<string, boolean>>({});
 
   function toggleTick(exercise_id: string, setNum: number) {
-    // Note: SetGrid passes movementKeyBase as exercise_id when available, so ticks do not collide across % blocks.
     const k = `${exercise_id}|${setNum}`;
     setTickKeys((m) => ({ ...m, [k]: !m[k] }));
   }
@@ -163,9 +235,7 @@ export default function GymWorkoutViewerPage() {
 
       const idx = next.findIndex((s) => {
         if (s.set !== setNum) return false;
-
         if (useMovementKey) return String((s as any)?.movement_key || "") === patchMovementKey;
-
         return s.exercise_id === exercise_id;
       });
 
@@ -207,17 +277,21 @@ export default function GymWorkoutViewerPage() {
     data?: Completion[];
   }>(weekCompletionsKey, fetcher, { revalidateOnFocus: false, dedupingInterval: 30_000 });
 
+  // Keep your existing “completed this week” badge logic, but editingCompletionId is the real edit switch.
   const isCompleted = useMemo(() => {
+    if (editingCompletionId) return true;
     if (!weekCompletions || !id || Array.isArray(id)) return false;
+
     const list: Completion[] =
       (weekCompletions.results as Completion[]) ||
       (weekCompletions.items as Completion[]) ||
       (weekCompletions.completions as Completion[]) ||
       (weekCompletions.data as Completion[]) ||
       [];
+
     const idStr = String(id);
     return list.some((c) => String(c.workout_id || "") === idStr);
-  }, [weekCompletions, id]);
+  }, [weekCompletions, id, editingCompletionId]);
 
   async function submitCompletion() {
     if (!id || Array.isArray(id)) return;
@@ -234,19 +308,26 @@ export default function GymWorkoutViewerPage() {
 
       if (notes.trim()) body.notes = notes.trim();
 
-      const res = await fetch(`/api/completions/create`, {
+      const isEditing = Boolean(editingCompletionId);
+      const endpoint = isEditing ? `/api/completions/update` : `/api/completions/create`;
+
+      if (isEditing) {
+        body.completion_id = editingCompletionId;
+      }
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to submit completion");
+      if (!res.ok) throw new Error(json?.error || "Failed to save completion");
 
       router.push("/");
     } catch (e) {
       console.error(e);
-      alert((e as any)?.message || "Failed to submit completion");
+      alert((e as any)?.message || "Failed to save completion");
     } finally {
       setSubmitting(false);
     }
@@ -254,7 +335,8 @@ export default function GymWorkoutViewerPage() {
 
   if (!mounted) return null;
 
-  const canComplete = loggedSetCount > 0 && !submitting && !isCompleted;
+  const isEditing = Boolean(editingCompletionId);
+  const canSave = loggedSetCount > 0 && !submitting;
 
   return (
     <>
@@ -368,20 +450,19 @@ export default function GymWorkoutViewerPage() {
               />
             ) : null}
 
-            {/* ✅ Complete workout CTA at the bottom */}
             <section className="futuristic-card p-3 mb-3">
               <div className="d-flex justify-content-between align-items-center">
-                <div className="fw-semibold">Complete workout</div>
+                <div className="fw-semibold">{isEditing ? "Edit workout" : "Complete workout"}</div>
                 <div className="text-dim small">
                   {weekStartKey} → {weekEndKey}
                 </div>
               </div>
 
               <div className="text-dim small mt-1">
-                {isCompleted
-                  ? "This workout is already completed this week."
-                  : loggedSetCount === 0
-                  ? "Log at least one set before completing."
+                {loggedSetCount === 0
+                  ? "Log at least one set before saving."
+                  : isEditing
+                  ? "Update your summary and save changes."
                   : "Add your summary and save."}
               </div>
 
@@ -389,9 +470,9 @@ export default function GymWorkoutViewerPage() {
                 type="button"
                 className="ia-btn ia-btn-primary w-100 mt-3"
                 onClick={() => setCompleteOpen(true)}
-                disabled={!canComplete}
+                disabled={!canSave}
               >
-                {submitting ? "Saving…" : isCompleted ? "Completed" : "Complete workout"}
+                {submitting ? "Saving…" : isEditing ? "Save changes" : "Complete workout"}
               </button>
             </section>
           </>
@@ -401,6 +482,7 @@ export default function GymWorkoutViewerPage() {
       <CompletionModal
         open={completeOpen}
         submitting={submitting}
+        isEditing={isEditing}
         difficulty={difficulty}
         setDifficulty={setDifficulty}
         calories={calories}
