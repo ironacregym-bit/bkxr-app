@@ -2,7 +2,9 @@
 
 import type { NextApiRequest, NextApiResponse } from "next";
 import { adminDb as db } from "../../../../lib/firebaseAdmin";
-
+import firestore from "../../../../lib/firestoreClient";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../../auth/[...nextauth]";
 /**
  * Admin workout fetch (Admin SDK)
  * - Loads workout doc + rounds + items
