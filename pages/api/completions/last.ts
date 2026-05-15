@@ -1,9 +1,15 @@
+// File: pages/api/completions/last.ts
+
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]";
 import firestore from "../../../lib/firestoreClient";
 
 const COLLECTION = "workoutCompletions";
+
+function isYMD(s: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
 
 function toJSDate(v: any): Date | null {
   try {
@@ -20,6 +26,51 @@ function toJSDate(v: any): Date | null {
   }
 }
 
+function dayRange(dateYMD: string): { from: Date; to: Date } | null {
+  if (!isYMD(dateYMD)) return null;
+  const d = new Date(`${dateYMD}T00:00:00`);
+  if (isNaN(d.getTime())) return null;
+  const from = new Date(d);
+  const to = new Date(d);
+  to.setHours(23, 59, 59, 999);
+  return { from, to };
+}
+
+function rangeFromTo(fromYMD?: string, toYMD?: string): { from: Date; to: Date } | null {
+  if (!fromYMD || !toYMD) return null;
+  if (!isYMD(fromYMD) || !isYMD(toYMD)) return null;
+
+  const f = new Date(`${fromYMD}T00:00:00`);
+  const t = new Date(`${toYMD}T00:00:00`);
+  if (isNaN(f.getTime()) || isNaN(t.getTime())) return null;
+
+  const from = new Date(f);
+  from.setHours(0, 0, 0, 0);
+
+  const to = new Date(t);
+  to.setHours(23, 59, 59, 999);
+
+  return { from, to };
+}
+
+function pickLatestDocInMemory(
+  docs: FirebaseFirestore.QueryDocumentSnapshot[]
+): FirebaseFirestore.QueryDocumentSnapshot | undefined {
+  if (!docs.length) return undefined;
+  return docs
+    .map((d) => ({ d, data: d.data() as any }))
+    .map(({ d, data }) => {
+      const ts =
+        toJSDate(data.completed_date) ||
+        toJSDate(data.date_completed) ||
+        toJSDate(data.created_at) ||
+        toJSDate(data.updated_at) ||
+        null;
+      return { d, when: ts ? ts.getTime() : 0 };
+    })
+    .sort((a, b) => b.when - a.when)[0]?.d;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "GET") {
@@ -32,50 +83,106 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!email) return res.status(401).json({ error: "Not signed in" });
 
     const userEmail = email.toLowerCase();
+
     const workoutId = String(req.query.workout_id || "").trim();
 
-    // Base query (with/without workout filter)
+    const fromQ = typeof req.query.from === "string" ? req.query.from.trim() : undefined;
+    const toQ = typeof req.query.to === "string" ? req.query.to.trim() : undefined;
+    const dateQ = typeof req.query.date === "string" ? req.query.date.trim() : undefined;
+
+    const weekRange = rangeFromTo(fromQ, toQ);
+    const dayPref = dateQ ? dayRange(dateQ) : null;
+
     let base = firestore.collection(COLLECTION).where("user_email", "==", userEmail) as FirebaseFirestore.Query;
     if (workoutId) base = base.where("workout_id", "==", workoutId);
 
     let doc: FirebaseFirestore.QueryDocumentSnapshot | undefined;
 
-    // --- Try newest by completed_date (preferred) ---
-    try {
-      const snap = await base.orderBy("completed_date", "desc").limit(1).get();
-      if (!snap.empty) doc = snap.docs[0];
-    } catch {
-      // index missing or other error -> fall through
+    // 1) Prefer a completion on the requested day (if date= provided)
+    if (dayPref) {
+      try {
+        const snap = await base
+          .where("completed_date", ">=", dayPref.from)
+          .where("completed_date", "<=", dayPref.to)
+          .orderBy("completed_date", "desc")
+          .limit(1)
+          .get();
+        if (!snap.empty) doc = snap.docs[0];
+      } catch {
+        // Missing index; fall back to in-memory filtering below
+      }
+
+      if (!doc) {
+        try {
+          const snap = await base.limit(workoutId ? 50 : 100).get();
+          const filtered = snap.docs.filter((d) => {
+            const x = d.data() as any;
+            const dt = toJSDate(x.completed_date) || toJSDate(x.date_completed) || null;
+            if (!dt) return false;
+            return dt >= dayPref.from && dt <= dayPref.to;
+          });
+          doc = pickLatestDocInMemory(filtered);
+        } catch {
+          // ignore
+        }
+      }
     }
 
-    // --- Fallback: legacy date_completed ---
+    // 2) If still no doc and week range provided, find latest in the range
+    if (!doc && weekRange) {
+      try {
+        const snap = await base
+          .where("completed_date", ">=", weekRange.from)
+          .where("completed_date", "<=", weekRange.to)
+          .orderBy("completed_date", "desc")
+          .limit(1)
+          .get();
+        if (!snap.empty) doc = snap.docs[0];
+      } catch {
+        // Missing index; fall back to in-memory filtering below
+      }
+
+      if (!doc) {
+        try {
+          const snap = await base.limit(workoutId ? 75 : 150).get();
+          const filtered = snap.docs.filter((d) => {
+            const x = d.data() as any;
+            const dt = toJSDate(x.completed_date) || toJSDate(x.date_completed) || null;
+            if (!dt) return false;
+            return dt >= weekRange.from && dt <= weekRange.to;
+          });
+          doc = pickLatestDocInMemory(filtered);
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    // 3) Final fallback: latest overall (existing behaviour)
+    if (!doc) {
+      try {
+        const snap = await base.orderBy("completed_date", "desc").limit(1).get();
+        if (!snap.empty) doc = snap.docs[0];
+      } catch {
+        // ignore
+      }
+    }
+
+    // 4) Fallback: legacy date_completed ordering
     if (!doc) {
       try {
         const snap2 = await base.orderBy("date_completed", "desc").limit(1).get();
         if (!snap2.empty) doc = snap2.docs[0];
       } catch {
-        // still nothing; we'll do a no-index scan
+        // ignore
       }
     }
 
-    // --- Final fallback: limited scan (no orderBy) and pick latest in memory ---
+    // 5) Final fallback: small scan and pick latest in-memory
     if (!doc) {
-      const scanLimit = workoutId ? 25 : 50;
+      const scanLimit = workoutId ? 50 : 100;
       const snap3 = await base.limit(scanLimit).get();
-      if (!snap3.empty) {
-        doc = snap3.docs
-          .map((d) => ({ d, data: d.data() as any }))
-          .map(({ d, data }) => {
-            const ts =
-              toJSDate(data.completed_date) ||
-              toJSDate(data.date_completed) ||
-              toJSDate(data.created_at) ||
-              toJSDate(data.updated_at) ||
-              null;
-            return { d, when: ts ? ts.getTime() : 0 };
-          })
-          .sort((a, b) => b.when - a.when)[0]?.d;
-      }
+      if (!snap3.empty) doc = pickLatestDocInMemory(snap3.docs);
     }
 
     if (!doc) {
@@ -96,9 +203,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // shared summaries
       calories_burned: typeof x.calories_burned === "number" ? x.calories_burned : null,
       duration_minutes: typeof x.duration_minutes === "number" ? x.duration_minutes : null,
-      duration: typeof x.duration === "number" ? x.duration : null, // legacy (BXKR path)
+      duration: typeof x.duration === "number" ? x.duration : null,
       rpe: typeof x.rpe === "number" ? x.rpe : null,
-      rating: typeof x.rating === "number" ? x.rating : null, // legacy (BXKR)
+      rating: typeof x.rating === "number" ? x.rating : null,
       notes: typeof x.notes === "string" ? x.notes : null,
 
       weight_completed_with:
@@ -114,8 +221,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // BXKR details
       is_benchmark: x.is_benchmark === true,
-      benchmark_metrics:
-        x.benchmark_metrics && typeof x.benchmark_metrics === "object" ? x.benchmark_metrics : null,
+      benchmark_metrics: x.benchmark_metrics && typeof x.benchmark_metrics === "object" ? x.benchmark_metrics : null,
       sets_completed: typeof x.sets_completed === "number" ? x.sets_completed : null,
     };
 
