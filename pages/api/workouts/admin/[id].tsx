@@ -1,15 +1,21 @@
-// pages/api/workouts/admin/[id].ts
+// File: pages/api/workouts/admin/[id].ts
+
 import type { NextApiRequest, NextApiResponse } from "next";
-import firestore from "../../../../lib/firestoreClient";
+import { adminDb as db } from "../../../../lib/firebaseAdmin";
 
 /**
- * Admin workout fetch (client SDK)
+ * Admin workout fetch (Admin SDK)
  * - Loads workout doc + rounds + items
  * - Normalises Superset inner array: `superset_items` -> `items`
  * - Preserves strength blocks:
  *    - Single.strength
  *    - Superset.items[].strength
  * - Tolerates missing `order` by sorting in-memory
+ *
+ * Note:
+ * This route uses the Firebase Admin SDK (adminDb). It bypasses Firestore security rules.
+ * If you see PERMISSION_DENIED referencing an `...apps.googleusercontent.com` string,
+ * that indicates a misconfigured Admin SDK project/credentials in lib/firebaseAdmin.
  */
 
 export const config = { api: { bodyParser: false } };
@@ -28,14 +34,19 @@ function fail(res: NextApiResponse<ApiError>, whereStr: string, e?: any) {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse<any | ApiError>) {
   try {
+    if (req.method !== "GET") {
+      res.setHeader("Allow", "GET");
+      return res.status(405).json({ error: "Method not allowed" });
+    }
+
     const idParam = Array.isArray(req.query.id) ? req.query.id[0] : req.query.id;
-    const workout_id = (idParam || "").trim();
+    const workout_id = String(idParam || "").trim();
     if (!workout_id) return res.status(400).json({ error: "id is required" });
 
     // 1) Load workout doc
     let doc;
     try {
-      doc = await firestore.collection("workouts").doc(workout_id).get();
+      doc = await db.collection("workouts").doc(workout_id).get();
     } catch (e) {
       return fail(res, "get(workout)", e);
     }
@@ -47,30 +58,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     // 2) Load rounds (ordered if possible)
     let roundsSnap;
     try {
-      roundsSnap = await firestore
-        .collection("workouts")
-        .doc(workout_id)
-        .collection("rounds")
-        .orderBy("order", "asc")
-        .get();
-    } catch {
-      roundsSnap = await firestore
-        .collection("workouts")
-        .doc(workout_id)
-        .collection("rounds")
-        .get();
+      roundsSnap = await db.collection("workouts").doc(workout_id).collection("rounds").orderBy("order", "asc").get();
+    } catch (e) {
+      console.warn("[workouts/admin/[id]] orderBy(order) on rounds failed; retrying without orderBy");
+      try {
+        roundsSnap = await db.collection("workouts").doc(workout_id).collection("rounds").get();
+      } catch (ee) {
+        return fail(res, "get(rounds)", ee);
+      }
     }
 
+    // 3) Map rounds + items
     const rounds: any[] = [];
 
     for (const rDoc of roundsSnap.docs) {
       const rData = rDoc.data() || {};
 
-      // 3) Load items for round
       let itemsSnap;
       try {
         try {
-          itemsSnap = await firestore
+          itemsSnap = await db
             .collection("workouts")
             .doc(workout_id)
             .collection("rounds")
@@ -79,7 +86,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             .orderBy("order", "asc")
             .get();
         } catch {
-          itemsSnap = await firestore
+          itemsSnap = await db
             .collection("workouts")
             .doc(workout_id)
             .collection("rounds")
@@ -96,11 +103,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         const out: any = { item_id: iDoc.id, ...d };
 
         const isSuperset =
-          String(d.type || "").toLowerCase() === "superset" || d.is_superset === true;
+          (d.type && String(d.type).toLowerCase() === "superset") ||
+          d.is_superset === true;
 
         if (isSuperset) {
-          const subs = Array.isArray(d.items)
-            ? d.items
+          const subs = Array.isArray(out.items)
+            ? out.items
             : Array.isArray(d.superset_items)
             ? d.superset_items
             : [];
@@ -131,16 +139,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     rounds.sort((a: any, b: any) => (a?.order ?? 0) - (b?.order ?? 0));
 
-    // 4) Normalise to warmup / main / finisher by name
+    // 4) Normalise to warmup/main/finisher by name
     const key = (s: any) => String(s || "").toLowerCase().replace(/\s+/g, "");
     const byName = (n: string) => rounds.find((r) => key(r.name) === key(n)) || null;
 
     const warmup = byName("Warm Up") || byName("Warmup");
-    const main =
-      byName("Main Set") ||
-      byName("Main") ||
-      rounds.find((r) => (r?.order ?? 0) === 2) ||
-      null;
+    const main = byName("Main Set") || byName("Main") || rounds.find((r) => (r?.order ?? 0) === 2) || null;
     const finisher = byName("Finisher");
 
     return res.status(200).json({
