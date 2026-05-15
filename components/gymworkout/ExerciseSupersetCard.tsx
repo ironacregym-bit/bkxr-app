@@ -20,11 +20,6 @@ function normaliseKeyPart(s: string) {
     .replace(/\s+/g, "_");
 }
 
-/**
- * Build a stable "movement key base" for a superset sub-exercise.
- * Important: this key should NOT include set number; SetGrid/tick logic will add set number separately.
- * We include the superset item's order + name to avoid collisions when the same exercise appears elsewhere.
- */
 function buildSupersetMovementKey(args: { exerciseId: string; supersetOrder: number; supersetName?: string | null }) {
   const ex = String(args.exerciseId || "").trim();
   const order = Number.isFinite(args.supersetOrder) ? args.supersetOrder : 0;
@@ -62,7 +57,6 @@ export default function ExerciseSupersetCard({
         <div className="gx-ss-title">{supersetName}</div>
 
         <div className="gx-ss-right">
-          {/* ✅ Colour aligned with strength UI (no more orange sets chip) */}
           <span className="gx-chip" style={{ borderColor: `${GREEN}88`, color: GREEN }}>
             {sets} sets
           </span>
@@ -100,17 +94,14 @@ export default function ExerciseSupersetCard({
                   const title = m.exercise_name || sub.exercise_id;
                   const hasMedia = Boolean(m.gif_url || m.video_url);
 
-                  // ✅ Superset movementKeyBase for tick scoping + saving movement_key
                   const movementKeyBase = buildSupersetMovementKey({
                     exerciseId: sub.exercise_id,
                     supersetOrder,
                     supersetName,
                   });
 
-                  // ✅ Prev prefers exposure-aware movement key first, then legacy fallback
                   const prev =
-                    prevByKey[`${movementKeyBase}|${setNum}`] ??
-                    prevByKey[`${sub.exercise_id}|${setNum}`];
+                    prevByKey[`${movementKeyBase}|${setNum}`] ?? prevByKey[`${sub.exercise_id}|${setNum}`];
 
                   const prefillReps = parseRepsToNumber(sub.reps);
 
@@ -137,7 +128,6 @@ export default function ExerciseSupersetCard({
                         Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
                       </div>
 
-                      {/* Single input row mapped to this setNum */}
                       <SetGrid
                         exerciseId={sub.exercise_id}
                         sets={1}
