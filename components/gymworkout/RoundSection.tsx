@@ -1,4 +1,5 @@
-// components/gymworkout/RoundSection.tsx
+// File: components/gymworkout/RoundSection.tsx
+
 import React, { useMemo } from "react";
 import type { CompletionSet, UIRound, UISingleItem, UISupersetItem } from "./types";
 import ExerciseSingleCard from "./ExerciseSingleCard";
@@ -9,15 +10,23 @@ type RoundItem = UISingleItem | UISupersetItem;
 function normalizeItem(it: any): RoundItem {
   if (it?.type !== "Superset") return it;
 
-  // ✅ Support both new + legacy superset shapes
-  const items =
-    Array.isArray(it.items)
-      ? it.items
-      : Array.isArray(it.superset_items)
-      ? it.superset_items
-      : [];
-
+  const items = Array.isArray(it.items) ? it.items : Array.isArray(it.superset_items) ? it.superset_items : [];
   return { ...it, items };
+}
+
+function buildCurrentByKey(currentSets: CompletionSet[]) {
+  const m: Record<string, { weight: number | null; reps: number | null }> = {};
+  for (const s of currentSets || []) {
+    const setNum = Number((s as any)?.set || 0);
+    if (!Number.isFinite(setNum) || setNum <= 0) continue;
+
+    const exId = String((s as any)?.exercise_id || "").trim();
+    if (exId) m[`${exId}|${setNum}`] = { weight: (s as any).weight ?? null, reps: (s as any).reps ?? null };
+
+    const mk = typeof (s as any)?.movement_key === "string" ? String((s as any).movement_key).trim() : "";
+    if (mk) m[`${mk}|${setNum}`] = { weight: (s as any).weight ?? null, reps: (s as any).reps ?? null };
+  }
+  return m;
 }
 
 export default function RoundSection({
@@ -25,6 +34,7 @@ export default function RoundSection({
   round,
   media,
   prevByKey,
+  currentSets,
   trainingMaxes,
   defaultRounding,
   onUpdateSet,
@@ -36,6 +46,7 @@ export default function RoundSection({
   round: UIRound;
   media: Record<string, { gif_url?: string; video_url?: string; exercise_name?: string }>;
   prevByKey: Record<string, { weight: number | null; reps: number | null }>;
+  currentSets: CompletionSet[];
   trainingMaxes: Record<string, number>;
   defaultRounding: number;
   onUpdateSet: (exercise_id: string, set: number, patch: Partial<CompletionSet>) => void;
@@ -45,10 +56,10 @@ export default function RoundSection({
 }) {
   const sorted = useMemo<RoundItem[]>(() => {
     const safeItems = Array.isArray(round?.items) ? round.items : [];
-    return safeItems
-      .map(normalizeItem)
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    return safeItems.map(normalizeItem).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [round]);
+
+  const currentByKey = useMemo(() => buildCurrentByKey(currentSets || []), [currentSets]);
 
   return (
     <section className="gx-round">
@@ -67,6 +78,7 @@ export default function RoundSection({
                 item={it}
                 media={media[it.exercise_id]}
                 prevByKey={prevByKey}
+                currentByKey={currentByKey}
                 trainingMaxes={trainingMaxes}
                 defaultRounding={defaultRounding}
                 onUpdateSet={onUpdateSet}
@@ -80,6 +92,7 @@ export default function RoundSection({
                 item={it}
                 media={media}
                 prevByKey={prevByKey}
+                currentByKey={currentByKey}
                 onUpdateSet={onUpdateSet}
                 onToggleTick={onToggleTick}
                 tickKeys={tickKeys}
