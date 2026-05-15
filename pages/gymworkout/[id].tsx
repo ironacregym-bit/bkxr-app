@@ -10,13 +10,7 @@ import HeaderBar from "../../components/gymworkout/HeaderBar";
 import MediaModal from "../../components/gymworkout/MediaModal";
 import CompletionModal from "../../components/gymworkout/CompletionModal";
 import RoundSection from "../../components/gymworkout/RoundSection";
-import type {
-  Completion,
-  CompletionSet,
-  GymWorkout,
-  PreviousCompletion,
-  UIRound,
-} from "../../components/gymworkout/types";
+import type { Completion, CompletionSet, GymWorkout, PreviousCompletion, UIRound } from "../../components/gymworkout/types";
 import { fixGifUrl, formatYMD, startOfAlignedWeek, endOfAlignedWeek } from "../../components/gymworkout/utils";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
@@ -95,11 +89,11 @@ export default function GymWorkoutViewerPage() {
   const [mediaGif, setMediaGif] = useState<string | undefined>();
   const [mediaVideo, setMediaVideo] = useState<string | undefined>();
 
-  // ✅ Edit mode: completion for THIS workout in THIS week
+  // Edit mode
   const [editingCompletionId, setEditingCompletionId] = useState<string | null>(null);
   const hydratedForCompletionId = useRef<string | null>(null);
 
-  // Load previous session (latest overall for this workout) — kept as-is
+  // Previous session (latest overall)
   useEffect(() => {
     if (!mounted || !id || Array.isArray(id)) return;
 
@@ -112,7 +106,7 @@ export default function GymWorkoutViewerPage() {
       .catch(() => {});
   }, [mounted, id]);
 
-  // ✅ Load completion for the current week window (prefer selected date)
+  // Completion in this week window (prefer selected day)
   useEffect(() => {
     if (!mounted || !id || Array.isArray(id)) return;
 
@@ -136,7 +130,6 @@ export default function GymWorkoutViewerPage() {
         const completionId = String(last.id);
         setEditingCompletionId(completionId);
 
-        // Hydrate only once per completion id (do not overwrite user edits)
         if (hydratedForCompletionId.current === completionId) return;
         hydratedForCompletionId.current = completionId;
 
@@ -153,19 +146,12 @@ export default function GymWorkoutViewerPage() {
 
         setFormSets(mappedSets);
 
-        // Summary fields
         setCalories(
-          typeof last.calories_burned === "number" && Number.isFinite(last.calories_burned)
-            ? String(last.calories_burned)
-            : ""
+          typeof last.calories_burned === "number" && Number.isFinite(last.calories_burned) ? String(last.calories_burned) : ""
         );
-
         setDuration(
-          typeof last.duration_minutes === "number" && Number.isFinite(last.duration_minutes)
-            ? String(last.duration_minutes)
-            : ""
+          typeof last.duration_minutes === "number" && Number.isFinite(last.duration_minutes) ? String(last.duration_minutes) : ""
         );
-
         setNotes(typeof last.notes === "string" ? last.notes : "");
         setDifficulty(difficultyFromRPE(last.rpe));
       })
@@ -185,10 +171,7 @@ export default function GymWorkoutViewerPage() {
 
       if (!exId || !Number.isFinite(setNum) || setNum <= 0) continue;
 
-      if (movementKey) {
-        m[`${movementKey}|${setNum}`] = { weight, reps };
-      }
-
+      if (movementKey) m[`${movementKey}|${setNum}`] = { weight, reps };
       m[`${exId}|${setNum}`] = { weight, reps };
     }
 
@@ -277,18 +260,15 @@ export default function GymWorkoutViewerPage() {
     data?: Completion[];
   }>(weekCompletionsKey, fetcher, { revalidateOnFocus: false, dedupingInterval: 30_000 });
 
-  // Keep your existing “completed this week” badge logic, but editingCompletionId is the real edit switch.
   const isCompleted = useMemo(() => {
     if (editingCompletionId) return true;
     if (!weekCompletions || !id || Array.isArray(id)) return false;
-
     const list: Completion[] =
       (weekCompletions.results as Completion[]) ||
       (weekCompletions.items as Completion[]) ||
       (weekCompletions.completions as Completion[]) ||
       (weekCompletions.data as Completion[]) ||
       [];
-
     const idStr = String(id);
     return list.some((c) => String(c.workout_id || "") === idStr);
   }, [weekCompletions, id, editingCompletionId]);
@@ -310,10 +290,7 @@ export default function GymWorkoutViewerPage() {
 
       const isEditing = Boolean(editingCompletionId);
       const endpoint = isEditing ? `/api/completions/update` : `/api/completions/create`;
-
-      if (isEditing) {
-        body.completion_id = editingCompletionId;
-      }
+      if (isEditing) body.completion_id = editingCompletionId;
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -413,6 +390,7 @@ export default function GymWorkoutViewerPage() {
                 round={data.warmup}
                 media={mediaById}
                 prevByKey={prevByKey}
+                currentSets={formSets}
                 trainingMaxes={trainingMaxes}
                 defaultRounding={defaultRounding}
                 onUpdateSet={updateSet}
@@ -427,6 +405,7 @@ export default function GymWorkoutViewerPage() {
               round={data.main}
               media={mediaById}
               prevByKey={prevByKey}
+              currentSets={formSets}
               trainingMaxes={trainingMaxes}
               defaultRounding={defaultRounding}
               onUpdateSet={updateSet}
@@ -441,6 +420,7 @@ export default function GymWorkoutViewerPage() {
                 round={data.finisher}
                 media={mediaById}
                 prevByKey={prevByKey}
+                currentSets={formSets}
                 trainingMaxes={trainingMaxes}
                 defaultRounding={defaultRounding}
                 onUpdateSet={updateSet}
