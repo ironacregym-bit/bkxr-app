@@ -8,41 +8,15 @@ import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../../../../components/BottomNav";
 import GymCreateWorkout from "../../../../components/gym-create/GymCreateWorkout";
+import type {
+  AdminWorkoutFetch as CanonicalAdminWorkoutFetch,
+} from "../../../../components/gym-create/GymCreateWorkout.constants";
 
 type ExerciseRow = { id: string; exercise_name: string; type?: string };
 
 type StrengthExercisesResp = {
   ok?: boolean;
   names?: string[];
-};
-
-type DayName =
-  | "Monday"
-  | "Tuesday"
-  | "Wednesday"
-  | "Thursday"
-  | "Friday"
-  | "Saturday"
-  | "Sunday";
-
-type AdminRoundFetch = { name: string; order: number; items?: any[] };
-
-type AdminWorkoutFetch = {
-  workout_id: string;
-  workout_name: string;
-  visibility: "global" | "private";
-  owner_email?: string | null;
-  focus?: string | null;
-  notes?: string | null;
-  video_url?: string | null;
-  warmup?: AdminRoundFetch | null;
-  main?: AdminRoundFetch | null;
-  finisher?: AdminRoundFetch | null;
-  recurring?: boolean;
-  recurring_day?: DayName | string | null;
-  recurring_start?: any;
-  recurring_end?: any;
-  assigned_to?: string | null;
 };
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
@@ -75,6 +49,39 @@ function normaliseExercisesPayload(raw: any): ExerciseRow[] {
   return deduped;
 }
 
+function normaliseWorkoutToCanonical(raw: any): CanonicalAdminWorkoutFetch {
+  // Convert nulls -> undefined where canonical type expects string | undefined
+  const owner_email = typeof raw?.owner_email === "string" ? raw.owner_email : undefined;
+  const focus = typeof raw?.focus === "string" ? raw.focus : undefined;
+  const notes = typeof raw?.notes === "string" ? raw.notes : undefined;
+  const video_url = typeof raw?.video_url === "string" ? raw.video_url : undefined;
+
+  const visibility: "global" | "private" =
+    raw?.visibility === "private" ? "private" : "global";
+
+  const assigned_to = typeof raw?.assigned_to === "string" ? raw.assigned_to : undefined;
+
+  return {
+    workout_id: String(raw?.workout_id || raw?.id || "").trim(),
+    workout_name: String(raw?.workout_name || "").trim(),
+    visibility,
+    owner_email,
+    focus,
+    notes,
+    video_url,
+
+    warmup: raw?.warmup ?? null,
+    main: raw?.main ?? null,
+    finisher: raw?.finisher ?? null,
+
+    recurring: raw?.recurring === true,
+    recurring_day: raw?.recurring_day ?? null,
+    recurring_start: raw?.recurring_start ?? null,
+    recurring_end: raw?.recurring_end ?? null,
+    assigned_to: assigned_to ?? null,
+  };
+}
+
 export default function GymEditWorkoutPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -97,15 +104,19 @@ export default function GymEditWorkoutPage() {
     dedupingInterval: 60_000,
   });
 
-  const basisOptions = useMemo(() => (Array.isArray(strengthList?.names) ? strengthList!.names : []), [strengthList?.names]);
+  const basisOptions = useMemo(() => (Array.isArray(strengthList?.names) ? strengthList!.names : []), [
+    strengthList?.names,
+  ]);
 
   const workoutKey = isEdit ? `/api/workouts/admin/${encodeURIComponent(editId)}` : null;
-  const { data: workoutResp, error: workoutErr } = useSWR<AdminWorkoutFetch>(workoutKey, fetcher, {
+
+  // We intentionally accept `any` from the API and normalise into the canonical type
+  const { data: workoutRespRaw, error: workoutErr } = useSWR<any>(workoutKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
 
-  const [initialWorkout, setInitialWorkout] = useState<AdminWorkoutFetch | null>(null);
+  const [initialWorkout, setInitialWorkout] = useState<CanonicalAdminWorkoutFetch | null>(null);
   const [initialWorkoutError, setInitialWorkoutError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -115,14 +126,14 @@ export default function GymEditWorkoutPage() {
       return;
     }
 
-    if (workoutResp && !initialWorkout) {
-      setInitialWorkout(workoutResp);
+    if (workoutRespRaw && !initialWorkout) {
+      setInitialWorkout(normaliseWorkoutToCanonical(workoutRespRaw));
     }
 
     if (workoutErr) {
       setInitialWorkoutError(String((workoutErr as any)?.message || workoutErr));
     }
-  }, [isEdit, workoutResp, workoutErr, initialWorkout]);
+  }, [isEdit, workoutRespRaw, workoutErr, initialWorkout]);
 
   if (status === "loading") {
     return (
