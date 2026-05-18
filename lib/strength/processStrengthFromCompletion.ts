@@ -12,7 +12,7 @@ type GymCompletionSet = {
 };
 
 type StrengthExerciseConfig = {
-  id: string; // Firestore doc id (canonical key)
+  id: string; // strength_exercises doc id (canonical key)
   exercise_name: string; // display label
   tracked: boolean;
   max_rep_for_e1rm?: number | null;
@@ -81,12 +81,12 @@ export async function processStrengthFromCompletion(args: { completionId: string
       ? completion.created_at
       : completion?.completed_date?.toDate
       ? completion.completed_date
-      : toTimestamp(Timestamp.now());
+      : toTimestamp(new Date());
 
   const processedSourceTS: Timestamp | null =
     completion?.processed_strength_source_updated_at?.toDate ? completion.processed_strength_source_updated_at : null;
 
-  // Edit-safe idempotency: only skip if we processed this same version of the completion
+  // Edit-safe idempotency: skip only if we processed this same version of the completion
   if (
     completion?.processed_strength_version === 1 &&
     processedSourceTS &&
@@ -134,9 +134,7 @@ export async function processStrengthFromCompletion(args: { completionId: string
     return { ok: true, skipped: true as const };
   }
 
-  // ✅ Build BOTH lookup maps:
-  // - by doc id (canonical mapping, matches movement_key basis like barbell_deadlift)
-  // - by display name (fallback, matches exercise_id like "Barbell Deadlift")
+  // Lookup maps: doc id first, then display name
   const trackedById = new Map<string, StrengthExerciseConfig>();
   const trackedByName = new Map<string, StrengthExerciseConfig>();
 
@@ -149,7 +147,6 @@ export async function processStrengthFromCompletion(args: { completionId: string
 
   const completedTS: Timestamp = completion?.completed_date?.toDate ? completion.completed_date : Timestamp.now();
   const date_key = toDateKey(completedTS);
-  const workout_id = String(completion?.workout_id || "").trim();
 
   // Group sets by lift doc id (strength_exercises doc id)
   const grouped = new Map<string, { cfg: StrengthExerciseConfig; sets: GymCompletionSet[] }>();
@@ -160,7 +157,6 @@ export async function processStrengthFromCompletion(args: { completionId: string
     const lookupKey = basisFromKey || nameFromExerciseId;
     if (!lookupKey) continue;
 
-    // ✅ First try doc-id mapping, then fallback to display-name mapping
     const cfg = trackedById.get(lookupKey) || trackedByName.get(lookupKey);
     if (!cfg) continue;
 
@@ -196,8 +192,7 @@ export async function processStrengthFromCompletion(args: { completionId: string
     { merge: true }
   );
 
-  const updates: Array<Promise<any>> = [];
-
+  // ✅ No entries writes. Increase-only updates.
   for (const [liftId, bucket] of grouped.entries()) {
     const { cfg, sets: liftSets } = bucket;
 
@@ -205,85 +200,63 @@ export async function processStrengthFromCompletion(args: { completionId: string
     const rounding = Number(cfg.rounding_kg ?? 2.5);
     const tmFactor = Number(cfg.training_max_factor ?? 0.9);
 
-    let bestTrue: number | null = null;
-    let bestE: number | null = null;
+    let bestTrueThisCompletion: number | null = null;
+    let bestEThisCompletion: number | null = null;
 
     for (const s of liftSets) {
       const w = s.weight as number;
       const r = s.reps as number;
 
-      const true1 = r === 1 ? w : null;
-      const e = r <= maxRep ? roundToIncrement(e1rm(w, r), rounding) : null;
+      if (r === 1) {
+        bestTrueThisCompletion =
+          bestTrueThisCompletion == null ? w : Math.max(bestTrueThisCompletion, w);
+      }
 
-      if (true1 != null) bestTrue = bestTrue == null ? true1 : Math.max(bestTrue, true1);
-      if (e != null) bestE = bestE == null ? e : Math.max(bestE, e);
-
-      const entryId = `${completionId}_${liftId}_${s.set}`;
-      const entryRef = profileRef.collection("lifts").doc(liftId).collection("entries").doc(entryId);
-
-      updates.push(
-        entryRef.set(
-          {
-            date_key,
-            completion_id: completionId,
-            workout_id,
-            exercise_name: cfg.exercise_name,
-            weight_kg: w,
-            reps: r,
-            e1rm_kg: e,
-            true_1rm_kg: true1,
-            movement_key: s.movement_key ?? null,
-            created_at: Timestamp.now(),
-          },
-          { merge: true }
-        )
-      );
+      if (r <= maxRep) {
+        const e = roundToIncrement(e1rm(w, r), rounding);
+        bestEThisCompletion =
+          bestEThisCompletion == null ? e : Math.max(bestEThisCompletion, e);
+      }
     }
 
     const liftRef = profileRef.collection("lifts").doc(liftId);
+    const liftSnap = await liftRef.get();
+    const cur = liftSnap.exists ? (liftSnap.data() as any) : {};
 
-    updates.push(
-      (async () => {
-        const liftSnap = await liftRef.get();
-        const cur = liftSnap.exists ? (liftSnap.data() as any) : {};
+    const curTrue = typeof cur?.best_true_1rm_kg === "number" ? cur.best_true_1rm_kg : null;
+    const curE = typeof cur?.best_e1rm_kg === "number" ? cur.best_e1rm_kg : null;
+    const curTM = typeof cur?.training_max_kg === "number" ? cur.training_max_kg : null;
 
-        const curTrue = typeof cur?.best_true_1rm_kg === "number" ? cur.best_true_1rm_kg : null;
-        const curE = typeof cur?.best_e1rm_kg === "number" ? cur.best_e1rm_kg : null;
+    const patch: any = {
+      exercise_name: cfg.exercise_name,
+      updated_at: Timestamp.now(),
+    };
 
-        const nextTrue =
-          bestTrue != null ? (curTrue == null ? bestTrue : Math.max(curTrue, bestTrue)) : curTrue;
-        const nextE = bestE != null ? (curE == null ? bestE : Math.max(curE, bestE)) : curE;
+    // ✅ Your requirement: only update 1RM if higher than before
+    if (bestTrueThisCompletion != null && (curTrue == null || bestTrueThisCompletion > curTrue)) {
+      patch.best_true_1rm_kg = bestTrueThisCompletion;
+      patch.best_true_1rm_date = date_key;
+      patch.best_true_1rm_completion_id = completionId;
+    }
 
-        const trainingMax =
-          typeof nextE === "number" && nextE > 0
-            ? roundToIncrement(nextE * tmFactor, rounding)
-            : cur?.training_max_kg ?? null;
+    // Optional but useful: keep e1RM and TM increase-only too
+    if (bestEThisCompletion != null && (curE == null || bestEThisCompletion > curE)) {
+      patch.best_e1rm_kg = bestEThisCompletion;
+      patch.best_e1rm_date = date_key;
+      patch.best_e1rm_completion_id = completionId;
+    }
 
-        const patch: any = {
-          exercise_name: cfg.exercise_name,
-          updated_at: Timestamp.now(),
-        };
+    // TM derived from best e1RM (increase-only)
+    const nextE = typeof patch.best_e1rm_kg === "number" ? patch.best_e1rm_kg : curE;
+    const nextTM =
+      typeof nextE === "number" && nextE > 0 ? roundToIncrement(nextE * tmFactor, rounding) : null;
 
-        if (nextTrue != null && (curTrue == null || nextTrue > curTrue)) {
-          patch.best_true_1rm_kg = nextTrue;
-          patch.best_true_1rm_date = date_key;
-          patch.best_true_1rm_completion_id = completionId;
-        }
+    if (nextTM != null && (curTM == null || nextTM > curTM)) {
+      patch.training_max_kg = nextTM;
+    }
 
-        if (nextE != null && (curE == null || nextE > curE)) {
-          patch.best_e1rm_kg = nextE;
-          patch.best_e1rm_date = date_key;
-          patch.best_e1rm_completion_id = completionId;
-        }
-
-        if (trainingMax != null) patch.training_max_kg = trainingMax;
-
-        await liftRef.set(patch, { merge: true });
-      })()
-    );
+    await liftRef.set(patch, { merge: true });
   }
-
-  await Promise.all(updates);
 
   await completionRef.set(
     {
