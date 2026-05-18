@@ -1,4 +1,5 @@
 // File: pages/admin/workouts/gym-create.tsx
+
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -52,7 +53,6 @@ function normaliseEditId(raw: unknown): string {
 }
 
 function normaliseExercisesPayload(raw: any): ExerciseRow[] {
-  // Be tolerant: different endpoints/pages often return different property names.
   const arr =
     (Array.isArray(raw?.exercises) && raw.exercises) ||
     (Array.isArray(raw?.items) && raw.items) ||
@@ -70,7 +70,6 @@ function normaliseExercisesPayload(raw: any): ExerciseRow[] {
     })
     .filter(Boolean) as ExerciseRow[];
 
-  // De-dupe by id (avoid dropdown duplicates)
   const seen = new Set<string>();
   const deduped: ExerciseRow[] = [];
   for (const ex of mapped) {
@@ -96,18 +95,14 @@ export default function GymCreateWorkoutPage() {
     revalidateOnFocus: false,
   });
 
-  const exercises: ExerciseRow[] = useMemo(() => {
-    return normaliseExercisesPayload(exData);
-  }, [exData]);
+  const exercises: ExerciseRow[] = useMemo(() => normaliseExercisesPayload(exData), [exData]);
 
   const { data: strengthList } = useSWR<StrengthExercisesResp>("/api/strength/exercises/list", fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
 
-  const basisOptions = useMemo(() => {
-    return Array.isArray(strengthList?.names) ? strengthList.names : [];
-  }, [strengthList?.names]);
+  const basisOptions = useMemo(() => (Array.isArray(strengthList?.names) ? strengthList!.names : []), [strengthList?.names]);
 
   const workoutKey = isEdit ? `/api/workouts/admin/${encodeURIComponent(editId)}` : null;
   const { data: workoutResp, error: workoutErr } = useSWR<AdminWorkoutFetch>(workoutKey, fetcher, {
@@ -126,8 +121,6 @@ export default function GymCreateWorkoutPage() {
     }
 
     if (workoutResp && !initialWorkout) {
-      // Freeze the first loaded workout snapshot so the form doesn't re-initialise
-      // if SWR revalidates or returns a new object reference.
       setInitialWorkout(workoutResp);
     }
 
