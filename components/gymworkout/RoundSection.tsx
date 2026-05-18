@@ -9,23 +9,36 @@ type RoundItem = UISingleItem | UISupersetItem;
 
 function normalizeItem(it: any): RoundItem {
   if (it?.type !== "Superset") return it;
-
   const items = Array.isArray(it.items) ? it.items : Array.isArray(it.superset_items) ? it.superset_items : [];
   return { ...it, items };
 }
 
 function buildCurrentByKey(currentSets: CompletionSet[]) {
   const m: Record<string, { weight: number | null; reps: number | null }> = {};
+
   for (const s of currentSets || []) {
     const setNum = Number((s as any)?.set || 0);
     if (!Number.isFinite(setNum) || setNum <= 0) continue;
 
-    const exId = String((s as any)?.exercise_id || "").trim();
-    if (exId) m[`${exId}|${setNum}`] = { weight: (s as any).weight ?? null, reps: (s as any).reps ?? null };
+    const weight = (s as any).weight ?? null;
+    const reps = (s as any).reps ?? null;
 
     const mk = typeof (s as any)?.movement_key === "string" ? String((s as any).movement_key).trim() : "";
-    if (mk) m[`${mk}|${setNum}`] = { weight: (s as any).weight ?? null, reps: (s as any).reps ?? null };
+    const exId = String((s as any)?.exercise_id || "").trim();
+
+    // ✅ If movement_key exists, store ONLY movement_key|set.
+    // This prevents collisions across multiple % exposures of the same exercise_id.
+    if (mk) {
+      m[`${mk}|${setNum}`] = { weight, reps };
+      continue;
+    }
+
+    // ✅ Legacy only when no movement_key
+    if (exId) {
+      m[`${exId}|${setNum}`] = { weight, reps };
+    }
   }
+
   return m;
 }
 
