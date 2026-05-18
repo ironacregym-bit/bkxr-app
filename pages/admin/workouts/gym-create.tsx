@@ -9,14 +9,11 @@ import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../../../components/BottomNav";
 import GymCreateWorkout from "../../../components/gym-create/GymCreateWorkout";
 import type {
-  AdminWorkoutFetch as CanonicalAdminWorkoutFetch,
+  AdminWorkoutFetch,
+  StrengthExercisesResp,
 } from "../../../components/gym-create/GymCreateWorkout.constants";
 
-
-type StrengthExercisesResp = {
-  ok?: boolean;
-  names?: string[];
-};
+type ExerciseRow = { id: string; exercise_name: string; type?: string };
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -53,38 +50,6 @@ function normaliseExercisesPayload(raw: any): ExerciseRow[] {
   return deduped;
 }
 
-function normaliseWorkoutToCanonical(raw: any): CanonicalAdminWorkoutFetch {
-  // Convert nulls -> undefined for fields that are typed as string | undefined
-  const owner_email = typeof raw?.owner_email === "string" ? raw.owner_email : undefined;
-  const focus = typeof raw?.focus === "string" ? raw.focus : undefined;
-  const notes = typeof raw?.notes === "string" ? raw.notes : undefined;
-  const video_url = typeof raw?.video_url === "string" ? raw.video_url : undefined;
-
-  const visibility: "global" | "private" = raw?.visibility === "private" ? "private" : "global";
-
-  const assigned_to = typeof raw?.assigned_to === "string" ? raw.assigned_to : undefined;
-
-  return {
-    workout_id: String(raw?.workout_id || raw?.id || "").trim(),
-    workout_name: String(raw?.workout_name || "").trim(),
-    visibility,
-    owner_email,
-    focus,
-    notes,
-    video_url,
-
-    warmup: raw?.warmup ?? null,
-    main: raw?.main ?? null,
-    finisher: raw?.finisher ?? null,
-
-    recurring: raw?.recurring === true,
-    recurring_day: raw?.recurring_day ?? null,
-    recurring_start: raw?.recurring_start ?? null,
-    recurring_end: raw?.recurring_end ?? null,
-    assigned_to: assigned_to ?? null,
-  };
-}
-
 export default function GymCreateWorkoutPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -112,14 +77,12 @@ export default function GymCreateWorkoutPage() {
   ]);
 
   const workoutKey = isEdit ? `/api/workouts/admin/${encodeURIComponent(editId)}` : null;
-
-  // Accept any from API and normalise to canonical type
-  const { data: workoutRespRaw, error: workoutErr } = useSWR<any>(workoutKey, fetcher, {
+  const { data: workoutResp, error: workoutErr } = useSWR<AdminWorkoutFetch>(workoutKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
 
-  const [initialWorkout, setInitialWorkout] = useState<CanonicalAdminWorkoutFetch | null>(null);
+  const [initialWorkout, setInitialWorkout] = useState<AdminWorkoutFetch | null>(null);
   const [initialWorkoutError, setInitialWorkoutError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -129,15 +92,16 @@ export default function GymCreateWorkoutPage() {
       return;
     }
 
-    if (workoutRespRaw && !initialWorkout) {
-      // Freeze first snapshot so the form doesn't re-initialise on SWR revalidate
-      setInitialWorkout(normaliseWorkoutToCanonical(workoutRespRaw));
+    if (workoutResp && !initialWorkout) {
+      // Freeze the first loaded workout snapshot so the form doesn't re-initialise
+      // if SWR revalidates or returns a new object reference.
+      setInitialWorkout(workoutResp);
     }
 
     if (workoutErr) {
       setInitialWorkoutError(String((workoutErr as any)?.message || workoutErr));
     }
-  }, [isEdit, workoutRespRaw, workoutErr, initialWorkout]);
+  }, [isEdit, workoutResp, workoutErr, initialWorkout]);
 
   if (status === "loading") {
     return (
@@ -202,4 +166,3 @@ export default function GymCreateWorkoutPage() {
     </>
   );
 }
-
