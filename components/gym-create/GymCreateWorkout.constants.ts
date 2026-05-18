@@ -1,4 +1,4 @@
-// components/gym-create/GymCreateWorkout.constants.ts
+// File: components/gym-create/GymCreateWorkout.constants.ts
 
 import type { StrengthSpec } from "./StrengthPrescriptionEditor";
 
@@ -99,13 +99,17 @@ export type AdminWorkoutFetch = {
   workout_id: string;
   workout_name: string;
   visibility: "global" | "private";
-  owner_email?: string;
-  focus?: string;
-  notes?: string;
-  video_url?: string;
+
+  // ✅ Allow null because Firestore/API may return null.
+  owner_email?: string | null;
+  focus?: string | null;
+  notes?: string | null;
+  video_url?: string | null;
+
   warmup?: AdminRoundFetch | null;
   main?: AdminRoundFetch | null;
   finisher?: AdminRoundFetch | null;
+
   recurring?: boolean;
   recurring_day?: DayName | string | null;
   recurring_start?: any;
