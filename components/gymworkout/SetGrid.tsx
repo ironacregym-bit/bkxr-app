@@ -43,6 +43,12 @@ export default function SetGrid({
   setNumberBase?: number | null;
 }) {
   const keyBase = (movementKeyBase || exerciseId || "").trim() || exerciseId;
+  const movementPatch = keyBase && keyBase !== exerciseId ? { movement_key: keyBase } : null;
+
+  function getRealSetNum(i: number) {
+    const localSetNum = i + 1;
+    return typeof setNumberBase === "number" && Number.isFinite(setNumberBase) ? setNumberBase + i : localSetNum;
+  }
 
   function getKey(realSetNum: number) {
     return `${keyBase}|${realSetNum}`;
@@ -50,11 +56,6 @@ export default function SetGrid({
 
   function getLegacyKey(realSetNum: number) {
     return `${exerciseId}|${realSetNum}`;
-  }
-
-  function getRealSetNum(i: number) {
-    const localSetNum = i + 1;
-    return typeof setNumberBase === "number" && Number.isFinite(setNumberBase) ? setNumberBase + i : localSetNum;
   }
 
   function hasCurrentForSet(realSetNum: number) {
@@ -76,8 +77,6 @@ export default function SetGrid({
     );
   }
 
-  const movementPatch = keyBase && keyBase !== exerciseId ? { movement_key: keyBase } : null;
-
   function getDisplayedForSet(realSetNum: number) {
     const hasCurrent = hasCurrentForSet(realSetNum);
     const current = getCurrentForSet(realSetNum);
@@ -88,40 +87,37 @@ export default function SetGrid({
     return { hasCurrent, current, displayedWeight, displayedReps };
   }
 
-  function copySet1ToBlanks() {
-    if (sets <= 1) return;
+  function copyFromSetToSet(srcSetNum: number, destSetNum: number) {
+    const src = getDisplayedForSet(srcSetNum);
+    const srcWeight = src.displayedWeight ?? null;
+    const srcReps = src.displayedReps ?? null;
 
-    const firstSetNum = getRealSetNum(0);
-    const first = getDisplayedForSet(firstSetNum);
-
-    const srcWeight = first.displayedWeight ?? null;
-    const srcReps = first.displayedReps ?? null;
-
-    // Nothing meaningful to copy
     if (srcWeight == null && srcReps == null) return;
 
-    // Copy into “blank” sets:
-    // - If a set has NO current state row -> considered blank even if it shows prefills (target/prescribed)
-    // - If it HAS a current row, only fill if weight/reps are still null (true blank in edit)
+    const destHasCurrent = hasCurrentForSet(destSetNum);
+    const dest = getCurrentForSet(destSetNum);
+
+    // Fill blanks only:
+    // - If dest has NO current state row => treat as blank (even if it shows prefills)
+    // - If dest HAS current row => only fill fields that are null
+    const destWeightBlank = !destHasCurrent || dest.weight == null;
+    const destRepsBlank = !destHasCurrent || dest.reps == null;
+
+    if (!destWeightBlank && !destRepsBlank) return;
+
+    const patch: Partial<CompletionSet> = { ...(movementPatch || {}) };
+    if (destWeightBlank) patch.weight = srcWeight;
+    if (destRepsBlank) patch.reps = srcReps;
+
+    onUpdateSet(exerciseId, destSetNum, patch);
+  }
+
+  function copySet1ToAllBlanks() {
+    if (sets <= 1) return;
+    const srcSetNum = getRealSetNum(0);
     for (let i = 1; i < sets; i++) {
-      const realSetNum = getRealSetNum(i);
-      const destHasCurrent = hasCurrentForSet(realSetNum);
-      const dest = getCurrentForSet(realSetNum);
-
-      const destWeightIsBlank = !destHasCurrent || dest.weight == null;
-      const destRepsIsBlank = !destHasCurrent || dest.reps == null;
-
-      // If nothing blank, skip
-      if (!destWeightIsBlank && !destRepsIsBlank) continue;
-
-      const patch: Partial<CompletionSet> = {
-        ...(movementPatch || {}),
-      };
-
-      if (destWeightIsBlank) patch.weight = srcWeight;
-      if (destRepsIsBlank) patch.reps = srcReps;
-
-      onUpdateSet(exerciseId, realSetNum, patch);
+      const destSetNum = getRealSetNum(i);
+      copyFromSetToSet(srcSetNum, destSetNum);
     }
   }
 
@@ -136,7 +132,6 @@ export default function SetGrid({
 
       {Array.from({ length: sets }).map((_, i) => {
         const realSetNum = getRealSetNum(i);
-
         const key = getKey(realSetNum);
         const legacyKey = getLegacyKey(realSetNum);
 
@@ -163,9 +158,6 @@ export default function SetGrid({
                   value={weightValue}
                   onChange={(e) => {
                     const weight = parseNullableNumber(e.target.value);
-
-                    // If user edits weight first and the set doesn't exist yet,
-                    // seed reps so reps doesn't snap back / feel locked.
                     const seedReps = !hasCurrent ? (prefillReps ?? null) : undefined;
 
                     onUpdateSet(exerciseId, realSetNum, {
@@ -189,8 +181,6 @@ export default function SetGrid({
                 onChange={(e) => {
                   const reps = parseNullableNumber(e.target.value);
 
-                  // If user edits reps first and the set doesn't exist yet,
-                  // seed weight so KG doesn't drop to blank/0.
                   const seedWeight = !hasCurrent
                     ? prefillWeight != null
                       ? prefillWeight
@@ -233,6 +223,19 @@ export default function SetGrid({
               >
                 <i className="fas fa-check" />
               </button>
+
+              {/* ✅ Copy from above (works even when Prev row is hidden elsewhere) */}
+              {i > 0 ? (
+                <button
+                  type="button"
+                  className="gx-use"
+                  style={{ marginTop: 8 }}
+                  onClick={() => copyFromSetToSet(getRealSetNum(i - 1), realSetNum)}
+                  title="Copy from previous set (fill blanks only)"
+                >
+                  Copy
+                </button>
+              ) : null}
             </div>
 
             {showPrevRow ? (
@@ -257,9 +260,14 @@ export default function SetGrid({
                     </button>
                   ) : null}
 
-                  {/* ✅ Copy Set 1 -> fill blanks (but treat “prefilled only” as blank, and don’t overwrite edited values) */}
+                  {/* ✅ Copy Set 1 to all other sets (fill blanks only, prefills count as blank) */}
                   {i === 0 && sets > 1 ? (
-                    <button type="button" className="gx-use" onClick={copySet1ToBlanks} title="Copy set 1 into blank sets">
+                    <button
+                      type="button"
+                      className="gx-use"
+                      onClick={copySet1ToAllBlanks}
+                      title="Copy Set 1 into all other sets (fill blanks only)"
+                    >
                       Copy down
                     </button>
                   ) : null}
