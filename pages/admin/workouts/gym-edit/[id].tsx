@@ -1,194 +1,48 @@
 // File: pages/admin/workouts/gym-edit/[id].tsx
 
 import Head from "next/head";
-import Link from "next/link";
 import { useRouter } from "next/router";
+import { useEffect } from "react";
 import { useSession } from "next-auth/react";
-import useSWR from "swr";
-import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../../../../components/BottomNav";
-import GymCreateWorkout from "../../../../components/gym-create/GymCreateWorkout";
-import type {
-  AdminWorkoutFetch as CanonicalAdminWorkoutFetch,
-} from "../../../../components/gym-create/GymCreateWorkout.constants";
 
-type ExerciseRow = { id: string; exercise_name: string; type?: string };
-
-type StrengthExercisesResp = {
-  ok?: boolean;
-  names?: string[];
-};
-
-const fetcher = (u: string) => fetch(u).then((r) => r.json());
-
-function normaliseExercisesPayload(raw: any): ExerciseRow[] {
-  const arr =
-    (Array.isArray(raw?.exercises) && raw.exercises) ||
-    (Array.isArray(raw?.items) && raw.items) ||
-    (Array.isArray(raw?.results) && raw.results) ||
-    (Array.isArray(raw?.data) && raw.data) ||
-    [];
-
-  const mapped: ExerciseRow[] = arr
-    .map((x: any) => {
-      const id = String(x?.id || x?._id || x?.exercise_id || x?.slug || x?.name || "").trim();
-      const exercise_name = String(x?.exercise_name || x?.name || x?.title || "").trim();
-      const type = x?.type ? String(x.type) : undefined;
-      if (!id || !exercise_name) return null;
-      return { id, exercise_name, type };
-    })
-    .filter(Boolean) as ExerciseRow[];
-
-  const seen = new Set<string>();
-  const deduped: ExerciseRow[] = [];
-  for (const ex of mapped) {
-    if (seen.has(ex.id)) continue;
-    seen.add(ex.id);
-    deduped.push(ex);
-  }
-  return deduped;
-}
-
-function normaliseWorkoutToCanonical(raw: any): CanonicalAdminWorkoutFetch {
-  // Convert nulls -> undefined where canonical type expects string | undefined
-  const owner_email = typeof raw?.owner_email === "string" ? raw.owner_email : undefined;
-  const focus = typeof raw?.focus === "string" ? raw.focus : undefined;
-  const notes = typeof raw?.notes === "string" ? raw.notes : undefined;
-  const video_url = typeof raw?.video_url === "string" ? raw.video_url : undefined;
-
-  const visibility: "global" | "private" =
-    raw?.visibility === "private" ? "private" : "global";
-
-  const assigned_to = typeof raw?.assigned_to === "string" ? raw.assigned_to : undefined;
-
-  return {
-    workout_id: String(raw?.workout_id || raw?.id || "").trim(),
-    workout_name: String(raw?.workout_name || "").trim(),
-    visibility,
-    owner_email,
-    focus,
-    notes,
-    video_url,
-
-    warmup: raw?.warmup ?? null,
-    main: raw?.main ?? null,
-    finisher: raw?.finisher ?? null,
-
-    recurring: raw?.recurring === true,
-    recurring_day: raw?.recurring_day ?? null,
-    recurring_start: raw?.recurring_start ?? null,
-    recurring_end: raw?.recurring_end ?? null,
-    assigned_to: assigned_to ?? null,
-  };
-}
-
-export default function GymEditWorkoutPage() {
-  const { data: session, status } = useSession();
+export default function GymEditWorkoutRedirectPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
 
-  const ownerEmail = (session?.user?.email || "").toLowerCase();
   const role = (session?.user as any)?.role || "user";
-
   const routeId = router.query.id;
   const editId = typeof routeId === "string" ? routeId.trim() : "";
-  const isEdit = Boolean(editId);
-
-  const { data: exData, mutate: mutateExercises } = useSWR("/api/exercises?limit=1000", fetcher, {
-    revalidateOnFocus: false,
-  });
-
-  const exercises: ExerciseRow[] = useMemo(() => normaliseExercisesPayload(exData), [exData]);
-
-  const { data: strengthList } = useSWR<StrengthExercisesResp>("/api/strength/exercises/list", fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 60_000,
-  });
-
-  const basisOptions = useMemo(() => (Array.isArray(strengthList?.names) ? strengthList!.names : []), [
-    strengthList?.names,
-  ]);
-
-  const workoutKey = isEdit ? `/api/workouts/admin/${encodeURIComponent(editId)}` : null;
-
-  // We intentionally accept `any` from the API and normalise into the canonical type
-  const { data: workoutRespRaw, error: workoutErr } = useSWR<any>(workoutKey, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 30_000,
-  });
-
-  const [initialWorkout, setInitialWorkout] = useState<CanonicalAdminWorkoutFetch | null>(null);
-  const [initialWorkoutError, setInitialWorkoutError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isEdit) {
-      setInitialWorkout(null);
-      setInitialWorkoutError("Missing workout id");
+    if (!router.isReady) return;
+    if (status === "loading") return;
+
+    if (!session || (role !== "admin" && role !== "gym")) {
+      router.replace("/admin");
       return;
     }
 
-    if (workoutRespRaw && !initialWorkout) {
-      setInitialWorkout(normaliseWorkoutToCanonical(workoutRespRaw));
+    if (!editId) {
+      router.replace("/admin/workouts");
+      return;
     }
 
-    if (workoutErr) {
-      setInitialWorkoutError(String((workoutErr as any)?.message || workoutErr));
-    }
-  }, [isEdit, workoutRespRaw, workoutErr, initialWorkout]);
-
-  if (status === "loading") {
-    return (
-      <div className="container py-4 text-white">
-        <div className="ia-tile ia-tile-pad">
-          <div className="text-dim">Checking access…</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!session || (role !== "admin" && role !== "gym")) {
-    return (
-      <div className="container py-4 text-white">
-        <div className="ia-tile ia-tile-pad">
-          <div className="ia-page-title">Access denied</div>
-          <div className="ia-page-subtitle">You do not have permission to view this page.</div>
-          <div className="mt-3">
-            <Link href="/admin" className="ia-btn ia-btn-outline">
-              Back to admin
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+    // ✅ Always use the unified editor UI (GymCreateWorkout) which supports strength/% blocks
+    router.replace(`/admin/workouts/gym-create?edit=${encodeURIComponent(editId)}`);
+  }, [router.isReady, status, session, role, editId, router]);
 
   return (
     <>
       <Head>
         <title>Edit gym workout • Admin</title>
+        <meta name="robots" content="noindex,nofollow" />
       </Head>
 
       <main className="container py-3 text-white" style={{ paddingBottom: 90 }}>
-        <div className="mb-3">
-          <Link href="/admin" className="ia-btn ia-btn-outline">
-            ← Back to admin
-          </Link>
-        </div>
-
-        <div className="ia-page-title">Edit gym workout</div>
-        <div className="ia-page-subtitle">Update the workout and assignments.</div>
-
-        <div className="mt-3 ia-tile ia-tile-pad">
-          <GymCreateWorkout
-            isEdit={true}
-            editId={editId}
-            ownerEmail={ownerEmail}
-            exercises={exercises}
-            basisOptions={basisOptions}
-            initialWorkout={initialWorkout}
-            initialWorkoutError={initialWorkoutError}
-            onExercisesCreated={() => mutateExercises()}
-            onDone={(workoutId) => router.push(`/admin/workouts/${workoutId}`)}
-          />
+        <div className="ia-tile ia-tile-pad">
+          <div className="ia-page-title">Loading editor…</div>
+          <div className="ia-page-subtitle">Redirecting to the updated workout editor.</div>
         </div>
       </main>
 
