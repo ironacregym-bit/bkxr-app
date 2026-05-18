@@ -53,9 +53,7 @@ function rangeFromTo(fromYMD?: string, toYMD?: string): { from: Date; to: Date }
   return { from, to };
 }
 
-function pickLatestDocInMemory(
-  docs: FirebaseFirestore.QueryDocumentSnapshot[]
-): FirebaseFirestore.QueryDocumentSnapshot | undefined {
+function pickLatestDocInMemory(docs: FirebaseFirestore.QueryDocumentSnapshot[]) {
   if (!docs.length) return undefined;
   return docs
     .map((d) => ({ d, data: d.data() as any }))
@@ -73,6 +71,9 @@ function pickLatestDocInMemory(
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
+    // ✅ This endpoint controls “edit vs new” state. Never cache it.
+    res.setHeader("Cache-Control", "no-store");
+
     if (req.method !== "GET") {
       res.setHeader("Allow", "GET");
       return res.status(405).json({ error: "Method not allowed" });
@@ -83,7 +84,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!email) return res.status(401).json({ error: "Not signed in" });
 
     const userEmail = email.toLowerCase();
-
     const workoutId = String(req.query.workout_id || "").trim();
 
     const fromQ = typeof req.query.from === "string" ? req.query.from.trim() : undefined;
@@ -93,12 +93,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const weekRange = rangeFromTo(fromQ, toQ);
     const dayPref = dateQ ? dayRange(dateQ) : null;
 
+    // ✅ If caller supplied date or week range, be strict: do NOT fall back to “latest overall”
+    const strictWindow = Boolean(dayPref || weekRange);
+
     let base = firestore.collection(COLLECTION).where("user_email", "==", userEmail) as FirebaseFirestore.Query;
     if (workoutId) base = base.where("workout_id", "==", workoutId);
 
     let doc: FirebaseFirestore.QueryDocumentSnapshot | undefined;
 
-    // 1) Prefer a completion on the requested day (if date= provided)
+    // 1) Prefer a completion on the requested day
     if (dayPref) {
       try {
         const snap = await base
@@ -109,26 +112,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           .get();
         if (!snap.empty) doc = snap.docs[0];
       } catch {
-        // Missing index; fall back to in-memory filtering below
+        // index missing -> scan below
       }
 
       if (!doc) {
-        try {
-          const snap = await base.limit(workoutId ? 50 : 100).get();
-          const filtered = snap.docs.filter((d) => {
-            const x = d.data() as any;
-            const dt = toJSDate(x.completed_date) || toJSDate(x.date_completed) || null;
-            if (!dt) return false;
-            return dt >= dayPref.from && dt <= dayPref.to;
-          });
-          doc = pickLatestDocInMemory(filtered);
-        } catch {
-          // ignore
-        }
+        const snap = await base.limit(workoutId ? 150 : 300).get();
+        const filtered = snap.docs.filter((d) => {
+          const x = d.data() as any;
+          const dt = toJSDate(x.completed_date) || toJSDate(x.date_completed) || null;
+          return dt ? dt >= dayPref.from && dt <= dayPref.to : false;
+        });
+        doc = pickLatestDocInMemory(filtered);
       }
     }
 
-    // 2) If still no doc and week range provided, find latest in the range
+    // 2) Else use week window
     if (!doc && weekRange) {
       try {
         const snap = await base
@@ -139,26 +137,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           .get();
         if (!snap.empty) doc = snap.docs[0];
       } catch {
-        // Missing index; fall back to in-memory filtering below
+        // index missing -> scan below
       }
 
       if (!doc) {
-        try {
-          const snap = await base.limit(workoutId ? 75 : 150).get();
-          const filtered = snap.docs.filter((d) => {
-            const x = d.data() as any;
-            const dt = toJSDate(x.completed_date) || toJSDate(x.date_completed) || null;
-            if (!dt) return false;
-            return dt >= weekRange.from && dt <= weekRange.to;
-          });
-          doc = pickLatestDocInMemory(filtered);
-        } catch {
-          // ignore
-        }
+        const snap = await base.limit(workoutId ? 200 : 400).get();
+        const filtered = snap.docs.filter((d) => {
+          const x = d.data() as any;
+          const dt = toJSDate(x.completed_date) || toJSDate(x.date_completed) || null;
+          return dt ? dt >= weekRange.from && dt <= weekRange.to : false;
+        });
+        doc = pickLatestDocInMemory(filtered);
       }
     }
 
-    // 3) Final fallback: latest overall (existing behaviour)
+    // ✅ If strict window and nothing found, stop here
+    if (!doc && strictWindow) {
+      return res.status(200).json({ ok: true, last: null });
+    }
+
+    // 3) Non-strict fallback: latest overall (existing behaviour)
     if (!doc) {
       try {
         const snap = await base.orderBy("completed_date", "desc").limit(1).get();
@@ -168,7 +166,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // 4) Fallback: legacy date_completed ordering
+    // 4) Legacy fallback: date_completed ordering
     if (!doc) {
       try {
         const snap2 = await base.orderBy("date_completed", "desc").limit(1).get();
@@ -178,7 +176,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // 5) Final fallback: small scan and pick latest in-memory
+    // 5) Final fallback: scan and pick latest
     if (!doc) {
       const scanLimit = workoutId ? 50 : 100;
       const snap3 = await base.limit(scanLimit).get();
@@ -196,11 +194,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       workout_id: x.workout_id ?? (workoutId || null),
       workout_name: x.workout_name ?? null,
 
-      // timestamps (keep both names for client compat)
       completed_date: x.completed_date ?? null,
       date_completed: x.date_completed ?? null,
 
-      // shared summaries
       calories_burned: typeof x.calories_burned === "number" ? x.calories_burned : null,
       duration_minutes: typeof x.duration_minutes === "number" ? x.duration_minutes : null,
       duration: typeof x.duration === "number" ? x.duration : null,
@@ -215,11 +211,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? x.weight_completed_with
           : null,
 
-      // gym details
       activity_type: x.activity_type ? String(x.activity_type) : null,
       sets: Array.isArray(x.sets) ? x.sets : [],
 
-      // BXKR details
       is_benchmark: x.is_benchmark === true,
       benchmark_metrics: x.benchmark_metrics && typeof x.benchmark_metrics === "object" ? x.benchmark_metrics : null,
       sets_completed: typeof x.sets_completed === "number" ? x.sets_completed : null,
