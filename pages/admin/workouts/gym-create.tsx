@@ -31,10 +31,10 @@ type AdminWorkoutFetch = {
   workout_id: string;
   workout_name: string;
   visibility: "global" | "private";
-  owner_email?: string;
-  focus?: string;
-  notes?: string;
-  video_url?: string;
+  owner_email?: string | null;
+  focus?: string | null;
+  notes?: string | null;
+  video_url?: string | null;
   warmup?: AdminRoundFetch | null;
   main?: AdminRoundFetch | null;
   finisher?: AdminRoundFetch | null;
@@ -102,7 +102,10 @@ export default function GymCreateWorkoutPage() {
     dedupingInterval: 60_000,
   });
 
-  const basisOptions = useMemo(() => (Array.isArray(strengthList?.names) ? strengthList!.names : []), [strengthList?.names]);
+  const basisOptions = useMemo(
+    () => (Array.isArray(strengthList?.names) ? strengthList!.names : []),
+    [strengthList?.names]
+  );
 
   const workoutKey = isEdit ? `/api/workouts/admin/${encodeURIComponent(editId)}` : null;
   const { data: workoutResp, error: workoutErr } = useSWR<AdminWorkoutFetch>(workoutKey, fetcher, {
@@ -121,6 +124,7 @@ export default function GymCreateWorkoutPage() {
     }
 
     if (workoutResp && !initialWorkout) {
+      // Freeze first snapshot so form doesn't reinitialise on SWR revalidate
       setInitialWorkout(workoutResp);
     }
 
