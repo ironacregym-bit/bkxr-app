@@ -20,7 +20,11 @@ function normaliseKeyPart(s: string) {
     .replace(/\s+/g, "_");
 }
 
-function buildSupersetMovementKey(args: { exerciseId: string; supersetOrder: number; supersetName?: string | null }) {
+function buildSupersetMovementKey(args: {
+  exerciseId: string;
+  supersetOrder: number;
+  supersetName?: string | null;
+}) {
   const ex = String(args.exerciseId || "").trim();
   const order = Number.isFinite(args.supersetOrder) ? args.supersetOrder : 0;
   const name = normaliseKeyPart(args.supersetName || "superset");
@@ -52,6 +56,86 @@ export default function ExerciseSupersetCard({
 
   const supersetName = useMemo(() => (item.name || "").trim() || "Superset", [item.name]);
   const supersetOrder = Number.isFinite(item.order) ? Number(item.order) : 0;
+
+  function keyFor(movementKeyBase: string, setNum: number) {
+    return `${movementKeyBase}|${setNum}`;
+  }
+
+  function hasCurrent(movementKeyBase: string, setNum: number) {
+    const k = keyFor(movementKeyBase, setNum);
+    return Object.prototype.hasOwnProperty.call(currentByKey, k);
+  }
+
+  function getCurrent(movementKeyBase: string, setNum: number) {
+    const k = keyFor(movementKeyBase, setNum);
+    return currentByKey[k] ?? { weight: null as number | null, reps: null as number | null };
+  }
+
+  function copySet1ToThisSet(opts: {
+    exerciseId: string;
+    movementKeyBase: string;
+    setNum: number;
+    prefillReps: number | null;
+  }) {
+    const { exerciseId, movementKeyBase, setNum, prefillReps } = opts;
+
+    const srcHas = hasCurrent(movementKeyBase, 1);
+    const src = getCurrent(movementKeyBase, 1);
+
+    const srcWeight = srcHas ? src.weight : null;
+    const srcReps = srcHas ? src.reps : prefillReps;
+
+    if (srcWeight == null && srcReps == null) return;
+
+    const destHas = hasCurrent(movementKeyBase, setNum);
+    const dest = getCurrent(movementKeyBase, setNum);
+
+    // Fill blanks only. Treat “prefill-only” as blank (destHas === false).
+    const destWeightBlank = !destHas || dest.weight == null;
+    const destRepsBlank = !destHas || dest.reps == null;
+
+    if (!destWeightBlank && !destRepsBlank) return;
+
+    const patch: Partial<CompletionSet> = { movement_key: movementKeyBase };
+    if (destWeightBlank) patch.weight = srcWeight;
+    if (destRepsBlank) patch.reps = srcReps;
+
+    onUpdateSet(exerciseId, setNum, patch);
+  }
+
+  function copySet1ToAllSets(opts: {
+    exerciseId: string;
+    movementKeyBase: string;
+    totalSets: number;
+    prefillReps: number | null;
+  }) {
+    const { exerciseId, movementKeyBase, totalSets, prefillReps } = opts;
+
+    // Use Set 1 as source
+    const srcHas = hasCurrent(movementKeyBase, 1);
+    const src = getCurrent(movementKeyBase, 1);
+
+    const srcWeight = srcHas ? src.weight : null;
+    const srcReps = srcHas ? src.reps : prefillReps;
+
+    if (srcWeight == null && srcReps == null) return;
+
+    for (let setNum = 2; setNum <= totalSets; setNum++) {
+      const destHas = hasCurrent(movementKeyBase, setNum);
+      const dest = getCurrent(movementKeyBase, setNum);
+
+      const destWeightBlank = !destHas || dest.weight == null;
+      const destRepsBlank = !destHas || dest.reps == null;
+
+      if (!destWeightBlank && !destRepsBlank) continue;
+
+      const patch: Partial<CompletionSet> = { movement_key: movementKeyBase };
+      if (destWeightBlank) patch.weight = srcWeight;
+      if (destRepsBlank) patch.reps = srcReps;
+
+      onUpdateSet(exerciseId, setNum, patch);
+    }
+  }
 
   return (
     <div className="gx-ss">
@@ -103,7 +187,8 @@ export default function ExerciseSupersetCard({
                   });
 
                   const prev =
-                    prevByKey[`${movementKeyBase}|${setNum}`] ?? prevByKey[`${sub.exercise_id}|${setNum}`];
+                    prevByKey[`${movementKeyBase}|${setNum}`] ??
+                    prevByKey[`${sub.exercise_id}|${setNum}`];
 
                   const prefillReps = parseRepsToNumber(sub.reps);
 
@@ -126,8 +211,48 @@ export default function ExerciseSupersetCard({
                         </button>
                       </div>
 
-                      <div className="text-dim small" style={{ marginTop: 6 }}>
-                        Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
+                      <div className="text-dim small" style={{ marginTop: 6, display: "flex", justifyContent: "space-between", gap: 10 }}>
+                        <span>
+                          Prev: {prev?.weight ?? "-"}kg × {prev?.reps ?? "-"}
+                        </span>
+
+                        <span style={{ display: "inline-flex", gap: 10 }}>
+                          {setNum === 1 && sets > 1 ? (
+                            <button
+                              type="button"
+                              className="gx-use"
+                              onClick={() =>
+                                copySet1ToAllSets({
+                                  exerciseId: sub.exercise_id,
+                                  movementKeyBase,
+                                  totalSets: sets,
+                                  prefillReps,
+                                })
+                              }
+                              title="Copy Set 1 into all other sets (fill blanks only)"
+                            >
+                              Copy to all
+                            </button>
+                          ) : null}
+
+                          {setNum > 1 ? (
+                            <button
+                              type="button"
+                              className="gx-use"
+                              onClick={() =>
+                                copySet1ToThisSet({
+                                  exerciseId: sub.exercise_id,
+                                  movementKeyBase,
+                                  setNum,
+                                  prefillReps,
+                                })
+                              }
+                              title="Copy Set 1 into this set (fill blanks only)"
+                            >
+                              Copy set 1
+                            </button>
+                          ) : null}
+                        </span>
                       </div>
 
                       <SetGrid
