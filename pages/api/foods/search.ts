@@ -22,6 +22,9 @@ type SearchResp = {
     timedOut?: boolean;
     tookMs?: number;
     count?: number;
+    ukUpstreamCount?: number;
+    globalUpstreamCount?: number;
+    usedUKFilter?: boolean;
   };
 };
 
@@ -33,8 +36,8 @@ function toNum(n: any): number {
 function pickName(p: any, fallback: string) {
   return (
     String(p?.product_name_en || "").trim() ||
-    String(p?.product_name || "").trim() ||
     String(p?.generic_name_en || "").trim() ||
+    String(p?.product_name || "").trim() ||
     String(p?.generic_name || "").trim() ||
     fallback
   );
@@ -55,7 +58,6 @@ function clampPageSize(n: number) {
 
 function mapProductsWithRaw(products: any[], fallbackQuery: string): Array<{ raw: any; food: Food }> {
   const out: Array<{ raw: any; food: Food }> = [];
-
   for (const p of products || []) {
     const code = String(p?.code || "").trim();
     if (!code) continue;
@@ -78,7 +80,6 @@ function mapProductsWithRaw(products: any[], fallbackQuery: string): Array<{ raw
 
     out.push({ raw: p, food });
   }
-
   return out;
 }
 
@@ -89,7 +90,7 @@ function scoreProduct(p: any, mapped: Food, tokens: string[]) {
   const nameEn = String(p?.product_name_en || "").trim();
   const genericEn = String(p?.generic_name_en || "").trim();
   const hasEnglishField = Boolean(nameEn || genericEn);
-  if (hasEnglishField) score += 8;
+  if (hasEnglishField) score += 10;
 
   const countries = Array.isArray(p?.countries_tags) ? p.countries_tags.join(" ") : String(p?.countries_tags || "");
   if (/united-kingdom|en:united-kingdom|gb/i.test(countries)) score += 8;
@@ -109,7 +110,6 @@ function scoreProduct(p: any, mapped: Food, tokens: string[]) {
   const tokenScore = tokens.reduce((acc, t) => acc + (n.includes(t) ? 1 : 0), 0);
   score += tokenScore * 3;
 
-  // Prefer items with at least some macro data, but do not exclude
   const hasAnyMacros = Boolean(mapped.calories || mapped.protein || mapped.carbs || mapped.fat);
   if (hasAnyMacros) score += 1;
 
@@ -159,21 +159,24 @@ function cacheSet(key: string, value: SearchResp, ttlMs: number) {
   CACHE.set(key, { at: Date.now(), ttlMs, value });
 }
 
-function buildSearchUrl(opts: {
-  q: string;
-  pageSize: number;
-  onlyUK: boolean;
-}) {
+/**
+ * OpenFoodFacts search docs recommend using advanced tag params for filters (e.g. countries) rather than ad-hoc query params.
+ * See API/Read/Search parameters for tagtype/tag_contains/tag values. [2](https://wiki.openfoodfacts.org/API/Read/Search)
+ * cc/lc are also supported to control country/language of the interface. [3](https://wiki.openfoodfacts.org/API/Read)
+ */
+function buildSearchUrl(opts: { q: string; pageSize: number; onlyUK: boolean }) {
   const params = new URLSearchParams();
   params.set("search_terms", opts.q);
   params.set("search_simple", "1");
   params.set("action", "process");
   params.set("json", "1");
   params.set("page_size", String(opts.pageSize));
-  params.set("lc", "en");
-  params.set("tags_lc", "en");
 
-  // Limit fields for speed (smaller payload, faster parse)
+  // Force English UI and GB context (does not guarantee product_name_en exists, but helps with localised fields).
+  params.set("lc", "en");
+  params.set("cc", "gb");
+
+  // Limit response fields for speed (supported by OFF). [5](https://openfoodfacts.github.io/openfoodfacts-server/api/ref-cheatsheet/)[4](https://wiki.openfoodfacts.org/API_Fields)
   params.set(
     "fields",
     [
@@ -192,8 +195,12 @@ function buildSearchUrl(opts: {
     ].join(",")
   );
 
+  // Proper country filtering using tag parameters
   if (opts.onlyUK) {
-    params.set("countries", "United Kingdom");
+    params.set("tagtype_0", "countries");
+    params.set("tag_contains_0", "contains");
+    // OFF uses normalized tags, UK is typically "en:united-kingdom"
+    params.set("tag_0", "en:united-kingdom");
   }
 
   return `https://world.openfoodfacts.org/cgi/search.pl?${params.toString()}`;
@@ -202,8 +209,6 @@ function buildSearchUrl(opts: {
 export default async function handler(req: NextApiRequest, res: NextApiResponse<SearchResp>) {
   const started = Date.now();
 
-  // Edge caching on Vercel is controlled via Cache-Control directives like s-maxage/stale-while-revalidate. [2](https://vercel.com/docs/caching/cdn-cache)[1](https://vercel.com/docs/caching/cache-control-headers)
-  // Browser max-age=0 can lead to revalidation + 304s; the client should bypass browser cache with fetch(cache:'no-store') (we’ll fix in pages/nutrition.tsx).
   res.setHeader("Cache-Control", "public, max-age=0, s-maxage=300, stale-while-revalidate=600");
   res.setHeader("Content-Type", "application/json; charset=utf-8");
 
@@ -223,7 +228,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       }
 
       const url = `https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode)}.json`;
-      const { data, timedOut } = await fetchJSONWithTimeout(url, 6000);
+      const { data, timedOut } = await fetchJSONWithTimeout(url, 8000);
 
       if (!data || data.status !== 1 || !data.product) {
         const payload: SearchResp = { foods: [], meta: { q: barcode, source: "live", timedOut, tookMs: Date.now() - started, count: 0 } };
@@ -248,7 +253,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         servingSize: p?.serving_size || null,
       };
 
-      const payload: SearchResp = { foods: food.code ? [food] : [], meta: { q: barcode, source: "live", timedOut, tookMs: Date.now() - started, count: food.code ? 1 : 0 } };
+      const payload: SearchResp = {
+        foods: food.code ? [food] : [],
+        meta: { q: barcode, source: "live", timedOut, tookMs: Date.now() - started, count: food.code ? 1 : 0 },
+      };
       cacheSet(cacheKey, payload, 60 * 60_000);
       return res.status(200).json(payload);
     }
@@ -270,9 +278,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const pageSize = clampPageSize(Number(req.query.page_size || 30));
     const tokens = q.split(" ").filter(Boolean).slice(0, 5);
 
-    // Try UK first, then global fallback
     const urlUK = buildSearchUrl({ q, pageSize, onlyUK: true });
-    const ukRes = await fetchJSONWithTimeout(urlUK, 4000);
+    const ukRes = await fetchJSONWithTimeout(urlUK, 6000);
     const productsUK: any[] = Array.isArray(ukRes.data?.products) ? ukRes.data.products : [];
     const ukPairs = mapProductsWithRaw(productsUK, q);
 
@@ -280,12 +287,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     let globalTimedOut = false;
     let globalPairs: Array<{ raw: any; food: Food }> = [];
+    let productsGlobalCount = 0;
 
     if (!haveEnoughUK) {
       const urlGlobal = buildSearchUrl({ q, pageSize, onlyUK: false });
-      const globalRes = await fetchJSONWithTimeout(urlGlobal, 4000);
+      const globalRes = await fetchJSONWithTimeout(urlGlobal, 6000);
       globalTimedOut = globalRes.timedOut;
       const productsGlobal: any[] = Array.isArray(globalRes.data?.products) ? globalRes.data.products : [];
+      productsGlobalCount = productsGlobal.length;
       globalPairs = mapProductsWithRaw(productsGlobal, q);
     }
 
@@ -295,8 +304,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     for (const x of globalPairs) if (!mergedMap.has(x.food.code)) mergedMap.set(x.food.code, x);
 
     const merged = Array.from(mergedMap.values());
-
-    // Rank
     merged.sort((A, B) => scoreProduct(B.raw, B.food, tokens) - scoreProduct(A.raw, A.food, tokens));
 
     const foods = merged.map((x) => x.food);
@@ -304,10 +311,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     const payload: SearchResp = {
       foods,
-      meta: { q, source: "live", timedOut, tookMs: Date.now() - started, count: foods.length },
+      meta: {
+        q,
+        source: "live",
+        timedOut,
+        tookMs: Date.now() - started,
+        count: foods.length,
+        ukUpstreamCount: productsUK.length,
+        globalUpstreamCount: productsGlobalCount,
+        usedUKFilter: true,
+      },
     };
 
-    // Cache: shorter TTL for very short queries (milk), longer for specific queries
     const ttl = q.length <= 4 ? 10 * 60_000 : 30 * 60_000;
     cacheSet(cacheKey, payload, ttl);
 
