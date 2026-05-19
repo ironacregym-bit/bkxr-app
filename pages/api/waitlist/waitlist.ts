@@ -1,6 +1,6 @@
 // File: pages/api/waitlist.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import firestore from "../../lib/firestoreClient";
+import firestore from "../../../lib/firestoreClient";
 
 type WaitlistBody = {
   name?: string;
