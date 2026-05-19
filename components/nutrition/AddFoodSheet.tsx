@@ -1,7 +1,7 @@
 // File: components/nutrition/AddFoodSheet.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import FoodEditor, { Food } from "./FoodEditor";
 import BarcodeScannerGate from "./BarcodeScannerGate";
 import { NUTRITION_ACCENT as ACCENT, NUTRITION_COLORS as COLORS } from "./nutritionTheme";
@@ -22,6 +22,12 @@ function fmt0(n: any) {
 function stop(e: any) {
   e.preventDefault();
   e.stopPropagation();
+}
+
+function clampGrams(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  // reasonable bounds to stop nonsense and reduce loops
+  return Math.max(0, Math.min(5000, Math.round(n)));
 }
 
 export default function AddFoodSheet({
@@ -66,7 +72,16 @@ export default function AddFoodSheet({
   isFavourite: (food: Food | null) => boolean;
   onChangeFood: (patch: Partial<Food>) => void;
 }) {
+  // ✅ Use a single number source of truth
   const [grams, setGrams] = useState<number>(100);
+
+  // ✅ Track whether user has intentionally changed grams in this sheet session
+  // When true, we stop auto-resetting grams due to selection changes or FoodEditor normalisation.
+  const [gramsTouched, setGramsTouched] = useState(false);
+
+  const lastFoodKeyRef = useRef<string | null>(null);
+  const lastAcceptedGramsRef = useRef<number>(100);
+
   const [showAllFavs, setShowAllFavs] = useState(false);
 
   const qTrim = query.trim();
@@ -90,11 +105,29 @@ export default function AddFoodSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // ✅ Initialise grams once per selected food (do not keep forcing it)
   useEffect(() => {
     if (!selectedFood) return;
-    if (String(selectedFood.id || "").startsWith("manual-")) return;
-    const g = parseServingGrams(selectedFood.servingSize);
-    setGrams(g && g > 0 ? g : 100);
+
+    const foodKey = String(selectedFood.id || selectedFood.code || selectedFood.name || "");
+    if (!foodKey) return;
+
+    // When switching to a new food, reset gramsTouched and pick a sensible default
+    if (lastFoodKeyRef.current !== foodKey) {
+      lastFoodKeyRef.current = foodKey;
+      setGramsTouched(false);
+
+      if (String(selectedFood.id || "").startsWith("manual-")) {
+        setGrams(100);
+        lastAcceptedGramsRef.current = 100;
+        return;
+      }
+
+      const g = parseServingGrams(selectedFood.servingSize);
+      const next = clampGrams(g && g > 0 ? g : 100);
+      setGrams(next);
+      lastAcceptedGramsRef.current = next;
+    }
   }, [selectedFood]);
 
   useEffect(() => {
@@ -111,6 +144,27 @@ export default function AddFoodSheet({
 
   const favsCompact = useMemo(() => favourites.slice(0, 10), [favourites]);
   const favsToShow = showAllFavs ? favourites : favsCompact;
+
+  const isManual = Boolean(selectedFood && String(selectedFood.id || "").startsWith("manual-"));
+
+  // ✅ Central setter to avoid loops / flicker
+  function setGramsSafe(next: number, source: "chip" | "editor" | "init") {
+    const v = clampGrams(next);
+
+    // ignore no-op updates
+    if (v === grams) return;
+
+    // If FoodEditor is firing normalisation updates repeatedly (common cause of flicker),
+    // only accept them if user hasn't actively set grams.
+    if (source === "editor" && gramsTouched) return;
+
+    setGrams(v);
+    lastAcceptedGramsRef.current = v;
+
+    if (source === "chip" || source === "editor") {
+      setGramsTouched(true);
+    }
+  }
 
   if (!open || !meal) return null;
 
@@ -136,8 +190,16 @@ export default function AddFoodSheet({
           WebkitOverflowScrolling: "touch",
         }}
       >
-        {/* Iron Acre surface */}
-        <div className="ia-tile ia-tile-pad" style={{ borderTopLeftRadius: 18, borderTopRightRadius: 18 }}>
+        {/* ✅ Fully opaque surface for readability */}
+        <div
+          className="ia-tile ia-tile-pad"
+          style={{
+            borderTopLeftRadius: 18,
+            borderTopRightRadius: 18,
+            background: "#0b0f14",
+            border: "1px solid rgba(255,255,255,0.06)",
+          }}
+        >
           <div className="d-flex justify-content-between align-items-center mb-2">
             <div className="ia-tile-title">{sheetTitle}</div>
 
@@ -155,7 +217,7 @@ export default function AddFoodSheet({
           {selectedFood ? (
             <>
               {/* Grams chips (non-manual only) */}
-              {!String(selectedFood.id || "").startsWith("manual-") && (
+              {!isManual && (
                 <div className="mb-2">
                   <div className="ia-kicker mb-1">Amount</div>
 
@@ -166,7 +228,7 @@ export default function AddFoodSheet({
                         type="button"
                         className={Math.round(grams) === g ? "ia-btn ia-btn-primary" : "ia-btn ia-btn-outline"}
                         style={{ borderRadius: 999, minHeight: 40, padding: "8px 12px" }}
-                        onClick={() => setGrams(g)}
+                        onClick={() => setGramsSafe(g, "chip")}
                       >
                         {g}g
                       </button>
@@ -176,14 +238,23 @@ export default function AddFoodSheet({
                       <button
                         type="button"
                         className={
-                          Math.round(grams) === Math.round(servingG) ? "ia-btn ia-btn-primary" : "ia-btn ia-btn-outline"
+                          Math.round(grams) === Math.round(servingG)
+                            ? "ia-btn ia-btn-primary"
+                            : "ia-btn ia-btn-outline"
                         }
                         style={{ borderRadius: 999, minHeight: 40, padding: "8px 12px" }}
-                        onClick={() => setGrams(servingG)}
+                        onClick={() => setGramsSafe(servingG, "chip")}
                         title={selectedFood.servingSize || "Serving"}
                       >
                         Serving
                       </button>
+                    ) : null}
+
+                    {/* Optional subtle “Custom” indicator when user typed something that doesn't match a chip */}
+                    {!chips.includes(Math.round(grams)) && (!servingG || Math.round(grams) !== Math.round(servingG)) ? (
+                      <span className="text-dim small" style={{ alignSelf: "center", paddingLeft: 6 }}>
+                        Custom
+                      </span>
                     ) : null}
                   </div>
                 </div>
@@ -200,8 +271,8 @@ export default function AddFoodSheet({
                 onToggleFavourite={() => toggleFavourite(selectedFood)}
                 onChangeFood={onChangeFood}
                 onCancel={onClose}
-                gramsOverride={!String(selectedFood.id || "").startsWith("manual-") ? grams : null}
-                onGramsChange={(g) => setGrams(g)}
+                gramsOverride={!isManual ? grams : null}
+                onGramsChange={(g) => setGramsSafe(g, "editor")}
               />
             </>
           ) : (
@@ -213,7 +284,7 @@ export default function AddFoodSheet({
                   placeholder="Search foods…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  style={{ minHeight: 44 }}
+                  style={{ minHeight: 44, background: "#0b0f14", color: "#fff", borderColor: "rgba(255,255,255,0.1)" }}
                   autoFocus
                 />
 
@@ -233,7 +304,7 @@ export default function AddFoodSheet({
                 </button>
               </div>
 
-              {/* Favourites: compact rail; hidden while typing */}
+              {/* Favourites */}
               {!inSearchMode && favourites.length > 0 && (
                 <div className="mb-3">
                   <div className="d-flex justify-content-between align-items-center mb-1">
@@ -329,6 +400,8 @@ export default function AddFoodSheet({
                               alignItems: "center",
                               justifyContent: "space-between",
                               gap: 10,
+                              background: "#0b0f14",
+                              border: "1px solid rgba(255,255,255,0.06)",
                             }}
                           >
                             <button
