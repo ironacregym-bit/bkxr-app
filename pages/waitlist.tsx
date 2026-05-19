@@ -113,7 +113,7 @@ export default function WaitlistPage() {
     }
   }
 
-  const heroVideoSrc = "/meadow.mp4";
+  const heroVideoSrc = "/video-1.mov";
   const concept1Src = "/concept-1.jpg";
   const concept2Src = "/concept-2.jpg";
 
