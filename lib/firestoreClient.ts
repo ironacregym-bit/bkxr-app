@@ -1,8 +1,7 @@
-
-// lib/firestoreClient.ts
+// File: lib/firestoreClient.ts
 import { Firestore } from "@google-cloud/firestore";
 
-// Normalise private key from Vercel env (convert escaped \n to real newlines, strip accidental quotes)
+// Normalise private key from Vercel env (convert escaped \\n to real newlines, strip accidental quotes)
 function normalizeKey(key?: string): string {
   if (!key) return "";
   return key.replace(/\\n/g, "\n").replace(/^"+|"+$/g, "").trim();
@@ -22,7 +21,8 @@ firestore.settings({ ignoreUndefinedProperties: true });
 // Optional: one-time log to confirm runtime project (remove after validation)
 if (process.env.NODE_ENV !== "production") {
   // Do NOT log the private key. Project ID is safe.
-  console.log("[BXKR] Firestore project:", process.env.GOOGLE_PROJECT_ID);
+  // eslint-disable-next-line no-console
+  console.log("[IronAcre] Firestore project:", process.env.GOOGLE_PROJECT_ID);
 }
 
 export default firestore;
