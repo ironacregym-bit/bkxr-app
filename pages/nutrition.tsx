@@ -1,7 +1,7 @@
 // File: pages/nutrition.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import useSWR, { mutate } from "swr";
 import { useSession, signIn } from "next-auth/react";
@@ -34,6 +34,10 @@ function dayPlus(d: Date, days: number) {
   const x = new Date(d);
   x.setDate(d.getDate() + days);
   return x;
+}
+
+function normaliseQuery(q: string) {
+  return String(q || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 type NutritionEntry = {
@@ -89,15 +93,11 @@ export default function NutritionPage() {
     setSelectedDate((d) => dayPlus(d, 1));
   };
 
-  const swrKey = session?.user?.email
-    ? `/api/nutrition/logs?date=${formattedDate}`
-    : null;
+  const swrKey = session?.user?.email ? `/api/nutrition/logs?date=${formattedDate}` : null;
   const { data: logsData } = useSWR<LogsResponse>(swrKey, fetcher);
 
   const { data: profile } = useSWR<UserProfile>(
-    session?.user?.email
-      ? `/api/profile?email=${encodeURIComponent(session.user.email as string)}`
-      : null,
+    session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email as string)}` : null,
     fetcher
   );
 
@@ -136,10 +136,7 @@ export default function NutritionPage() {
 
   const [favourites, setFavourites] = useState<Food[]>([]);
   const favKey = useMemo(
-    () =>
-      session?.user?.email
-        ? `bxkr:favs:${session.user.email as string}`
-        : `bxkr:favs:anon`,
+    () => (session?.user?.email ? `bxkr:favs:${session.user.email as string}` : `bxkr:favs:anon`),
     [session?.user?.email]
   );
 
@@ -179,9 +176,7 @@ export default function NutritionPage() {
 
   const isFavourite = (food: Food | null) => {
     if (!food) return false;
-    return favourites.some(
-      (f) => f.id === food.id || (food.code && f.code === food.code)
-    );
+    return favourites.some((f) => f.id === food.id || (food.code && f.code === food.code));
   };
 
   const saveFavourites = (arr: Food[]) => {
@@ -201,35 +196,109 @@ export default function NutritionPage() {
 
   const [sheetMeal, setSheetMeal] = useState<string | null>(null);
   const [selectedFood, setSelectedFood] = useState<Food | null>(null);
-  const [usingServing, setUsingServing] =
-    useState<"per100" | "serving">("per100");
+  const [usingServing, setUsingServing] = useState<"per100" | "serving">("per100");
 
   const [query, setQuery] = useState<string>("");
   const [results, setResults] = useState<Food[]>([]);
   const [loadingSearch, setLoadingSearch] = useState<boolean>(false);
 
+  // ✅ Search cancellation + stale guards + client cache
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const searchReqIdRef = useRef(0);
+  const searchCacheRef = useRef<Map<string, Food[]>>(new Map());
+  const lastCompletedQueryRef = useRef<string>("");
+
+  // Cancel any in-flight search (used when closing sheet / selecting food / query changes)
+  function cancelSearch() {
+    try {
+      searchAbortRef.current?.abort();
+    } catch {}
+    searchAbortRef.current = null;
+  }
+
+  // Cancel searches when sheet closes or user selects a food (no need to keep searching)
   useEffect(() => {
-    const q = query.trim();
-    if (!q || q.length < 2) {
-      setResults([]);
+    if (!sheetMeal) {
+      cancelSearch();
       setLoadingSearch(false);
       return;
     }
+  }, [sheetMeal]);
+
+  useEffect(() => {
+    if (selectedFood) {
+      cancelSearch();
+      setLoadingSearch(false);
+    }
+  }, [selectedFood]);
+
+  useEffect(() => {
+    const qNorm = normaliseQuery(query);
+
+    // Clear results if query too short
+    if (!qNorm || qNorm.length < 2) {
+      cancelSearch();
+      setResults([]);
+      setLoadingSearch(false);
+      lastCompletedQueryRef.current = "";
+      return;
+    }
+
+    // Debounce typing
+    const reqId = ++searchReqIdRef.current;
 
     const t = setTimeout(async () => {
+      // If we already have cached results for this exact query, show them immediately
+      const cached = searchCacheRef.current.get(qNorm);
+      if (cached) {
+        setResults(cached);
+      } else {
+        // prevent “No foods found” flash by showing searching state (results cleared)
+        setResults([]);
+      }
+
+      // Start fresh request, abort previous
+      cancelSearch();
+      const ctrl = new AbortController();
+      searchAbortRef.current = ctrl;
+
       setLoadingSearch(true);
+
       try {
-        const res = await fetch(
-          `/api/foods/search?query=${encodeURIComponent(q)}`
-        );
-        const json = await res.json();
-        setResults((json.foods || []) as Food[]);
-      } catch {
+        const res = await fetch(`/api/foods/search?query=${encodeURIComponent(qNorm)}`, {
+          signal: ctrl.signal,
+          headers: { "Accept": "application/json" },
+        });
+
+        const json = await res.json().catch(() => ({} as any));
+        const foods = (json.foods || []) as Food[];
+
+        // Ignore stale responses
+        if (reqId !== searchReqIdRef.current) return;
+
+        // If aborted, do nothing
+        if (ctrl.signal.aborted) return;
+
+        // If the API indicates a timeout and there are no results, don’t poison cache
+        const timedOut = Boolean(json?.meta?.timedOut);
+        if (!timedOut) {
+          searchCacheRef.current.set(qNorm, foods);
+        }
+
+        lastCompletedQueryRef.current = qNorm;
+        setResults(foods);
+      } catch (e: any) {
+        if (e?.name === "AbortError") return;
+        if (reqId !== searchReqIdRef.current) return;
+
+        lastCompletedQueryRef.current = qNorm;
         setResults([]);
       } finally {
-        setLoadingSearch(false);
+        if (reqId === searchReqIdRef.current) {
+          setLoadingSearch(false);
+        }
       }
-    }, 250);
+    }, 350);
 
     return () => clearTimeout(t);
   }, [query]);
@@ -309,10 +378,7 @@ export default function NutritionPage() {
 
   const removeEntry = async (id: string) => {
     if (!confirm("Remove this entry?")) return;
-    await fetch(
-      `/api/nutrition/logs?id=${encodeURIComponent(id)}&date=${formattedDate}`,
-      { method: "DELETE" }
-    );
+    await fetch(`/api/nutrition/logs?id=${encodeURIComponent(id)}&date=${formattedDate}`, { method: "DELETE" });
     if (swrKey) mutate(swrKey);
   };
 
@@ -320,10 +386,7 @@ export default function NutritionPage() {
     <>
       <GlobalNumericFocus />
 
-      <main
-        className="container py-3"
-        style={{ paddingBottom: "90px", color: "#fff" }}
-      >
+      <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff" }}>
         <div className="d-flex justify-content-between align-items-center mb-3">
           <button className="btn btn-bxkr-outline" onClick={goPrevDay}>
             ← Previous
@@ -373,14 +436,22 @@ export default function NutritionPage() {
         results={results}
         loading={loadingSearch}
         favourites={favourites}
-        onSelectFood={(food) => setSelectedFood(food)}
-        onCreateManual={() => setSelectedFood(createManualFood())}
+        onSelectFood={(food) => {
+          cancelSearch();
+          setSelectedFood(food);
+        }}
+        onCreateManual={() => {
+          cancelSearch();
+          setSelectedFood(createManualFood());
+        }}
         onClose={() => {
+          cancelSearch();
           setSheetMeal(null);
           setSelectedFood(null);
           setQuery("");
           setResults([]);
           setUsingServing("per100");
+          setLoadingSearch(false);
         }}
         isPremium={Boolean(isPremium)}
         onScanRequested={() => setScannerOpen(true)}
@@ -403,13 +474,9 @@ export default function NutritionPage() {
           setQuery(food.name || food.code || "");
         }}
         onLookupBarcode={async (code: string) => {
-          const res = await fetch(
-            `/api/foods/lookup-barcode?barcode=${encodeURIComponent(code)}`
-          );
+          const res = await fetch(`/api/foods/lookup-barcode?barcode=${encodeURIComponent(code)}`);
           const json = await res.json();
-          const found: Food | undefined = (json.foods || [])[0] as
-            | Food
-            | undefined;
+          const found: Food | undefined = (json.foods || [])[0] as Food | undefined;
           return found;
         }}
       />
