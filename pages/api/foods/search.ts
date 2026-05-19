@@ -11,6 +11,7 @@ type Food = {
   protein: number;
   carbs: number;
   fat: number;
+  servingSize?: string | null;
 };
 
 type SearchResp = {
@@ -20,6 +21,7 @@ type SearchResp = {
     source?: "cache" | "live";
     timedOut?: boolean;
     tookMs?: number;
+    count?: number;
   };
 };
 
@@ -53,23 +55,30 @@ function clampPageSize(n: number) {
 
 function mapProductsWithRaw(products: any[], fallbackQuery: string): Array<{ raw: any; food: Food }> {
   const out: Array<{ raw: any; food: Food }> = [];
+
   for (const p of products || []) {
-    if (!p?.nutriments) continue;
-    const calories = toNum(p.nutriments?.["energy-kcal_100g"] ?? p.nutriments?.["energy_100g"]);
+    const code = String(p?.code || "").trim();
+    if (!code) continue;
+
+    const nutr = p?.nutriments || {};
+    const calories = toNum(nutr?.["energy-kcal_100g"] ?? nutr?.["energy_100g"]);
+
     const food: Food = {
-      id: String(p.code),
-      code: String(p.code),
+      id: code,
+      code,
       name: pickName(p, fallbackQuery),
-      brand: String(p.brands || "Unknown"),
-      image: p.image_front_small_url || p.image_front_url || null,
+      brand: String(p?.brands || "Unknown"),
+      image: p?.image_front_small_url || p?.image_front_url || null,
       calories,
-      protein: toNum(p.nutriments?.proteins_100g),
-      carbs: toNum(p.nutriments?.carbohydrates_100g),
-      fat: toNum(p.nutriments?.fat_100g),
+      protein: toNum(nutr?.proteins_100g),
+      carbs: toNum(nutr?.carbohydrates_100g),
+      fat: toNum(nutr?.fat_100g),
+      servingSize: p?.serving_size || null,
     };
-    if (!food.code) continue;
+
     out.push({ raw: p, food });
   }
+
   return out;
 }
 
@@ -91,20 +100,7 @@ function scoreProduct(p: any, mapped: Food, tokens: string[]) {
   if (/^[\x00-\x7F]*$/.test(mapped.name)) score += 2;
 
   const n = mapped.name.toLowerCase();
-  const penalties = [
-    "blanc",
-    "poulet",
-    "dinde",
-    "jambon",
-    "rôti",
-    "charcuterie",
-    "pollo",
-    "pechuga",
-    "frango",
-    "filet",
-    "nature",
-    "sans nitrite",
-  ];
+  const penalties = ["blanc", "poulet", "dinde", "jambon", "rôti", "charcuterie", "pollo", "pechuga", "frango", "filet", "nature", "sans nitrite"];
   for (const w of penalties) if (n.includes(w)) score -= 1;
 
   if (mapped.image) score += 1;
@@ -112,6 +108,10 @@ function scoreProduct(p: any, mapped: Food, tokens: string[]) {
 
   const tokenScore = tokens.reduce((acc, t) => acc + (n.includes(t) ? 1 : 0), 0);
   score += tokenScore * 3;
+
+  // Prefer items with at least some macro data, but do not exclude
+  const hasAnyMacros = Boolean(mapped.calories || mapped.protein || mapped.carbs || mapped.fat);
+  if (hasAnyMacros) score += 1;
 
   return score;
 }
@@ -159,11 +159,53 @@ function cacheSet(key: string, value: SearchResp, ttlMs: number) {
   CACHE.set(key, { at: Date.now(), ttlMs, value });
 }
 
+function buildSearchUrl(opts: {
+  q: string;
+  pageSize: number;
+  onlyUK: boolean;
+}) {
+  const params = new URLSearchParams();
+  params.set("search_terms", opts.q);
+  params.set("search_simple", "1");
+  params.set("action", "process");
+  params.set("json", "1");
+  params.set("page_size", String(opts.pageSize));
+  params.set("lc", "en");
+  params.set("tags_lc", "en");
+
+  // Limit fields for speed (smaller payload, faster parse)
+  params.set(
+    "fields",
+    [
+      "code",
+      "product_name_en",
+      "product_name",
+      "generic_name_en",
+      "generic_name",
+      "brands",
+      "image_front_small_url",
+      "image_front_url",
+      "nutriments",
+      "countries_tags",
+      "languages_tags",
+      "serving_size",
+    ].join(",")
+  );
+
+  if (opts.onlyUK) {
+    params.set("countries", "United Kingdom");
+  }
+
+  return `https://world.openfoodfacts.org/cgi/search.pl?${params.toString()}`;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse<SearchResp>) {
   const started = Date.now();
 
-  // Helpful CDN caching for identical queries, plus SWR behaviour
+  // Edge caching on Vercel is controlled via Cache-Control directives like s-maxage/stale-while-revalidate. [2](https://vercel.com/docs/caching/cdn-cache)[1](https://vercel.com/docs/caching/cache-control-headers)
+  // Browser max-age=0 can lead to revalidation + 304s; the client should bypass browser cache with fetch(cache:'no-store') (we’ll fix in pages/nutrition.tsx).
   res.setHeader("Cache-Control", "public, max-age=0, s-maxage=300, stale-while-revalidate=600");
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
 
   const queryRaw = String(req.query.query || "").trim();
   const barcode = String(req.query.barcode || "").trim();
@@ -176,78 +218,71 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       if (cached) {
         return res.status(200).json({
           ...cached,
-          meta: { ...(cached.meta || {}), source: "cache", tookMs: Date.now() - started },
+          meta: { ...(cached.meta || {}), source: "cache", tookMs: Date.now() - started, count: cached.foods.length },
         });
       }
 
       const url = `https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode)}.json`;
       const { data, timedOut } = await fetchJSONWithTimeout(url, 6000);
 
-      if (!data || data.status !== 1 || !data.product || !data.product.nutriments) {
-        const payload: SearchResp = { foods: [], meta: { q: barcode, source: "live", timedOut, tookMs: Date.now() - started } };
+      if (!data || data.status !== 1 || !data.product) {
+        const payload: SearchResp = { foods: [], meta: { q: barcode, source: "live", timedOut, tookMs: Date.now() - started, count: 0 } };
         cacheSet(cacheKey, payload, 10 * 60_000);
         return res.status(200).json(payload);
       }
 
       const p = data.product;
-      const calories = toNum(p.nutriments?.["energy-kcal_100g"] ?? p.nutriments?.["energy_100g"]);
+      const nutr = p?.nutriments || {};
+      const calories = toNum(nutr?.["energy-kcal_100g"] ?? nutr?.["energy_100g"]);
 
       const food: Food = {
-        id: String(p.code),
-        code: String(p.code),
+        id: String(p.code || barcode),
+        code: String(p.code || barcode),
         name: pickName(p, "Unknown"),
         brand: String(p.brands || "Unknown"),
         image: p.image_front_small_url || p.image_front_url || null,
         calories,
-        protein: toNum(p.nutriments?.proteins_100g),
-        carbs: toNum(p.nutriments?.carbohydrates_100g),
-        fat: toNum(p.nutriments?.fat_100g),
+        protein: toNum(nutr?.proteins_100g),
+        carbs: toNum(nutr?.carbohydrates_100g),
+        fat: toNum(nutr?.fat_100g),
+        servingSize: p?.serving_size || null,
       };
 
-      const payload: SearchResp = { foods: [food], meta: { q: barcode, source: "live", timedOut, tookMs: Date.now() - started } };
+      const payload: SearchResp = { foods: food.code ? [food] : [], meta: { q: barcode, source: "live", timedOut, tookMs: Date.now() - started, count: food.code ? 1 : 0 } };
       cacheSet(cacheKey, payload, 60 * 60_000);
       return res.status(200).json(payload);
     }
 
     const q = normaliseQuery(queryRaw);
-    if (!q || q.length < 2) return res.status(200).json({ foods: [], meta: { q, source: "live", tookMs: Date.now() - started } });
+    if (!q || q.length < 2) {
+      return res.status(200).json({ foods: [], meta: { q, source: "live", tookMs: Date.now() - started, count: 0 } });
+    }
 
     const cacheKey = `q:${q}`;
     const cached = cacheGet(cacheKey);
     if (cached) {
       return res.status(200).json({
         ...cached,
-        meta: { ...(cached.meta || {}), source: "cache", tookMs: Date.now() - started },
+        meta: { ...(cached.meta || {}), source: "cache", tookMs: Date.now() - started, count: cached.foods.length },
       });
     }
 
     const pageSize = clampPageSize(Number(req.query.page_size || 30));
     const tokens = q.split(" ").filter(Boolean).slice(0, 5);
 
-    // Budget: try UK first (fast), then global (fallback). Hard cap overall behaviour.
-    const urlUK =
-      `https://world.openfoodfacts.org/cgi/search.pl?` +
-      `search_terms=${encodeURIComponent(q)}` +
-      `&search_simple=1&action=process&json=1&page_size=${pageSize}` +
-      `&lc=en&tags_lc=en&countries=United%20Kingdom`;
-
+    // Try UK first, then global fallback
+    const urlUK = buildSearchUrl({ q, pageSize, onlyUK: true });
     const ukRes = await fetchJSONWithTimeout(urlUK, 4000);
     const productsUK: any[] = Array.isArray(ukRes.data?.products) ? ukRes.data.products : [];
     const ukPairs = mapProductsWithRaw(productsUK, q);
 
-    // If enough UK-ish results, return early
     const haveEnoughUK = ukPairs.length >= 10;
 
     let globalTimedOut = false;
     let globalPairs: Array<{ raw: any; food: Food }> = [];
 
     if (!haveEnoughUK) {
-      const urlGlobal =
-        `https://world.openfoodfacts.org/cgi/search.pl?` +
-        `search_terms=${encodeURIComponent(q)}` +
-        `&search_simple=1&action=process&json=1&page_size=${pageSize}` +
-        `&lc=en&tags_lc=en`;
-
+      const urlGlobal = buildSearchUrl({ q, pageSize, onlyUK: false });
       const globalRes = await fetchJSONWithTimeout(urlGlobal, 4000);
       globalTimedOut = globalRes.timedOut;
       const productsGlobal: any[] = Array.isArray(globalRes.data?.products) ? globalRes.data.products : [];
@@ -265,12 +300,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     merged.sort((A, B) => scoreProduct(B.raw, B.food, tokens) - scoreProduct(A.raw, A.food, tokens));
 
     const foods = merged.map((x) => x.food);
-
     const timedOut = Boolean(ukRes.timedOut || globalTimedOut);
 
     const payload: SearchResp = {
       foods,
-      meta: { q, source: "live", timedOut, tookMs: Date.now() - started },
+      meta: { q, source: "live", timedOut, tookMs: Date.now() - started, count: foods.length },
     };
 
     // Cache: shorter TTL for very short queries (milk), longer for specific queries
@@ -280,6 +314,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     return res.status(200).json(payload);
   } catch (err) {
     console.error("[foods/search] error:", err);
-    return res.status(500).json({ foods: [], meta: { source: "live", tookMs: Date.now() - started } });
+    return res.status(500).json({ foods: [], meta: { source: "live", tookMs: Date.now() - started, count: 0 } });
   }
 }
