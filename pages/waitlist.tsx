@@ -113,9 +113,9 @@ export default function WaitlistPage() {
     }
   }
 
-  const heroVideoSrc = "/waitlist/meadow.mp4";
-  const concept1Src = "/waitlist/concept-1.jpg";
-  const concept2Src = "/waitlist/concept-2.jpg";
+  const heroVideoSrc = "/meadow.mp4";
+  const concept1Src = "/concept-1.jpg";
+  const concept2Src = "/concept-2.jpg";
 
   return (
     <>
