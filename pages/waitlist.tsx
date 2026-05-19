@@ -355,7 +355,6 @@ export default function WaitlistPage() {
           <div className="ia-tile ia-tile-pad" style={{ borderRadius: 18, background: "#0b0f14", border: "1px solid rgba(255,255,255,0.06)" }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <div style={{ color: "#fff", fontWeight: 950, fontSize: 18 }}>Concept</div>
-              <div style={{ color: "rgba(255,255,255,0.60)", fontSize: 13 }}>Add images at /public/waitlist/concept-1.jpg and concept-2.jpg</div>
             </div>
 
             <div className="row g-3" style={{ marginTop: 6 }}>
