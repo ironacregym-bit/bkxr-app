@@ -1,4 +1,4 @@
-// File: pages/api/waitlist.ts
+// File: pages/api/waitlist/waitlist.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 
