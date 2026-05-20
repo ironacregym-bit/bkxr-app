@@ -97,7 +97,7 @@ export default function WaitlistPage() {
         return;
       }
 
-      router.push(`/waitlist/thanks?email=${encodeURIComponent(e)}`);
+      router.push(`/waitlist/thanks?email=${encodeURIComponent(e)}&founders=${foundersInterest ? "1" : "0"}`);
     } catch {
       setError("Could not join. Try again.");
       setLoading(false);
@@ -111,9 +111,9 @@ export default function WaitlistPage() {
     <>
       <Head>
         <title>Iron Acre Gym | Founders</title>
-        <meta name="description" content="Founders £60/month locked for life (first 20). Standard £100/month." />
+        <meta name="description" content="Train outdoors. Founders £60/month locked for life (first 20). Standard £100/month." />
         <meta property="og:title" content="Iron Acre Gym | Founders" />
-        <meta property="og:description" content="Train outdoors. Founders £60/month locked for life (first 20)." />
+        <meta property="og:description" content="Train hard. Be outside. Build something real. Founders £60/month locked for life (first 20)." />
         <meta property="og:type" content="website" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
@@ -146,10 +146,18 @@ export default function WaitlistPage() {
             </div>
 
             <nav className="heroNav heroNavDesktop" aria-label="Page sections">
-              <button type="button" className="navLink" onClick={() => scrollToId("programs")}>Programs</button>
-              <button type="button" className="navLink" onClick={() => scrollToId("classes")}>Classes</button>
-              <button type="button" className="navLink" onClick={() => scrollToId("faq")}>FAQ</button>
-              <button type="button" className="navLink" onClick={() => scrollToId("contact")}>Contact</button>
+              <button type="button" className="navLink" onClick={() => scrollToId("programs")}>
+                Programs
+              </button>
+              <button type="button" className="navLink" onClick={() => scrollToId("classes")}>
+                Classes
+              </button>
+              <button type="button" className="navLink" onClick={() => scrollToId("faq")}>
+                FAQ
+              </button>
+              <button type="button" className="navLink" onClick={() => scrollToId("contact")}>
+                Contact
+              </button>
             </nav>
 
             <button
@@ -167,12 +175,20 @@ export default function WaitlistPage() {
               <button type="button" className="mobileMenuBackdrop" onClick={() => setMenuOpen(false)} aria-label="Close menu" />
               <div className="mobileMenuPanel">
                 <div className="mobileMenuTitle">Menu</div>
-                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("programs"); }}>Programs</button>
-                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("classes"); }}>Classes</button>
-                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("faq"); }}>FAQ</button>
-                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("contact"); }}>Contact</button>
+                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("programs"); }}>
+                  Programs
+                </button>
+                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("classes"); }}>
+                  Classes
+                </button>
+                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("faq"); }}>
+                  FAQ
+                </button>
+                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("contact"); }}>
+                  Contact
+                </button>
                 <button type="button" className="ia-btn ia-btn-primary mobileMenuCta" onClick={() => { setMenuOpen(false); scrollToForm(); }}>
-                  Join waitlist
+                  Join the Acre
                 </button>
               </div>
             </div>
@@ -181,10 +197,13 @@ export default function WaitlistPage() {
           <div className="heroInner">
             <div className="heroLeft">
               <h1 className="headline">
-                Train outdoors.
+                Train Hard
                 <br />
-                Founders spots are limited.
+                Be Outside
+                <br />
+                Build Something Real
               </h1>
+
               <div className="badgeRow">
                 <div className="badge">Founders £60/month locked for life • first 20</div>
               </div>
@@ -192,7 +211,9 @@ export default function WaitlistPage() {
 
             <div className="heroRight" ref={formRef}>
               <div className="formCard ia-tile ia-tile-pad">
-                <div className="formTitle">Join the waitlist</div>
+                <div className="formTitle">Join the Acre</div>
+                <div className="formSub">One email. Early access. Founders gets invited first.</div>
+
                 <div className="formGrid">
                   <input
                     className="form-control formInput"
@@ -210,7 +231,7 @@ export default function WaitlistPage() {
                       checked={foundersInterest}
                       onChange={(e) => setFoundersInterest(e.target.checked)}
                     />
-                    <span>I want a founders spot (£60/month)</span>
+                    <span>I want a founders spot (£60/month locked)</span>
                   </label>
 
                   {error ? <div className="formError">{error}</div> : null}
@@ -221,7 +242,7 @@ export default function WaitlistPage() {
                     disabled={loading}
                     onClick={submit}
                   >
-                    {loading ? "Joining…" : "Join waitlist"}
+                    {loading ? "Joining…" : "Join the Acre"}
                   </button>
 
                   <div className="finePrint">Standard will be £100/month. No payment until one month after opening.</div>
@@ -237,20 +258,23 @@ export default function WaitlistPage() {
           <section id="programs" className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">Programs</h2>
-              <p className="sectionSub">Small group coaching built to progress.</p>
+              <p className="sectionSub">Not just sessions. This is how you get better.</p>
             </div>
+
             <div className="grid3">
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Small group</div>
-                <div className="cardText">Coached sessions with limited numbers.</div>
+                <div className="cardTitle">Small group coaching</div>
+                <div className="cardText">You’re coached properly. Every set, every session. No hiding, no coasting.</div>
               </div>
+
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Strength first</div>
-                <div className="cardText">Simple, repeatable training that moves you forward.</div>
+                <div className="cardText">Everything is built around getting stronger. Because strength changes everything.</div>
               </div>
+
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Outdoor focus</div>
-                <div className="cardText">A proper training space that feels different.</div>
+                <div className="cardTitle">Outside hits different</div>
+                <div className="cardText">Fresh air, real space, better energy. Train in the open, not under strip lights.</div>
               </div>
             </div>
           </section>
@@ -258,24 +282,38 @@ export default function WaitlistPage() {
           <section id="classes" className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">Classes</h2>
-              <p className="sectionSub">Boxing, farm fitness, kettlebells, hybrid, military fitness.</p>
+              <p className="sectionSub">Real training. No filler. Sessions that actually move you forward.</p>
             </div>
+
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Boxing Skills and Conditioning</div>
-                <div className="cardText">Technique plus conditioning.</div>
+                <div className="cardText">Learn how to punch properly, move with purpose, then push it when it counts.</div>
               </div>
+
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Farm Fit</div>
-                <div className="cardText">Carries, sleds and sandbags.</div>
+                <div className="cardText">Carries, sleds and sandbags. The kind of work that makes you properly fit.</div>
               </div>
+
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Kettlebell Strength</div>
-                <div className="cardText">Strong basics, simple progressions.</div>
+                <div className="cardText">Simple lifts done well. Strength you can actually use.</div>
               </div>
+
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Hybrid Conditioning</div>
-                <div className="cardText">Strength plus engine work.</div>
+                <div className="cardText">Strength meets engine. Hard sessions that still build, not just burn you out.</div>
+              </div>
+
+              <div className="card ia-tile ia-tile-pad">
+                <div className="cardTitle">Military Fitness</div>
+                <div className="cardText">Team intervals with structure. Grit with coaching. Scaled for all levels.</div>
+              </div>
+
+              <div className="card ia-tile ia-tile-pad">
+                <div className="cardTitle">What’s next</div>
+                <div className="cardText">Cold plunges first. Then we keep expanding the space, the kit, and the sessions.</div>
               </div>
             </div>
           </section>
@@ -285,6 +323,7 @@ export default function WaitlistPage() {
               <h2 className="sectionTitle">Concept</h2>
               <p className="sectionSub">A preview of the space.</p>
             </div>
+
             <div className="conceptWrap ia-tile" aria-hidden="true">
               <Image
                 src={concept2Src}
@@ -300,16 +339,28 @@ export default function WaitlistPage() {
           <section id="faq" className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">FAQ</h2>
-              <p className="sectionSub">Quick answers.</p>
+              <p className="sectionSub">Quick answers. No waffle.</p>
             </div>
+
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">How does founders work?</div>
-                <div className="cardText">First 20 get £60/month locked for life. After that it’s £100/month.</div>
+                <div className="cardText">First 20 people to accept the invite get £60/month locked for life. After that it’s £100/month.</div>
               </div>
+
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">When do I pay?</div>
-                <div className="cardText">First payment one month after opening.</div>
+                <div className="cardText">First payment is taken one month after opening. The waitlist is free until then.</div>
+              </div>
+
+              <div className="card ia-tile ia-tile-pad">
+                <div className="cardTitle">Where is it?</div>
+                <div className="cardText">Ipswich area, overlooking a meadow. You’ll get exact directions in the invite email.</div>
+              </div>
+
+              <div className="card ia-tile ia-tile-pad">
+                <div className="cardTitle">Do I need to be fit already?</div>
+                <div className="cardText">No. It’s coached and scaled. You start where you are and build from there.</div>
               </div>
             </div>
           </section>
@@ -317,14 +368,17 @@ export default function WaitlistPage() {
           <section id="contact" className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">Contact</h2>
-              <p className="sectionSub">Join the waitlist and you’ll get updates by email.</p>
+              <p className="sectionSub">Join the Acre and we’ll keep you in the loop by email.</p>
             </div>
+
             <div className="contactCard ia-tile ia-tile-pad">
               <div className="contactRow">
-                <div className="contactLabel">Waitlist</div>
-                <button type="button" className="ia-btn ia-btn-primary" onClick={scrollToForm}>Join</button>
+                <div className="contactLabel">Best next step</div>
+                <button type="button" className="ia-btn ia-btn-primary" onClick={scrollToForm}>
+                  Join the Acre
+                </button>
               </div>
-              <div className="contactFoot">Founders is limited to 20.</div>
+              <div className="contactFoot">Founders is limited to 20. £60/month is locked for those spots.</div>
             </div>
           </section>
 
@@ -363,9 +417,10 @@ export default function WaitlistPage() {
           .badge{display:inline-flex;align-items:center;width:fit-content;border-radius:12px;padding:10px 12px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.22);color:rgba(255,255,255,.92);font-weight:600;font-size:13px;letter-spacing:.1px}
           .formCard{border-radius:18px;background:rgba(11,15,20,.70);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(10px)}
           .formTitle{font-weight:650;font-size:18px}
+          .formSub{margin-top:6px;color:rgba(255,255,255,.72);line-height:1.35;font-size:14px;font-weight:450}
           .formGrid{margin-top:12px;display:grid;gap:10px}
           .formInput{min-height:48px;background:rgba(7,10,15,.85);color:#fff;border-color:rgba(255,255,255,.12);border-radius:12px}
-          .checkRow{display:flex;gap:10px;align-items:flex-start;color:rgba(255,255,255,.82);font-size:14px;font-weight:500}
+          .checkRow{display:flex;gap:10px;align-items:flex-start;color:rgba(255,255,255,.82);font-size:14px;font-weight:450}
           .formBtn{min-height:50px;border-radius:14px;padding:10px 16px}
           .formError{color:#ff6b6b;font-size:14px}
           .finePrint{color:rgba(255,255,255,.55);font-size:12px;line-height:1.35}
