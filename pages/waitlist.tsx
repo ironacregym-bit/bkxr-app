@@ -43,8 +43,6 @@ export default function WaitlistPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [videoFailed, setVideoFailed] = useState(false);
-
   const utm = useMemo(() => {
     const q = router.query || {};
     return {
@@ -113,23 +111,16 @@ export default function WaitlistPage() {
     }
   }
 
-  const heroVideoSrc = "/video-1.mov";
-  const concept1Src = "/concept-1.jpg";
+  const heroImageSrc = "/concept-1.jpg";
   const concept2Src = "/concept-2.jpg";
 
   return (
     <>
       <Head>
         <title>Iron Acre Gym Outdoor Gym Waitlist</title>
-        <meta
-          name="description"
-          content="Covered outdoor container gym overlooking a meadow. Founders membership £60/month locked for life for the first 20."
-        />
+        <meta name="description" content="Covered outdoor container gym overlooking a meadow. Founders £60/month locked for life (first 20)." />
         <meta property="og:title" content="Iron Acre Gym Outdoor Gym Waitlist" />
-        <meta
-          property="og:description"
-          content="Train outdoors on an old menage overlooking a meadow. Founders £60/month locked for life (first 20)."
-        />
+        <meta property="og:description" content="Train outdoors on an old menage overlooking a meadow. Founders £60/month locked for life (first 20)." />
         <meta property="og:type" content="website" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
@@ -138,51 +129,28 @@ export default function WaitlistPage() {
         <div className="container" style={{ paddingTop: 18, paddingBottom: 54, maxWidth: 1080 }}>
           <div className="d-flex align-items-center justify-content-between" style={{ marginBottom: 12 }}>
             <div style={{ color: "#fff", fontWeight: 900, letterSpacing: 0.2, fontSize: 18 }}>Iron Acre Gym</div>
-            <div className="text-dim small" style={{ color: "rgba(255,255,255,0.72)" }}>
-              Outdoor Gym • Ipswich
-            </div>
+            <div className="text-dim small" style={{ color: "rgba(255,255,255,0.72)" }}>Outdoor Gym • Ipswich</div>
           </div>
 
-          <div
-            className="ia-tile"
-            style={{
-              borderRadius: 18,
-              overflow: "hidden",
-              border: "1px solid rgba(255,255,255,0.06)",
-              background: "#0b0f14",
-            }}
-          >
+          <div className="ia-tile" style={{ borderRadius: 18, overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)", background: "#0b0f14" }}>
             <div className="row g-0">
               <div className="col-12 col-lg-7">
                 <div className="waitlist-hero">
-                  {!videoFailed ? (
-                    <video
-                      className="waitlist-hero-video"
-                      src={heroVideoSrc}
-                      muted
-                      playsInline
-                      autoPlay
-                      loop
-                      preload="metadata"
-                      onError={() => setVideoFailed(true)}
+                  <div className="waitlist-hero-media">
+                    <Image
+                      src={heroImageSrc}
+                      alt="Iron Acre Gym concept"
+                      fill
+                      priority
+                      sizes="(max-width: 991px) 100vw, 60vw"
+                      style={{ objectFit: "cover", objectPosition: "50% 60%" }}
                     />
-                  ) : (
-                    <div className="waitlist-hero-fallback">
-                      <div style={{ textAlign: "center", padding: 18 }}>
-                        <div style={{ color: "rgba(255,255,255,0.9)", fontWeight: 900 }}>Add the meadow video</div>
-                        <div style={{ color: "rgba(255,255,255,0.65)", marginTop: 6, fontSize: 13 }}>
-                          Place a portrait MP4 at <span style={{ color: "#fff", fontWeight: 900 }}>/public/waitlist/meadow.mp4</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  </div>
 
                   <div className="waitlist-hero-overlay" />
 
                   <div className="waitlist-hero-content">
-                    <div className="waitlist-badge">
-                      Founders £60/month locked for life • first 20
-                    </div>
+                    <div className="waitlist-badge">Founders £60/month locked for life • first 20</div>
 
                     <div className="waitlist-hero-title">
                       Train outdoors.
@@ -198,11 +166,20 @@ export default function WaitlistPage() {
                     </div>
 
                     <div className="waitlist-hero-actions">
-                      <button type="button" className="ia-btn ia-btn-primary" style={{ borderRadius: 14, minHeight: 48, padding: "10px 16px", minWidth: 220 }} onClick={scrollToForm}>
+                      <button
+                        type="button"
+                        className="ia-btn ia-btn-primary"
+                        style={{ borderRadius: 14, minHeight: 48, padding: "10px 16px", minWidth: 220 }}
+                        onClick={scrollToForm}
+                      >
                         Join the waitlist
                       </button>
 
-                      <button type="button" className="waitlist-link-btn" onClick={() => window.scrollTo({ top: 900, behavior: "smooth" })}>
+                      <button
+                        type="button"
+                        className="waitlist-link-btn"
+                        onClick={() => document.getElementById("concept")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                      >
                         See concept
                       </button>
                     </div>
@@ -216,18 +193,9 @@ export default function WaitlistPage() {
 
               <div className="col-12 col-lg-5" ref={formRef}>
                 <div style={{ padding: 18 }}>
-                  <div
-                    className="ia-tile ia-tile-pad"
-                    style={{
-                      borderRadius: 18,
-                      background: "#0b0f14",
-                      border: "1px solid rgba(255,255,255,0.06)",
-                    }}
-                  >
+                  <div className="ia-tile ia-tile-pad" style={{ borderRadius: 18, background: "#0b0f14", border: "1px solid rgba(255,255,255,0.06)" }}>
                     <div style={{ color: "#fff", fontWeight: 950, fontSize: 18 }}>Join the waitlist</div>
-                    <div style={{ color: "rgba(255,255,255,0.72)", marginTop: 6, lineHeight: 1.35 }}>
-                      Get opening updates and founders invites first.
-                    </div>
+                    <div style={{ color: "rgba(255,255,255,0.72)", marginTop: 6, lineHeight: 1.35 }}>Get opening updates and founders invites first.</div>
 
                     <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
                       <input
@@ -300,49 +268,19 @@ export default function WaitlistPage() {
 
                       {error ? <div style={{ color: "#ff6b6b", fontSize: 14 }}>{error}</div> : null}
 
-                      <button type="button" className="ia-btn ia-btn-primary" style={{ borderRadius: 14, minHeight: 48, padding: "10px 16px" }} disabled={loading} onClick={submit}>
+                      <button
+                        type="button"
+                        className="ia-btn ia-btn-primary"
+                        style={{ borderRadius: 14, minHeight: 48, padding: "10px 16px" }}
+                        disabled={loading}
+                        onClick={submit}
+                      >
                         {loading ? "Joining…" : "Join the waitlist"}
                       </button>
 
                       <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>
                         Founders is limited. Standard price will be £100/month. First payment is taken one month after opening.
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="ia-tile" style={{ marginTop: 12, borderRadius: 18, padding: 14, border: "1px solid rgba(255,255,255,0.06)", background: "#0b0f14" }}>
-                    <div style={{ color: "#fff", fontWeight: 950, fontSize: 16 }}>Pricing</div>
-                    <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.82)" }}>
-                        <span style={{ color: "#fff", fontWeight: 950 }}>Founders</span>
-                        <span style={{ color: "#fff", fontWeight: 950 }}>£60/month</span>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.72)" }}>
-                        <span>Locked for life</span>
-                        <span>First 20 people</span>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.72)" }}>
-                        <span>Standard price</span>
-                        <span style={{ color: "#fff", fontWeight: 900 }}>£100/month</span>
-                      </div>
-                      <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 13 }}>
-                        No payment taken until one month after we open.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="ia-tile" style={{ marginTop: 12, borderRadius: 18, padding: 14, border: "1px solid rgba(255,255,255,0.06)", background: "#0b0f14" }}>
-                    <div style={{ color: "#fff", fontWeight: 950, fontSize: 16 }}>What you’ll train</div>
-                    <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-                      {CLASS_OPTIONS.map((c) => (
-                        <div key={c.key} style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10 }}>
-                          <div style={{ color: "#fff", fontWeight: 900 }}>{c.label}</div>
-                          <div style={{ color: "rgba(255,255,255,0.70)", fontSize: 14, marginTop: 4, lineHeight: 1.35 }}>{c.desc}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ marginTop: 12, color: "rgba(255,255,255,0.65)", fontSize: 13 }}>
-                      Short-term: cold plunges. Long-term: keep expanding the space and the sessions.
                     </div>
                   </div>
                 </div>
@@ -352,30 +290,72 @@ export default function WaitlistPage() {
 
           <div style={{ height: 14 }} />
 
-          <div className="ia-tile ia-tile-pad" style={{ borderRadius: 18, background: "#0b0f14", border: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="row g-3">
+            <div className="col-12 col-lg-6">
+              <div className="ia-tile ia-tile-pad" style={{ borderRadius: 18, background: "#0b0f14", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ color: "#fff", fontWeight: 950, fontSize: 18 }}>Pricing</div>
+                <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.82)" }}>
+                    <span style={{ color: "#fff", fontWeight: 950 }}>Founders</span>
+                    <span style={{ color: "#fff", fontWeight: 950 }}>£60/month</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.72)" }}>
+                    <span>Locked for life</span>
+                    <span>First 20 people</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", color: "rgba(255,255,255,0.72)" }}>
+                    <span>Standard price</span>
+                    <span style={{ color: "#fff", fontWeight: 900 }}>£100/month</span>
+                  </div>
+                  <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 13 }}>No payment taken until one month after we open.</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-12 col-lg-6">
+              <div className="ia-tile ia-tile-pad" style={{ borderRadius: 18, background: "#0b0f14", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ color: "#fff", fontWeight: 950, fontSize: 18 }}>What you’ll train</div>
+                <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+                  {CLASS_OPTIONS.map((c) => (
+                    <div key={c.key} style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10 }}>
+                      <div style={{ color: "#fff", fontWeight: 900 }}>{c.label}</div>
+                      <div style={{ color: "rgba(255,255,255,0.70)", fontSize: 14, marginTop: 4, lineHeight: 1.35 }}>{c.desc}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 12, color: "rgba(255,255,255,0.65)", fontSize: 13 }}>
+                  Short-term: cold plunges. Long-term: we keep expanding the space and the sessions.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ height: 14 }} />
+
+          <div id="concept" className="ia-tile ia-tile-pad" style={{ borderRadius: 18, background: "#0b0f14", border: "1px solid rgba(255,255,255,0.06)" }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <div style={{ color: "#fff", fontWeight: 950, fontSize: 18 }}>Concept</div>
             </div>
 
             <div className="row g-3" style={{ marginTop: 6 }}>
-              <div className="col-12 col-md-6">
+              <div className="col-12">
                 <div style={{ borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)", background: "#070a0f" }}>
-                  <div style={{ position: "relative", width: "100%", aspectRatio: "16/10" as any }}>
-                    <Image src={concept1Src} alt="Iron Acre Gym concept 1" fill style={{ objectFit: "cover" }} sizes="(max-width: 768px) 100vw, 50vw" />
-                  </div>
-                </div>
-              </div>
-              <div className="col-12 col-md-6">
-                <div style={{ borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)", background: "#070a0f" }}>
-                  <div style={{ position: "relative", width: "100%", aspectRatio: "16/10" as any }}>
-                    <Image src={concept2Src} alt="Iron Acre Gym concept 2" fill style={{ objectFit: "cover" }} sizes="(max-width: 768px) 100vw, 50vw" />
+                  <div style={{ position: "relative", width: "100%", aspectRatio: "16/9" as any }}>
+                    <Image src={concept2Src} alt="Iron Acre Gym concept view" fill sizes="100vw" style={{ objectFit: "cover" }} />
                   </div>
                 </div>
               </div>
             </div>
 
             <div style={{ marginTop: 12, color: "rgba(255,255,255,0.72)", lineHeight: 1.45 }}>
-              Covered canopy training floor built from containers. Woodland around you, meadow in front of you.
+              Built on an old menage overlooking a meadow. Covered canopy training floor with storage and kit built into the containers.
+            </div>
+
+            <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 10 }}>
+              <button type="button" className="ia-btn ia-btn-primary" style={{ borderRadius: 14, minHeight: 46, padding: "10px 14px" }} onClick={scrollToForm}>
+                Join the waitlist
+              </button>
+              <div style={{ color: "rgba(255,255,255,0.60)", fontSize: 13, alignSelf: "center" }}>Founders is limited to 20.</div>
             </div>
           </div>
 
@@ -388,7 +368,9 @@ export default function WaitlistPage() {
               <div className="col-12 col-md-6">
                 <div className="ia-tile" style={{ borderRadius: 16, padding: 14, background: "#070a0f", border: "1px solid rgba(255,255,255,0.06)" }}>
                   <div style={{ color: "#fff", fontWeight: 900 }}>Where is it?</div>
-                  <div style={{ color: "rgba(255,255,255,0.72)", marginTop: 6 }}>Ipswich area, set on an old menage overlooking a meadow with sheep and cows.</div>
+                  <div style={{ color: "rgba(255,255,255,0.72)", marginTop: 6 }}>
+                    Ipswich area, set on an old menage overlooking a meadow with sheep and cows.
+                  </div>
                 </div>
               </div>
 
@@ -402,7 +384,9 @@ export default function WaitlistPage() {
               <div className="col-12 col-md-6">
                 <div className="ia-tile" style={{ borderRadius: 16, padding: 14, background: "#070a0f", border: "1px solid rgba(255,255,255,0.06)" }}>
                   <div style={{ color: "#fff", fontWeight: 900 }}>How does founders work?</div>
-                  <div style={{ color: "rgba(255,255,255,0.72)", marginTop: 6 }}>First 20 people to accept the invite get £60/month locked for life. After that it’s £100/month.</div>
+                  <div style={{ color: "rgba(255,255,255,0.72)", marginTop: 6 }}>
+                    First 20 people to accept the invite get £60/month locked for life. After that it’s £100/month.
+                  </div>
                 </div>
               </div>
 
@@ -412,29 +396,13 @@ export default function WaitlistPage() {
                   <div style={{ color: "rgba(255,255,255,0.72)", marginTop: 6 }}>One month after opening.</div>
                 </div>
               </div>
-
-              <div className="col-12 col-md-6">
-                <div className="ia-tile" style={{ borderRadius: 16, padding: 14, background: "#070a0f", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <div style={{ color: "#fff", fontWeight: 900 }}>What if it rains?</div>
-                  <div style={{ color: "rgba(255,255,255,0.72)", marginTop: 6 }}>The training area is covered. The space is designed for outdoor conditions.</div>
-                </div>
-              </div>
-
-              <div className="col-12 col-md-6">
-                <div className="ia-tile" style={{ borderRadius: 16, padding: 14, background: "#070a0f", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <div style={{ color: "#fff", fontWeight: 900 }}>Do I need to be fit already?</div>
-                  <div style={{ color: "rgba(255,255,255,0.72)", marginTop: 6 }}>No. Everything is coached and scaled so you can start where you are.</div>
-                </div>
-              </div>
             </div>
 
             <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 10 }}>
               <button type="button" className="ia-btn ia-btn-primary" style={{ borderRadius: 14, minHeight: 46, padding: "10px 14px" }} onClick={scrollToForm}>
                 Join the waitlist
               </button>
-              <div style={{ color: "rgba(255,255,255,0.60)", fontSize: 13, alignSelf: "center" }}>
-                Founders is limited to 20.
-              </div>
+              <div style={{ color: "rgba(255,255,255,0.60)", fontSize: 13, alignSelf: "center" }}>Founders is limited to 20.</div>
             </div>
           </div>
 
@@ -450,30 +418,14 @@ export default function WaitlistPage() {
             height: 560px;
             background: #05070b;
           }
-          .waitlist-hero-video {
+          .waitlist-hero-media {
             position: absolute;
             inset: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            object-position: 50% 60%;
-            filter: saturate(1.05) contrast(1.05);
-            transform: translateZ(0);
-          }
-          .waitlist-hero-fallback {
-            position: absolute;
-            inset: 0;
-            background: radial-gradient(900px 420px at 20% 15%, rgba(0, 255, 170, 0.16), transparent 55%),
-              radial-gradient(900px 420px at 75% 0%, rgba(110, 168, 255, 0.16), transparent 60%),
-              linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
-            display: flex;
-            align-items: center;
-            justify-content: center;
           }
           .waitlist-hero-overlay {
             position: absolute;
             inset: 0;
-            background: linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.12) 42%, rgba(0, 0, 0, 0.78) 100%);
+            background: linear-gradient(180deg, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.12) 42%, rgba(0, 0, 0, 0.82) 100%);
           }
           .waitlist-hero-content {
             position: absolute;
@@ -491,7 +443,7 @@ export default function WaitlistPage() {
             border-radius: 12px;
             padding: 10px 12px;
             border: 1px solid rgba(255, 255, 255, 0.14);
-            background: rgba(0, 0, 0, 0.25);
+            background: rgba(0, 0, 0, 0.22);
             color: rgba(255, 255, 255, 0.92);
             font-weight: 900;
             font-size: 13px;
@@ -550,7 +502,7 @@ export default function WaitlistPage() {
           }
           @media (max-width: 480px) {
             .waitlist-hero {
-              height: 720px;
+              height: 740px;
             }
             .waitlist-hero-title {
               font-size: 40px;
