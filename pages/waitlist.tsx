@@ -39,17 +39,17 @@ export default function WaitlistPage() {
   const utm = useMemo(() => {
     const q = router.query || {};
     return {
-      utm_source: getStr(q.utm_source),
-      utm_medium: getStr(q.utm_medium),
-      utm_campaign: getStr(q.utm_campaign),
-      utm_content: getStr(q.utm_content),
-      utm_term: getStr(q.utm_term),
+      utm_source: getStr((q as any).utm_source),
+      utm_medium: getStr((q as any).utm_medium),
+      utm_campaign: getStr((q as any).utm_campaign),
+      utm_content: getStr((q as any).utm_content),
+      utm_term: getStr((q as any).utm_term),
     };
   }, [router.query]);
 
   useEffect(() => {
     if (!router.isReady) return;
-    const maybeEmail = getStr(router.query.email);
+    const maybeEmail = getStr((router.query as any).email);
     if (maybeEmail && !email) setEmail(maybeEmail);
   }, [router.isReady, router.query, email]);
 
@@ -118,13 +118,32 @@ export default function WaitlistPage() {
       </Head>
 
       <div className="wrap">
-        <section className="hero">
+        <section className="hero" aria-label="Iron Acre Gym Waitlist Hero">
           <div className="heroMedia" aria-hidden="true">
-            <Image src={heroImageSrc} alt="" fill priority sizes="100vw" style={{ objectFit: "cover", objectPosition: "50% 55%" }}"heroTop">
-            <div className="brand" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} role="button" tabIndex={0}>
+            <Image
+              src={heroImageSrc}
+              alt=""
+              fill
+              priority
+              sizes="100vw"
+              style={{ objectFit: "cover", objectPosition: "50% 55%" }}
+            />
+          </div>
+
+          <div className="heroOverlay" aria-hidden="true" />
+
+          <div className="heroTop">
+            <div
+              className="brand"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              role="button"
+              tabIndex={0}
+              aria-label="Back to top"
+            >
               <span className="brandMark" aria-hidden="true" />
               <span className="brandText">Iron Acre Gym</span>
             </div>
+
             <nav className="heroNav" aria-label="Page sections">
               <button type="button" onClick={() => scrollToId("programs")} className="navLink">
                 Programs
@@ -144,15 +163,18 @@ export default function WaitlistPage() {
           <div className="heroInner">
             <div className="heroLeft">
               <div className="badge">Founders £60/month locked for life • first 20</div>
+
               <h1 className="headline">
                 Train outdoors.
                 <br />
                 Founders spots are limited.
               </h1>
+
               <p className="subhead">
                 Built on an old menage overlooking a meadow with sheep and cows.
                 <span className="subStrong"> Strength, conditioning and bags</span> in nature.
               </p>
+
               <div className="offerLine">
                 <span className="offerGood">£60/month founders</span>
                 <span className="offerSep">•</span>
@@ -160,6 +182,7 @@ export default function WaitlistPage() {
                 <span className="offerSep">•</span>
                 <span className="offerMuted">No payment until one month after opening</span>
               </div>
+
               <div className="heroActions">
                 <button type="button" className="ia-btn ia-btn-primary heroCta" onClick={scrollToForm}>
                   Join waitlist
@@ -168,7 +191,8 @@ export default function WaitlistPage() {
                   See programs
                 </button>
               </div>
-              <div className="heroProof">
+
+              <div className="heroProof" aria-label="Key points">
                 <div className="proofItem">Max 12 per session</div>
                 <div className="proofDot" aria-hidden="true" />
                 <div className="proofItem">Covered canopy training</div>
@@ -179,8 +203,9 @@ export default function WaitlistPage() {
 
             <div className="heroRight" ref={formRef}>
               <div className="formCard ia-tile ia-tile-pad">
-                <div className="formTitle">Get the founders invite first</div>
-                <div className="formSub">One field. No noise. Maximum chance of getting one of the 20.</div>
+                <div className="formTitle">Get the invite first</div>
+                <div className="formSub">Email only. Tick founders if you want one of the 20.</div>
+
                 <div className="formGrid">
                   <input
                     className="form-control formInput"
@@ -191,18 +216,23 @@ export default function WaitlistPage() {
                     autoCapitalize="none"
                     autoCorrect="off"
                   />
+
                   <label className="checkRow">
                     <input type="checkbox" checked={foundersInterest} onChange={(e) => setFoundersInterest(e.target.checked)} />
                     <span>I want a founders spot (£60/month locked for life)</span>
                   </label>
+
                   <label className="checkRow dim">
                     <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
                     <span>I agree to receive opening updates and founders invites</span>
                   </label>
+
                   {error ? <div className="formError">{error}</div> : null}
+
                   <button type="button" className="ia-btn ia-btn-primary formBtn" disabled={loading} onClick={submit}>
                     {loading ? "Joining…" : "Join waitlist"}
                   </button>
+
                   <div className="finePrint">No payment taken until one month after opening. Unsubscribe anytime.</div>
                 </div>
               </div>
@@ -216,10 +246,9 @@ export default function WaitlistPage() {
           <section id="programs" className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">Programs</h2>
-              <p className="sectionSub">
-                Three high impact reasons this works.
-              </p>
+              <p className="sectionSub">Three reasons this works.</p>
             </div>
+
             <div className="grid3">
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Small group coaching</div>
@@ -227,13 +256,14 @@ export default function WaitlistPage() {
               </div>
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Train into the view</div>
-                <div className="cardText">An old menage overlooking a meadow with sheep and cows. It hits different.</div>
+                <div className="cardText">An old menage overlooking a meadow. Woodland around you. Calm and brutal.</div>
               </div>
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Strength first, built to progress</div>
-                <div className="cardText">Simple progression, real kit, and sessions designed to make you better every week.</div>
+                <div className="cardTitle">Progressive training</div>
+                <div className="cardText">Structured sessions designed to make you better every week.</div>
               </div>
             </div>
+
             <div className="sectionCtaRow">
               <button type="button" className="ia-btn ia-btn-primary" onClick={scrollToForm}>
                 Join waitlist
@@ -245,10 +275,9 @@ export default function WaitlistPage() {
           <section id="classes" className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">Classes</h2>
-              <p className="sectionSub">
-                A focused line-up. No filler.
-              </p>
+              <p className="sectionSub">A focused line-up. No filler.</p>
             </div>
+
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Boxing Skills and Conditioning</div>
@@ -268,11 +297,11 @@ export default function WaitlistPage() {
               </div>
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Military Fit</div>
-                <div className="cardText">Team-style intervals and grit, structured and scalable for all levels.</div>
+                <div className="cardText">Team-style intervals and grit, structured and scalable.</div>
               </div>
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Expansion</div>
-                <div className="cardText">Short-term: cold plunges. Long-term: keep building the space and the sessions.</div>
+                <div className="cardText">Short-term: cold plunges. Long-term: keep building the space and sessions.</div>
               </div>
             </div>
           </section>
@@ -280,17 +309,20 @@ export default function WaitlistPage() {
           <section className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">Concept</h2>
-              <p className="sectionSub">
-                This is the space we’re building.
-              </p>
+              <p className="sectionSub">This is what we’re building.</p>
             </div>
+
             <div className="conceptWrap ia-tile">
-              <div className="conceptMedia">
-                <Image src={concept2Src} alt="Iron Acre Gym concept render" fill sizes="100vw" style={{ objectFit: "cover", objectPosition: "50% 55%" }}ceptText">
+              <div className="conceptMedia" aria-hidden="true">
+                <Image src={concept2Src} alt="" fill sizes="100vw" style={{ objectFit: "cover", objectPosition: "50% 55%" }} />
+              </div>
+              <div className="conceptOverlay" aria-hidden="true" />
+              <div className="conceptText">
                 Built on an old menage overlooking a meadow.
                 <span className="conceptTextDim"> Covered canopy training with containers for storage and kit.</span>
               </div>
             </div>
+
             <div className="sectionCtaRow">
               <button type="button" className="ia-btn ia-btn-primary" onClick={scrollToForm}>
                 Join waitlist
@@ -302,10 +334,9 @@ export default function WaitlistPage() {
           <section id="faq" className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">FAQ</h2>
-              <p className="sectionSub">
-                The only questions that matter.
-              </p>
+              <p className="sectionSub">The only questions that matter.</p>
             </div>
+
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">How does founders work?</div>
@@ -317,19 +348,11 @@ export default function WaitlistPage() {
               </div>
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Where is it?</div>
-                <div className="cardText">Ipswich area, set on an old menage overlooking a meadow with sheep and cows.</div>
+                <div className="cardText">Ipswich area, on an old menage overlooking a meadow with sheep and cows.</div>
               </div>
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">What if it rains?</div>
                 <div className="cardText">The training area is covered. The space is designed for outdoor conditions.</div>
-              </div>
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Do I need to be fit already?</div>
-                <div className="cardText">No. Everything is coached and scaled so you can start where you are.</div>
-              </div>
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">How will I hear back?</div>
-                <div className="cardText">We’ll email waitlisters first with opening dates and founders invites. Reply to that email with any questions.</div>
               </div>
             </div>
           </section>
@@ -337,10 +360,9 @@ export default function WaitlistPage() {
           <section id="contact" className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">Contact</h2>
-              <p className="sectionSub">
-                Join the waitlist and you’ll get updates by email. You can reply directly to those emails with questions.
-              </p>
+              <p className="sectionSub">Join the waitlist and you’ll get updates by email.</p>
             </div>
+
             <div className="contactCard ia-tile ia-tile-pad">
               <div className="contactRow">
                 <div className="contactLabel">Best next step</div>
@@ -356,7 +378,7 @@ export default function WaitlistPage() {
             <div className="footerInner">
               <div>© {new Date().getFullYear()} Iron Acre Gym</div>
               <div className="footerLinks">
-                <button type="button" className="footerLink" onClick={() => scrollToId("classes")}>
+                <button type="button" className="footerLink" onClick={() => scrollToId("programs")}>
                   Programs
                 </button>
                 <button type="button" className="footerLink" onClick={() => scrollToId("faq")}>
@@ -384,14 +406,11 @@ export default function WaitlistPage() {
           .heroMedia {
             position: absolute;
             inset: 0;
-            background: radial-gradient(900px 420px at 20% 15%, rgba(0, 255, 170, 0.10), transparent 55%),
-              radial-gradient(900px 420px at 75% 0%, rgba(110, 168, 255, 0.10), transparent 60%),
-              linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
           }
           .heroOverlay {
             position: absolute;
             inset: 0;
-            background: linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.16) 38%, rgba(0, 0, 0, 0.88) 100%);
+            background: linear-gradient(180deg, rgba(0, 0, 0, 0.48) 0%, rgba(0, 0, 0, 0.14) 38%, rgba(0, 0, 0, 0.90) 100%);
           }
           .heroTop {
             position: absolute;
