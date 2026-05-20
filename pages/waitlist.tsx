@@ -108,7 +108,7 @@ export default function WaitlistPage() {
     }
   }
 
-  const heroImageSrc = "/concept-1.jpg";
+  const heroImageSrc = "/concept-3.jpeg";
   const concept2Src = "/concept-2.jpg";
   const logoSrc = "/iron_acre_logo_transparent.png";
 
