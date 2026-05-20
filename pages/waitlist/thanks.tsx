@@ -1,5 +1,5 @@
 // File: pages/waitlist/thanks.tsx
-import Head from from "next/head";
+import Head from "next/head";
 import Link from "next/link";
 import { useMemo } from "react";
 import { useRouter } from "next/router";
