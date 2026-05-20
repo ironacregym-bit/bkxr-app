@@ -92,7 +92,11 @@ export default function WaitlistPage() {
 
       if (!resp.ok || !data || (data as any).ok !== true) {
         const err = (data as any)?.error || "Something went wrong.";
-        setError(err === "RATE_LIMITED" ? "Too many attempts. Try again in a few minutes." : "Could not join. Try again.");
+        setError(
+          err === "RATE_LIMITED"
+            ? "Too many attempts. Try again in a few minutes."
+            : "Could not join. Try again."
+        );
         setLoading(false);
         return;
       }
@@ -106,14 +110,21 @@ export default function WaitlistPage() {
 
   const heroImageSrc = "/concept-1.jpg";
   const concept2Src = "/concept-2.jpg";
+  const logoSrc = "/iron_acre_logo_transparent.png";
 
   return (
     <>
       <Head>
         <title>Iron Acre Gym | Founders</title>
-        <meta name="description" content="Train outdoors. Founders £60/month locked for life (first 20). Standard £100/month." />
+        <meta
+          name="description"
+          content="Train outdoors. Founders £60/month locked for life (first 20). Standard £100/month."
+        />
         <meta property="og:title" content="Iron Acre Gym | Founders" />
-        <meta property="og:description" content="Train hard. Be outside. Build something real. Founders £60/month locked for life (first 20)." />
+        <meta
+          property="og:description"
+          content="Train hard. Be outside. Build something real. Founders £60/month locked for life (first 20)."
+        />
         <meta property="og:type" content="website" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
@@ -141,7 +152,16 @@ export default function WaitlistPage() {
               tabIndex={0}
               aria-label="Back to top"
             >
-              <span className="brandMark" aria-hidden="true" />
+              <span className="brandLogo" aria-hidden="true">
+                <Image
+                  src={logoSrc}
+                  alt=""
+                  width={38}
+                  height={38}
+                  priority
+                  style={{ width: 38, height: 38 }}
+                />
+              </span>
               <span className="brandText">Iron Acre Gym</span>
             </div>
 
@@ -172,22 +192,62 @@ export default function WaitlistPage() {
 
           {menuOpen ? (
             <div className="mobileMenu" role="dialog" aria-modal="true" aria-label="Menu">
-              <button type="button" className="mobileMenuBackdrop" onClick={() => setMenuOpen(false)} aria-label="Close menu" />
+              <button
+                type="button"
+                className="mobileMenuBackdrop"
+                onClick={() => setMenuOpen(false)}
+                aria-label="Close menu"
+              />
               <div className="mobileMenuPanel">
                 <div className="mobileMenuTitle">Menu</div>
-                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("programs"); }}>
+                <button
+                  type="button"
+                  className="mobileMenuLink"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    scrollToId("programs");
+                  }}
+                >
                   Programs
                 </button>
-                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("classes"); }}>
+                <button
+                  type="button"
+                  className="mobileMenuLink"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    scrollToId("classes");
+                  }}
+                >
                   Classes
                 </button>
-                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("faq"); }}>
+                <button
+                  type="button"
+                  className="mobileMenuLink"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    scrollToId("faq");
+                  }}
+                >
                   FAQ
                 </button>
-                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("contact"); }}>
+                <button
+                  type="button"
+                  className="mobileMenuLink"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    scrollToId("contact");
+                  }}
+                >
                   Contact
                 </button>
-                <button type="button" className="ia-btn ia-btn-primary mobileMenuCta" onClick={() => { setMenuOpen(false); scrollToForm(); }}>
+                <button
+                  type="button"
+                  className="ia-btn ia-btn-primary mobileMenuCta"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    scrollToForm();
+                  }}
+                >
                   Join the Acre
                 </button>
               </div>
@@ -245,7 +305,9 @@ export default function WaitlistPage() {
                     {loading ? "Joining…" : "Join the Acre"}
                   </button>
 
-                  <div className="finePrint">Standard will be £100/month. No payment until one month after opening.</div>
+                  <div className="finePrint">
+                    Standard will be £100/month. No payment until one month after opening.
+                  </div>
                 </div>
               </div>
             </div>
@@ -264,17 +326,23 @@ export default function WaitlistPage() {
             <div className="grid3">
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Small group coaching</div>
-                <div className="cardText">You’re coached properly. Every set, every session. No hiding, no coasting.</div>
+                <div className="cardText">
+                  You’re coached properly. Every set, every session. No hiding, no coasting.
+                </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Strength first</div>
-                <div className="cardText">Everything is built around getting stronger. Because strength changes everything.</div>
+                <div className="cardText">
+                  Everything is built around getting stronger. Because strength changes everything.
+                </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Outside hits different</div>
-                <div className="cardText">Fresh air, real space, better energy. Train in the open, not under strip lights.</div>
+                <div className="cardText">
+                  Fresh air, real space, better energy. Train in the open, not under strip lights.
+                </div>
               </div>
             </div>
           </section>
@@ -288,12 +356,16 @@ export default function WaitlistPage() {
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Boxing Skills and Conditioning</div>
-                <div className="cardText">Learn how to punch properly, move with purpose, then push it when it counts.</div>
+                <div className="cardText">
+                  Learn how to punch properly, move with purpose, then push it when it counts.
+                </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Farm Fit</div>
-                <div className="cardText">Carries, sleds and sandbags. The kind of work that makes you properly fit.</div>
+                <div className="cardText">
+                  Carries, sleds and sandbags. The kind of work that makes you properly fit.
+                </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
@@ -303,17 +375,23 @@ export default function WaitlistPage() {
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Hybrid Conditioning</div>
-                <div className="cardText">Strength meets engine. Hard sessions that still build, not just burn you out.</div>
+                <div className="cardText">
+                  Strength meets engine. Hard sessions that still build, not just burn you out.
+                </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Military Fitness</div>
-                <div className="cardText">Team intervals with structure. Grit with coaching. Scaled for all levels.</div>
+                <div className="cardText">
+                  Team intervals with structure. Grit with coaching. Scaled for all levels.
+                </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">What’s next</div>
-                <div className="cardText">Cold plunges first. Then we keep expanding the space, the kit, and the sessions.</div>
+                <div className="cardText">
+                  Cold plunges first. Then we keep expanding the space, the kit, and the sessions.
+                </div>
               </div>
             </div>
           </section>
@@ -345,22 +423,30 @@ export default function WaitlistPage() {
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">How does founders work?</div>
-                <div className="cardText">First 20 people to accept the invite get £60/month locked for life. After that it’s £100/month.</div>
+                <div className="cardText">
+                  First 20 people to accept the invite get £60/month locked for life. After that it’s £100/month.
+                </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">When do I pay?</div>
-                <div className="cardText">First payment is taken one month after opening. The waitlist is free until then.</div>
+                <div className="cardText">
+                  First payment is taken one month after opening. The waitlist is free until then.
+                </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Where is it?</div>
-                <div className="cardText">Ipswich area, overlooking a meadow. You’ll get exact directions in the invite email.</div>
+                <div className="cardText">
+                  Ipswich area, overlooking a meadow. You’ll get exact directions in the invite email.
+                </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Do I need to be fit already?</div>
-                <div className="cardText">No. It’s coached and scaled. You start where you are and build from there.</div>
+                <div className="cardText">
+                  No. It’s coached and scaled. You start where you are and build from there.
+                </div>
               </div>
             </div>
           </section>
@@ -386,9 +472,15 @@ export default function WaitlistPage() {
             <div className="footerInner">
               <div>© {new Date().getFullYear()} Iron Acre Gym</div>
               <div className="footerLinks">
-                <button type="button" className="footerLink" onClick={() => scrollToId("programs")}>Programs</button>
-                <button type="button" className="footerLink" onClick={() => scrollToId("classes")}>Classes</button>
-                <button type="button" className="footerLink" onClick={() => scrollToId("contact")}>Contact</button>
+                <button type="button" className="footerLink" onClick={() => scrollToId("programs")}>
+                  Programs
+                </button>
+                <button type="button" className="footerLink" onClick={() => scrollToId("classes")}>
+                  Classes
+                </button>
+                <button type="button" className="footerLink" onClick={() => scrollToId("contact")}>
+                  Contact
+                </button>
               </div>
             </div>
           </footer>
@@ -401,7 +493,7 @@ export default function WaitlistPage() {
           .heroOverlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.20) 40%,rgba(0,0,0,.92) 100%)}
           .heroTop{position:absolute;top:0;left:0;right:0;padding:18px 18px 0 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;z-index:5}
           .brand{display:inline-flex;align-items:center;gap:10px;cursor:pointer;user-select:none;min-height:44px}
-          .brandMark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,rgba(0,255,170,.95),rgba(0,180,255,.85));box-shadow:0 12px 28px rgba(0,255,170,.18)}
+          .brandLogo{width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center}
           .brandText{font-weight:650;letter-spacing:.2px}
           .heroNav{display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end}
           .navLink{appearance:none;background:transparent;border:none;color:rgba(255,255,255,.78);font-weight:550;padding:10px 6px;min-height:44px;cursor:pointer}
