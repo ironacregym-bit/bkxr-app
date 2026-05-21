@@ -13,20 +13,9 @@ type PublicSite = {
   owner_email: string;
   editor_emails: string[];
   updated_at?: string;
-
   theme?: { accent?: string | null };
-
-  seo?: {
-    title?: string;
-    description?: string;
-    image?: string | null;
-  };
-
-  brand?: {
-    name?: string;
-    logoUrl?: string | null;
-  };
-
+  seo?: { title?: string; description?: string; image?: string | null };
+  brand?: { name?: string; logoUrl?: string | null };
   hero?: {
     headline?: string;
     subheadline?: string;
@@ -34,13 +23,8 @@ type PublicSite = {
     ctaText?: string;
     ctaHref?: string;
   };
-
-  sections?: {
-    about?: string;
-    services?: string;
-    faq?: string;
-    contact?: string;
-  };
+  sections?: { about?: string; services?: string; faq?: string; contact?: string };
+  domains?: Array<{ host: string; status: string }>;
 };
 
 function normalizeHost(host: string) {
@@ -79,32 +63,26 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   const baseHost = normalizeHost(String(process.env.SITEBUILDER_BASE_HOST || ""));
 
   try {
-    const slugRef = firestore.collection("sitebuilder_slugs").doc(slug);
-    const slugSnap = await slugRef.get();
+    const slugSnap = await firestore.collection("sitebuilder_slugs").doc(slug).get();
     if (!slugSnap.exists) return { notFound: true };
 
     const slugData: any = slugSnap.data() || {};
     const siteId = String(slugData.siteId || "").trim();
     if (!siteId) return { notFound: true };
 
-    const siteRef = firestore.collection("sitebuilder_sites").doc(siteId);
-    const siteSnap = await siteRef.get();
+    const siteSnap = await firestore.collection("sitebuilder_sites").doc(siteId).get();
     if (!siteSnap.exists) return { notFound: true };
 
     const site = siteSnap.data() as PublicSite;
-
     const canEdit = isAuthorized(site, email);
-    const isPublished = Boolean(site.published);
+    const published = Boolean(site.published);
 
-    if (!isPublished && !canEdit) return { notFound: true };
+    // Drafts are visible only to editors (with a banner)
+    if (!published && !canEdit) return { notFound: true };
 
     return {
       props: {
-        site: {
-          ...site,
-          id: siteId,
-          slug,
-        },
+        site: { ...(site as any), id: siteId, slug },
         canEdit,
         servedHost: host,
         isCustomDomain: Boolean(host && baseHost && host !== baseHost),
@@ -123,9 +101,10 @@ export default function PublicSitePage(props: {
   servedHost: string;
   isCustomDomain: boolean;
 }) {
-  const { site, canEdit } = props;
+  const { site, canEdit, isCustomDomain } = props;
 
   const accent = site?.theme?.accent || "#1fe0a5";
+
   const title = safeText(site?.seo?.title) || safeText(site?.brand?.name) || "Site";
   const description = safeText(site?.seo?.description) || "";
   const ogImage = site?.seo?.image || site?.hero?.imageUrl || null;
@@ -143,10 +122,13 @@ export default function PublicSitePage(props: {
   const aboutParas = splitParagraphs(site?.sections?.about);
   const servicesParas = splitParagraphs(site?.sections?.services);
   const faqParas = splitParagraphs(site?.sections?.faq);
+
   const contactLines = safeText(site?.sections?.contact)
     .split("\n")
     .map((x) => x.trim())
     .filter(Boolean);
+
+  const isDraft = !Boolean(site.published);
 
   return (
     <>
@@ -156,18 +138,28 @@ export default function PublicSitePage(props: {
         <meta property="og:title" content={title} />
         {description ? <meta property="og:description" content={description} /> : null}
         <meta property="og:type" content="website" />
-        {ogImage ? <meta property="og:image" content={ogImage} /> : null}
+        {ogImage ? <meta property="og:image" content={String(ogImage)} /> : null}
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
       <div className="sb-wrap">
+        {canEdit && isDraft ? (
+          <div className="sb-draftBanner" role="status" aria-label="Draft banner">
+            <div className="sb-draftDot" aria-hidden="true" />
+            <div className="sb-draftText">
+              Draft page. Only you (and editors) can see this. Publish it in settings when ready.
+            </div>
+            <div className="sb-draftActions">
+              <Link className="sb-draftLink" href={`/sitebuilder/${encodeURIComponent(site.id)}`}>
+                Open settings
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
         <header className="sb-top">
           <div className="sb-brand">
-            {logoUrl ? (
-              <img className="sb-logo" src={logoUrl} alt="" />
-            ) : (
-              <div className="sb-mark" aria-hidden="true" />
-            )}
+            {logoUrl ? <img className="sb-logo" src={logoUrl} alt={`${brandName} logo`} /> : <div className="sb-mark" aria-hidden="true" />}
             <div className="sb-brandText">{brandName}</div>
           </div>
 
@@ -266,7 +258,7 @@ export default function PublicSitePage(props: {
 
           <footer className="sb-foot">
             <div className="sb-footInner">
-              <div className="sb-footText">Powered by SiteBuilder</div>
+              <div className="sb-footText">{isCustomDomain ? "" : "Powered by SiteBuilder"}</div>
               <div className="sb-footText">© {new Date().getFullYear()}</div>
             </div>
           </footer>
@@ -279,9 +271,58 @@ export default function PublicSitePage(props: {
             color: #fff;
           }
 
-          .sb-top {
+          .sb-draftBanner {
             position: sticky;
             top: 0;
+            z-index: 40;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 18px;
+            background: rgba(255, 170, 0, 0.12);
+            border-bottom: 1px solid rgba(255, 170, 0, 0.22);
+            backdrop-filter: blur(8px);
+          }
+
+          .sb-draftDot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(255, 170, 0, 0.9);
+            box-shadow: 0 0 0 4px rgba(255, 170, 0, 0.15);
+          }
+
+          .sb-draftText {
+            flex: 1;
+            color: rgba(255, 255, 255, 0.86);
+            font-weight: 500;
+            line-height: 1.3;
+            font-size: 13px;
+          }
+
+          .sb-draftActions {
+            display: flex;
+            gap: 10px;
+          }
+
+          .sb-draftLink {
+            color: rgba(255, 255, 255, 0.92);
+            text-decoration: underline;
+            text-underline-offset: 3px;
+            font-weight: 600;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(0, 0, 0, 0.14);
+            min-height: 36px;
+            display: inline-flex;
+            align-items: center;
+          }
+
+          .sb-top {
+            position: sticky;
+            top: ${canEdit ? (isDraft ? "44px" : "0px") : "0px"};
             z-index: 20;
             display: flex;
             align-items: center;
@@ -323,12 +364,6 @@ export default function PublicSitePage(props: {
             overflow: hidden;
             text-overflow: ellipsis;
             max-width: 50vw;
-          }
-
-          .sb-actions {
-            display: flex;
-            align-items: center;
-            gap: 10px;
           }
 
           .sb-edit {
@@ -504,9 +539,22 @@ export default function PublicSitePage(props: {
             font-size: 12px;
           }
 
+          .sb-footText {
+            min-height: 18px;
+          }
+
           @media (max-width: 720px) {
             .sb-h1 {
               font-size: 38px;
+            }
+            .sb-brandText {
+              max-width: 60vw;
+            }
+            .sb-draftBanner {
+              padding: 10px 12px;
+            }
+            .sb-top {
+              padding: 12px;
             }
           }
         `}</style>
