@@ -128,9 +128,15 @@ export default function WaitlistPage() {
           <div className="heroOverlay" aria-hidden="true" />
 
           <header className="heroTop">
-            <div className="brand" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} role="button" tabIndex={0} aria-label="Back to top">
+            <div
+              className="brand"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              role="button"
+              tabIndex={0}
+              aria-label="Back to top"
+            >
               <span className="brandLogo" aria-hidden="true">
-                {logoSrc}
+                <Image src={logoSrc} alt="" width={40} height={40} style={{ objectFit: "contain" }} priority />
               </span>
               <span className="brandText">Iron Acre Gym</span>
             </div>
@@ -143,7 +149,12 @@ export default function WaitlistPage() {
               <button type="button" className="navLink" onClick={() => scrollToId("contact")}>Contact</button>
             </nav>
 
-            <button type="button" className="menuBtn heroNavMobile" aria-label={menuOpen ? "Close menu" : "Open menu"} onClick={() => setMenuOpen((v) => !v)}>
+            <button
+              type="button"
+              className="menuBtn heroNavMobile"
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+              onClick={() => setMenuOpen((v) => !v)}
+            >
               <span className="menuIcon" aria-hidden="true" />
             </button>
           </header>
@@ -218,21 +229,21 @@ export default function WaitlistPage() {
           <section id="about" className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">About</h2>
-              <p className="sectionSub">This is what you’ve been missing.</p>
+              <p className="sectionSub">This is the gym you look forward to.</p>
             </div>
 
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">A training space you actually want to show up to</div>
+                <div className="cardTitle">Built in the open, built with purpose</div>
                 <div className="cardText">
-                  Iron Acre is built on an old menage and aimed to open end of June. You train looking out over a meadow with sheep and horses, with a woodland backdrop behind you. Sunrise sessions that set your day up right. Sunset sessions that hit different. It’s calm, it’s raw, and it’s built for serious work.
+                  Iron Acre Gym is built on an old menage and we’re aiming to open at the end of June. You’ll train with a woodland backdrop behind you and a meadow out front with sheep and horses in the distance. Sunrise sessions that make the day feel easy. Sunset sessions that feel like you’ve earned them. If you’ve ever wanted training to feel like an experience, this is it.
                 </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Best in class coaching, outdoors</div>
+                <div className="cardTitle">Best in class training, without the gym nonsense</div>
                 <div className="cardText">
-                  This isn’t “random circuits in a field”. It’s structured, coached training with purpose. Every session is designed to build real strength, real fitness, and real confidence. If you want a gym that feels like an experience and performs like proper training, you’ll fit in here.
+                  No crowds. No machines you wait for. No random workouts. Just coached sessions, real equipment, and a space designed for people who want to get genuinely strong and fit. It’s premium, simple, and ruthless in the best way. You turn up, you train properly, you leave better.
                 </div>
               </div>
             </div>
@@ -240,58 +251,49 @@ export default function WaitlistPage() {
             <div className="conceptWrap ia-tile" aria-hidden="true">
               <Image src={concept2Src} alt="" fill sizes="100vw" style={{ objectFit: "cover", objectPosition: "50% 55%" }} />
               <div className="conceptOverlay" aria-hidden="true" />
-              <div className="conceptCaption">
-                Meadow views, woodland backdrop, covered training, real kit, real sessions.
-              </div>
+              <div className="conceptCaption">Meadow views. Woodland backdrop. Covered training. Proper kit. Zero compromise.</div>
             </div>
           </section>
 
           <section id="classes" className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">Classes</h2>
-              <p className="sectionSub">Each session has a point. Each one makes you better.</p>
+              <p className="sectionSub">Each class has a point. Each one moves you forward.</p>
             </div>
 
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Boxing Skills and Conditioning</div>
                 <div className="cardText">
-                  Learn how to punch properly, move with intent, and build a gas tank that doesn’t quit. We’ll sharpen the fundamentals, then finish with conditioning that makes you feel dangerous. Bags, skill work, and the kind of training that leaves you walking out taller.
+                  This is boxing the way it should be taught. You’ll build real technique, clean movement, and confidence under pressure, then turn it into conditioning that carries over to everything else you do. Sharp skill work, hard finishers, and that addictive feeling of getting better every single week.
                 </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Farm Fit</div>
                 <div className="cardText">
-                  The outdoors is the point here. Carries, sleds, sandbags and engine work that turns “fitness” into capability. You’ll build the kind of strength that shows up in everyday life and the kind of conditioning that feels unfair to everyone else.
+                  Carries, sleds, sandbags and engine work designed to make you capable, not just tired. You’ll build a tough base of strength and conditioning that shows up in real life. The kind of sessions where you leave feeling like you can handle anything.
                 </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Kettlebell Strength</div>
                 <div className="cardText">
-                  Simple movements, done well, programmed to progress. You’ll build grip, legs, back, shoulders, and a body that moves as one piece. Clean technique, smart loading, and sessions that build strength without wrecking you.
+                  Simple movements, programmed properly. You’ll build grip, legs, back, shoulders and control through clean technique and smart progressions. This is strength you can use, strength you can feel, and strength you can keep building without getting broken.
                 </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Hybrid Conditioning</div>
                 <div className="cardText">
-                  Strength meets engine. This is where hard work gets organised. You’ll lift, move, and breathe under pressure with structure that actually improves you week to week. Not “destroy yourself” workouts. Training that builds an athlete.
+                  Strength meets engine with structure. You’ll lift, move and breathe under pressure in a way that builds athletic fitness over time. Not chaos workouts. Not burnouts. Real hybrid training that makes you feel like an athlete again.
                 </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">What’s next</div>
                 <div className="cardText">
-                  We’re building this properly and expanding it properly. Cold plunges are the first upgrade, then more kit, more session blocks, and more ways to train outside without losing quality. Early members shape what this becomes.
-                </div>
-              </div>
-
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Why it feels different</div>
-                <div className="cardText">
-                  You’re not walking into a crowded room with fluorescent lighting and noise. You’re training in a purpose-built outdoor space with the view in front of you. It’s calmer. It’s sharper. It makes consistency easy because you actually want to be there.
+                  Cold plunges are the first upgrade, then more kit and more session blocks as we expand. The early members shape what Iron Acre becomes. This is a build, and you’re getting in at the start.
                 </div>
               </div>
             </div>
@@ -300,21 +302,21 @@ export default function WaitlistPage() {
           <section id="programs" className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">Programs</h2>
-              <p className="sectionSub">This is the flagship system behind the sessions.</p>
+              <p className="sectionSub">The system behind the sessions.</p>
             </div>
 
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">MVP</div>
                 <div className="cardText">
-                  Our flagship hybrid fitness program built around massive strength in the big lifts and conditioning that can rival professional athletes. You’ll build a powerful base, then layer the engine on top. It’s the best of strength training and sport-level conditioning, without the chaos.
+                  Our flagship hybrid fitness program built around massive strength in the big lifts and conditioning that can rival professional athletes. You’ll build a powerful base in the foundational movements, then layer in an engine that makes you hard to kill. It’s performance training with the chaos removed.
                 </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">App access included for every member</div>
+                <div className="cardTitle">App access for every member</div>
                 <div className="cardText">
-                  Every member gets full app access: nutrition tracking, workout tracking, movement tracking, daily habits and weekly check-ins. It’s a full personal training plan for the price of a gym membership, with the structure and accountability most people never get.
+                  Every member gets full app access: nutrition tracking, workout tracking, movement tracking, daily habits and weekly check-ins. It’s a full personal training plan for the price of a gym membership, with structure, accountability and progression baked in.
                 </div>
               </div>
             </div>
@@ -337,7 +339,7 @@ export default function WaitlistPage() {
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">When do I pay?</div>
                 <div className="cardText">
-                  No payment is taken until one month after opening. You’re just securing your place in line and getting the invite first.
+                  No payment is taken until one month after opening. You’re securing your place in line and getting the invite first.
                 </div>
               </div>
 
@@ -351,7 +353,7 @@ export default function WaitlistPage() {
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Is it suitable for beginners?</div>
                 <div className="cardText">
-                  Yes. Sessions are coached and scaled. You start where you are and build from there, safely and properly.
+                  Yes. Sessions are coached and scaled. You start where you are and build from there safely and properly.
                 </div>
               </div>
             </div>
@@ -391,7 +393,7 @@ export default function WaitlistPage() {
           .heroOverlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.20) 40%,rgba(0,0,0,.92) 100%)}
           .heroTop{position:absolute;top:0;left:0;right:0;padding:18px 18px 0 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;z-index:5}
           .brand{display:inline-flex;align-items:center;gap:10px;cursor:pointer;user-select:none;min-height:44px}
-          .brandLogo{width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center}
+          .brandLogo{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center}
           .brandText{font-weight:650;letter-spacing:.2px}
           .heroNav{display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end}
           .navLink{appearance:none;background:transparent;border:none;color:rgba(255,255,255,.78);font-weight:550;padding:10px 6px;min-height:44px;cursor:pointer}
