@@ -92,11 +92,7 @@ export default function WaitlistPage() {
 
       if (!resp.ok || !data || (data as any).ok !== true) {
         const err = (data as any)?.error || "Something went wrong.";
-        setError(
-          err === "RATE_LIMITED"
-            ? "Too many attempts. Try again in a few minutes."
-            : "Could not join. Try again."
-        );
+        setError(err === "RATE_LIMITED" ? "Too many attempts. Try again in a few minutes." : "Could not join. Try again.");
         setLoading(false);
         return;
       }
@@ -108,7 +104,7 @@ export default function WaitlistPage() {
     }
   }
 
-  const heroImageSrc = "/concept-3.jpeg";
+  const heroImageSrc = "/concept-1.jpg";
   const concept2Src = "/concept-2.jpg";
   const logoSrc = "/iron_acre_logo_transparent.png";
 
@@ -116,15 +112,9 @@ export default function WaitlistPage() {
     <>
       <Head>
         <title>Iron Acre Gym | Founders</title>
-        <meta
-          name="description"
-          content="Train outdoors. Founders £60/month locked for life (first 20). Standard £100/month."
-        />
+        <meta name="description" content="Train hard. Be outside. Build something real. Founders £60/month locked for life (first 20)." />
         <meta property="og:title" content="Iron Acre Gym | Founders" />
-        <meta
-          property="og:description"
-          content="Train hard. Be outside. Build something real. Founders £60/month locked for life (first 20)."
-        />
+        <meta property="og:description" content="Train hard. Be outside. Build something real. Founders £60/month locked for life (first 20)." />
         <meta property="og:type" content="website" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
@@ -132,124 +122,43 @@ export default function WaitlistPage() {
       <div className="wrap">
         <section className="hero" aria-label="Iron Acre Gym">
           <div className="heroMedia" aria-hidden="true">
-            <Image
-              src={heroImageSrc}
-              alt=""
-              fill
-              priority
-              sizes="100vw"
-              style={{ objectFit: "cover", objectPosition: "50% 55%" }}
-            />
+            <Image src={heroImageSrc} alt="" fill priority sizes="100vw" style={{ objectFit: "cover", objectPosition: "50% 55%" }} />
           </div>
 
           <div className="heroOverlay" aria-hidden="true" />
 
           <header className="heroTop">
-            <div
-              className="brand"
-              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              role="button"
-              tabIndex={0}
-              aria-label="Back to top"
-            >
+            <div className="brand" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} role="button" tabIndex={0} aria-label="Back to top">
               <span className="brandLogo" aria-hidden="true">
-                <Image
-                  src={logoSrc}
-                  alt=""
-                  width={38}
-                  height={38}
-                  priority
-                  style={{ width: 38, height: 38 }}
-                />
+                <Image src={logoSrc} alt="" width={38} height={38} priority />
               </span>
               <span className="brandText">Iron Acre Gym</span>
             </div>
 
             <nav className="heroNav heroNavDesktop" aria-label="Page sections">
-              <button type="button" className="navLink" onClick={() => scrollToId("programs")}>
-                Programs
-              </button>
-              <button type="button" className="navLink" onClick={() => scrollToId("classes")}>
-                Classes
-              </button>
-              <button type="button" className="navLink" onClick={() => scrollToId("faq")}>
-                FAQ
-              </button>
-              <button type="button" className="navLink" onClick={() => scrollToId("contact")}>
-                Contact
-              </button>
+              <button type="button" className="navLink" onClick={() => scrollToId("about")}>About</button>
+              <button type="button" className="navLink" onClick={() => scrollToId("classes")}>Classes</button>
+              <button type="button" className="navLink" onClick={() => scrollToId("programs")}>Programs</button>
+              <button type="button" className="navLink" onClick={() => scrollToId("faq")}>FAQ</button>
+              <button type="button" className="navLink" onClick={() => scrollToId("contact")}>Contact</button>
             </nav>
 
-            <button
-              type="button"
-              className="menuBtn heroNavMobile"
-              aria-label={menuOpen ? "Close menu" : "Open menu"}
-              onClick={() => setMenuOpen((v) => !v)}
-            >
+            <button type="button" className="menuBtn heroNavMobile" aria-label={menuOpen ? "Close menu" : "Open menu"} onClick={() => setMenuOpen((v) => !v)}>
               <span className="menuIcon" aria-hidden="true" />
             </button>
           </header>
 
           {menuOpen ? (
             <div className="mobileMenu" role="dialog" aria-modal="true" aria-label="Menu">
-              <button
-                type="button"
-                className="mobileMenuBackdrop"
-                onClick={() => setMenuOpen(false)}
-                aria-label="Close menu"
-              />
+              <button type="button" className="mobileMenuBackdrop" onClick={() => setMenuOpen(false)} aria-label="Close menu" />
               <div className="mobileMenuPanel">
                 <div className="mobileMenuTitle">Menu</div>
-                <button
-                  type="button"
-                  className="mobileMenuLink"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    scrollToId("programs");
-                  }}
-                >
-                  Programs
-                </button>
-                <button
-                  type="button"
-                  className="mobileMenuLink"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    scrollToId("classes");
-                  }}
-                >
-                  Classes
-                </button>
-                <button
-                  type="button"
-                  className="mobileMenuLink"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    scrollToId("faq");
-                  }}
-                >
-                  FAQ
-                </button>
-                <button
-                  type="button"
-                  className="mobileMenuLink"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    scrollToId("contact");
-                  }}
-                >
-                  Contact
-                </button>
-                <button
-                  type="button"
-                  className="ia-btn ia-btn-primary mobileMenuCta"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    scrollToForm();
-                  }}
-                >
-                  Join the Acre
-                </button>
+                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("about"); }}>About</button>
+                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("classes"); }}>Classes</button>
+                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("programs"); }}>Programs</button>
+                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("faq"); }}>FAQ</button>
+                <button type="button" className="mobileMenuLink" onClick={() => { setMenuOpen(false); scrollToId("contact"); }}>Contact</button>
+                <button type="button" className="ia-btn ia-btn-primary mobileMenuCta" onClick={() => { setMenuOpen(false); scrollToForm(); }}>Join the Acre</button>
               </div>
             </div>
           ) : null}
@@ -286,28 +195,17 @@ export default function WaitlistPage() {
                   />
 
                   <label className="checkRow">
-                    <input
-                      type="checkbox"
-                      checked={foundersInterest}
-                      onChange={(e) => setFoundersInterest(e.target.checked)}
-                    />
+                    <input type="checkbox" checked={foundersInterest} onChange={(e) => setFoundersInterest(e.target.checked)} />
                     <span>I want a founders spot (£60/month locked)</span>
                   </label>
 
                   {error ? <div className="formError">{error}</div> : null}
 
-                  <button
-                    type="button"
-                    className="ia-btn ia-btn-primary formBtn"
-                    disabled={loading}
-                    onClick={submit}
-                  >
+                  <button type="button" className="ia-btn ia-btn-primary formBtn" disabled={loading} onClick={submit}>
                     {loading ? "Joining…" : "Join the Acre"}
                   </button>
 
-                  <div className="finePrint">
-                    Standard will be £100/month. No payment until one month after opening.
-                  </div>
+                  <div className="finePrint">Standard will be £100/month. No payment until one month after opening.</div>
                 </div>
               </div>
             </div>
@@ -317,32 +215,33 @@ export default function WaitlistPage() {
         </section>
 
         <main className="main">
-          <section id="programs" className="section">
+          <section id="about" className="section">
             <div className="sectionHead">
-              <h2 className="sectionTitle">Programs</h2>
-              <p className="sectionSub">Not just sessions. This is how you get better.</p>
+              <h2 className="sectionTitle">About</h2>
+              <p className="sectionSub">This is what you’ve been missing.</p>
             </div>
 
-            <div className="grid3">
+            <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Small group coaching</div>
+                <div className="cardTitle">A training space you actually want to show up to</div>
                 <div className="cardText">
-                  You’re coached properly. Every set, every session. No hiding, no coasting.
+                  Iron Acre is built on an old menage and aimed to open end of June. You train looking out over a meadow with sheep and horses, with a woodland backdrop behind you. Sunrise sessions that set your day up right. Sunset sessions that hit different. It’s calm, it’s raw, and it’s built for serious work.
                 </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Strength first</div>
+                <div className="cardTitle">Best in class coaching, outdoors</div>
                 <div className="cardText">
-                  Everything is built around getting stronger. Because strength changes everything.
+                  This isn’t “random circuits in a field”. It’s structured, coached training with purpose. Every session is designed to build real strength, real fitness, and real confidence. If you want a gym that feels like an experience and performs like proper training, you’ll fit in here.
                 </div>
               </div>
+            </div>
 
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Outside hits different</div>
-                <div className="cardText">
-                  Fresh air, real space, better energy. Train in the open, not under strip lights.
-                </div>
+            <div className="conceptWrap ia-tile" aria-hidden="true">
+              <Image src={concept2Src} alt="" fill sizes="100vw" style={{ objectFit: "cover", objectPosition: "50% 55%" }} />
+              <div className="conceptOverlay" aria-hidden="true" />
+              <div className="conceptCaption">
+                Meadow views, woodland backdrop, covered training, real kit, real sessions.
               </div>
             </div>
           </section>
@@ -350,67 +249,74 @@ export default function WaitlistPage() {
           <section id="classes" className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">Classes</h2>
-              <p className="sectionSub">Real training. No filler. Sessions that actually move you forward.</p>
+              <p className="sectionSub">Each session has a point. Each one makes you better.</p>
             </div>
 
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Boxing Skills and Conditioning</div>
                 <div className="cardText">
-                  Learn how to punch properly, move with purpose, then push it when it counts.
+                  Learn how to punch properly, move with intent, and build a gas tank that doesn’t quit. We’ll sharpen the fundamentals, then finish with conditioning that makes you feel dangerous. Bags, skill work, and the kind of training that leaves you walking out taller.
                 </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Farm Fit</div>
                 <div className="cardText">
-                  Carries, sleds and sandbags. The kind of work that makes you properly fit.
+                  The outdoors is the point here. Carries, sleds, sandbags and engine work that turns “fitness” into capability. You’ll build the kind of strength that shows up in everyday life and the kind of conditioning that feels unfair to everyone else.
                 </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Kettlebell Strength</div>
-                <div className="cardText">Simple lifts done well. Strength you can actually use.</div>
+                <div className="cardText">
+                  Simple movements, done well, programmed to progress. You’ll build grip, legs, back, shoulders, and a body that moves as one piece. Clean technique, smart loading, and sessions that build strength without wrecking you.
+                </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Hybrid Conditioning</div>
                 <div className="cardText">
-                  Strength meets engine. Hard sessions that still build, not just burn you out.
-                </div>
-              </div>
-
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Military Fitness</div>
-                <div className="cardText">
-                  Team intervals with structure. Grit with coaching. Scaled for all levels.
+                  Strength meets engine. This is where hard work gets organised. You’ll lift, move, and breathe under pressure with structure that actually improves you week to week. Not “destroy yourself” workouts. Training that builds an athlete.
                 </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">What’s next</div>
                 <div className="cardText">
-                  Cold plunges first. Then we keep expanding the space, the kit, and the sessions.
+                  We’re building this properly and expanding it properly. Cold plunges are the first upgrade, then more kit, more session blocks, and more ways to train outside without losing quality. Early members shape what this becomes.
+                </div>
+              </div>
+
+              <div className="card ia-tile ia-tile-pad">
+                <div className="cardTitle">Why it feels different</div>
+                <div className="cardText">
+                  You’re not walking into a crowded room with fluorescent lighting and noise. You’re training in a purpose-built outdoor space with the view in front of you. It’s calmer. It’s sharper. It makes consistency easy because you actually want to be there.
                 </div>
               </div>
             </div>
           </section>
 
-          <section className="section" aria-label="Concept">
+          <section id="programs" className="section">
             <div className="sectionHead">
-              <h2 className="sectionTitle">Concept</h2>
-              <p className="sectionSub">A preview of the space.</p>
+              <h2 className="sectionTitle">Programs</h2>
+              <p className="sectionSub">This is the flagship system behind the sessions.</p>
             </div>
 
-            <div className="conceptWrap ia-tile" aria-hidden="true">
-              <Image
-                src={concept2Src}
-                alt=""
-                fill
-                sizes="100vw"
-                style={{ objectFit: "cover", objectPosition: "50% 55%" }}
-              />
-              <div className="conceptOverlay" aria-hidden="true" />
+            <div className="grid2">
+              <div className="card ia-tile ia-tile-pad">
+                <div className="cardTitle">MVP</div>
+                <div className="cardText">
+                  Our flagship hybrid fitness program built around massive strength in the big lifts and conditioning that can rival professional athletes. You’ll build a powerful base, then layer the engine on top. It’s the best of strength training and sport-level conditioning, without the chaos.
+                </div>
+              </div>
+
+              <div className="card ia-tile ia-tile-pad">
+                <div className="cardTitle">App access included for every member</div>
+                <div className="cardText">
+                  Every member gets full app access: nutrition tracking, workout tracking, movement tracking, daily habits and weekly check-ins. It’s a full personal training plan for the price of a gym membership, with the structure and accountability most people never get.
+                </div>
+              </div>
             </div>
           </section>
 
@@ -424,28 +330,28 @@ export default function WaitlistPage() {
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">How does founders work?</div>
                 <div className="cardText">
-                  First 20 people to accept the invite get £60/month locked for life. After that it’s £100/month.
+                  The first 20 people to accept the founders invite get £60/month locked for life. After that, membership moves to £100/month.
                 </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">When do I pay?</div>
                 <div className="cardText">
-                  First payment is taken one month after opening. The waitlist is free until then.
+                  No payment is taken until one month after opening. You’re just securing your place in line and getting the invite first.
                 </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">Where is it?</div>
                 <div className="cardText">
-                  Ipswich area, overlooking a meadow. You’ll get exact directions in the invite email.
+                  Ipswich area. Exact location and directions are shared via email with opening updates and invites.
                 </div>
               </div>
 
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Do I need to be fit already?</div>
+                <div className="cardTitle">Is it suitable for beginners?</div>
                 <div className="cardText">
-                  No. It’s coached and scaled. You start where you are and build from there.
+                  Yes. Sessions are coached and scaled. You start where you are and build from there, safely and properly.
                 </div>
               </div>
             </div>
@@ -460,9 +366,7 @@ export default function WaitlistPage() {
             <div className="contactCard ia-tile ia-tile-pad">
               <div className="contactRow">
                 <div className="contactLabel">Best next step</div>
-                <button type="button" className="ia-btn ia-btn-primary" onClick={scrollToForm}>
-                  Join the Acre
-                </button>
+                <button type="button" className="ia-btn ia-btn-primary" onClick={scrollToForm}>Join the Acre</button>
               </div>
               <div className="contactFoot">Founders is limited to 20. £60/month is locked for those spots.</div>
             </div>
@@ -472,15 +376,9 @@ export default function WaitlistPage() {
             <div className="footerInner">
               <div>© {new Date().getFullYear()} Iron Acre Gym</div>
               <div className="footerLinks">
-                <button type="button" className="footerLink" onClick={() => scrollToId("programs")}>
-                  Programs
-                </button>
-                <button type="button" className="footerLink" onClick={() => scrollToId("classes")}>
-                  Classes
-                </button>
-                <button type="button" className="footerLink" onClick={() => scrollToId("contact")}>
-                  Contact
-                </button>
+                <button type="button" className="footerLink" onClick={() => scrollToId("about")}>About</button>
+                <button type="button" className="footerLink" onClick={() => scrollToId("classes")}>Classes</button>
+                <button type="button" className="footerLink" onClick={() => scrollToId("contact")}>Contact</button>
               </div>
             </div>
           </footer>
@@ -526,9 +424,10 @@ export default function WaitlistPage() {
           .grid2{margin-top:14px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
           .card{border-radius:18px;background:#0b0f14;border:1px solid rgba(255,255,255,.06)}
           .cardTitle{font-weight:600;font-size:16px}
-          .cardText{margin-top:8px;color:rgba(255,255,255,.72);line-height:1.45;font-weight:450}
+          .cardText{margin-top:8px;color:rgba(255,255,255,.72);line-height:1.5;font-weight:450}
           .conceptWrap{margin-top:14px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.06);background:#070a0f;position:relative;height:360px}
-          .conceptOverlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.10),rgba(0,0,0,.72))}
+          .conceptOverlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.10),rgba(0,0,0,.78))}
+          .conceptCaption{position:absolute;left:14px;right:14px;bottom:12px;color:rgba(255,255,255,.90);font-weight:600;text-shadow:0 10px 26px rgba(0,0,0,.55)}
           .contactCard{border-radius:18px;background:#0b0f14;border:1px solid rgba(255,255,255,.06)}
           .contactRow{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
           .contactLabel{font-weight:600}
@@ -546,7 +445,7 @@ export default function WaitlistPage() {
           .mobileMenuLink{width:100%;text-align:left;appearance:none;background:transparent;border:1px solid rgba(255,255,255,.10);color:rgba(255,255,255,.90);border-radius:12px;padding:12px;min-height:46px;margin-top:8px;font-weight:550;cursor:pointer}
           .mobileMenuCta{width:100%;margin-top:10px;border-radius:12px;min-height:48px}
           @media (max-width:980px){.heroInner{grid-template-columns:1fr;align-items:end;padding-top:84px}.headline{font-size:44px}}
-          @media (max-width:720px){.heroNavDesktop{display:none}.heroNavMobile{display:inline-flex}.grid3{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.headline{font-size:40px}}
+          @media (max-width:720px){.heroNavDesktop{display:none}.heroNavMobile{display:inline-flex}.grid3{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.headline{font-size:40px}.conceptWrap{height:300px}}
         `}</style>
       </div>
     </>
