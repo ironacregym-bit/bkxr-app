@@ -218,14 +218,13 @@ export default function WaitlistPage() {
           <section id="about" className="section">
             <div className="sectionHead">
               <h2 className="sectionTitle">About</h2>
-              <p className="sectionSub">This is what you’ve been missing.</p>
             </div>
 
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">A training space you actually want to show up to</div>
                 <div className="cardText">
-                  Iron Acre is built on an old menage and aimed to open end of June. You train looking out over a meadow with sheep and horses, with a woodland backdrop behind you. Sunrise sessions that set your day up right. Sunset sessions that hit different. It’s calm, it’s raw, and it’s built for serious work.
+                  Iron Acre is built on an old menage and aiming to open end of June 2026. You train looking out over a meadow with sheep and horses, with a woodland backdrop behind you. Sunrise sessions that set your day up right. Sunset sessions that hit different. It’s calm, it’s raw, and it’s built for serious work.
                 </div>
               </div>
 
