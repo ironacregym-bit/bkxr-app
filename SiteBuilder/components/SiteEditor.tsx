@@ -1,7 +1,7 @@
 // File: SiteBuilder/components/SiteEditor.tsx
-import { useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import useSWR from "swr";
+import { useMemoswr"};import { useMemo, useState } from "react";
+import SiteDomainsCard from "../../SiteBuilder/components/SiteDomainsCard";
 
 type GetResp =
   | { ok: true; site: any; canEdit: boolean }
@@ -35,7 +35,6 @@ export default function SiteEditor() {
 
   const [draft, setDraft] = useState<any>(null);
 
-  // Initialise draft once we have site
   useMemo(() => {
     if (!site) return;
     if (draft) return;
@@ -200,30 +199,39 @@ export default function SiteEditor() {
             </label>
 
             <div className="se-help">
-              Draft sites are only visible to you (owner/editors). Publish when ready.
+              Draft sites are only visible to you (owner/editors). The public will see a 404 until you publish.
             </div>
           </div>
 
-          <div className="se-card">
+          <SiteDomainsCard
+            siteId={String(site.id)}
+            canEdit={canEdit}
+            slug={String(site.slug || "")}
+            onChanged={() => mutate()}
+          />
+
+          <div className="se-card se-span2">
             <div className="se-cardTitle">Brand</div>
 
-            <div className="se-field">
-              <div className="se-label">Name</div>
-              <input
-                className="se-input"
-                value={draft.brand.name}
-                onChange={(e) => setDraft((p: any) => ({ ...p, brand: { ...p.brand, name: e.target.value } }))}
-              />
-            </div>
+            <div className="se-two">
+              <div className="se-field">
+                <div className="se-label">Name</div>
+                <input
+                  className="se-input"
+                  value={draft.brand.name}
+                  onChange={(e) => setDraft((p: any) => ({ ...p, brand: { ...p.brand, name: e.target.value } }))}
+                />
+              </div>
 
-            <div className="se-field">
-              <div className="se-label">Logo URL</div>
-              <input
-                className="se-input"
-                value={draft.brand.logoUrl}
-                onChange={(e) => setDraft((p: any) => ({ ...p, brand: { ...p.brand, logoUrl: e.target.value } }))}
-                placeholder="https://..."
-              />
+              <div className="se-field">
+                <div className="se-label">Logo URL</div>
+                <input
+                  className="se-input"
+                  value={draft.brand.logoUrl}
+                  onChange={(e) => setDraft((p: any) => ({ ...p, brand: { ...p.brand, logoUrl: e.target.value } }))}
+                  placeholder="https://..."
+                />
+              </div>
             </div>
 
             <div className="se-field">
@@ -531,3 +539,4 @@ export default function SiteEditor() {
     </div>
   );
 }
+
