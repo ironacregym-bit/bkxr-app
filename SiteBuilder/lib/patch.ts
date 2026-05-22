@@ -7,13 +7,10 @@ function safeStr(v: any, max = 4000) {
 function safeUrl(v: any, max = 600) {
   const s = safeStr(v, max);
   if (!s) return "";
-  // allow hash links and relative anchors
   if (s.startsWith("#")) return s;
-  // allow relative paths
   if (s.startsWith("/")) return s;
-  // allow http(s)
   if (/^https?:\/\//i.test(s)) return s;
-  return s; // keep raw; renderer will still show it, but this avoids blocking odd schemes during MVP
+  return s;
 }
 
 function safeHex(v: any) {
@@ -22,6 +19,10 @@ function safeHex(v: any) {
   if (/^#[0-9a-fA-F]{6}$/.test(s)) return s;
   if (/^#[0-9a-fA-F]{3}$/.test(s)) return s;
   return "";
+}
+
+function safeThemeMode(v: any): "dark" | "light" {
+  return String(v || "").trim().toLowerCase() === "light" ? "light" : "dark";
 }
 
 export function sanitizeSitePatch(patch: any) {
@@ -36,6 +37,7 @@ export function sanitizeSitePatch(patch: any) {
 
   out.theme = {
     accent: safeHex(patch?.theme?.accent) || "#1fe0a5",
+    mode: safeThemeMode(patch?.theme?.mode),
   };
 
   out.seo = {
