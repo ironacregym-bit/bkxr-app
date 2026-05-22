@@ -1,5 +1,6 @@
 // File: pages/api/sitebuilder/domains/verify.ts
-import type { NextApiRequest, NextApiResponse }-auth";import type { NextApiRequest, NextApiResponse } from "next";
+import { getServerSession } from "next-auth";
+import type { NextApiRequest, NextApiResponse } from "next";
 import { authOptions } from "../../auth/[...nextauth]";
 import firestore from "../../../../lib/firestoreClient";
 import { normalizeHost, nowIso } from "../../../../SiteBuilder/lib/model";
