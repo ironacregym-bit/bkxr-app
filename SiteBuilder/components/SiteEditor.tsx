@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import useSWR from "swr";
 import SiteDomainsCard from "./SiteDomainsCard";
+import ImageUploadField from "./ImageUploadField";
 
 type GetResp =
   | { ok: true; site: any; canEdit: boolean }
@@ -20,7 +21,6 @@ function safeStr(v: any) {
 
 export default function SiteEditor() {
   const router = useRouter();
-
   const siteId = useMemo(() => safeStr(router.query.siteId), [router.query.siteId]);
 
   const { data, mutate, isLoading } = useSWR<GetResp>(
@@ -34,20 +34,24 @@ export default function SiteEditor() {
 
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-
   const [draft, setDraft] = useState<any>(null);
 
   useEffect(() => {
     if (!site) return;
+
     setDraft((prev: any) => {
       if (prev) return prev;
+
       return {
         published: Boolean(site.published),
         brand: {
           name: safeStr(site?.brand?.name),
           logoUrl: safeStr(site?.brand?.logoUrl),
         },
-        theme: { accent: safeStr(site?.theme?.accent) || "#1fe0a5" },
+        theme: {
+          accent: safeStr(site?.theme?.accent) || "#1fe0a5",
+          mode: safeStr(site?.theme?.mode) === "light" ? "light" : "dark",
+        },
         seo: {
           title: safeStr(site?.seo?.title),
           description: safeStr(site?.seo?.description),
@@ -81,6 +85,7 @@ export default function SiteEditor() {
     }
 
     setSaving(true);
+
     try {
       const resp = await fetch("/api/sitebuilder/update", {
         method: "POST",
@@ -231,15 +236,25 @@ export default function SiteEditor() {
               </div>
 
               <div className="se-field">
-                <div className="se-label">Logo URL</div>
-                <input
+                <div className="se-label">Theme mode</div>
+                <select
                   className="se-input"
-                  value={draft.brand.logoUrl}
-                  onChange={(e) => setDraft((p: any) => ({ ...p, brand: { ...p.brand, logoUrl: e.target.value } }))}
-                  placeholder="https://..."
-                />
+                  value={draft.theme.mode}
+                  onChange={(e) => setDraft((p: any) => ({ ...p, theme: { ...p.theme, mode: e.target.value } }))}
+                >
+                  <option value="dark">Dark</option>
+                  <option value="light">Light</option>
+                </select>
               </div>
             </div>
+
+            <ImageUploadField
+              label="Logo"
+              value={draft.brand.logoUrl}
+              onChange={(url) => setDraft((p: any) => ({ ...p, brand: { ...p.brand, logoUrl: url } }))}
+              folder="sitebuilder/logos"
+              helpText="Upload a logo or paste a public image URL."
+            />
 
             <div className="se-field">
               <div className="se-label">Accent</div>
@@ -286,26 +301,22 @@ export default function SiteEditor() {
               />
             </div>
 
-            <div className="se-two">
-              <div className="se-field">
-                <div className="se-label">Hero image URL</div>
-                <input
-                  className="se-input"
-                  value={draft.hero.imageUrl}
-                  onChange={(e) => setDraft((p: any) => ({ ...p, hero: { ...p.hero, imageUrl: e.target.value } }))}
-                  placeholder="https://..."
-                />
-              </div>
+            <ImageUploadField
+              label="Hero image"
+              value={draft.hero.imageUrl}
+              onChange={(url) => setDraft((p: any) => ({ ...p, hero: { ...p.hero, imageUrl: url } }))}
+              folder="sitebuilder/heroes"
+              helpText="Upload a hero image or paste a public image URL."
+            />
 
-              <div className="se-field">
-                <div className="se-label">CTA link</div>
-                <input
-                  className="se-input"
-                  value={draft.hero.ctaHref}
-                  onChange={(e) => setDraft((p: any) => ({ ...p, hero: { ...p.hero, ctaHref: e.target.value } }))}
-                  placeholder="#contact or https://..."
-                />
-              </div>
+            <div className="se-field">
+              <div className="se-label">CTA link</div>
+              <input
+                className="se-input"
+                value={draft.hero.ctaHref}
+                onChange={(e) => setDraft((p: any) => ({ ...p, hero: { ...p.hero, ctaHref: e.target.value } }))}
+                placeholder="#contact or https://..."
+              />
             </div>
           </div>
 
@@ -535,9 +546,11 @@ export default function SiteEditor() {
           .se-grid {
             grid-template-columns: 1fr;
           }
+
           .se-span2 {
             grid-column: span 1;
           }
+
           .se-two {
             grid-template-columns: 1fr;
           }
