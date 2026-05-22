@@ -1,7 +1,8 @@
 // File: SiteBuilder/components/SiteEditor.tsx
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import { useMemoswr"};import { useMemo, useState } from "react";
-import SiteDomainsCard from "../../SiteBuilder/components/SiteDomainsCard";
+import useSWR from "swr";
+import SiteDomainsCard from "./SiteDomainsCard";
 
 type GetResp =
   | { ok: true; site: any; canEdit: boolean }
@@ -19,6 +20,7 @@ function safeStr(v: any) {
 
 export default function SiteEditor() {
   const router = useRouter();
+
   const siteId = useMemo(() => safeStr(router.query.siteId), [router.query.siteId]);
 
   const { data, mutate, isLoading } = useSWR<GetResp>(
@@ -35,45 +37,49 @@ export default function SiteEditor() {
 
   const [draft, setDraft] = useState<any>(null);
 
-  useMemo(() => {
+  useEffect(() => {
     if (!site) return;
-    if (draft) return;
-    setDraft({
-      published: Boolean(site.published),
-      brand: {
-        name: safeStr(site?.brand?.name),
-        logoUrl: safeStr(site?.brand?.logoUrl),
-      },
-      theme: { accent: safeStr(site?.theme?.accent) || "#1fe0a5" },
-      seo: {
-        title: safeStr(site?.seo?.title),
-        description: safeStr(site?.seo?.description),
-        image: safeStr(site?.seo?.image),
-      },
-      hero: {
-        headline: safeStr(site?.hero?.headline),
-        subheadline: safeStr(site?.hero?.subheadline),
-        imageUrl: safeStr(site?.hero?.imageUrl),
-        ctaText: safeStr(site?.hero?.ctaText),
-        ctaHref: safeStr(site?.hero?.ctaHref),
-      },
-      sections: {
-        about: safeStr(site?.sections?.about),
-        services: safeStr(site?.sections?.services),
-        faq: safeStr(site?.sections?.faq),
-        contact: safeStr(site?.sections?.contact),
-      },
+    setDraft((prev: any) => {
+      if (prev) return prev;
+      return {
+        published: Boolean(site.published),
+        brand: {
+          name: safeStr(site?.brand?.name),
+          logoUrl: safeStr(site?.brand?.logoUrl),
+        },
+        theme: { accent: safeStr(site?.theme?.accent) || "#1fe0a5" },
+        seo: {
+          title: safeStr(site?.seo?.title),
+          description: safeStr(site?.seo?.description),
+          image: safeStr(site?.seo?.image),
+        },
+        hero: {
+          headline: safeStr(site?.hero?.headline),
+          subheadline: safeStr(site?.hero?.subheadline),
+          imageUrl: safeStr(site?.hero?.imageUrl),
+          ctaText: safeStr(site?.hero?.ctaText),
+          ctaHref: safeStr(site?.hero?.ctaHref),
+        },
+        sections: {
+          about: safeStr(site?.sections?.about),
+          services: safeStr(site?.sections?.services),
+          faq: safeStr(site?.sections?.faq),
+          contact: safeStr(site?.sections?.contact),
+        },
+      };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [site]);
 
   async function save() {
     setMsg(null);
+
     if (!siteId) return;
+
     if (!canEdit) {
       setMsg("You don’t have permission to edit this site.");
       return;
     }
+
     setSaving(true);
     try {
       const resp = await fetch("/api/sitebuilder/update", {
@@ -84,6 +90,7 @@ export default function SiteEditor() {
       });
 
       const json = (await resp.json().catch(() => null)) as UpdateResp | null;
+
       if (!resp.ok || !json || (json as any).ok !== true) {
         setMsg((json as any)?.detail || "Could not save changes.");
         setSaving(false);
@@ -539,4 +546,3 @@ export default function SiteEditor() {
     </div>
   );
 }
-
