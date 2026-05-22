@@ -13,7 +13,7 @@ type PublicSite = {
   owner_email: string;
   editor_emails: string[];
   updated_at?: string;
-  theme?: { accent?: string | null };
+  theme?: { accent?: string | null; mode?: "dark" | "light" | string };
   seo?: { title?: string; description?: string; image?: string | null };
   brand?: { name?: string; logoUrl?: string | null };
   hero?: {
@@ -23,8 +23,12 @@ type PublicSite = {
     ctaText?: string;
     ctaHref?: string;
   };
-  sections?: { about?: string; services?: string; faq?: string; contact?: string };
-  domains?: Array<{ host: string; status: string }>;
+  sections?: {
+    about?: string;
+    services?: string;
+    faq?: string;
+    contact?: string;
+  };
 };
 
 function normalizeHost(host: string) {
@@ -77,7 +81,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     const canEdit = isAuthorized(site, email);
     const published = Boolean(site.published);
 
-    // Drafts are visible only to editors (with a banner)
     if (!published && !canEdit) return { notFound: true };
 
     return {
@@ -104,6 +107,8 @@ export default function PublicSitePage(props: {
   const { site, canEdit, isCustomDomain } = props;
 
   const accent = site?.theme?.accent || "#1fe0a5";
+  const mode = String(site?.theme?.mode || "dark").toLowerCase() === "light" ? "light" : "dark";
+  const isLight = mode === "light";
 
   const title = safeText(site?.seo?.title) || safeText(site?.brand?.name) || "Site";
   const description = safeText(site?.seo?.description) || "";
@@ -130,6 +135,18 @@ export default function PublicSitePage(props: {
 
   const isDraft = !Boolean(site.published);
 
+  const bg = isLight ? "#ffffff" : "#06090d";
+  const text = isLight ? "#111318" : "#ffffff";
+  const muted = isLight ? "rgba(17,19,24,0.68)" : "rgba(255,255,255,0.70)";
+  const border = isLight ? "rgba(17,19,24,0.08)" : "rgba(255,255,255,0.06)";
+  const cardBg = isLight ? "#f6f7f9" : "#0b0f14";
+  const topBg = isLight ? "rgba(255,255,255,0.82)" : "rgba(6,9,13,0.82)";
+  const heroOverlay = isLight
+    ? "linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.72) 100%)"
+    : "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.75) 100%)";
+
+  const markBg = `linear-gradient(135deg, ${accent}, rgba(110, 168, 255, 0.75))`;
+
   return (
     <>
       <Head>
@@ -150,7 +167,7 @@ export default function PublicSitePage(props: {
               Draft page. Only you (and editors) can see this. Publish it in settings when ready.
             </div>
             <div className="sb-draftActions">
-              <Link className="sb-draftLink" href={`/sitebuilder/${encodeURIComponent(site.id)}`}>
+              <Link className="sb-draftLink" href={`/sitebuilder/${encodeURIComponent(String(site.id))}`}>
                 Open settings
               </Link>
             </div>
@@ -159,13 +176,13 @@ export default function PublicSitePage(props: {
 
         <header className="sb-top">
           <div className="sb-brand">
-            {logoUrl ? <img className="sb-logo" src={logoUrl} alt={`${brandName} logo`} /> : <div className="sb-mark" aria-hidden="true" />}
+            {logoUrl ? <img src={logoUrl} alt={`${brandName} logo`} className="sb-logo" /> : <div className="sb-mark" aria-hidden="true" />}
             <div className="sb-brandText">{brandName}</div>
           </div>
 
           <div className="sb-actions">
             {canEdit ? (
-              <Link className="sb-edit" href={`/sitebuilder/${encodeURIComponent(site.id)}`}>
+              <Link className="sb-edit" href={`/sitebuilder/${encodeURIComponent(String(site.id))}`}>
                 Edit
               </Link>
             ) : null}
@@ -176,7 +193,7 @@ export default function PublicSitePage(props: {
           <section className="sb-hero">
             {heroImage ? (
               <div className="sb-heroMedia" aria-hidden="true">
-                <img className="sb-heroImg" src={heroImage} alt="" />
+                <img src={heroImage} alt="" className="sb-heroImg" />
                 <div className="sb-heroOverlay" aria-hidden="true" />
               </div>
             ) : null}
@@ -189,9 +206,7 @@ export default function PublicSitePage(props: {
                 <a className="sb-cta" href={ctaHref}>
                   {ctaText}
                 </a>
-                <a className="sb-ctaGhost" href="#about">
-                  Learn more
-                </a>
+                <a className="sb-ctaGhost" href="#about             </a>
               </div>
             </div>
           </section>
@@ -267,8 +282,8 @@ export default function PublicSitePage(props: {
         <style jsx>{`
           .sb-wrap {
             min-height: 100vh;
-            background: #06090d;
-            color: #fff;
+            background: ${bg};
+            color: ${text};
           }
 
           .sb-draftBanner {
@@ -295,7 +310,7 @@ export default function PublicSitePage(props: {
 
           .sb-draftText {
             flex: 1;
-            color: rgba(255, 255, 255, 0.86);
+            color: ${isLight ? "rgba(17,19,24,0.86)" : "rgba(255,255,255,0.86)"};
             font-weight: 500;
             line-height: 1.3;
             font-size: 13px;
@@ -307,14 +322,14 @@ export default function PublicSitePage(props: {
           }
 
           .sb-draftLink {
-            color: rgba(255, 255, 255, 0.92);
+            color: ${isLight ? "rgba(17,19,24,0.92)" : "rgba(255,255,255,0.92)"};
             text-decoration: underline;
             text-underline-offset: 3px;
             font-weight: 600;
             padding: 8px 10px;
             border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            background: rgba(0, 0, 0, 0.14);
+            border: 1px solid ${border};
+            background: rgba(0, 0, 0, 0.04);
             min-height: 36px;
             display: inline-flex;
             align-items: center;
@@ -329,8 +344,8 @@ export default function PublicSitePage(props: {
             justify-content: space-between;
             gap: 12px;
             padding: 14px 18px;
-            background: rgba(6, 9, 13, 0.82);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            background: ${topBg};
+            border-bottom: 1px solid ${border};
             backdrop-filter: blur(10px);
           }
 
@@ -353,7 +368,7 @@ export default function PublicSitePage(props: {
             width: 34px;
             height: 34px;
             border-radius: 10px;
-            background: linear-gradient(135deg, ${accent}, rgba(110, 168, 255, 0.75));
+            background: ${markBg};
             box-shadow: 0 12px 28px rgba(31, 224, 165, 0.18);
           }
 
@@ -367,21 +382,16 @@ export default function PublicSitePage(props: {
           }
 
           .sb-edit {
-            color: rgba(255, 255, 255, 0.85);
+            color: ${isLight ? "rgba(17,19,24,0.85)" : "rgba(255,255,255,0.85)"};
             text-decoration: none;
             padding: 10px 12px;
             border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            background: rgba(0, 0, 0, 0.18);
+            border: 1px solid ${border};
+            background: rgba(0, 0, 0, 0.04);
             font-weight: 600;
             min-height: 44px;
             display: inline-flex;
             align-items: center;
-          }
-
-          .sb-edit:hover {
-            border-color: rgba(255, 255, 255, 0.2);
-            color: rgba(255, 255, 255, 0.95);
           }
 
           .sb-main {
@@ -393,10 +403,10 @@ export default function PublicSitePage(props: {
           .sb-hero {
             border-radius: 18px;
             overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            background: radial-gradient(900px 420px at 20% 15%, rgba(31, 224, 165, 0.14), transparent 55%),
-              radial-gradient(900px 420px at 75% 0%, rgba(110, 168, 255, 0.14), transparent 60%),
-              #0b0f14;
+            border: 1px solid ${border};
+            background: ${isLight
+              ? `radial-gradient(900px 420px at 20% 15%, rgba(31,224,165,0.10), transparent 55%), radial-gradient(900px 420px at 75% 0%, rgba(110,168,255,0.10), transparent 60%), #f6f7f9`
+              : `radial-gradient(900px 420px at 20% 15%, rgba(31,224,165,0.14), transparent 55%), radial-gradient(900px 420px at 75% 0%, rgba(110,168,255,0.14), transparent 60%), #0b0f14`};
             position: relative;
             min-height: 360px;
           }
@@ -418,7 +428,7 @@ export default function PublicSitePage(props: {
           .sb-heroOverlay {
             position: absolute;
             inset: 0;
-            background: linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.75) 100%);
+            background: ${heroOverlay};
           }
 
           .sb-heroInner {
@@ -437,12 +447,12 @@ export default function PublicSitePage(props: {
             line-height: 1.05;
             font-weight: 700;
             letter-spacing: -0.4px;
-            text-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+            text-shadow: ${isLight ? "none" : "0 14px 40px rgba(0, 0, 0, 0.55)"};
           }
 
           .sb-lead {
             margin: 12px 0 0 0;
-            color: rgba(255, 255, 255, 0.8);
+            color: ${isLight ? "rgba(17,19,24,0.78)" : "rgba(255,255,255,0.8)"};
             line-height: 1.5;
             max-width: 720px;
             font-weight: 450;
@@ -469,9 +479,9 @@ export default function PublicSitePage(props: {
           }
 
           .sb-ctaGhost {
-            background: rgba(0, 0, 0, 0.18);
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            color: rgba(255, 255, 255, 0.88);
+            background: rgba(0, 0, 0, 0.04);
+            border: 1px solid ${border};
+            color: ${isLight ? "rgba(17,19,24,0.88)" : "rgba(255,255,255,0.88)"};
             text-decoration: none;
             font-weight: 600;
             border-radius: 14px;
@@ -481,16 +491,11 @@ export default function PublicSitePage(props: {
             align-items: center;
           }
 
-          .sb-ctaGhost:hover {
-            border-color: rgba(255, 255, 255, 0.22);
-            color: rgba(255, 255, 255, 0.98);
-          }
-
           .sb-section {
             margin-top: 16px;
             border-radius: 18px;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            background: #0b0f14;
+            border: 1px solid ${border};
+            background: ${cardBg};
             padding: 18px;
           }
 
@@ -507,13 +512,13 @@ export default function PublicSitePage(props: {
 
           .sb-p {
             margin: 0 0 10px 0;
-            color: rgba(255, 255, 255, 0.78);
+            color: ${muted};
             line-height: 1.55;
             font-weight: 450;
           }
 
           .sb-line {
-            color: rgba(255, 255, 255, 0.78);
+            color: ${muted};
             line-height: 1.55;
             font-weight: 450;
             margin-top: 6px;
@@ -521,7 +526,7 @@ export default function PublicSitePage(props: {
 
           .sb-muted {
             margin-top: 10px;
-            color: rgba(255, 255, 255, 0.55);
+            color: ${isLight ? "rgba(17,19,24,0.52)" : "rgba(255,255,255,0.55)"};
             font-weight: 450;
           }
 
@@ -535,7 +540,7 @@ export default function PublicSitePage(props: {
             justify-content: space-between;
             gap: 12px;
             flex-wrap: wrap;
-            color: rgba(255, 255, 255, 0.5);
+            color: ${isLight ? "rgba(17,19,24,0.45)" : "rgba(255,255,255,0.5)"};
             font-size: 12px;
           }
 
@@ -547,12 +552,15 @@ export default function PublicSitePage(props: {
             .sb-h1 {
               font-size: 38px;
             }
+
             .sb-brandText {
               max-width: 60vw;
             }
+
             .sb-draftBanner {
               padding: 10px 12px;
             }
+
             .sb-top {
               padding: 12px;
             }
