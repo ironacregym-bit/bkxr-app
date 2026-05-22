@@ -1,5 +1,5 @@
 // File: pages/api/sitebuilder/domains/add.ts
-import type { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { authOptions } from "../../auth/[...nextauth]";
 import firestore from "../../../../lib/firestoreClient";
