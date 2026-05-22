@@ -13,9 +13,19 @@ type PublicSite = {
   owner_email: string;
   editor_emails: string[];
   updated_at?: string;
-  theme?: { accent?: string | null; mode?: "dark" | "light" | string };
-  seo?: { title?: string; description?: string; image?: string | null };
-  brand?: { name?: string; logoUrl?: string | null };
+  theme?: {
+    accent?: string | null;
+    mode?: "dark" | "light" | string;
+  };
+  seo?: {
+    title?: string;
+    description?: string;
+    image?: string | null;
+  };
+  brand?: {
+    name?: string;
+    logoUrl?: string | null;
+  };
   hero?: {
     headline?: string;
     subheadline?: string;
@@ -81,6 +91,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     const canEdit = isAuthorized(site, email);
     const published = Boolean(site.published);
 
+    // Drafts are visible only to owner/editors
     if (!published && !canEdit) return { notFound: true };
 
     return {
@@ -164,7 +175,7 @@ export default function PublicSitePage(props: {
           <div className="sb-draftBanner" role="status" aria-label="Draft banner">
             <div className="sb-draftDot" aria-hidden="true" />
             <div className="sb-draftText">
-              Draft page. Only you (and editors) can see this. Publish it in settings when ready.
+              Draft page. Only you and editors can see this. Publish it in settings when ready.
             </div>
             <div className="sb-draftActions">
               <Link className="sb-draftLink" href={`/sitebuilder/${encodeURIComponent(String(site.id))}`}>
@@ -176,7 +187,11 @@ export default function PublicSitePage(props: {
 
         <header className="sb-top">
           <div className="sb-brand">
-            {logoUrl ? <img src={logoUrl} alt={`${brandName} logo`} className="sb-logo" /> : <div className="sb-mark" aria-hidden="true" />}
+            {logoUrl ? (
+              <img src={logoUrl} alt={`${brandName} logo`} className="sb-logo" />
+            ) : (
+              <div className="sb-mark" aria-hidden="true" />
+            )}
             <div className="sb-brandText">{brandName}</div>
           </div>
 
@@ -200,13 +215,16 @@ export default function PublicSitePage(props: {
 
             <div className="sb-heroInner">
               <h1 className="sb-h1">{heroHeadline}</h1>
+
               {heroSub ? <p className="sb-lead">{heroSub}</p> : null}
 
               <div className="sb-ctaRow">
                 <a className="sb-cta" href={ctaHref}>
                   {ctaText}
                 </a>
-                <a className="sb-ctaGhost" href="#about             </a>
+                <a className="sb-ctaGhost" href="#about">
+                  Learn more
+                </a>
               </div>
             </div>
           </section>
