@@ -1,5 +1,4 @@
-// /pages/parq.tsx
-
+// File: pages/parq.tsx
 import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -110,7 +109,6 @@ export default function ParqPage() {
       }
 
       const m = evt as MouseEvent;
-
       return {
         x: m.clientX - rect.left,
         y: m.clientY - rect.top,
@@ -412,7 +410,9 @@ export default function ParqPage() {
             <hr style={{ borderColor: "rgba(255,255,255,0.08)" }} />
 
             <div>
-              <label className="form-label">Injuries, medical conditions or limitations coaches should know about</label>
+              <label className="form-label">
+                Injuries, medical conditions or limitations coaches should know about
+              </label>
 
               <textarea
                 className="form-control ia-input"
@@ -716,3 +716,4 @@ function ParqQuestion(props: {
     </div>
   );
 }
+        
