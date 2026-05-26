@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import useSWR from "swr";
 import SiteDomainsCard from "./SiteDomainsCard";
+import SiteEditorsCard from "./SiteEditorsCard";
 import ImageUploadField from "./ImageUploadField";
 
 type GetResp =
@@ -222,6 +223,11 @@ export default function SiteEditor() {
             onChanged={() => mutate()}
           />
 
+          <SiteEditorsCard
+            siteId={String(site.id)}
+            onChanged={() => mutate()}
+          />
+
           <div className="se-card se-span2">
             <div className="se-cardTitle">Brand</div>
 
@@ -231,7 +237,12 @@ export default function SiteEditor() {
                 <input
                   className="se-input"
                   value={draft.brand.name}
-                  onChange={(e) => setDraft((p: any) => ({ ...p, brand: { ...p.brand, name: e.target.value } }))}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      brand: { ...p.brand, name: e.target.value },
+                    }))
+                  }
                 />
               </div>
 
@@ -240,7 +251,12 @@ export default function SiteEditor() {
                 <select
                   className="se-input"
                   value={draft.theme.mode}
-                  onChange={(e) => setDraft((p: any) => ({ ...p, theme: { ...p.theme, mode: e.target.value } }))}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      theme: { ...p.theme, mode: e.target.value },
+                    }))
+                  }
                 >
                   <option value="dark">Dark</option>
                   <option value="light">Light</option>
@@ -251,7 +267,12 @@ export default function SiteEditor() {
             <ImageUploadField
               label="Logo"
               value={draft.brand.logoUrl}
-              onChange={(url) => setDraft((p: any) => ({ ...p, brand: { ...p.brand, logoUrl: url } }))}
+              onChange={(url) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  brand: { ...p.brand, logoUrl: url },
+                }))
+              }
               folder="sitebuilder/logos"
               helpText="Upload a logo or paste a public image URL."
             />
@@ -261,7 +282,12 @@ export default function SiteEditor() {
               <input
                 className="se-input"
                 value={draft.theme.accent}
-                onChange={(e) => setDraft((p: any) => ({ ...p, theme: { ...p.theme, accent: e.target.value } }))}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    theme: { ...p.theme, accent: e.target.value },
+                  }))
+                }
                 placeholder="#1fe0a5"
               />
             </div>
@@ -276,7 +302,12 @@ export default function SiteEditor() {
                 <input
                   className="se-input"
                   value={draft.hero.headline}
-                  onChange={(e) => setDraft((p: any) => ({ ...p, hero: { ...p.hero, headline: e.target.value } }))}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      hero: { ...p.hero, headline: e.target.value },
+                    }))
+                  }
                 />
               </div>
 
@@ -285,7 +316,12 @@ export default function SiteEditor() {
                 <input
                   className="se-input"
                   value={draft.hero.ctaText}
-                  onChange={(e) => setDraft((p: any) => ({ ...p, hero: { ...p.hero, ctaText: e.target.value } }))}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      hero: { ...p.hero, ctaText: e.target.value },
+                    }))
+                  }
                   placeholder="Get in touch"
                 />
               </div>
@@ -296,7 +332,12 @@ export default function SiteEditor() {
               <textarea
                 className="se-textarea"
                 value={draft.hero.subheadline}
-                onChange={(e) => setDraft((p: any) => ({ ...p, hero: { ...p.hero, subheadline: e.target.value } }))}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    hero: { ...p.hero, subheadline: e.target.value },
+                  }))
+                }
                 rows={3}
               />
             </div>
@@ -304,7 +345,12 @@ export default function SiteEditor() {
             <ImageUploadField
               label="Hero image"
               value={draft.hero.imageUrl}
-              onChange={(url) => setDraft((p: any) => ({ ...p, hero: { ...p.hero, imageUrl: url } }))}
+              onChange={(url) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  hero: { ...p.hero, imageUrl: url },
+                }))
+              }
               folder="sitebuilder/heroes"
               helpText="Upload a hero image or paste a public image URL."
             />
@@ -314,7 +360,12 @@ export default function SiteEditor() {
               <input
                 className="se-input"
                 value={draft.hero.ctaHref}
-                onChange={(e) => setDraft((p: any) => ({ ...p, hero: { ...p.hero, ctaHref: e.target.value } }))}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    hero: { ...p.hero, ctaHref: e.target.value },
+                  }))
+                }
                 placeholder="#contact or https://..."
               />
             </div>
@@ -328,7 +379,12 @@ export default function SiteEditor() {
               <textarea
                 className="se-textarea"
                 value={draft.sections.about}
-                onChange={(e) => setDraft((p: any) => ({ ...p, sections: { ...p.sections, about: e.target.value } }))}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    sections: { ...p.sections, about: e.target.value },
+                  }))
+                }
                 rows={6}
               />
               <div className="se-help">Use blank lines to separate paragraphs.</div>
@@ -339,7 +395,12 @@ export default function SiteEditor() {
               <textarea
                 className="se-textarea"
                 value={draft.sections.services}
-                onChange={(e) => setDraft((p: any) => ({ ...p, sections: { ...p.sections, services: e.target.value } }))}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    sections: { ...p.sections, services: e.target.value },
+                  }))
+                }
                 rows={6}
               />
             </div>
@@ -349,7 +410,12 @@ export default function SiteEditor() {
               <textarea
                 className="se-textarea"
                 value={draft.sections.faq}
-                onChange={(e) => setDraft((p: any) => ({ ...p, sections: { ...p.sections, faq: e.target.value } }))}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    sections: { ...p.sections, faq: e.target.value },
+                  }))
+                }
                 rows={6}
               />
             </div>
@@ -359,7 +425,12 @@ export default function SiteEditor() {
               <textarea
                 className="se-textarea"
                 value={draft.sections.contact}
-                onChange={(e) => setDraft((p: any) => ({ ...p, sections: { ...p.sections, contact: e.target.value } }))}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    sections: { ...p.sections, contact: e.target.value },
+                  }))
+                }
                 rows={5}
               />
               <div className="se-help">One item per line: Email, Phone, Instagram, Address etc.</div>
@@ -375,7 +446,12 @@ export default function SiteEditor() {
                 <input
                   className="se-input"
                   value={draft.seo.title}
-                  onChange={(e) => setDraft((p: any) => ({ ...p, seo: { ...p.seo, title: e.target.value } }))}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      seo: { ...p.seo, title: e.target.value },
+                    }))
+                  }
                 />
               </div>
 
@@ -384,7 +460,12 @@ export default function SiteEditor() {
                 <input
                   className="se-input"
                   value={draft.seo.image}
-                  onChange={(e) => setDraft((p: any) => ({ ...p, seo: { ...p.seo, image: e.target.value } }))}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      seo: { ...p.seo, image: e.target.value },
+                    }))
+                  }
                   placeholder="https://..."
                 />
               </div>
@@ -395,7 +476,12 @@ export default function SiteEditor() {
               <textarea
                 className="se-textarea"
                 value={draft.seo.description}
-                onChange={(e) => setDraft((p: any) => ({ ...p, seo: { ...p.seo, description: e.target.value } }))}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    seo: { ...p.seo, description: e.target.value },
+                  }))
+                }
                 rows={3}
               />
             </div>
