@@ -1,3 +1,4 @@
+// File: pages/iron-acre/strength/[liftKey].tsx
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -13,7 +14,6 @@ import {
   type StrengthProfile,
 } from "../../../lib/iron-acre/strengthLifts";
 
-// Chart.js
 import {
   Chart as ChartJS,
   LineElement,
@@ -37,7 +37,13 @@ const fetcher = async (u: string) => {
   return j;
 };
 
-type CompletionSet = { exercise_id: string; set: number; weight: number | null; reps: number | null };
+type CompletionSet = {
+  exercise_id?: string | null;
+  exercise_name?: string | null;
+  set: number;
+  weight: number | null;
+  reps: number | null;
+};
 
 type Completion = {
   id?: string;
@@ -58,7 +64,6 @@ type CompletionsIndexResp = {
   nextCursor?: string | null;
 };
 
-// Firestore timestamp parser (same idea as your progress.tsx)
 const toISO = (v: any) => {
   try {
     if (!v) return null;
@@ -78,7 +83,6 @@ const toISO = (v: any) => {
   }
 };
 
-// Epley e1RM
 function epleyE1RM(weight: number, reps: number) {
   return weight * (1 + reps / 30);
 }
@@ -87,24 +91,35 @@ export default function IronAcreStrengthLiftPage() {
   const router = useRouter();
   const { liftkey, liftKey } = router.query as any;
 
-  // Support either param casing just in case
-  const keyFromRoute = typeof liftKey === "string" ? liftKey : typeof liftkey === "string" ? liftkey : undefined;
+  const keyFromRoute =
+    typeof liftKey === "string"
+      ? liftKey
+      : typeof liftkey === "string"
+      ? liftkey
+      : undefined;
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const lift = useMemo(() => (typeof keyFromRoute === "string" ? getLiftDef(keyFromRoute) : undefined), [keyFromRoute]);
+  const lift = useMemo(
+    () => (typeof keyFromRoute === "string" ? getLiftDef(keyFromRoute) : undefined),
+    [keyFromRoute]
+  );
 
-  const { data: profResp, error: profErr } = useSWR(mounted ? "/api/strength/profile/get" : null, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 60_000,
-  });
+  const { data: profResp, error: profErr } = useSWR(
+    mounted ? "/api/strength/profile/get" : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60_000,
+    }
+  );
 
   const profile: StrengthProfile | undefined = profResp?.profile;
   const email: string | null = profResp?.email || null;
 
-  // Page all completions (same pattern as /progress)
   const PAGE_LIMIT = 500;
+
   const getKey = (pageIndex: number, previousPageData: CompletionsIndexResp | null) => {
     if (!mounted || !email || !lift) return null;
     if (previousPageData && !previousPageData.nextCursor) return null;
@@ -112,12 +127,19 @@ export default function IronAcreStrengthLiftPage() {
     const params = new URLSearchParams();
     params.set("user_email", email);
     params.set("limit", String(PAGE_LIMIT));
-    if (pageIndex > 0 && previousPageData?.nextCursor) params.set("cursor", previousPageData.nextCursor);
+
+    if (pageIndex > 0 && previousPageData?.nextCursor) {
+      params.set("cursor", previousPageData.nextCursor);
+    }
 
     return `/api/completions?${params.toString()}`;
   };
 
-  const { data: pages, error: compsErr, isValidating } = useSWRInfinite<CompletionsIndexResp>(getKey, fetcher, {
+  const {
+    data: pages,
+    error: compsErr,
+    isValidating,
+  } = useSWRInfinite<CompletionsIndexResp>(getKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
@@ -140,7 +162,13 @@ export default function IronAcreStrengthLiftPage() {
     const empty = {
       chartData: null as ChartData<"line"> | null,
       chartOptions: null as ChartOptions<"line"> | null,
-      recentRows: [] as Array<{ ymd: string; weight: number; reps: number; e1rm: number; workoutName?: string | null }>,
+      recentRows: [] as Array<{
+        ymd: string;
+        weight: number;
+        reps: number;
+        e1rm: number;
+        workoutName?: string | null;
+      }>,
       stats: {
         latestE1RM: null as number | null,
         bestE1RM: null as number | null,
@@ -150,29 +178,41 @@ export default function IronAcreStrengthLiftPage() {
 
     if (!lift) return empty;
 
-    // Aggregate per-day: max e1RM, max true 1RM (singles)
     const perDay = new Map<string, { maxE1RM: number; maxTrue1RM: number | null }>();
-
-    // Also store recent sets for this lift
-    const recent: Array<{ ymd: string; weight: number; reps: number; e1rm: number; workoutName?: string | null }> = [];
+    const recent: Array<{
+      ymd: string;
+      weight: number;
+      reps: number;
+      e1rm: number;
+      workoutName?: string | null;
+    }> = [];
 
     for (const c of allCompletions) {
-      const iso = toISO((c as any).completed_date) || toISO((c as any).date_completed) || toISO((c as any).created_at);
+      const iso =
+        toISO((c as any).completed_date) ||
+        toISO((c as any).date_completed) ||
+        toISO((c as any).created_at);
+
       if (!iso) continue;
 
       const ymd = iso.slice(0, 10);
       const sets = Array.isArray((c as any).sets) ? ((c as any).sets as CompletionSet[]) : [];
 
       for (const s of sets) {
-        // ✅ THIS IS THE KEY CHANGE:
-        // use canonical mapping (underscore IDs) AND allow legacy names
-        if (!s?.exercise_id || !matchesLiftExerciseId(String(s.exercise_id), lift)) continue;
+        const exerciseCandidate = String(
+          s?.exercise_id || s?.exercise_name || ""
+        ).trim();
+
+        if (!exerciseCandidate) continue;
+        if (!matchesLiftExerciseId(exerciseCandidate, lift)) continue;
 
         const w = Number(s.weight);
         const r = Number(s.reps);
+
         if (!Number.isFinite(w) || !Number.isFinite(r) || w <= 0 || r <= 0) continue;
 
         const e1 = epleyE1RM(w, r);
+
         recent.push({
           ymd,
           weight: w,
@@ -182,9 +222,11 @@ export default function IronAcreStrengthLiftPage() {
         });
 
         const row = perDay.get(ymd) || { maxE1RM: 0, maxTrue1RM: null };
-        if (e1 > row.maxE1RM) row.maxE1RM = e1;
 
-        // True 1RM overlay points: best single per day
+        if (e1 > row.maxE1RM) {
+          row.maxE1RM = e1;
+        }
+
         if (r === 1) {
           row.maxTrue1RM = row.maxTrue1RM == null ? w : Math.max(row.maxTrue1RM, w);
         }
@@ -198,11 +240,19 @@ export default function IronAcreStrengthLiftPage() {
       .sort((a, b) => a.ymd.localeCompare(b.ymd));
 
     const labels = daysAsc.map((d) =>
-      new Date(d.ymd + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" })
+      new Date(`${d.ymd}T00:00:00`).toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+      })
     );
 
-    const e1rmSeries = daysAsc.map((d) => (d.maxE1RM > 0 ? Math.round(d.maxE1RM * 10) / 10 : null));
-    const trueSeries = daysAsc.map((d) => (typeof d.maxTrue1RM === "number" ? d.maxTrue1RM : null));
+    const e1rmSeries = daysAsc.map((d) =>
+      d.maxE1RM > 0 ? Math.round(d.maxE1RM * 10) / 10 : null
+    );
+
+    const trueSeries = daysAsc.map((d) =>
+      typeof d.maxTrue1RM === "number" ? d.maxTrue1RM : null
+    );
 
     const numsE1 = e1rmSeries.filter((x): x is number => typeof x === "number");
     const numsTrue = trueSeries.filter((x): x is number => typeof x === "number");
@@ -231,7 +281,7 @@ export default function IronAcreStrengthLiftPage() {
           showLine: false,
           pointRadius: 4,
           pointHoverRadius: 6,
-        } as any,
+        } as ChartDataset<"line">,
       ],
     };
 
@@ -242,15 +292,24 @@ export default function IronAcreStrengthLiftPage() {
         tooltip: { intersect: false, mode: "index" },
       },
       scales: {
-        x: { ticks: { color: "#9fb0c3" }, grid: { color: "rgba(255,255,255,0.08)" } },
-        y: { ticks: { color: "#9fb0c3" }, grid: { color: "rgba(255,255,255,0.08)" } },
+        x: {
+          ticks: { color: "#9fb0c3" },
+          grid: { color: "rgba(255,255,255,0.08)" },
+        },
+        y: {
+          ticks: { color: "#9fb0c3" },
+          grid: { color: "rgba(255,255,255,0.08)" },
+        },
       },
     };
 
     const recentRows = recent
       .sort((a, b) => (a.ymd === b.ymd ? 0 : b.ymd.localeCompare(a.ymd)))
       .slice(0, 12)
-      .map((r) => ({ ...r, e1rm: Math.round(r.e1rm * 10) / 10 }));
+      .map((r) => ({
+        ...r,
+        e1rm: Math.round(r.e1rm * 10) / 10,
+      }));
 
     return {
       chartData: cd,
@@ -275,7 +334,11 @@ export default function IronAcreStrengthLiftPage() {
             <div className="text-dim small mt-1">That lift key isn’t recognised.</div>
 
             <div className="mt-3">
-              <Link href="/iron-acre/strength" className="btn btn-outline-light btn-sm" style={{ borderRadius: 24 }}>
+              <Link
+                href="/iron-acre/strength"
+                className="btn btn-outline-light btn-sm"
+                style={{ borderRadius: 24 }}
+              >
                 Back
               </Link>
             </div>
@@ -305,7 +368,11 @@ export default function IronAcreStrengthLiftPage() {
               <div className="text-dim small mt-1">e1RM trend with true 1RM singles overlay.</div>
             </div>
 
-            <Link href="/iron-acre/strength" className="btn btn-sm btn-outline-light" style={{ borderRadius: 24 }}>
+            <Link
+              href="/iron-acre/strength"
+              className="btn btn-sm btn-outline-light"
+              style={{ borderRadius: 24 }}
+            >
               Back
             </Link>
           </div>
@@ -315,21 +382,42 @@ export default function IronAcreStrengthLiftPage() {
           <div className="row g-2">
             <div className="col-6 col-md-3">
               <div className="text-dim small">Latest e1RM</div>
-              <div style={{ color: IA.neon, fontWeight: 900, fontSize: "1.15rem", textShadow: `0 0 10px ${IA.neon}40` }}>
+              <div
+                style={{
+                  color: IA.neon,
+                  fontWeight: 900,
+                  fontSize: "1.15rem",
+                  textShadow: `0 0 10px ${IA.neon}40`,
+                }}
+              >
                 {derived.stats.latestE1RM != null ? `${derived.stats.latestE1RM}kg` : "—"}
               </div>
             </div>
 
             <div className="col-6 col-md-3">
               <div className="text-dim small">Best e1RM</div>
-              <div style={{ color: IA.neon, fontWeight: 900, fontSize: "1.15rem", textShadow: `0 0 10px ${IA.neon}40` }}>
+              <div
+                style={{
+                  color: IA.neon,
+                  fontWeight: 900,
+                  fontSize: "1.15rem",
+                  textShadow: `0 0 10px ${IA.neon}40`,
+                }}
+              >
                 {derived.stats.bestE1RM != null ? `${derived.stats.bestE1RM}kg` : "—"}
               </div>
             </div>
 
             <div className="col-6 col-md-3">
               <div className="text-dim small">Best true 1RM</div>
-              <div style={{ color: IA.neon2, fontWeight: 900, fontSize: "1.15rem", textShadow: `0 0 10px ${IA.neon2}40` }}>
+              <div
+                style={{
+                  color: IA.neon2,
+                  fontWeight: 900,
+                  fontSize: "1.15rem",
+                  textShadow: `0 0 10px ${IA.neon2}40`,
+                }}
+              >
                 {derived.stats.bestTrue1RM != null ? `${derived.stats.bestTrue1RM}kg` : "—"}
               </div>
             </div>
@@ -375,7 +463,10 @@ export default function IronAcreStrengthLiftPage() {
           ) : (
             <div className="d-flex flex-column" style={{ gap: 10 }}>
               {derived.recentRows.map((r, idx) => (
-                <div key={`${r.ymd}-${idx}`} style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
+                <div
+                  key={`${r.ymd}-${idx}`}
+                  style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}
+                >
                   <div className="d-flex justify-content-between align-items-center">
                     <div className="fw-semibold">
                       {r.weight}kg × {r.reps}
@@ -384,7 +475,10 @@ export default function IronAcreStrengthLiftPage() {
                       </span>
                     </div>
                     <div className="text-dim small">
-                      {new Date(r.ymd + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                      {new Date(`${r.ymd}T00:00:00`).toLocaleDateString(undefined, {
+                        day: "numeric",
+                        month: "short",
+                      })}
                     </div>
                   </div>
 
