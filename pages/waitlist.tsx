@@ -1,4 +1,4 @@
-// File: pages/waitlist.tsx// 
+// File: pages/waitlist.tsx
 import Image from "next/image";
 import Head from "next/head";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -218,6 +218,7 @@ export default function WaitlistPage() {
                 onClick={() => setMenuOpen(false)}
                 aria-label="Close menu"
               />
+
               <div className="mobileMenuPanel">
                 <div className="mobileMenuTitle">Menu</div>
 
@@ -314,6 +315,8 @@ export default function WaitlistPage() {
 
           <div className="heroInner">
             <div className="heroLeft">
+              <div className="heroEyebrow">IRON ACRE GYM</div>
+
               <h1 className="headline">
                 Train Hard
                 <br />
@@ -321,6 +324,12 @@ export default function WaitlistPage() {
                 <br />
                 Build Something Real
               </h1>
+
+              <div className="differentiators" aria-label="Brand differentiators">
+                <span className="diffChip">Strength</span>
+                <span className="diffChip">Community</span>
+                <span className="diffChip">Outdoors</span>
+              </div>
 
               <div className="badgeRow">
                 <div className="badge">Founders £60/month locked for life • first 20 only</div>
@@ -379,6 +388,7 @@ export default function WaitlistPage() {
         <main className="main">
           <section id="founders" className="section">
             <div className="sectionHead">
+              <div className="sectionEyebrow">FOUNDING OFFER</div>
               <h2 className="sectionTitle">Founding Members</h2>
               <p className="sectionSub">
                 Get in early. Pay less forever. Be part of what Iron Acre becomes from day one.
@@ -386,20 +396,20 @@ export default function WaitlistPage() {
             </div>
 
             <div className="grid2">
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">£60 a month for life</div>
+              <div className="card ia-tile ia-tile-pad cardFounders">
+                <div className="cardTitle cardTitleAccent">£60 a month for life</div>
                 <div className="cardText">
-                  The first 20 members lock in at £60 a month for life. After that, membership moves to £100 a month.
-                  If you know you want in, this is the moment to move.
+                  The first 20 members lock in at <strong>£60 a month for life</strong>. After that, membership moves
+                  to <strong>£100 a month</strong>. If you know you want in, this is the moment to move.
                 </div>
               </div>
 
-              <div className="card ia-tile ia-tile-pad">
+              <div className="card ia-tile ia-tile-pad cardFounders">
                 <div className="cardTitle">More than just a lower price</div>
                 <div className="cardText">
-                  Founding members get priority access to sessions, early access before public launch, and an invite
-                  to the opening BBQ. More importantly, you get to be part of the original group that shapes the culture
-                  of the gym from the very start.
+                  Founding members get <strong>priority access to sessions</strong>, <strong>early access before public launch</strong>,
+                  and an invite to the <strong>opening BBQ</strong>. More importantly, you get to be part of the group
+                  that shapes the culture of the gym from the very start.
                 </div>
               </div>
             </div>
@@ -407,18 +417,29 @@ export default function WaitlistPage() {
 
           <section id="about" className="section">
             <div className="sectionHead">
-              <h2 className="sectionTitle">About</h2>
-              <p className="sectionSub">This is the gym people actually want to train at.</p>
+              <div className="sectionEyebrow">ABOUT IRON ACRE</div>
+              <h2 className="sectionTitle">This is the gym people actually want to train at.</h2>
             </div>
 
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Built in the open, built with purpose</div>
+                <div className="cardTitle">Built for people who want more</div>
                 <div className="cardText">
-                  Iron Acre Gym is built on an old menage and we’re aiming to open at the end of June. You’ll train
-                  with a woodland backdrop behind you and a meadow out front with sheep and horses in the distance.
-                  Sunrise sessions that set the tone for the day. Sunset sessions that feel like you’ve earned them.
-                  This is not just somewhere to work out. It’s somewhere you actually want to be.
+                  Iron Acre Gym is built for people who want more from their training.
+                  <br />
+                  <br />
+                  You’ll train with woodland behind you and open meadow out in front, surrounded by a setting that
+                  actually makes you want to show up.
+                  <br />
+                  <br />
+                  Sunrise sessions that set the tone for your entire day.
+                  <br />
+                  Sunset sessions that feel earned.
+                  <br />
+                  <br />
+                  This isn’t just somewhere you train.
+                  <br />
+                  It’s somewhere you want to be.
                 </div>
               </div>
 
@@ -443,13 +464,14 @@ export default function WaitlistPage() {
               />
               <div className="conceptOverlay" aria-hidden="true" />
               <div className="conceptCaption">
-                Meadow views. Woodland backdrop. Covered training. Proper kit. Zero compromise.
+                Strength, Community, Outdoors.
               </div>
             </div>
           </section>
 
           <section id="classes" className="section">
             <div className="sectionHead">
+              <div className="sectionEyebrow">TRAINING</div>
               <h2 className="sectionTitle">Classes</h2>
               <p className="sectionSub">Four clear pillars. Real training. Real progression.</p>
             </div>
@@ -494,6 +516,7 @@ export default function WaitlistPage() {
 
           <section id="benefits" className="section">
             <div className="sectionHead">
+              <div className="sectionEyebrow">MEMBERSHIP</div>
               <h2 className="sectionTitle">Benefits</h2>
               <p className="sectionSub">More than classes. A full training system.</p>
             </div>
@@ -536,6 +559,7 @@ export default function WaitlistPage() {
 
           <section id="next" className="section">
             <div className="sectionHead">
+              <div className="sectionEyebrow">THE VISION</div>
               <h2 className="sectionTitle">What’s Next</h2>
               <p className="sectionSub">This is just the beginning of what Iron Acre becomes.</p>
             </div>
@@ -578,6 +602,7 @@ export default function WaitlistPage() {
 
           <section id="faq" className="section">
             <div className="sectionHead">
+              <div className="sectionEyebrow">QUESTIONS</div>
               <h2 className="sectionTitle">FAQ</h2>
               <p className="sectionSub">Quick answers. No fluff.</p>
             </div>
@@ -618,6 +643,7 @@ export default function WaitlistPage() {
 
           <section id="contact" className="section">
             <div className="sectionHead">
+              <div className="sectionEyebrow">READY TO JOIN?</div>
               <h2 className="sectionTitle">Contact</h2>
               <p className="sectionSub">Join the Acre and we’ll keep you in the loop by email.</p>
             </div>
@@ -654,75 +680,544 @@ export default function WaitlistPage() {
         </main>
 
         <style jsx>{`
-          .wrap{background:#06090d;color:#fff;min-height:100vh}
-          .hero{position:relative;min-height:100vh;overflow:hidden}
-          .heroMedia{position:absolute;inset:0}
-          .heroOverlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.20) 40%,rgba(0,0,0,.92) 100%)}
-          .heroTop{position:absolute;top:0;left:0;right:0;padding:18px 18px 0 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;z-index:5}
-          .brand{display:inline-flex;align-items:center;gap:10px;cursor:pointer;user-select:none;min-height:44px}
-          .brandLogo{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center}
-          .brandText{font-weight:650;letter-spacing:.2px}
-          .heroNav{display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end}
-          .navLink{appearance:none;background:transparent;border:none;color:rgba(255,255,255,.78);font-weight:550;padding:10px 6px;min-height:44px;cursor:pointer}
-          .navLink:hover{color:rgba(255,255,255,.95)}
-          .menuBtn{appearance:none;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.14);border-radius:12px;min-height:44px;min-width:44px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
-          .menuIcon{width:18px;height:2px;background:rgba(255,255,255,.9);border-radius:999px;position:relative;display:inline-block}
-          .menuIcon:before,.menuIcon:after{content:"";position:absolute;left:0;width:18px;height:2px;background:rgba(255,255,255,.9);border-radius:999px}
-          .menuIcon:before{top:-6px}
-          .menuIcon:after{top:6px}
-          .heroInner{position:relative;z-index:4;max-width:1100px;margin:0 auto;padding:92px 18px 36px 18px;min-height:100vh;display:grid;grid-template-columns:1.15fr .85fr;gap:18px;align-items:end}
-          .headline{margin:0;font-size:54px;line-height:1.02;font-weight:650;letter-spacing:-.6px;text-shadow:0 14px 40px rgba(0,0,0,.55)}
-          .badgeRow{margin-top:12px}
-          .badge{display:inline-flex;align-items:center;width:fit-content;border-radius:12px;padding:10px 12px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.22);color:rgba(255,255,255,.92);font-weight:600;font-size:13px;letter-spacing:.1px}
-          .formCard{border-radius:18px;background:rgba(11,15,20,.70);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(10px)}
-          .formTitle{font-weight:650;font-size:18px}
-          .formSub{margin-top:6px;color:rgba(255,255,255,.72);line-height:1.35;font-size:14px;font-weight:450}
-          .formGrid{margin-top:12px;display:grid;gap:10px}
-          .formInput{min-height:48px;background:rgba(7,10,15,.85);color:#fff;border-color:rgba(255,255,255,.12);border-radius:12px}
-          .checkRow{display:flex;gap:10px;align-items:flex-start;color:rgba(255,255,255,.82);font-size:14px;font-weight:450}
-          .formBtn{min-height:50px;border-radius:14px;padding:10px 16px}
-          .formError{color:#ff6b6b;font-size:14px}
-          .finePrint{color:rgba(255,255,255,.55);font-size:12px;line-height:1.35}
-          .heroScrollHint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:36px;height:6px;border-radius:999px;background:rgba(255,255,255,.22);z-index:4}
-          .main{max-width:1100px;margin:0 auto;padding:18px 18px 54px 18px}
-          .section{padding:22px 0}
-          .sectionHead{max-width:760px}
-          .sectionTitle{margin:0;font-size:22px;font-weight:600;letter-spacing:-.2px}
-          .sectionSub{margin:8px 0 0 0;color:rgba(255,255,255,.72);line-height:1.45;font-weight:450}
-          .grid2{margin-top:14px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-          .card{border-radius:18px;background:#0b0f14;border:1px solid rgba(255,255,255,.06)}
-          .cardTitle{font-weight:600;font-size:16px}
-          .cardText{margin-top:8px;color:rgba(255,255,255,.72);line-height:1.5;font-weight:450}
-          .conceptWrap{margin-top:14px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.06);background:#070a0f;position:relative;height:360px}
-          .conceptOverlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.10),rgba(0,0,0,.78))}
-          .conceptCaption{position:absolute;left:14px;right:14px;bottom:12px;color:rgba(255,255,255,.90);font-weight:600;text-shadow:0 10px 26px rgba(0,0,0,.55)}
-          .contactCard{border-radius:18px;background:#0b0f14;border:1px solid rgba(255,255,255,.06)}
-          .contactRow{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
-          .contactLabel{font-weight:600}
-          .contactFoot{margin-top:10px;color:rgba(255,255,255,.70);line-height:1.45;font-weight:450}
-          .footer{padding-top:24px;border-top:1px solid rgba(255,255,255,.06);margin-top:12px}
-          .footerInner{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:rgba(255,255,255,.55);font-size:12px}
-          .footerLinks{display:flex;gap:12px;flex-wrap:wrap}
-          .footerLink{appearance:none;background:transparent;border:none;padding:0;color:rgba(255,255,255,.60);cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-weight:550}
-          .footerLink:hover{color:rgba(255,255,255,.85)}
-          .heroNavMobile{display:none}
-          .mobileMenu{position:fixed;inset:0;z-index:9999}
-          .mobileMenuBackdrop{position:absolute;inset:0;background:rgba(0,0,0,.55);border:none}
-          .mobileMenuPanel{position:absolute;right:12px;top:12px;left:12px;border-radius:16px;background:rgba(11,15,20,.92);border:1px solid rgba(255,255,255,.10);padding:14px;backdrop-filter:blur(10px)}
-          .mobileMenuTitle{font-weight:650;margin-bottom:10px}
-          .mobileMenuLink{width:100%;text-align:left;appearance:none;background:transparent;border:1px solid rgba(255,255,255,.10);color:rgba(255,255,255,.90);border-radius:12px;padding:12px;min-height:46px;margin-top:8px;font-weight:550;cursor:pointer}
-          .mobileMenuCta{width:100%;margin-top:10px;border-radius:12px;min-height:48px}
-          @media (max-width:980px){.heroInner{grid-template-columns:1fr;align-items:end;padding-top:84px}.headline{font-size:44px}}
-          @media (max-width:720px){
-            .heroNavDesktop{display:none}
-            .heroNavMobile{display:inline-flex}
-            .grid2{grid-template-columns:1fr}
-            .headline{font-size:40px}
-            .conceptWrap{height:300px}
+          .wrap {
+            --accent: #18ff9a;
+            --accent2: #ff8a2a;
+            --card: #0b0f14;
+            --border: rgba(255,255,255,.06);
+            background: #06090d;
+            color: #fff;
+            min-height: 100vh;
+          }
+
+          .hero {
+            position: relative;
+            min-height: 100vh;
+            overflow: hidden;
+          }
+
+          .heroMedia {
+            position: absolute;
+            inset: 0;
+          }
+
+          .heroOverlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.20) 40%, rgba(0,0,0,.92) 100%);
+          }
+
+          .heroTop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 18px 18px 0 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            z-index: 5;
+          }
+
+          .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            user-select: none;
+            min-height: 44px;
+          }
+
+          .brandLogo {
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .brandText {
+            font-weight: 650;
+            letter-spacing: .2px;
+          }
+
+          .heroNav {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+          }
+
+          .navLink {
+            appearance: none;
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,.78);
+            font-weight: 550;
+            padding: 10px 6px;
+            min-height: 44px;
+            cursor: pointer;
+          }
+
+          .navLink:hover {
+            color: rgba(255,255,255,.95);
+          }
+
+          .menuBtn {
+            appearance: none;
+            background: rgba(0,0,0,.18);
+            border: 1px solid rgba(255,255,255,.14);
+            border-radius: 12px;
+            min-height: 44px;
+            min-width: 44px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+          }
+
+          .menuIcon {
+            width: 18px;
+            height: 2px;
+            background: rgba(255,255,255,.9);
+            border-radius: 999px;
+            position: relative;
+            display: inline-block;
+          }
+
+          .menuIcon:before,
+          .menuIcon:after {
+            content: "";
+            position: absolute;
+            left: 0;
+            width: 18px;
+            height: 2px;
+            background: rgba(255,255,255,.9);
+            border-radius: 999px;
+          }
+
+          .menuIcon:before {
+            top: -6px;
+          }
+
+          .menuIcon:after {
+            top: 6px;
+          }
+
+          .heroInner {
+            position: relative;
+            z-index: 4;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 92px 18px 36px 18px;
+            min-height: 100vh;
+            display: grid;
+            grid-template-columns: 1.15fr .85fr;
+            gap: 18px;
+            align-items: end;
+          }
+
+          .heroEyebrow {
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .18em;
+            margin-bottom: 10px;
+          }
+
+          .headline {
+            margin: 0;
+            font-size: 54px;
+            line-height: 1.02;
+            font-weight: 650;
+            letter-spacing: -.6px;
+            text-shadow: 0 14px 40px rgba(0,0,0,.55);
+          }
+
+          .differentiators {
+            margin-top: 14px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+
+          .diffChip {
+            display: inline-flex;
+            align-items: center;
+            min-height: 34px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(24,255,154,.28);
+            background: rgba(24,255,154,.10);
+            color: rgba(255,255,255,.95);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+          }
+
+          .badgeRow {
+            margin-top: 14px;
+          }
+
+          .badge {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            border-radius: 12px;
+            padding: 10px 12px;
+            border: 1px solid rgba(255,255,255,.14);
+            background: rgba(0,0,0,.22);
+            color: rgba(255,255,255,.92);
+            font-weight: 600;
+            font-size: 13px;
+            letter-spacing: .1px;
+          }
+
+          .formCard {
+            border-radius: 18px;
+            background: rgba(11,15,20,.70);
+            border: 1px solid rgba(255,255,255,.08);
+            backdrop-filter: blur(10px);
+          }
+
+          .formTitle {
+            font-weight: 650;
+            font-size: 18px;
+          }
+
+          .formSub {
+            margin-top: 6px;
+            color: rgba(255,255,255,.72);
+            line-height: 1.35;
+            font-size: 14px;
+            font-weight: 450;
+          }
+
+          .formGrid {
+            margin-top: 12px;
+            display: grid;
+            gap: 10px;
+          }
+
+          .formInput {
+            min-height: 48px;
+            background: rgba(7,10,15,.85);
+            color: #fff;
+            border-color: rgba(255,255,255,.12);
+            border-radius: 12px;
+          }
+
+          .checkRow {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            color: rgba(255,255,255,.82);
+            font-size: 14px;
+            font-weight: 450;
+          }
+
+          .formBtn {
+            min-height: 50px;
+            border-radius: 14px;
+            padding: 10px 16px;
+          }
+
+          .formError {
+            color: #ff6b6b;
+            font-size: 14px;
+          }
+
+          .finePrint {
+            color: rgba(255,255,255,.55);
+            font-size: 12px;
+            line-height: 1.35;
+          }
+
+          .heroScrollHint {
+            position: absolute;
+            left: 50%;
+            bottom: 14px;
+            transform: translateX(-50%);
+            width: 36px;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.22);
+            z-index: 4;
+          }
+
+          .main {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 18px 18px 54px 18px;
+          }
+
+          .section {
+            padding: 22px 0;
+          }
+
+          .sectionHead {
+            max-width: 760px;
+          }
+
+          .sectionEyebrow {
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .16em;
+            margin-bottom: 8px;
+          }
+
+          .sectionTitle {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 650;
+            letter-spacing: -.2px;
+          }
+
+          .sectionSub {
+            margin: 8px 0 0 0;
+            color: rgba(255,255,255,.72);
+            line-height: 1.45;
+            font-weight: 450;
+          }
+
+          .grid2 {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+          }
+
+          .card {
+            border-radius: 18px;
+            background: var(--card);
+            border: 1px solid var(--border);
+          }
+
+          .cardFounders {
+            background:
+              radial-gradient(900px 300px at 10% 0%, rgba(24,255,154,.08), transparent 40%),
+              #0b0f14;
+          }
+
+          .cardTitle {
+            font-weight: 650;
+            font-size: 16px;
+          }
+
+          .cardTitleAccent {
+            color: var(--accent);
+            text-shadow: 0 0 18px rgba(24,255,154,.16);
+          }
+
+          .cardText {
+            margin-top: 8px;
+            color: rgba(255,255,255,.72);
+            line-height: 1.55;
+            font-weight: 450;
+          }
+
+          .cardText strong {
+            color: #fff;
+            font-weight: 650;
+          }
+
+          .conceptWrap {
+            margin-top: 14px;
+            border-radius: 18px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            background: #070a0f;
+            position: relative;
+            height: 360px;
+          }
+
+          .conceptOverlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.78));
+          }
+
+          .conceptCaption {
+            position: absolute;
+            left: 14px;
+            right: 14px;
+            bottom: 12px;
+            color: rgba(255,255,255,.95);
+            font-weight: 700;
+            text-shadow: 0 10px 26px rgba(0,0,0,.55);
+          }
+
+          .contactCard {
+            border-radius: 18px;
+            background: var(--card);
+            border: 1px solid var(--border);
+          }
+
+          .contactRow {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+          }
+
+          .contactLabel {
+            font-weight: 650;
+          }
+
+          .contactFoot {
+            margin-top: 10px;
+            color: rgba(255,255,255,.70);
+            line-height: 1.45;
+            font-weight: 450;
+          }
+
+          .footer {
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+            margin-top: 12px;
+          }
+
+          .footerInner {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            color: rgba(255,255,255,.55);
+            font-size: 12px;
+          }
+
+          .footerLinks {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+          }
+
+          .footerLink {
+            appearance: none;
+            background: transparent;
+            border: none;
+            padding: 0;
+            color: rgba(255,255,255,.60);
+            cursor: pointer;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+            font-weight: 550;
+          }
+
+          .footerLink:hover {
+            color: rgba(255,255,255,.85);
+          }
+
+          .heroNavMobile {
+            display: none;
+          }
+
+          .mobileMenu {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+          }
+
+          .mobileMenuBackdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,.55);
+            border: none;
+          }
+
+          .mobileMenuPanel {
+            position: absolute;
+            right: 12px;
+            top: 12px;
+            left: 12px;
+            border-radius: 16px;
+            background: rgba(11,15,20,.92);
+            border: 1px solid rgba(255,255,255,.10);
+            padding: 14px;
+            backdrop-filter: blur(10px);
+          }
+
+          .mobileMenuTitle {
+            font-weight: 650;
+            margin-bottom: 10px;
+          }
+
+          .mobileMenuLink {
+            width: 100%;
+            text-align: left;
+            appearance: none;
+            background: transparent;
+            border: 1px solid rgba(255,255,255,.10);
+            color: rgba(255,255,255,.90);
+            border-radius: 12px;
+            padding: 12px;
+            min-height: 46px;
+            margin-top: 8px;
+            font-weight: 550;
+            cursor: pointer;
+          }
+
+          .mobileMenuCta {
+            width: 100%;
+            margin-top: 10px;
+            border-radius: 12px;
+            min-height: 48px;
+          }
+
+          @media (max-width: 980px) {
+            .heroInner {
+              grid-template-columns: 1fr;
+              align-items: end;
+              padding-top: 84px;
+            }
+
+            .headline {
+              font-size: 44px;
+            }
+          }
+
+          @media (max-width: 720px) {
+            .heroNavDesktop {
+              display: none;
+            }
+
+            .heroNavMobile {
+              display: inline-flex;
+            }
+
+            .grid2 {
+              grid-template-columns: 1fr;
+            }
+
+            .headline {
+              font-size: 40px;
+            }
+
+            .conceptWrap {
+              height: 300px;
+            }
+
+            .sectionTitle {
+              font-size: 22px;
+            }
+
+            .differentiators {
+              gap: 6px;
+            }
+
+            .diffChip {
+              font-size: 11px;
+              min-height: 32px;
+              padding: 7px 10px;
+            }
           }
         `}</style>
       </div>
     </>
   );
 }
-
