@@ -1,4 +1,3 @@
-// File: pages/iron-acre/index.tsx
 import Head from "next/head";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -9,13 +8,13 @@ import IronAcreHeader from "../../components/iron-acre/IronAcreHeader";
 import IronAcreTasks from "../../components/iron-acre/IronAcreTasks";
 import IronAcreStrengthSummary from "../../components/iron-acre/IronAcreStrengthSummary";
 import IronAcreRecentSessions from "../../components/iron-acre/IronAcreRecentSessions";
+import IronAcreClassesList from "../../components/iron-acre/IronAcreClassesList";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 function formatYMD(d: Date) {
   return d.toLocaleDateString("en-CA");
 }
-
 function startOfAlignedWeek(d: Date) {
   const day = d.getDay();
   const diffToMon = (day + 6) % 7;
@@ -30,11 +29,14 @@ type SimpleWorkoutRef = { id: string; name?: string };
 type DayOverview = {
   dateKey: string;
   isFriday: boolean;
+
   checkinComplete: boolean;
+
   hasWorkout: boolean;
   workoutDone: boolean;
   workoutIds: string[];
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
+
   hasRecurringToday: boolean;
   recurringWorkouts: SimpleWorkoutRef[];
   recurringDone: boolean;
@@ -58,7 +60,6 @@ type WeeklyOverviewResponse = {
 export default function IronAcreHome() {
   const { data: session, status } = useSession();
   const [mounted, setMounted] = useState(false);
-
   useEffect(() => setMounted(true), []);
 
   const userName = (session?.user?.name || session?.user?.email || "Athlete").toString();
@@ -76,15 +77,10 @@ export default function IronAcreHome() {
     }
   }, [now]);
 
-  const weekStartKey = useMemo(
-    () => (mounted ? formatYMD(startOfAlignedWeek(new Date())) : ""),
-    [mounted]
-  );
+  const weekStartKey = useMemo(() => (mounted ? formatYMD(startOfAlignedWeek(new Date())) : ""), [mounted]);
 
   const { data: weeklyOverview } = useSWR<WeeklyOverviewResponse>(
-    mounted && weekStartKey
-      ? `/api/weekly/overview?week=${encodeURIComponent(weekStartKey)}`
-      : null,
+    mounted && weekStartKey ? `/api/weekly/overview?week=${encodeURIComponent(weekStartKey)}` : null,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 }
   );
@@ -94,6 +90,8 @@ export default function IronAcreHome() {
   const effectiveTodayKey = useMemo(() => {
     const days = weeklyOverview?.days || [];
     if (days.some((d) => d.dateKey === todayKey)) return todayKey;
+    // If the API week isn’t the current week (testing / time mismatch),
+    // fall back to the first day of the returned week so the UI still shows workouts.
     return weeklyOverview?.weekStartYMD || todayKey;
   }, [weeklyOverview, todayKey]);
 
@@ -109,14 +107,10 @@ export default function IronAcreHome() {
     return days.find((d) => d.dateKey === fridayYMD);
   }, [weeklyOverview]);
 
-  const { data: strengthProfile } = useSWR(
-    mounted ? "/api/strength/profile/get" : null,
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 60_000,
-    }
-  );
+  const { data: strengthProfile } = useSWR(mounted ? "/api/strength/profile/get" : null, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60_000,
+  });
 
   if (!mounted) return null;
 
@@ -141,11 +135,7 @@ export default function IronAcreHome() {
             <h2 className="m-0">Iron Acre Gym</h2>
             <div className="text-dim mt-2">Please sign in to view your performance dashboard.</div>
             <div className="mt-3">
-              <Link
-                href={`/register?callbackUrl=${cb}`}
-                className="btn btn-outline-light"
-                style={{ borderRadius: 24 }}
-              >
+              <Link href={`/register?callbackUrl=${cb}`} className="btn btn-outline-light" style={{ borderRadius: 24 }}>
                 Sign in
               </Link>
             </div>
@@ -167,121 +157,18 @@ export default function IronAcreHome() {
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <IronAcreHeader userName={userName} dateLabel={dateLabel} />
 
-        <section className="futuristic-card p-3 mb-3">
-          <div className="fw-bold" style={{ fontSize: "1.15rem" }}>
-            Founding Members
-          </div>
-
-          <div className="text-dim small mt-2">
-            Join Iron Acre from day one and get the best value we will ever offer.
-          </div>
-
-          <div className="mt-3" style={{ display: "grid", gap: 6 }}>
-            <div>✅ £60 a month for life</div>
-            <div>✅ Priority access to sessions</div>
-            <div>✅ Early access before public launch</div>
-            <div>✅ Exclusive opening BBQ</div>
-            <div>✅ Founding member status</div>
-          </div>
-
-          <div className="mt-3 fw-bold">Limited spots available</div>
-        </section>
-
-        <section className="futuristic-card p-3 mb-3">
-          <div className="fw-bold" style={{ fontSize: "1.1rem" }}>
-            About Iron Acre
-          </div>
-
-          <div className="text-dim small mt-2" style={{ lineHeight: 1.6 }}>
-            Iron Acre is not another outdoor bootcamp gym.
-            <br />
-            <br />
-            We believe in proper progression, real coaching and training that actually improves you over time.
-            Every session is built with intent. Every class is there to make you stronger, fitter and more capable.
-            No random workouts. No guesswork. No wasted sessions.
-            <br />
-            <br />
-            Just real training, in a setting people actually want to show up for.
-          </div>
-        </section>
-
-        <section className="futuristic-card p-3 mb-3">
-          <div className="fw-bold" style={{ fontSize: "1.1rem" }}>
-            Classes
-          </div>
-
-          <div className="mt-3" style={{ display: "grid", gap: 12 }}>
-            <div>
-              <div className="fw-semibold">Hybrid Fit</div>
-              <div className="text-dim small">
-                Strength and conditioning combined to build muscle, fitness and work capacity.
-              </div>
-            </div>
-
-            <div>
-              <div className="fw-semibold">Farm Strength</div>
-              <div className="text-dim small">
-                Real-world strength training using carries, sleds, sandbags and functional movement.
-              </div>
-            </div>
-
-            <div>
-              <div className="fw-semibold">Boxing Conditioning</div>
-              <div className="text-dim small">
-                Fast-paced sessions focused on footwork, power and conditioning using bags and pads.
-              </div>
-            </div>
-
-            <div>
-              <div className="fw-semibold">Kettlebells</div>
-              <div className="text-dim small">
-                Simple, effective sessions to build strength, endurance and full-body control.
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="futuristic-card p-3 mb-3">
-          <div className="fw-bold" style={{ fontSize: "1.1rem" }}>
-            Benefits
-          </div>
-
-          <div className="mt-3" style={{ display: "grid", gap: 6 }}>
-            <div>✅ Coach led sessions</div>
-            <div>✅ Open gym sessions</div>
-            <div>✅ Full gym program delivered via our custom app</div>
-            <div>✅ Online personal training support</div>
-            <div>✅ Structured progression and accountability</div>
-          </div>
-        </section>
-
-        <section className="futuristic-card p-3 mb-3">
-          <div className="fw-bold" style={{ fontSize: "1.1rem" }}>
-            What’s Next
-          </div>
-
-          <div className="text-dim small mt-2">
-            We’re just getting started. The vision for Iron Acre goes well beyond day one.
-          </div>
-
-          <div className="mt-3" style={{ display: "grid", gap: 6 }}>
-            <div>🔥 Cold Water Therapy</div>
-            <div>🔥 Wild Saunas</div>
-            <div>🔥 Wild Hot Tubs</div>
-            <div>🔥 Expanding Gym Area</div>
-          </div>
-        </section>
-
         <IronAcreTasks
           todayKey={effectiveTodayKey}
-          fridayYMD={weeklyOverview?.fridayYMD || ""}
           todayData={todayData}
+          fridayYMD={weeklyOverview?.fridayYMD || ""}
           fridayData={fridayData}
           weekDays={weeklyOverview?.days || []}
           weekStartYMD={weeklyOverview?.weekStartYMD || ""}
           weekEndYMD={weeklyOverview?.weekEndYMD || ""}
           weeklyTotals={weeklyOverview?.weeklyTotals}
         />
+
+        <IronAcreClassesList />
 
         <div className="row g-2">
           <div className="col-12 col-lg-6">
