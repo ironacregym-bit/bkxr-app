@@ -1,8 +1,7 @@
 // File: pages/parq.tsx
 import Head from "next/head";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/router";
+import { useEffect/router";import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSession } from "next-auth/react";
 
 type Answer = "yes" | "no" | "";
@@ -18,13 +17,6 @@ type ParqAnswers = {
 };
 
 export default function ParqPage() {
-  const ACCENT = "#18ff9a";
-  const ACCENT_SOFT = "rgba(24,255,154,0.14)";
-  const BG = "#0b0f14";
-  const CARD = "#11161d";
-  const BORDER = "rgba(255,255,255,0.08)";
-  const TEXT_DIM = "rgba(255,255,255,0.68)";
-
   const { status, data } = useSession();
   const router = useRouter();
 
@@ -67,9 +59,7 @@ export default function ParqPage() {
     return typeof v === "string" ? v : "";
   }, [router.query.session, mounted]);
 
-  const hasRedFlag = useMemo(() => {
-    return Object.values(answers).includes("yes");
-  }, [answers]);
+  const hasRedFlag = useMemo(() => Object.values(answers).includes("yes"), [answers]);
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -133,11 +123,12 @@ export default function ParqPage() {
       ctx.lineTo(x, y);
       ctx.stroke();
 
-      setHasSignature(true);
+      if (!hasSignature) setHasSignature(true);
     };
 
     const onUp = (evt: MouseEvent | TouchEvent) => {
       if (!drawing.current) return;
+
       evt.preventDefault();
       drawing.current = false;
     };
@@ -159,7 +150,7 @@ export default function ParqPage() {
       canvas.removeEventListener("touchmove", onMove);
       window.removeEventListener("touchend", onUp);
     };
-  }, [mounted]);
+  }, [mounted, hasSignature]);
 
   const clearSignature = () => {
     const canvas = canvasRef.current;
@@ -183,7 +174,7 @@ export default function ParqPage() {
     return Object.values(answers).every((a) => a === "yes" || a === "no");
   }, [answers]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -284,11 +275,11 @@ export default function ParqPage() {
       </Head>
 
       <main
-        className="container py-4"
+        className="ia-app container py-4"
         style={{
+          minHeight: "100vh",
           paddingBottom: 80,
           color: "#fff",
-          minHeight: "100vh",
           background: "linear-gradient(to bottom, #070a0d 0%, #0d1416 55%, #111a16 100%)",
         }}
       >
@@ -298,70 +289,42 @@ export default function ParqPage() {
               src="/IronAcreLogoNoBG.png"
               alt="Iron Acre Gym"
               height={42}
-              style={{
-                borderRadius: 8,
-                display: "block",
-              }}
+              style={{ display: "block", borderRadius: 8 }}
             />
           </div>
 
-          <Link href="/" className="btn-bxkr-outline">
+          <Link href="/" className="ia-btn-outline">
             Back
           </Link>
         </div>
 
         <section className="mb-4">
-          <h1
-            className="fw-bold"
-            style={{
-              fontSize: "2rem",
-              lineHeight: 1.15,
-            }}
-          >
-            Health{" "}
+          <div className="ia-kicker">Health Screening</div>
+
+          <h1 className="ia-page-title mt-2">
+            PAR-Q{" "}
             <span
               style={{
-                color: ACCENT,
+                color: "var(--ia-neon)",
                 textShadow: "0 0 16px rgba(24,255,154,0.18)",
               }}
             >
-              PAR-Q
+              Iron Acre Gym
             </span>
           </h1>
 
-          <p
-            className="mt-2 mb-0"
-            style={{
-              color: TEXT_DIM,
-            }}
-          >
+          <p className="ia-page-subtitle">
             Please answer honestly. Participation in physical activity carries risk of injury.
           </p>
 
-          {hasRedFlag && (
-            <div
-              className="alert mt-3"
-              style={{
-                background: ACCENT_SOFT,
-                border: "1px solid rgba(24,255,154,0.32)",
-                color: "#fff",
-                borderRadius: 14,
-              }}
-            >
+          {hasRedFlag ? (
+            <div className="ia-alert ia-alert-green mt-3">
               One or more answers may require medical guidance before participating in intense physical activity.
             </div>
-          )}
+          ) : null}
         </section>
 
-        <section
-          className="futuristic-card p-3 mb-3"
-          style={{
-            background: CARD,
-            border: `1px solid ${BORDER}`,
-            borderRadius: 20,
-            boxShadow: "0 18px 40px rgba(0,0,0,0.22)",
-          }}
-        >
+        <section className="ia-tile ia-tile-pad mb-3">
           <form onSubmit={handleSubmit} className="d-grid gap-4">
             <div className="d-grid gap-3">
               <ParqQuestion
@@ -410,12 +373,12 @@ export default function ParqPage() {
             <hr style={{ borderColor: "rgba(255,255,255,0.08)" }} />
 
             <div>
-              <label className="form-label">
+              <label className="form-label ia-label">
                 Injuries, medical conditions or limitations coaches should know about
               </label>
 
               <textarea
-                className="form-control ia-input"
+                className="form-control ia-form-input"
                 rows={4}
                 placeholder="Optional medical notes..."
                 value={medicalNotes}
@@ -424,15 +387,15 @@ export default function ParqPage() {
             </div>
 
             <div>
-              <h5 className="mb-3">Emergency Contact</h5>
+              <div className="ia-tile-title mb-3">Emergency Contact</div>
 
               <div className="row g-2">
                 <div className="col-12 col-md-6">
-                  <label className="form-label">Contact Name</label>
+                  <label className="form-label ia-label">Contact Name</label>
 
                   <input
                     type="text"
-                    className="form-control ia-input"
+                    className="form-control ia-form-input"
                     value={emergencyName}
                     onChange={(e) => setEmergencyName(e.target.value)}
                     required
@@ -440,11 +403,11 @@ export default function ParqPage() {
                 </div>
 
                 <div className="col-12 col-md-6">
-                  <label className="form-label">Contact Phone</label>
+                  <label className="form-label ia-label">Contact Phone</label>
 
                   <input
                     type="tel"
-                    className="form-control ia-input"
+                    className="form-control ia-form-input"
                     value={emergencyPhone}
                     onChange={(e) => setEmergencyPhone(e.target.value)}
                     required
@@ -457,7 +420,7 @@ export default function ParqPage() {
 
             <div className="form-check">
               <input
-                className="form-check-input"
+                className="form-check-input ia-checkbox"
                 type="checkbox"
                 id="photosConsent"
                 checked={photosConsent}
@@ -471,7 +434,7 @@ export default function ParqPage() {
 
             <div className="form-check">
               <input
-                className="form-check-input"
+                className="form-check-input ia-checkbox"
                 type="checkbox"
                 id="consentConfirmed"
                 checked={consentConfirmed}
@@ -488,11 +451,11 @@ export default function ParqPage() {
 
             <div className="row g-2">
               <div className="col-12">
-                <label className="form-label">Full Name</label>
+                <label className="form-label ia-label">Full Name</label>
 
                 <input
                   type="text"
-                  className="form-control ia-input"
+                  className="form-control ia-form-input"
                   placeholder="Your full legal name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
@@ -501,50 +464,36 @@ export default function ParqPage() {
               </div>
 
               <div className="col-12">
-                <label className="form-label">
+                <label className="form-label ia-label">
                   Email{" "}
                   {isAuthed ? (
-                    <span style={{ color: TEXT_DIM }}>(linked)</span>
+                    <span className="text-dim">(linked)</span>
                   ) : (
-                    <span style={{ color: TEXT_DIM }}>(optional)</span>
+                    <span className="text-dim">(optional)</span>
                   )}
                 </label>
 
                 <input
                   type="email"
-                  className="form-control ia-input"
+                  className="form-control ia-form-input"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isAuthed}
                 />
 
-                {isAuthed && sessionEmail && (
-                  <div className="small mt-1" style={{ color: TEXT_DIM }}>
-                    Linked to{" "}
-                    <span
-                      style={{
-                        color: ACCENT,
-                        fontWeight: 700,
-                      }}
-                    >
-                      {sessionEmail}
-                    </span>
+                {isAuthed && sessionEmail ? (
+                  <div className="small mt-1 text-dim">
+                    Linked to <span className="ia-linked-email">{sessionEmail}</span>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
 
             <div>
-              <label className="form-label">Signature</label>
+              <label className="form-label ia-label">Signature</label>
 
-              <div
-                className="rounded"
-                style={{
-                  border: "1px dashed rgba(255,255,255,0.28)",
-                  background: "rgba(255,255,255,0.03)",
-                }}
-              >
+              <div className="ia-signature-wrap">
                 <canvas
                   ref={canvasRef}
                   width={600}
@@ -559,60 +508,51 @@ export default function ParqPage() {
               </div>
 
               <div className="d-flex justify-content-end mt-2">
-                <button type="button" className="btn-bxkr-outline" onClick={clearSignature}>
+                <button type="button" className="ia-btn-outline" onClick={clearSignature}>
                   Clear
                 </button>
               </div>
             </div>
 
-            {error && (
-              <div
-                className="alert"
-                role="alert"
-                style={{
-                  background: "rgba(255,107,107,0.14)",
-                  border: "1px solid rgba(255,107,107,0.32)",
-                  color: "#fff",
-                  borderRadius: 14,
-                }}
-              >
+            {error ? (
+              <div className="ia-alert ia-alert-red" role="alert">
                 {error}
               </div>
-            )}
+            ) : null}
 
-            <button
-              type="submit"
-              className="bxkr-btn"
-              disabled={busy || !mounted}
-              style={{
-                background: ACCENT,
-                color: "#061018",
-                border: "none",
-                fontWeight: 700,
-              }}
-            >
+            <button type="submit" className="ia-btn-primary" disabled={busy || !mounted}>
               {busy ? "Submitting..." : "Submit PAR-Q"}
             </button>
 
-            <div className="small text-center" style={{ color: TEXT_DIM }}>
+            <div className="small text-center text-dim">
               By submitting this form you agree to the{" "}
               <Link href="/termsbership terms and participation waiver</Link>.
             </div>
 
-            <div className="small text-center" style={{ color: TEXT_DIM }}>
+            <div className="small text-center text-dim">
               Submissions are timestamped automatically. Session link: {sessionId ? `#${sessionId}` : "None"}
             </div>
           </form>
         </section>
 
-        <footer className="text-center small" style={{ color: TEXT_DIM }}>
+        <footer className="text-center small text-dim">
           © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacycy</Link> ·{" "}
           <Link href="/termsms</Link>
         </footer>
       </main>
 
       <style jsx>{`
-        :global(.ia-input) {
+        .text-dim {
+          color: var(--ia-muted);
+        }
+
+        .ia-label {
+          color: rgba(255,255,255,0.86);
+          font-weight: var(--ia-fw-semi);
+          margin-bottom: 6px;
+        }
+
+        .ia-form-input {
           min-height: 46px;
           border-radius: 12px;
           border: 1px solid rgba(255,255,255,0.10);
@@ -620,49 +560,53 @@ export default function ParqPage() {
           color: #fff;
         }
 
-        :global(.ia-input:focus) {
+        .ia-form-input:focus {
           border-color: rgba(24,255,154,0.45);
           box-shadow: 0 0 0 3px rgba(24,255,154,0.12);
           background: rgba(255,255,255,0.04);
           color: #fff;
         }
 
-        :global(.ia-input::placeholder) {
+        .ia-form-input::placeholder {
           color: rgba(255,255,255,0.38);
         }
 
-        :global(.form-check-input:checked) {
-          background-color: ${ACCENT};
-          border-color: ${ACCENT};
+        .ia-checkbox:checked {
+          background-color: var(--ia-neon);
+          border-color: var(--ia-neon);
         }
 
-        :global(.form-check-input:focus) {
+        .ia-checkbox:focus {
           box-shadow: 0 0 0 3px rgba(24,255,154,0.14);
           border-color: rgba(24,255,154,0.5);
         }
 
-        :global(.btn-bxkr-outline) {
-          min-height: 42px;
-          border-radius: 12px;
-          border: 1px solid rgba(255,255,255,0.14);
-          background: transparent;
-          color: #fff;
-          padding: 10px 14px;
-          text-decoration: none;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        :global(.btn-bxkr-outline:hover) {
-          border-color: rgba(24,255,154,0.35);
-          color: #fff;
-        }
-
-        :global(.bxkr-btn) {
-          min-height: 48px;
+        .ia-alert {
           border-radius: 14px;
-          padding: 10px 16px;
+          padding: 12px 14px;
+          color: #fff;
+        }
+
+        .ia-alert-green {
+          background: rgba(24,255,154,0.12);
+          border: 1px solid rgba(24,255,154,0.28);
+        }
+
+        .ia-alert-red {
+          background: rgba(255,107,107,0.14);
+          border: 1px solid rgba(255,107,107,0.32);
+        }
+
+        .ia-signature-wrap {
+          border-radius: 14px;
+          border: 1px dashed rgba(255,255,255,0.28);
+          background: rgba(255,255,255,0.03);
+          overflow: hidden;
+        }
+
+        .ia-linked-email {
+          color: var(--ia-neon);
+          font-weight: 700;
         }
       `}</style>
     </>
@@ -675,8 +619,7 @@ function ParqQuestion(props: {
   onChange: (v: Answer) => void;
 }) {
   const { label, value, onChange } = props;
-
-  const nameId = useMemo(() => Math.random().toString(36).slice(2), []);
+  const nameId = useId();
 
   return (
     <div className="d-grid gap-2">
@@ -685,7 +628,7 @@ function ParqQuestion(props: {
       <div className="d-flex gap-3">
         <div className="form-check">
           <input
-            className="form-check-input"
+            className="form-check-input ia-checkbox"
             type="radio"
             name={nameId}
             id={`${nameId}-yes`}
@@ -700,7 +643,7 @@ function ParqQuestion(props: {
 
         <div className="form-check">
           <input
-            className="form-check-input"
+            className="form-check-input ia-checkbox"
             type="radio"
             name={nameId}
             id={`${nameId}-no`}
@@ -713,7 +656,18 @@ function ParqQuestion(props: {
           </label>
         </div>
       </div>
+
+      <style jsx>{`
+        .ia-checkbox:checked {
+          background-color: var(--ia-neon);
+          border-color: var(--ia-neon);
+        }
+
+        .ia-checkbox:focus {
+          box-shadow: 0 0 0 3px rgba(24,255,154,0.14);
+          border-color: rgba(24,255,154,0.5);
+        }
+      `}</style>
     </div>
   );
 }
-        
