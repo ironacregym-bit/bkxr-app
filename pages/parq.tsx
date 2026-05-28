@@ -1,6 +1,6 @@
 // File: pages/parq.tsx
-import Link from "next/link";
 import Head from "next/head";
+import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
@@ -44,7 +44,6 @@ export default function ParqPage() {
   const [email, setEmail] = useState("");
 
   const [medicalNotes, setMedicalNotes] = useState("");
-
   const [emergencyName, setEmergencyName] = useState("");
   const [emergencyPhone, setEmergencyPhone] = useState("");
 
@@ -533,7 +532,7 @@ export default function ParqPage() {
 
             <div className="small text-center text-dim">
               By submitting this form you agree to the{" "}
-              <Link href="/terms"> Membership terms and participation waiver</Link>.
+              <Link href="/terms">membership terms and participation waiver</Link>.
             </div>
 
             <div className="small text-center text-dim">
@@ -543,8 +542,8 @@ export default function ParqPage() {
         </section>
 
         <footer className="text-center small text-dim">
-          © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacy">Privacy</Link> ·{" "}
-          <Link href="/terms>Terms</Link>
+          © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacy"></Link> ·{" "}
+          <Link href="/terms"></Link>
         </footer>
       </main>
 
