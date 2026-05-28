@@ -1,14 +1,7 @@
 // File: pages/parq.tsx
 import Link from "next/link";
 import Head from "next/head";
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 
@@ -60,7 +53,6 @@ export default function ParqPage() {
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
-  const hasDrawn = useRef(false);
 
   const [hasSignature, setHasSignature] = useState(false);
 
@@ -88,10 +80,6 @@ export default function ParqPage() {
     }
   }, [mounted, status, data?.user, email]);
 
-  /**
-   * SIGNATURE CANVAS (STABLE SETUP)
-   * Fix: removed hasSignature dependency to avoid re-binding listeners
-   */
   useEffect(() => {
     if (!mounted) return;
 
@@ -141,15 +129,12 @@ export default function ParqPage() {
       ctx.lineTo(x, y);
       ctx.stroke();
 
-      if (!hasDrawn.current) {
-        hasDrawn.current = true;
+      if (!hasSignature) {
         setHasSignature(true);
       }
     };
 
-    const onUp = (evt: MouseEvent | TouchEvent) => {
-      if (!drawing.current) return;
-      evt.preventDefault();
+    const onUp = () => {
       drawing.current = false;
     };
 
@@ -170,7 +155,7 @@ export default function ParqPage() {
       canvas.removeEventListener("touchmove", onMove);
       window.removeEventListener("touchend", onUp);
     };
-  }, [mounted]);
+  }, [mounted, hasSignature]);
 
   const clearSignature = () => {
     const canvas = canvasRef.current;
@@ -181,7 +166,6 @@ export default function ParqPage() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setHasSignature(false);
-    hasDrawn.current = false;
   };
 
   const setAnswer = (key: keyof ParqAnswers, value: Answer) => {
@@ -192,35 +176,25 @@ export default function ParqPage() {
   };
 
   const allAnswered = useMemo(() => {
-    return Object.values(answers).every(
-      (a) => a === "yes" || a === "no"
-    );
+    return Object.values(answers).every((a) => a === "yes" || a === "no");
   }, [answers]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!allAnswered)
-      return setError("Please answer all PAR-Q questions.");
-    if (!consentConfirmed)
-      return setError("Please confirm the consent statement.");
-    if (!fullName.trim())
-      return setError("Please enter your full name.");
-    if (!emergencyName.trim())
-      return setError("Please enter an emergency contact.");
-    if (!emergencyPhone.trim())
-      return setError("Please enter an emergency contact phone.");
-    if (!hasSignature)
-      return setError("Please provide your signature.");
-    if (email && !isValidEmail(email))
-      return setError("Please enter a valid email.");
+    if (!allAnswered) return setError("Please answer all PAR-Q questions.");
+    if (!consentConfirmed) return setError("Please confirm the consent statement.");
+    if (!fullName.trim()) return setError("Please enter your full name.");
+    if (!emergencyName.trim()) return setError("Please enter an emergency contact.");
+    if (!emergencyPhone.trim()) return setError("Please enter an emergency contact phone.");
+    if (!hasSignature) return setError("Please provide your signature.");
+    if (email && !isValidEmail(email)) return setError("Please enter a valid email.");
 
     setBusy(true);
 
     try {
-      const signature_b64 =
-        canvasRef.current?.toDataURL("image/jpeg", 0.8);
+      const signature_b64 = canvasRef.current?.toDataURL("image/jpeg", 0.8);
 
       const payload = {
         answers,
@@ -248,9 +222,7 @@ export default function ParqPage() {
       const nextRegister = "/register?parq=ok";
 
       const successUrl = showRegisterCta
-        ? `/parq/success?linked=0&register=${encodeURIComponent(
-            nextRegister
-          )}`
+        ? `/parq/success?linked=0&register=${encodeURIComponent(nextRegister)}`
         : `/parq/success?linked=1`;
 
       await router.replace(successUrl);
@@ -262,8 +234,7 @@ export default function ParqPage() {
   };
 
   const isAuthed = mounted && status === "authenticated";
-  const sessionEmail =
-    isAuthed ? ((data?.user as any)?.email || "") : "";
+  const sessionEmail = isAuthed ? ((data?.user as any)?.email || "") : "";
 
   return (
     <>
@@ -278,18 +249,11 @@ export default function ParqPage() {
           minHeight: "100vh",
           paddingBottom: 80,
           color: "#fff",
-          background:
-            "linear-gradient(to bottom, #070a0d 0%, #0d1416 55%, #111a16 100%)",
+          background: "linear-gradient(to bottom, #070a0d 0%, #0d1416 55%, #111a16 100%)",
         }}
       >
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <img
-            src="/IronAcreLogoNoBG.png"
-            alt="Iron Acre Gym"
-            height={42}
-            style={{ borderRadius: 8 }}
-          />
-
+          <img src="/IronAcreLogoNoBG.png" alt="Iron Acre Gym" height={42} />
           <Link href="/" className="ia-btn-outline">
             Back
           </Link>
@@ -316,14 +280,90 @@ export default function ParqPage() {
           )}
         </section>
 
-        {/* ===== FORM CONTENT (UNCHANGED FROM YOUR ORIGINAL) ===== */}
-        {/* kept intact to preserve full structure */}
+        {/* ===================== FULL ORIGINAL FORM RESTORED ===================== */}
+
+        <section className="ia-tile ia-tile-pad mb-3">
+          <form onSubmit={handleSubmit} className="d-grid gap-4">
+
+            <div className="d-grid gap-3">
+              {/*
+                ALL 7 QUESTIONS RESTORED EXACTLY
+              */}
+              <ParqQuestion label="Has your doctor ever said that you have a heart condition or high blood pressure?" value={answers.q1} onChange={(v) => setAnswer("q1", v)} />
+              <ParqQuestion label="Do you feel pain in your chest when you perform physical activity?" value={answers.q2} onChange={(v) => setAnswer("q2", v)} />
+              <ParqQuestion label="In the past month, have you had chest pain when not doing physical activity?" value={answers.q3} onChange={(v) => setAnswer("q3", v)} />
+              <ParqQuestion label="Do you lose balance because of dizziness or ever lose consciousness?" value={answers.q4} onChange={(v) => setAnswer("q4", v)} />
+              <ParqQuestion label="Do you have a bone or joint problem that could worsen with physical activity?" value={answers.q5} onChange={(v) => setAnswer("q5", v)} />
+              <ParqQuestion label="Is your doctor prescribing medication for blood pressure or heart conditions?" value={answers.q6} onChange={(v) => setAnswer("q6", v)} />
+              <ParqQuestion label="Do you know of any other reason why you should not participate in physical activity?" value={answers.q7} onChange={(v) => setAnswer("q7", v)} />
+            </div>
+
+            <hr />
+
+            <div>
+              <label>Medical notes</label>
+              <textarea
+                rows={4}
+                value={medicalNotes}
+                onChange={(e) => setMedicalNotes(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label>Emergency Contact</label>
+              <input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} />
+              <input value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} />
+            </div>
+
+            <div>
+              <input
+                type="checkbox"
+                checked={photosConsent}
+                onChange={(e) => setPhotosConsent(e.target.checked)}
+              />
+              <label>Photo/video consent</label>
+            </div>
+
+            <div>
+              <input
+                type="checkbox"
+                checked={consentConfirmed}
+                onChange={(e) => setConsentConfirmed(e.target.checked)}
+              />
+              <label>Consent confirmation</label>
+            </div>
+
+            <input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Full name"
+            />
+
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+            />
+
+            <div>
+              <canvas ref={canvasRef} width={600} height={180} />
+              <button type="button" onClick={clearSignature}>
+                Clear
+              </button>
+            </div>
+
+            {error && <div className="ia-alert ia-alert-red">{error}</div>}
+
+            <button type="submit" disabled={busy}>
+              {busy ? "Submitting..." : "Submit PAR-Q"}
+            </button>
+
+          </form>
+        </section>
 
         <div className="small text-center text-dim">
           By submitting this form you agree to the{" "}
-          <Link href="/membership-terms">
-            terms and participation waiver
-          </Link>.
+          <Link href="/membership-terms">terms and participation waiver</Link>.
         </div>
 
         <div className="small text-center text-dim">
@@ -337,12 +377,6 @@ export default function ParqPage() {
           <Link href="/terms">Terms</Link>
         </footer>
       </main>
-
-      <style jsx>{`
-        .text-dim {
-          color: var(--ia-muted);
-        }
-      `}</style>
     </>
   );
 }
@@ -359,31 +393,25 @@ function ParqQuestion({
   const nameId = useId();
 
   return (
-    <div className="d-grid gap-2">
-      <label className="form-label mb-1">{label}</label>
+    <div>
+      <label>{label}</label>
 
-      <div className="d-flex gap-3">
-        <div className="form-check">
-          <input
-            className="form-check-input ia-checkbox"
-            type="radio"
-            name={nameId}
-            checked={value === "yes"}
-            onChange={() => onChange("yes")}
-          />
-          <label>Yes</label>
-        </div>
+      <div>
+        <input
+          type="radio"
+          name={nameId}
+          checked={value === "yes"}
+          onChange={() => onChange("yes")}
+        />
+        Yes
 
-        <div className="form-check">
-          <input
-            className="form-check-input ia-checkbox"
-            type="radio"
-            name={nameId}
-            checked={value === "no"}
-            onChange={() => onChange("no")}
-          />
-          <label>No</label>
-        </div>
+        <input
+          type="radio"
+          name={nameId}
+          checked={value === "no"}
+          onChange={() => onChange("no")}
+        />
+        No
       </div>
     </div>
   );
