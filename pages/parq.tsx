@@ -1,7 +1,7 @@
 // File: pages/parq.tsx
 import Head from "next/head";
 import Link from "next/link";
-import { use { useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/router";
 
