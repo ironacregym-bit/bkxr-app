@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
-import BottomNav from "../../../components/BottomNav";
+import BottomNav from "../../components/BottomNav";
 
 type SessionRow = {
   id: string;
