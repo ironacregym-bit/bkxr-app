@@ -1,7 +1,7 @@
-// File: components/PushSubscribeButton.tsx
+// components/PushSubscribeButton.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -12,13 +12,14 @@ function urlBase64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
-export default function PushSubscribeButton() {
+export function usePushNotifications() {
   const [supported, setSupported] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  const refresh = useCallback(async () => {
     const ok =
       typeof window !== "undefined" &&
       "serviceWorker" in navigator &&
@@ -27,39 +28,66 @@ export default function PushSubscribeButton() {
 
     setSupported(ok);
 
-    if (!ok) return;
+    if (!ok) {
+      setPermission("unsupported");
+      setSubscribed(false);
+      return;
+    }
 
-    (async () => {
-      try {
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (!reg) return;
-        const existing = await reg.pushManager.getSubscription();
-        setSubscribed(!!existing);
-      } catch {
-        // ignore
+    setPermission(Notification.permission);
+
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        setSubscribed(false);
+        return;
       }
-    })();
+
+      const existing = await reg.pushManager.getSubscription();
+      setSubscribed(!!existing);
+    } catch {
+      setSubscribed(false);
+    }
   }, []);
 
-  async function ensureRegistration(): Promise<ServiceWorkerRegistration> {
-    let reg = await navigator.serviceWorker.getRegistration();
-    if (!reg) {
-      reg = await navigator.serviceWorker.register("/sw.js");
-    }
-    return reg;
-  }
+  useEffect(() => {
+    refresh().catch(() => {});
+  }, [refresh]);
 
-  async function subscribe() {
+  const subscribe = useCallback(async () => {
     try {
       setBusy(true);
       setError("");
 
-      const reg = await ensureRegistration();
+      const ok =
+        typeof window !== "undefined" &&
+        "serviceWorker" in navigator &&
+        "PushManager" in window &&
+        "Notification" in window;
 
-      const perm = await Notification.requestPermission();
+      if (!ok) {
+        setSupported(false);
+        setPermission("unsupported");
+        setError("Push notifications are not supported on this device.");
+        return false;
+      }
+
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        reg = await navigator.serviceWorker.register("/sw.js");
+      }
+
+      let perm = Notification.permission;
+      if (perm !== "granted") {
+        perm = await Notification.requestPermission();
+      }
+
+      setPermission(perm);
+
       if (perm !== "granted") {
         setError("Notifications are blocked in your browser settings.");
-        return;
+        setSubscribed(false);
+        return false;
       }
 
       const vapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -86,51 +114,54 @@ export default function PushSubscribeButton() {
       }
 
       setSubscribed(true);
+      return true;
     } catch (e) {
       console.error("[push subscribe]", e);
       setError("Failed to enable push notifications.");
+      setSubscribed(false);
+      return false;
     } finally {
       setBusy(false);
     }
-  }
+  }, []);
 
-  if (!supported) return null;
+  return {
+    supported,
+    subscribed,
+    busy,
+    permission,
+    error,
+    subscribe,
+    refresh,
+  };
+}
+
+type PushSubscribeButtonProps = {
+  className?: string;
+  style?: React.CSSProperties;
+  children?: React.ReactNode;
+};
+
+export default function PushSubscribeButton({
+  className,
+  style,
+  children,
+}: PushSubscribeButtonProps) {
+  const { supported, subscribed, busy, subscribe } = usePushNotifications();
+
+  if (!supported || subscribed) return null;
 
   return (
-    <section className="futuristic-card p-3 mb-3" aria-label="Push notifications">
-      <div className="d-flex align-items-start justify-content-between gap-3 flex-wrap">
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 12, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            Device alerts
-          </div>
-          <h2 className="m-0" style={{ fontSize: "1.05rem" }}>
-            Push notifications
-          </h2>
-          <div className="text-dim mt-2" style={{ lineHeight: 1.45 }}>
-            Get reminders for workouts, updates and important gym alerts straight to your device.
-          </div>
-          {!!error && (
-            <div className="mt-2" style={{ color: "#ff9b9b", fontSize: 13 }}>
-              {error}
-            </div>
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={subscribe}
-          disabled={busy || subscribed}
-          className="btn btn-outline-light"
-          style={{
-            borderRadius: 999,
-            padding: "10px 16px",
-            whiteSpace: "nowrap",
-            opacity: busy ? 0.85 : 1,
-          }}
-        >
-          {busy ? "Enabling..." : subscribed ? "Push enabled" : "Enable push"}
-        </button>
-      </div>
-    </section>
+    <button
+      type="button"
+      onClick={() => {
+        subscribe().catch(() => {});
+      }}
+      disabled={busy}
+      className={className || "btn btn-outline-light"}
+      style={style}
+    >
+      {busy ? "Enabling..." : children || "Enable push notifications"}
+    </button>
   );
 }
