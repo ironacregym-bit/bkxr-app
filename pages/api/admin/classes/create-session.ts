@@ -1,9 +1,11 @@
 // pages/api/admin/classes/create-session.ts
+
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Timestamp } from "@google-cloud/firestore";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]";
 import firestore from "../../../../lib/firestoreClient";
+import { notifyInAppAndPush } from "../../../../lib/notify";
 
 type Body = {
   class_id?: string;
@@ -17,7 +19,7 @@ type Body = {
   notify_members?: boolean;
 };
 
-function parseDateTime(dateYMD: string, hhmm: string) {
+function parseDateTime(dateYMD: string, hhmm: string): Date | null {
   const [year, month, day] = dateYMD.split("-").map((x) => Number(x));
   const [hours, minutes] = hhmm.split(":").map((x) => Number(x));
 
@@ -33,6 +35,108 @@ function parseDateTime(dateYMD: string, hhmm: string) {
 
   const value = new Date(year, month - 1, day, hours, minutes, 0, 0);
   return isNaN(value.getTime()) ? null : value;
+}
+
+function formatSessionDateTime(startDate: Date, endDate: Date): string {
+  try {
+    const datePart = startDate.toLocaleDateString("en-GB", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    });
+
+    const startPart = startDate.toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    const endPart = endDate.toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    return `${datePart} • ${startPart}-${endPart}`;
+  } catch {
+    return `${startDate.toISOString()} - ${endDate.toISOString()}`;
+  }
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size));
+  }
+  return out;
+}
+
+async function notifyUsersOfNewSession(params: {
+  userEmails: string[];
+  sessionId: string;
+  className: string;
+  gymName: string;
+  startDate: Date;
+  endDate: Date;
+}) {
+  const { userEmails, sessionId, className, gymName, startDate, endDate } = params;
+
+  if (!userEmails.length) {
+    return { attempted: 0, succeeded: 0, failed: 0 };
+  }
+
+  const whenText = formatSessionDateTime(startDate, endDate);
+  const title = "New class added";
+  const message = `${className} has been added at ${gymName} on ${whenText}. Tap to view the latest schedule.`;
+  const href = "/iron-acre";
+
+  let succeeded = 0;
+  let failed = 0;
+
+  const chunks = chunkArray(userEmails, 20);
+
+  for (const chunk of chunks) {
+    const results = await Promise.allSettled(
+      chunk.map((email) =>
+        notifyInAppAndPush(
+          email,
+          {
+            title,
+            message,
+            href,
+            source_key: "session",
+            source_event: "created",
+            meta: {
+              session_id: sessionId,
+              class_name: className,
+              gym_name: gymName,
+              start_time: startDate.toISOString(),
+              end_time: endDate.toISOString(),
+            },
+          },
+          {
+            title,
+            body: `${className} • ${whenText}`,
+            url: href,
+          }
+        )
+      )
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        succeeded++;
+      } else {
+        failed++;
+      }
+    }
+  }
+
+  return {
+    attempted: userEmails.length,
+    succeeded,
+    failed,
+  };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -99,6 +203,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Selected class does not exist" });
     }
 
+    const gymData = gymDoc.data() as any;
+    const classData = classDoc.data() as any;
+
+    const gymName = String(gymData?.name || gymId);
+    const className = String(classData?.name || classData?.title || classId);
+
     const now = Timestamp.now();
     const ref = firestore.collection("session").doc();
 
@@ -118,9 +228,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       created_by: String(session.user.email || "").toLowerCase(),
     });
 
+    let notificationSummary = {
+      attempted: 0,
+      succeeded: 0,
+      failed: 0,
+    };
+
+    if (notifyMembers) {
+      const usersSnap = await firestore.collection("users").select().get();
+      const allEmails = usersSnap.docs
+        .map((doc) => String(doc.id || "").trim().toLowerCase())
+        .filter(Boolean);
+
+      notificationSummary = await notifyUsersOfNewSession({
+        userEmails: allEmails,
+        sessionId: ref.id,
+        className,
+        gymName,
+        startDate,
+        endDate,
+      });
+    }
+
     return res.status(200).json({
       ok: true,
       sessionId: ref.id,
+      notifiedUsers: notificationSummary.succeeded,
+      notificationFailures: notificationSummary.failed,
     });
   } catch (err: any) {
     console.error("[admin/classes/create-session]", err?.message || err);
