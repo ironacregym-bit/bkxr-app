@@ -41,10 +41,16 @@ export default function NotificationsBanner() {
     <div>
       <div className="d-flex align-items-center justify-content-between gap-2 mb-3">
         <div>
-          <div className="text-dim small" style={{ letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <div
+            className="text-dim small"
+            style={{ letterSpacing: "0.08em", textTransform: "uppercase" }}
+          >
             Updates
           </div>
-          <div style={{ fontSize: "1.05rem", fontWeight: 700, color: "#fff" }}>Notifications</div>
+
+          <div style={{ fontSize: "1.05rem", fontWeight: 700, color: "#fff" }}>
+            Notifications
+          </div>
         </div>
 
         {supported ? (
@@ -195,6 +201,7 @@ export default function NotificationsBanner() {
                   marginBottom: 8,
                 }}
               />
+
               <div
                 style={{
                   width: "78%",
@@ -233,6 +240,7 @@ export default function NotificationsBanner() {
                         boxShadow: item.read_at ? "none" : "0 0 0 4px rgba(255,127,50,0.12)",
                       }}
                     />
+
                     <div style={{ minWidth: 0 }}>
                       <div
                         style={{
@@ -277,7 +285,8 @@ export default function NotificationsBanner() {
                 <Link
                   key={item.id}
                   href={item.href}
-                  style={{ textDecoration: "none", color: "inherit" }}
+                  className="text-decoration-none"
+                  style={{ color: "inherit" }}
                 >
                   {content}
                 </Link>
