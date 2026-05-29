@@ -70,6 +70,22 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+function shouldNotifyUserForGym(user: any, targetGymId: string): boolean {
+  const userGymId = String(user?.gym_id || "").trim();
+  const membershipSource = String(user?.membership_source || "").trim().toLowerCase();
+
+  if (userGymId) {
+    return userGymId === targetGymId;
+  }
+
+  // Temporary fallback for existing Iron Acre users before gym_id is set everywhere.
+  if (targetGymId === "g1" && membershipSource === "iron_acre") {
+    return true;
+  }
+
+  return false;
+}
+
 async function notifyUsersOfNewSession(params: {
   userEmails: string[];
   sessionId: string;
@@ -234,13 +250,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     if (notifyMembers) {
-      const usersSnap = await firestore.collection("users").select().get();
-      const allEmails = usersSnap.docs
+      const usersSnap = await firestore.collection("users").get();
+      const targetEmails = usersSnap.docs
+        .filter((doc) => shouldNotifyUserForGym(doc.data(), gymId))
         .map((doc) => String(doc.id || "").trim().toLowerCase())
         .filter(Boolean);
 
       notificationSummary = await notifyUsersOfNewSession({
-        userEmails: allEmails,
+        userEmails: targetEmails,
         sessionId: ref.id,
         className,
         gymName,
