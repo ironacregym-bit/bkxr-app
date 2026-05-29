@@ -1,8 +1,9 @@
-// File: components/NotificationsBanner.tsx
+// components/NotificationsBanner.tsx
 "use client";
 
 import Link from "next/link";
 import useSWR from "swr";
+import PushSubscribeButton, { usePushNotifications } from "./PushSubscribeButton";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -28,58 +29,154 @@ function formatCreatedAt(value?: string | null) {
 }
 
 export default function NotificationsBanner() {
-  const { data, error, isLoading } = useSWR("/api/notifications/feed?limit=3", fetcher, {
+  const { data, error, isLoading } = useSWR("/api/notifications/feed?limit=8", fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
 
   const items: FeedItem[] = Array.isArray(data?.items) ? data.items : [];
-
-  if (error) {
-    return null;
-  }
+  const { supported, subscribed, permission, busy, error: pushError } = usePushNotifications();
 
   return (
-    <section className="futuristic-card p-3 mb-3" aria-label="Notifications">
-      <div className="d-flex align-items-center justify-content-between mb-2">
+    <div>
+      <div className="d-flex align-items-center justify-content-between gap-2 mb-3">
         <div>
-          <div style={{ fontSize: 12, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <div className="text-dim small" style={{ letterSpacing: "0.08em", textTransform: "uppercase" }}>
             Updates
           </div>
-          <h2 className="m-0" style={{ fontSize: "1.05rem" }}>
-            Notifications
-          </h2>
+          <div style={{ fontSize: "1.05rem", fontWeight: 700, color: "#fff" }}>Notifications</div>
         </div>
-        {!!items.length && (
+
+        {supported ? (
+          subscribed ? (
+            <div
+              style={{
+                borderRadius: 999,
+                padding: "6px 10px",
+                background: "rgba(36, 255, 176, 0.10)",
+                border: "1px solid rgba(36, 255, 176, 0.30)",
+                color: "#d8fff1",
+                fontSize: 12,
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Push enabled
+            </div>
+          ) : (
+            <div
+              style={{
+                borderRadius: 999,
+                padding: "6px 10px",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.10)",
+                color: "rgba(255,255,255,0.82)",
+                fontSize: 12,
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Push off
+            </div>
+          )
+        ) : (
           <div
             style={{
-              minWidth: 28,
-              height: 28,
-              padding: "0 10px",
               borderRadius: 999,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.12)",
+              padding: "6px 10px",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.10)",
+              color: "rgba(255,255,255,0.60)",
               fontSize: 12,
-              fontWeight: 700,
-              color: "#fff",
+              fontWeight: 600,
+              whiteSpace: "nowrap",
             }}
           >
-            {items.length}
+            Unsupported
           </div>
         )}
       </div>
 
-      {isLoading ? (
+      {supported && !subscribed && (
         <div
           style={{
-            display: "grid",
-            gap: 10,
+            borderRadius: 18,
+            padding: 14,
+            marginBottom: 14,
+            background: "rgba(255,127,50,0.08)",
+            border: "1px solid rgba(255,127,50,0.22)",
           }}
         >
-          {[0, 1].map((i) => (
+          <div style={{ fontWeight: 700, color: "#fff", marginBottom: 6 }}>
+            Turn on push notifications
+          </div>
+
+          <div
+            style={{
+              color: "rgba(255,255,255,0.78)",
+              fontSize: 14,
+              lineHeight: 1.45,
+              marginBottom: 12,
+            }}
+          >
+            Get workout reminders, important gym updates and anything time-sensitive straight to your device.
+          </div>
+
+          {permission === "denied" && (
+            <div
+              style={{
+                color: "#ffb3b3",
+                fontSize: 13,
+                lineHeight: 1.45,
+                marginBottom: 10,
+              }}
+            >
+              Notifications are currently blocked in your browser settings.
+            </div>
+          )}
+
+          {!!pushError && (
+            <div
+              style={{
+                color: "#ffb3b3",
+                fontSize: 13,
+                lineHeight: 1.45,
+                marginBottom: 10,
+              }}
+            >
+              {pushError}
+            </div>
+          )}
+
+          <PushSubscribeButton
+            className="btn btn-sm ia-btn"
+            style={{
+              borderRadius: 999,
+              whiteSpace: "nowrap",
+              minHeight: 40,
+            }}
+          >
+            {busy ? "Enabling..." : "Enable push notifications"}
+          </PushSubscribeButton>
+        </div>
+      )}
+
+      {error ? (
+        <div
+          style={{
+            borderRadius: 16,
+            padding: "14px",
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            color: "rgba(255,255,255,0.72)",
+            fontSize: 14,
+          }}
+        >
+          Unable to load notifications right now.
+        </div>
+      ) : isLoading ? (
+        <div style={{ display: "grid", gap: 10 }}>
+          {[0, 1, 2].map((i) => (
             <div
               key={i}
               style={{
@@ -91,16 +188,16 @@ export default function NotificationsBanner() {
             >
               <div
                 style={{
-                  width: "40%",
+                  width: "38%",
                   height: 12,
                   borderRadius: 999,
-                  background: "rgba(255,255,255,0.10)",
+                  background: "rgba(255,255,255,0.12)",
                   marginBottom: 8,
                 }}
               />
               <div
                 style={{
-                  width: "80%",
+                  width: "78%",
                   height: 10,
                   borderRadius: 999,
                   background: "rgba(255,255,255,0.08)",
@@ -117,24 +214,23 @@ export default function NotificationsBanner() {
                 style={{
                   borderRadius: 16,
                   padding: "12px 14px",
-                  background: item.read_at ? "rgba(255,255,255,0.03)" : "rgba(255,127,50,0.12)",
+                  background: item.read_at ? "rgba(255,255,255,0.03)" : "rgba(255,127,50,0.10)",
                   border: item.read_at
                     ? "1px solid rgba(255,255,255,0.08)"
-                    : "1px solid rgba(255,127,50,0.35)",
-                  transition: "all 0.2s ease",
+                    : "1px solid rgba(255,127,50,0.24)",
                 }}
               >
                 <div className="d-flex align-items-start justify-content-between gap-2">
                   <div className="d-flex align-items-start gap-2" style={{ minWidth: 0 }}>
                     <div
                       style={{
-                        width: 10,
-                        height: 10,
+                        width: 9,
+                        height: 9,
                         borderRadius: "50%",
                         marginTop: 6,
                         flex: "0 0 auto",
                         background: item.read_at ? "rgba(255,255,255,0.25)" : "#ff7f32",
-                        boxShadow: item.read_at ? "none" : "0 0 0 4px rgba(255,127,50,0.14)",
+                        boxShadow: item.read_at ? "none" : "0 0 0 4px rgba(255,127,50,0.12)",
                       }}
                     />
                     <div style={{ minWidth: 0 }}>
@@ -149,6 +245,7 @@ export default function NotificationsBanner() {
                       >
                         {item.title}
                       </div>
+
                       <div
                         style={{
                           fontSize: 13,
@@ -180,8 +277,8 @@ export default function NotificationsBanner() {
                 <Link
                   key={item.id}
                   href={item.href}
-                  style={{ textDecoration: "none", color: "inherit" }}
-                  aria-label={`${item.title}. ${item.message}`}
+                  className="text-decoration-none"
+                  style={{ color: "inherit" }}
                 >
                   {content}
                 </Link>
@@ -203,9 +300,9 @@ export default function NotificationsBanner() {
             lineHeight: 1.45,
           }}
         >
-          No new notifications yet.
+          No notifications yet.
         </div>
       )}
-    </section>
+    </div>
   );
 }
