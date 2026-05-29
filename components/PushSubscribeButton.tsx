@@ -1,6 +1,7 @@
 // components/PushSubscribeButton.tsx
 "use client";
 
+import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -138,8 +139,8 @@ export function usePushNotifications() {
 
 type PushSubscribeButtonProps = {
   className?: string;
-  style?: React.CSSProperties;
-  children?: React.ReactNode;
+  style?: CSSProperties;
+  children?: ReactNode;
 };
 
 export default function PushSubscribeButton({
