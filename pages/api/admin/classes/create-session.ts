@@ -72,18 +72,7 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 
 function shouldNotifyUserForGym(user: any, targetGymId: string): boolean {
   const userGymId = String(user?.gym_id || "").trim();
-  const membershipSource = String(user?.membership_source || "").trim().toLowerCase();
-
-  if (userGymId) {
-    return userGymId === targetGymId;
-  }
-
-  // Temporary fallback for existing Iron Acre users before gym_id is set everywhere.
-  if (targetGymId === "g1" && membershipSource === "iron_acre") {
-    return true;
-  }
-
-  return false;
+  return Boolean(userGymId) && userGymId === targetGymId;
 }
 
 async function notifyUsersOfNewSession(params: {
@@ -93,8 +82,9 @@ async function notifyUsersOfNewSession(params: {
   gymName: string;
   startDate: Date;
   endDate: Date;
+  gymId: string;
 }) {
-  const { userEmails, sessionId, className, gymName, startDate, endDate } = params;
+  const { userEmails, sessionId, className, gymName, startDate, endDate, gymId } = params;
 
   if (!userEmails.length) {
     return { attempted: 0, succeeded: 0, failed: 0 };
@@ -125,6 +115,7 @@ async function notifyUsersOfNewSession(params: {
               session_id: sessionId,
               class_name: className,
               gym_name: gymName,
+              gym_id: gymId,
               start_time: startDate.toISOString(),
               end_time: endDate.toISOString(),
             },
@@ -161,10 +152,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const session = await getServerSession(req, res, authOptions);
-    const role = (session?.user as any)?.role || "user";
+    const authSession = await getServerSession(req, res, authOptions);
+    const role = (authSession?.user as any)?.role || "user";
 
-    if (!session?.user?.email || (role !== "admin" && role !== "gym")) {
+    if (!authSession?.user?.email || (role !== "admin" && role !== "gym")) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -180,11 +171,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const maxAttendance = Number(body.max_attendance || 0);
     const notifyMembers = Boolean(body.notify_members);
 
-    if (!classId) return res.status(400).json({ error: "Class is required" });
-    if (!gymId) return res.status(400).json({ error: "Gym is required" });
-    if (!date) return res.status(400).json({ error: "Date is required" });
-    if (!startHHMM) return res.status(400).json({ error: "Start time is required" });
-    if (!endHHMM) return res.status(400).json({ error: "End time is required" });
+    if (!classId) {
+      return res.status(400).json({ error: "Class is required" });
+    }
+
+    if (!gymId) {
+      return res.status(400).json({ error: "Gym is required" });
+    }
+
+    if (!date) {
+      return res.status(400).json({ error: "Date is required" });
+    }
+
+    if (!startHHMM) {
+      return res.status(400).json({ error: "Start time is required" });
+    }
+
+    if (!endHHMM) {
+      return res.status(400).json({ error: "End time is required" });
+    }
 
     const startDate = parseDateTime(date, startHHMM);
     const endDate = parseDateTime(date, endHHMM);
@@ -240,7 +245,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       notify_members: notifyMembers,
       created_at: now,
       updated_at: now,
-      created_by: String(session.user.email || "").toLowerCase(),
+      created_by: String(authSession.user.email || "").toLowerCase(),
     });
 
     let notificationSummary = {
@@ -251,6 +256,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (notifyMembers) {
       const usersSnap = await firestore.collection("users").get();
+
       const targetEmails = usersSnap.docs
         .filter((doc) => shouldNotifyUserForGym(doc.data(), gymId))
         .map((doc) => String(doc.id || "").trim().toLowerCase())
@@ -263,6 +269,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         gymName,
         startDate,
         endDate,
+        gymId,
       });
     }
 
