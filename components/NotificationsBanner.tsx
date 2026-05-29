@@ -104,7 +104,7 @@ export default function NotificationsBanner() {
             padding: 14,
             marginBottom: 14,
             background: "rgba(255,127,50,0.08)",
-            border: "1px solid rgba(255,127,50,0.22)",
+            border: "1px solid rgba(255,127,50,0.20)",
           }}
         >
           <div style={{ fontWeight: 700, color: "#fff", marginBottom: 6 }}>
@@ -119,7 +119,7 @@ export default function NotificationsBanner() {
               marginBottom: 12,
             }}
           >
-            Get workout reminders, important gym updates and anything time-sensitive straight to your device.
+            Get workout reminders, class updates and important gym alerts straight to your device.
           </div>
 
           {permission === "denied" && (
@@ -277,8 +277,7 @@ export default function NotificationsBanner() {
                 <Link
                   key={item.id}
                   href={item.href}
-                  className="text-decoration-none"
-                  style={{ color: "inherit" }}
+                  style={{ textDecoration: "none", color: "inherit" }}
                 >
                   {content}
                 </Link>
