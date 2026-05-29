@@ -9,7 +9,11 @@ function urlBase64ToUint8Array(base64String: string) {
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = atob(base64);
   const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+
   return outputArray;
 }
 
@@ -39,6 +43,7 @@ export function usePushNotifications() {
 
     try {
       const reg = await navigator.serviceWorker.getRegistration();
+
       if (!reg) {
         setSubscribed(false);
         return;
@@ -74,11 +79,13 @@ export function usePushNotifications() {
       }
 
       let reg = await navigator.serviceWorker.getRegistration();
+
       if (!reg) {
         reg = await navigator.serviceWorker.register("/sw.js");
       }
 
       let perm = Notification.permission;
+
       if (perm !== "granted") {
         perm = await Notification.requestPermission();
       }
@@ -92,11 +99,13 @@ export function usePushNotifications() {
       }
 
       const vapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+
       if (!vapid) {
         throw new Error("Missing NEXT_PUBLIC_VAPID_PUBLIC_KEY");
       }
 
       const existing = await reg.pushManager.getSubscription();
+
       const sub =
         existing ||
         (await reg.pushManager.subscribe({
@@ -115,6 +124,7 @@ export function usePushNotifications() {
       }
 
       setSubscribed(true);
+      setError("");
       return true;
     } catch (e) {
       console.error("[push subscribe]", e);
@@ -150,7 +160,9 @@ export default function PushSubscribeButton({
 }: PushSubscribeButtonProps) {
   const { supported, subscribed, busy, subscribe } = usePushNotifications();
 
-  if (!supported || subscribed) return null;
+  if (!supported || subscribed) {
+    return null;
+  }
 
   return (
     <button
