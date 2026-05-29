@@ -1,5 +1,4 @@
 // pages/api/admin/classes/create-session.ts
-
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Timestamp } from "@google-cloud/firestore";
 import { getServerSession } from "next-auth";
