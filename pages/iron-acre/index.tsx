@@ -1,12 +1,10 @@
-// File: pages/iron-acre/index.tsx
+// pages/iron-acre/index.tsx
 import Head from "next/head";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import BottomNav from "../../components/BottomNav";
-import NotificationsBanner from "../../components/NotificationsBanner";
-import PushSubscribeButton from "../../components/PushSubscribeButton";
 import IronAcreHeader from "../../components/iron-acre/IronAcreHeader";
 import IronAcreTasks from "../../components/iron-acre/IronAcreTasks";
 import IronAcreStrengthSummary from "../../components/iron-acre/IronAcreStrengthSummary";
@@ -156,10 +154,6 @@ export default function IronAcreHome() {
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <IronAcreHeader userName={userName} dateLabel={dateLabel} />
-
-        <NotificationsBanner />
-
-        <PushSubscribeButton />
 
         <IronAcreTasks
           todayKey={effectiveTodayKey}
