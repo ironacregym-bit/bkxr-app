@@ -1,5 +1,5 @@
 // components/iron-acre/IronAcreHeader.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import NotificationsBanner from "../NotificationsBanner";
 
 type IronAcreHeaderProps = {
@@ -8,6 +8,7 @@ type IronAcreHeaderProps = {
 };
 
 const TIME_UPDATE_MS = 30_000;
+const DROPDOWN_MAX_WIDTH = 420;
 
 function greetingForHour(hour: number): string {
   if (hour < 12) return "Good morning";
@@ -21,9 +22,23 @@ function formatHHMM(d: Date): string {
   return `${hh}:${mm}`;
 }
 
+type DropdownPosition = {
+  top: number;
+  right: number;
+  width: number;
+};
+
 export default function IronAcreHeader({ userName, dateLabel }: IronAcreHeaderProps) {
   const [timeText, setTimeText] = useState<string>("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState<DropdownPosition>({
+    top: 78,
+    right: 12,
+    width: DROPDOWN_MAX_WIDTH,
+  });
+
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   const greeting = useMemo(() => greetingForHour(new Date().getHours()), []);
 
@@ -38,22 +53,53 @@ export default function IronAcreHeader({ userName, dateLabel }: IronAcreHeaderPr
   useEffect(() => {
     if (!notificationsOpen) return;
 
+    const updatePosition = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const width = Math.min(DROPDOWN_MAX_WIDTH, viewportWidth - 24);
+      const right = rect ? Math.max(12, viewportWidth - rect.right) : 12;
+      const top = rect ? rect.bottom + 10 : 78;
+
+      setDropdownPos({ top, right, width });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [notificationsOpen]);
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+
+      const clickedButton = buttonRef.current?.contains(target);
+      const clickedDropdown = dropdownRef.current?.contains(target);
+
+      if (!clickedButton && !clickedDropdown) {
+        setNotificationsOpen(false);
+      }
+    };
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setNotificationsOpen(false);
       }
     };
 
+    document.addEventListener("mousedown", onMouseDown);
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [notificationsOpen]);
 
-  useEffect(() => {
-    if (!notificationsOpen) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = previous;
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
     };
   }, [notificationsOpen]);
 
@@ -76,6 +122,7 @@ export default function IronAcreHeader({ userName, dateLabel }: IronAcreHeaderPr
           </div>
 
           <button
+            ref={buttonRef}
             type="button"
             className="btn btn-sm ia-btn-outline"
             style={{
@@ -91,7 +138,7 @@ export default function IronAcreHeader({ userName, dateLabel }: IronAcreHeaderPr
             aria-label="Open notifications"
             aria-expanded={notificationsOpen}
             aria-haspopup="dialog"
-            onClick={() => setNotificationsOpen(true)}
+            onClick={() => setNotificationsOpen((prev) => !prev)}
           >
             <i className="fas fa-bell" />
           </button>
@@ -99,79 +146,26 @@ export default function IronAcreHeader({ userName, dateLabel }: IronAcreHeaderPr
       </section>
 
       {notificationsOpen && (
-        <>
-          <button
-            type="button"
-            aria-label="Close notifications"
-            onClick={() => setNotificationsOpen(false)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.55)",
-              border: "none",
-              padding: 0,
-              margin: 0,
-              zIndex: 1040,
-              cursor: "default",
-            }}
-          />
-
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Notifications"
-            style={{
-              position: "fixed",
-              left: 12,
-              right: 12,
-              top: 12,
-              zIndex: 1050,
-              maxWidth: 560,
-              margin: "0 auto",
-            }}
-          >
-            <div
-              className="futuristic-card ia-tile"
-              style={{
-                maxHeight: "calc(100vh - 24px)",
-                overflowY: "auto",
-                padding: 16,
-                borderRadius: 22,
-              }}
-            >
-              <div className="d-flex align-items-center justify-content-between gap-2 mb-3">
-                <div>
-                  <div className="text-dim small" style={{ letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                    Iron Acre Gym
-                  </div>
-                  <div style={{ fontWeight: 800, fontSize: "1.1rem", color: "#fff" }}>
-                    Notifications
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="btn btn-sm ia-btn-outline"
-                  onClick={() => setNotificationsOpen(false)}
-                  style={{
-                    width: 38,
-                    height: 38,
-                    padding: 0,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: 999,
-                  }}
-                  aria-label="Close notifications"
-                >
-                  <i className="fas fa-times" />
-                </button>
-              </div>
-
-              <NotificationsBanner />
-            </div>
-          </div>
-        </>
+        <div
+          ref={dropdownRef}
+          role="dialog"
+          aria-label="Notifications"
+          className="futuristic-card ia-tile"
+          style={{
+            position: "fixed",
+            top: dropdownPos.top,
+            right: dropdownPos.right,
+            width: dropdownPos.width,
+            maxHeight: "min(70vh, 640px)",
+            overflowY: "auto",
+            zIndex: 1050,
+            padding: 16,
+            borderRadius: 22,
+            boxShadow: "0 18px 48px rgba(0,0,0,0.45)",
+          }}
+        >
+          <NotificationsBanner />
+        </div>
       )}
     </>
   );
