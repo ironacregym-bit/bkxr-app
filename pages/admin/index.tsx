@@ -1,3 +1,4 @@
+// pages/admin/index.tsx
 "use client";
 
 import Head from "next/head";
@@ -21,6 +22,7 @@ export default function AdminDashboard() {
         setMsg("Service Worker not supported in this browser.");
         return;
       }
+
       if (!("Notification" in window) || !("PushManager" in window)) {
         setMsg("Push notifications are not supported on this device/browser.");
         return;
@@ -30,6 +32,7 @@ export default function AdminDashboard() {
 
       let perm = Notification.permission as NotificationPermission;
       if (perm === "default") perm = await Notification.requestPermission();
+
       if (perm !== "granted") {
         setMsg("Notifications permission not granted.");
         return;
@@ -39,7 +42,9 @@ export default function AdminDashboard() {
       if (existing) {
         try {
           await existing.unsubscribe();
-        } catch {}
+        } catch {
+          // ignore unsubscribe errors
+        }
       }
 
       const vapidPub = (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "").trim();
@@ -61,6 +66,7 @@ export default function AdminDashboard() {
       });
 
       const subObj = JSON.parse(JSON.stringify(sub));
+
       const resp = await fetch("/api/notifications/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -95,13 +101,12 @@ export default function AdminDashboard() {
   }
 
   const tiles = [
-    // 🔧 Workouts admin library (NEW)
     { title: "Workouts", icon: "fas fa-list-ul", link: "/admin/workouts", color: "primary" },
-
+    { title: "Sessions", icon: "fas fa-calendar-alt", link: "/admin/sessions", color: "info" },
+    { title: "Create Session", icon: "fas fa-calendar-plus", link: "/admin/classes/create-session", color: "info" },
     { title: "Create Workout (BXKR)", icon: "fas fa-dumbbell", link: "/admin/workouts/create", color: "primary" },
     { title: "Create Exercise", icon: "fas fa-plus-circle", link: "/admin/exercises/create", color: "success" },
     { title: "Create Gym Workout", icon: "fas fa-weight-hanging", link: "/admin/workouts/gym-create", color: "warning" },
-    { title: "Create Session", icon: "fas fa-calendar-plus", link: "/admin/sessions/create", color: "info" },
     { title: "Generate WhatsApp Link", icon: "fab fa-whatsapp", link: "/admin/share", color: "success" },
     { title: "Notifications", icon: "fas fa-bell", link: "/admin/notifications", color: "danger" },
     { title: "Members", icon: "fas fa-address-book", link: "/admin/members", color: "primary" },
@@ -123,8 +128,10 @@ export default function AdminDashboard() {
           <h2 className="mb-0 text-center w-100">Admin Dashboard</h2>
         </div>
 
-        {/* Re-enable notifications card */}
-        <div className="card p-3 mb-3" style={{ background: "rgba(255,255,255,0.06)", borderRadius: 16 }}>
+        <div
+          className="card p-3 mb-3"
+          style={{ background: "rgba(255,255,255,0.06)", borderRadius: 16 }}
+        >
           <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
             <div>
               <div className="fw-semibold">Notifications</div>
@@ -133,7 +140,7 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <div className="d-flex gap-2 align-items-center">
+            <div className="d-flex gap-2 align-items-center flex-wrap">
               <Link href="/admin/notifications" className="btn-bxkr-outline">
                 Open Notifications Admin
               </Link>
