@@ -1,13 +1,16 @@
 // components/iron-acre/IronAcreClassesList.tsx
-
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import { toMillis } from "../../lib/time";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-type Gym = { id: string; name: string; location: string };
+type Gym = {
+  id: string;
+  name: string;
+  location?: string | null;
+};
 
 type SessionItem = {
   id: string;
@@ -22,9 +25,14 @@ type SessionItem = {
   location: string | null;
 };
 
- type UserAccess = {
+type UserAccess = {
   membership_status?: string | null;
   payment_type?: string | null;
+  gym_id?: string | null;
+};
+
+type BookingsMineResponse = {
+  sessionIds?: string[];
 };
 
 type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
@@ -41,7 +49,7 @@ function startOfAlignedWeek(d: Date) {
 function endOfAlignedWeek(d: Date) {
   const s = startOfAlignedWeek(d);
   const e = new Date(s);
-  e.setDate(s.getDate() + 6);
+  e.setDate(s.getDate() + 13);
   e.setHours(23, 59, 59, 999);
   return e;
 }
@@ -56,7 +64,16 @@ function ymdLocal(d: Date) {
 function renderStartStr(start_time: string | null) {
   if (!start_time) return "TBC";
   const d = new Date(start_time);
-  return isNaN(d.getTime()) ? "TBC" : d.toLocaleString();
+  return isNaN(d.getTime())
+    ? "TBC"
+    : d.toLocaleString("en-GB", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
 }
 
 export default function IronAcreClassesList() {
@@ -64,41 +81,50 @@ export default function IronAcreClassesList() {
   const isAuthed = Boolean(authSession?.user?.email);
   const authedEmail = authSession?.user?.email || "";
 
-  // Load gyms so we can auto-pick the first gym silently (no select UI)
-  const { data: gymsResp } = useSWR("/api/gyms/list", fetcher, { revalidateOnFocus: false });
-  const gyms: Gym[] = gymsResp?.gyms ?? [];
-  const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!selectedGymId && gyms.length > 0) setSelectedGymId(gyms[0].id);
-  }, [gyms, selectedGymId]);
-
-  const selectedGym = useMemo(() => gyms.find((g) => g.id === selectedGymId) || null, [gyms, selectedGymId]);
-
-  const profileKey = authedEmail ? `/api/profile?email=${encodeURIComponent(authedEmail)}` : null;
-  const { data: profile } = useSWR<UserAccess>(profileKey, fetcher, {
+  const { data: gymsResp } = useSWR("/api/gyms/list", fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
 
+  const gyms: Gym[] = Array.isArray(gymsResp?.gyms) ? gymsResp.gyms : [];
+
+  const profileKey = authedEmail ? `/api/profile?email=${encodeURIComponent(authedEmail)}` : null;
+  const {
+    data: profile,
+    mutate: mutateProfile,
+  } = useSWR<UserAccess>(profileKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60_000,
+  });
+
+  const userGymId = String(profile?.gym_id || "").trim();
   const isGymMember = String(profile?.membership_status || "").toLowerCase() === "gym_member";
   const isCashPayer = String(profile?.payment_type || "").toLowerCase() === "cash";
 
-  const now = new Date();
-  const thisWeekStart = startOfAlignedWeek(now);
-  const thisWeekEnd = endOfAlignedWeek(now);
-  const nextWeekStart = new Date(thisWeekStart);
-  nextWeekStart.setDate(nextWeekStart.getDate() + 7);
-  const nextWeekEnd = endOfAlignedWeek(nextWeekStart);
+  const selectedGym = useMemo(() => {
+    if (!userGymId) return null;
+    return gyms.find((g) => g.id === userGymId) || null;
+  }, [gyms, userGymId]);
 
-  const fromISO = thisWeekStart.toISOString();
-  const toISO = nextWeekEnd.toISOString();
+  const joinableGym = useMemo(() => {
+    if (selectedGym) return selectedGym;
+    if (gyms.length === 1) return gyms[0];
+    const g1 = gyms.find((g) => g.id === "g1");
+    return g1 || gyms[0] || null;
+  }, [gyms, selectedGym]);
+
+  const now = new Date();
+  const weekStart = startOfAlignedWeek(now);
+  const weekEnd = endOfAlignedWeek(now);
+
+  const fromISO = weekStart.toISOString();
+  const toISO = weekEnd.toISOString();
 
   const shouldLoadSessions = Boolean(selectedGym?.location);
 
   const { data: sessionsResp, mutate: mutateSessions } = useSWR(
     shouldLoadSessions
-      ? `/api/schedule/upcoming?location=${encodeURIComponent(selectedGym!.location)}&from=${encodeURIComponent(
+      ? `/api/schedule/upcoming?location=${encodeURIComponent(selectedGym!.location || "")}&from=${encodeURIComponent(
           fromISO
         )}&to=${encodeURIComponent(toISO)}`
       : null,
@@ -106,37 +132,105 @@ export default function IronAcreClassesList() {
     { revalidateOnFocus: false, dedupingInterval: 30_000 }
   );
 
-  const sessions: SessionItem[] = sessionsResp?.sessions ?? [];
+  const sessions: SessionItem[] = Array.isArray(sessionsResp?.sessions) ? sessionsResp.sessions : [];
+
+  const bookingsKey =
+    isAuthed && shouldLoadSessions
+      ? `/api/bookings/mine?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`
+      : null;
+
+  const { data: bookingsResp, mutate: mutateBookings } = useSWR<BookingsMineResponse>(
+    bookingsKey,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 20_000 }
+  );
+
+  const [localBookedIds, setLocalBookedIds] = useState<string[]>([]);
+  const [bookingBusy, setBookingBusy] = useState<string | null>(null);
+  const [joinBusy, setJoinBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const bookedSet = useMemo(() => {
+    const fromApi = Array.isArray(bookingsResp?.sessionIds) ? bookingsResp.sessionIds : [];
+    return new Set<string>([...fromApi, ...localBookedIds]);
+  }, [bookingsResp?.sessionIds, localBookedIds]);
 
   const byWeek = useMemo(() => {
+    const thisWeekStart = startOfAlignedWeek(now);
+    const thisWeekEnd = new Date(thisWeekStart);
+    thisWeekEnd.setDate(thisWeekStart.getDate() + 6);
+    thisWeekEnd.setHours(23, 59, 59, 999);
+
+    const nextWeekStart = new Date(thisWeekStart);
+    nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+    nextWeekStart.setHours(0, 0, 0, 0);
+
+    const nextWeekEnd = new Date(nextWeekStart);
+    nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
+    nextWeekEnd.setHours(23, 59, 59, 999);
+
     const thisWeek: SessionItem[] = [];
     const nextWeek: SessionItem[] = [];
 
     for (const s of sessions) {
       const ms = toMillis(s.start_time);
       if (!ms) continue;
+
       const d = new Date(ms);
-      if (d >= thisWeekStart && d <= thisWeekEnd) thisWeek.push(s);
-      else if (d >= nextWeekStart && d <= nextWeekEnd) nextWeek.push(s);
+
+      if (d >= thisWeekStart && d <= thisWeekEnd) {
+        thisWeek.push(s);
+      } else if (d >= nextWeekStart && d <= nextWeekEnd) {
+        nextWeek.push(s);
+      }
     }
 
     const group = (arr: SessionItem[]) => {
-      const m: Record<string, SessionItem[]> = {};
+      const out: Record<string, SessionItem[]> = {};
       for (const s of arr) {
         const ms = toMillis(s.start_time);
         if (!ms) continue;
         const key = ymdLocal(new Date(ms));
-        (m[key] ??= []).push(s);
+        (out[key] ??= []).push(s);
       }
-      return m;
+      return out;
     };
 
-    return { thisWeek: group(thisWeek), nextWeek: group(nextWeek) };
-  }, [sessions, thisWeekStart, thisWeekEnd, nextWeekStart, nextWeekEnd]);
+    return {
+      thisWeek: group(thisWeek),
+      nextWeek: group(nextWeek),
+    };
+  }, [sessions, now]);
 
-  const [bookingBusy, setBookingBusy] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  async function handleJoinGym() {
+    if (!joinableGym?.id) return;
+
+    setErr(null);
+    setMsg(null);
+    setJoinBusy(true);
+
+    try {
+      const res = await fetch("/api/profile/join-gym", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gym_id: joinableGym.id }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(json?.error || "Failed to join gym");
+      }
+
+      await mutateProfile();
+      setMsg(`You are now linked to ${joinableGym.name}. Class updates and gym sessions will now show here.`);
+    } catch (e: any) {
+      setErr(e?.message || "Failed to join gym");
+    } finally {
+      setJoinBusy(false);
+    }
+  }
 
   async function book(sessionId: string, payOnDay: boolean) {
     setErr(null);
@@ -146,10 +240,15 @@ export default function IronAcreClassesList() {
     try {
       let method: PaymentMethod;
 
-      if (isGymMember && isAuthed) method = "member_free";
-      else if (isCashPayer && isAuthed) method = "pay_on_day";
-      else if (payOnDay) method = "pay_on_day";
-      else method = "stripe";
+      if (isGymMember && isAuthed) {
+        method = "member_free";
+      } else if (isCashPayer && isAuthed) {
+        method = "pay_on_day";
+      } else if (payOnDay) {
+        method = "pay_on_day";
+      } else {
+        method = "stripe";
+      }
 
       const res = await fetch("/api/bookings/create", {
         method: "POST",
@@ -168,12 +267,15 @@ export default function IronAcreClassesList() {
         });
 
         const cj = await checkoutRes.json().catch(() => ({}));
+
         if (!checkoutRes.ok) throw new Error(cj?.error || "Stripe error");
         if (!cj?.url) throw new Error("Stripe checkout created but no URL returned");
 
         window.location.href = cj.url;
         return;
       }
+
+      setLocalBookedIds((prev) => (prev.includes(sessionId) ? prev : [...prev, sessionId]));
 
       setMsg(
         json.payment_method === "member_free"
@@ -186,6 +288,7 @@ export default function IronAcreClassesList() {
       );
 
       mutateSessions?.();
+      mutateBookings?.();
     } catch (e: any) {
       setErr(e?.message || "Booking failed");
     } finally {
@@ -195,6 +298,7 @@ export default function IronAcreClassesList() {
 
   function renderWeek(title: string, groups: Record<string, SessionItem[]>) {
     const days = Object.keys(groups).sort();
+
     if (!days.length) return null;
 
     return (
@@ -208,6 +312,7 @@ export default function IronAcreClassesList() {
             {(groups[ymd] || []).map((s) => {
               const full = s.max_attendance > 0 && s.current_attendance >= s.max_attendance;
               const startStr = renderStartStr(s.start_time);
+              const alreadyBooked = bookedSet.has(s.id);
 
               return (
                 <div
@@ -223,11 +328,13 @@ export default function IronAcreClassesList() {
                   <div className="d-flex justify-content-between align-items-start gap-2">
                     <div style={{ minWidth: 0 }}>
                       <div className="ia-tile-title" style={{ fontSize: "1rem" }}>
-                        {s.class_id || "Class"} {s.gym_name ? `• ${s.gym_name}` : ""}
+                        {s.class_id || "Class"}
+                        {s.gym_name ? ` • ${s.gym_name}` : ""}
                       </div>
 
                       <div className="text-dim small">
-                        {startStr} {s.coach_name ? `• Coach: ${s.coach_name}` : ""}
+                        {startStr}
+                        {s.coach_name ? ` • Coach: ${s.coach_name}` : ""}
                       </div>
 
                       <div className="text-dim small mt-1">
@@ -240,15 +347,15 @@ export default function IronAcreClassesList() {
                     <div className="d-flex flex-column gap-2" style={{ minWidth: 120 }}>
                       <button
                         type="button"
-                        className="btn btn-sm ia-btn-primary"
-                        disabled={full || bookingBusy === s.id}
+                        className={alreadyBooked ? "btn btn-sm ia-btn" : "btn btn-sm ia-btn-primary"}
+                        disabled={alreadyBooked || full || bookingBusy === s.id}
                         onClick={() => book(s.id, false)}
                         style={{ opacity: full ? 0.6 : 1 }}
                       >
-                        {full ? "Full" : bookingBusy === s.id ? "…" : "Book"}
+                        {alreadyBooked ? "Booked" : full ? "Full" : bookingBusy === s.id ? "…" : "Book"}
                       </button>
 
-                      {!isGymMember ? (
+                      {!isGymMember && !alreadyBooked ? (
                         <button
                           type="button"
                           className="btn btn-sm ia-btn"
@@ -272,6 +379,7 @@ export default function IronAcreClassesList() {
   const emptyThis = Object.keys(byWeek.thisWeek || {}).length === 0;
   const emptyNext = Object.keys(byWeek.nextWeek || {}).length === 0;
   const emptyAll = emptyThis && emptyNext;
+  const hasGym = Boolean(userGymId);
 
   return (
     <section className="futuristic-card ia-tile ia-tile-pad mb-3">
@@ -303,7 +411,38 @@ export default function IronAcreClassesList() {
 
       {err ? <div className="alert alert-danger mb-2">{err}</div> : null}
 
-      {emptyAll ? (
+      {!isAuthed ? (
+        <div className="text-dim small">Sign in to view your gym classes and book sessions.</div>
+      ) : !hasGym ? (
+        <div
+          style={{
+            padding: "14px 14px",
+            borderRadius: 14,
+            background: "rgba(255,255,255,0.05)",
+            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+          }}
+        >
+          <div className="ia-tile-title" style={{ fontSize: "1rem" }}>
+            Join a gym to receive classes
+          </div>
+
+          <div className="text-dim small mt-1">
+            Link your account to {joinableGym?.name || "the gym"} to see the timetable, book classes and receive gym
+            notifications.
+          </div>
+
+          <div className="mt-3">
+            <button
+              type="button"
+              className="btn btn-sm ia-btn-primary"
+              onClick={handleJoinGym}
+              disabled={joinBusy || !joinableGym?.id}
+            >
+              {joinBusy ? "Joining…" : `Join ${joinableGym?.name || "gym"}`}
+            </button>
+          </div>
+        </div>
+      ) : emptyAll ? (
         <div className="text-dim small">No classes scheduled.</div>
       ) : (
         <>
