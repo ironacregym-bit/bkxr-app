@@ -1,9 +1,12 @@
+// File: pages/iron-acre/index.tsx
 import Head from "next/head";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import BottomNav from "../../components/BottomNav";
+import NotificationsBanner from "../../components/NotificationsBanner";
+import PushSubscribeButton from "../../components/PushSubscribeButton";
 import IronAcreHeader from "../../components/iron-acre/IronAcreHeader";
 import IronAcreTasks from "../../components/iron-acre/IronAcreTasks";
 import IronAcreStrengthSummary from "../../components/iron-acre/IronAcreStrengthSummary";
@@ -15,6 +18,7 @@ const fetcher = (u: string) => fetch(u).then((r) => r.json());
 function formatYMD(d: Date) {
   return d.toLocaleDateString("en-CA");
 }
+
 function startOfAlignedWeek(d: Date) {
   const day = d.getDay();
   const diffToMon = (day + 6) % 7;
@@ -29,14 +33,11 @@ type SimpleWorkoutRef = { id: string; name?: string };
 type DayOverview = {
   dateKey: string;
   isFriday: boolean;
-
   checkinComplete: boolean;
-
   hasWorkout: boolean;
   workoutDone: boolean;
   workoutIds: string[];
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
-
   hasRecurringToday: boolean;
   recurringWorkouts: SimpleWorkoutRef[];
   recurringDone: boolean;
@@ -60,6 +61,7 @@ type WeeklyOverviewResponse = {
 export default function IronAcreHome() {
   const { data: session, status } = useSession();
   const [mounted, setMounted] = useState(false);
+
   useEffect(() => setMounted(true), []);
 
   const userName = (session?.user?.name || session?.user?.email || "Athlete").toString();
@@ -90,8 +92,6 @@ export default function IronAcreHome() {
   const effectiveTodayKey = useMemo(() => {
     const days = weeklyOverview?.days || [];
     if (days.some((d) => d.dateKey === todayKey)) return todayKey;
-    // If the API week isn’t the current week (testing / time mismatch),
-    // fall back to the first day of the returned week so the UI still shows workouts.
     return weeklyOverview?.weekStartYMD || todayKey;
   }, [weeklyOverview, todayKey]);
 
@@ -156,6 +156,10 @@ export default function IronAcreHome() {
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <IronAcreHeader userName={userName} dateLabel={dateLabel} />
+
+        <NotificationsBanner />
+
+        <PushSubscribeButton />
 
         <IronAcreTasks
           todayKey={effectiveTodayKey}
