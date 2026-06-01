@@ -16,7 +16,7 @@ export default function Document() {
         {/* iOS PWA */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="BXKR" />
+        <meta name="apple-mobile-web-app-title" content="Iron Acre Gym" />
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
 
         {/* Favicons / icons */}
