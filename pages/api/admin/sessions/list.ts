@@ -56,7 +56,11 @@ export default async function handler(
     const limitRaw = Number(req.query.limit);
     const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(300, limitRaw)) : 200;
 
-    const snap = await firestore.collection("session").orderBy("start_time", "desc").limit(limit).get();
+    const snap = await firestore
+      .collection("session")
+      .orderBy("start_time", "desc")
+      .limit(limit)
+      .get();
 
     const classIds = Array.from(
       new Set(
@@ -78,7 +82,9 @@ export default async function handler(
       classIds.length
         ? firestore.getAll(...classIds.map((id) => firestore.collection("gymClasses").doc(id)))
         : Promise.resolve([]),
-      gymIds.length ? firestore.getAll(...gymIds.map((id) => firestore.collection("gyms").doc(id))) : Promise.resolve([]),
+      gymIds.length
+        ? firestore.getAll(...gymIds.map((id) => firestore.collection("gyms").doc(id)))
+        : Promise.resolve([]),
     ]);
 
     const classMap = new Map<string, string>();
@@ -151,9 +157,16 @@ export default async function handler(
       const ams = a.start_time ? Date.parse(a.start_time) : 0;
       const bms = b.start_time ? Date.parse(b.start_time) : 0;
 
-      if (timing === "past") return bms - ams;
+      if (timing === "past") {
+        return bms - ams;
+      }
+
       return ams - bms;
     });
 
     return res.status(200).json({ items });
   } catch (err: any) {
+    console.error("[admin/sessions/list]", err?.message || err);
+    return res.status(500).json({ error: "Failed to load sessions" });
+  }
+}
