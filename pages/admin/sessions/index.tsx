@@ -1,5 +1,6 @@
 // pages/admin/sessions/index.tsx
 "use client";
+
 import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -15,7 +16,7 @@ type SessionRow = {
   gym_name: string;
   coach_name?: string | null;
   start_time: string | null;
-   end_time: string | null;
+  end_time: string | null;
   price: number;
   max_attendance: number;
   current_attendance: number;
@@ -164,8 +165,8 @@ export default function AdminSessionsPage() {
     dedupingInterval: 60_000,
   });
 
-  const gymOptions = Array.isArray(optionsData?.gyms) ? optionsData!.gyms : [];
-  const classOptions = Array.isArray(optionsData?.classes) ? optionsData!.classes : [];
+  const gymOptions = Array.isArray(optionsData?.gyms) ? optionsData.gyms : [];
+  const classOptions = Array.isArray(optionsData?.classes) ? optionsData.classes : [];
 
   const selected = selectedData || null;
   const selectedIsPast = useMemo(() => isPastSession(selected?.start_time), [selected?.start_time]);
@@ -277,7 +278,10 @@ export default function AdminSessionsPage() {
       setEditMode(false);
       setSelectedId(null);
       setMobileViewing(false);
-      await Promise.all([mutateSelected(undefined, { revalidate: false }), mutateList()]);
+      await Promise.all([
+        mutateSelected(undefined, { revalidate: false }),
+        mutateList(),
+      ]);
     } catch (err: any) {
       setSaveErr(String(err?.message || err || "Failed to cancel session"));
     } finally {
@@ -351,9 +355,9 @@ export default function AdminSessionsPage() {
               + Create session
             </Link>
 
-            <button type="button" className="ia-btn ia-btn-outline" disabled title="Coming next">
+            <Link href="/admin/sessions/recurring" className="ia-btn ia-btn-outline">
               Recurring sessions
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -362,16 +366,13 @@ export default function AdminSessionsPage() {
             + Create session
           </Link>
 
-          <button type="button" className="ia-btn ia-btn-outline" disabled title="Coming next">
+          <Link href="/admin/sessions/recurring" className="ia-btn ia-btn-outline">
             Recurring
-          </button>
+          </Link>
         </div>
 
         {(saveMsg || saveErr) && (
-          <div
-            className={`mb-3 alert ${saveErr ? "alert-danger" : "alert-success"}`}
-            role="alert"
-          >
+          <div className={`mb-3 alert ${saveErr ? "alert-danger" : "alert-success"}`} role="alert">
             {saveErr || saveMsg}
           </div>
         )}
@@ -618,12 +619,7 @@ export default function AdminSessionsPage() {
                   </div>
 
                   <div className="d-flex flex-wrap gap-2 mt-4">
-                    <button
-                      type="button"
-                      className="ia-btn"
-                      onClick={handleSave}
-                      disabled={saving}
-                    >
+                    <button type="button" className="ia-btn" onClick={handleSave} disabled={saving}>
                       {saving ? "Saving..." : "Save changes"}
                     </button>
 
@@ -720,9 +716,7 @@ export default function AdminSessionsPage() {
                     <div className="col-12 col-md-6">
                       <div className="text-dim small">Cancelled</div>
                       <div className="fw-semibold">
-                        {selected.cancelled
-                          ? `Yes • ${formatDateTime(selected.cancelled_at)}`
-                          : "No"}
+                        {selected.cancelled ? `Yes • ${formatDateTime(selected.cancelled_at)}` : "No"}
                       </div>
                     </div>
 
@@ -768,14 +762,9 @@ export default function AdminSessionsPage() {
                         : "Delete session"}
                     </button>
 
-                    <button
-                      type="button"
-                      className="ia-btn ia-btn-outline"
-                      disabled
-                      title="Recurring sessions coming next"
-                    >
-                      Make recurring
-                    </button>
+                    <Link href="/admin/sessions/recurring" className="ia-btn ia-btn-outline">
+                      Recurring sessions
+                    </Link>
 
                     <button
                       type="button"
