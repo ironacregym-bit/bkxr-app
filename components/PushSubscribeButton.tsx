@@ -2,7 +2,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -17,12 +17,16 @@ function urlBase64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
+const DISMISS_KEY = "ia_push_toast_dismissed";
+
 export function usePushNotifications() {
   const [supported, setSupported] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [error, setError] = useState("");
+  const [dismissed, setDismissed] = useState(false);
+  const [checked, setChecked] = useState(false);
 
   const refresh = useCallback(async () => {
     const ok =
@@ -36,16 +40,22 @@ export function usePushNotifications() {
     if (!ok) {
       setPermission("unsupported");
       setSubscribed(false);
+      setChecked(true);
       return;
     }
 
     setPermission(Notification.permission);
 
     try {
+      const storedDismissed =
+        typeof window !== "undefined" && window.sessionStorage.getItem(DISMISS_KEY) === "1";
+      setDismissed(storedDismissed);
+
       const reg = await navigator.serviceWorker.getRegistration();
 
       if (!reg) {
         setSubscribed(false);
+        setChecked(true);
         return;
       }
 
@@ -53,12 +63,28 @@ export function usePushNotifications() {
       setSubscribed(!!existing);
     } catch {
       setSubscribed(false);
+    } finally {
+      setChecked(true);
     }
   }, []);
 
   useEffect(() => {
     refresh().catch(() => {});
   }, [refresh]);
+
+  const dismissPrompt = useCallback(() => {
+    setDismissed(true);
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(DISMISS_KEY, "1");
+    }
+  }, []);
+
+  const resetDismissed = useCallback(() => {
+    setDismissed(false);
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(DISMISS_KEY);
+    }
+  }, []);
 
   const subscribe = useCallback(async () => {
     try {
@@ -125,6 +151,7 @@ export function usePushNotifications() {
 
       setSubscribed(true);
       setError("");
+      resetDismissed();
       return true;
     } catch (e) {
       console.error("[push subscribe]", e);
@@ -134,7 +161,15 @@ export function usePushNotifications() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [resetDismissed]);
+
+  const shouldPrompt = useMemo(() => {
+    if (!checked) return false;
+    if (!supported) return false;
+    if (subscribed) return false;
+    if (dismissed) return false;
+    return true;
+  }, [checked, supported, subscribed, dismissed]);
 
   return {
     supported,
@@ -144,6 +179,11 @@ export function usePushNotifications() {
     error,
     subscribe,
     refresh,
+    dismissed,
+    dismissPrompt,
+    resetDismissed,
+    shouldPrompt,
+    checked,
   };
 }
 
@@ -151,30 +191,178 @@ type PushSubscribeButtonProps = {
   className?: string;
   style?: CSSProperties;
   children?: ReactNode;
+  variant?: "button" | "toast";
+  title?: string;
+  message?: string;
+  hideIfDenied?: boolean;
 };
 
 export default function PushSubscribeButton({
   className,
   style,
   children,
+  variant = "button",
+  title = "Turn on notifications",
+  message = "Get class reminders, gym updates and weekly booking notifications straight to your device.",
+  hideIfDenied = false,
 }: PushSubscribeButtonProps) {
-  const { supported, subscribed, busy, subscribe } = usePushNotifications();
+  const {
+    supported,
+    subscribed,
+    busy,
+    subscribe,
+    permission,
+    error,
+    shouldPrompt,
+    dismissPrompt,
+  } = usePushNotifications();
 
-  if (!supported || subscribed) {
+  if (variant === "button") {
+    if (!supported || subscribed) {
+      return null;
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          subscribe().catch(() => {});
+        }}
+        disabled={busy}
+        className={className || "btn btn-outline-light"}
+        style={style}
+      >
+        {busy ? "Enabling..." : children || "Enable push notifications"}
+      </button>
+    );
+  }
+
+  if (!supported || subscribed || !shouldPrompt) {
+    return null;
+  }
+
+  if (hideIfDenied && permission === "denied") {
     return null;
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => {
-        subscribe().catch(() => {});
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        position: "fixed",
+        left: 16,
+        right: 16,
+        bottom: 88,
+        zIndex: 1200,
+        maxWidth: 460,
+        margin: "0 auto",
+        borderRadius: 20,
+        padding: 14,
+        background: "rgba(11,15,20,0.96)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        boxShadow: "0 18px 48px rgba(0,0,0,0.45)",
+        color: "#fff",
+        ...style,
       }}
-      disabled={busy}
-      className={className || "btn btn-outline-light"}
-      style={style}
+      className={className}
     >
-      {busy ? "Enabling..." : children || "Enable push notifications"}
-    </button>
+      <div className="d-flex align-items-start justify-content-between gap-3">
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 8,
+              borderRadius: 999,
+              padding: "6px 10px",
+              background: "rgba(36,255,160,0.10)",
+              border: "1px solid rgba(36,255,160,0.22)",
+              color: "#24FFA0",
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Iron Acre alerts
+          </div>
+
+          <div style={{ fontWeight: 800, fontSize: "1rem", marginBottom: 6 }}>
+            {title}
+          </div>
+
+          <div
+            style={{
+              color: "rgba(255,255,255,0.80)",
+              fontSize: 14,
+              lineHeight: 1.45,
+              marginBottom: 12,
+            }}
+          >
+            {permission === "denied"
+              ? "Notifications are currently blocked in your browser settings. Enable them there to receive class and gym reminders."
+              : message}
+          </div>
+
+          {!!error && (
+            <div
+              style={{
+                color: "#ffb3b3",
+                fontSize: 13,
+                lineHeight: 1.45,
+                marginBottom: 10,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <div className="d-flex flex-wrap gap-2">
+            {permission !== "denied" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  subscribe().catch(() => {});
+                }}
+                disabled={busy}
+                className="ia-btn"
+              >
+                {busy ? "Enabling..." : "Enable notifications"}
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={dismissPrompt}
+              className="ia-btn ia-btn-outline"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={dismissPrompt}
+          aria-label="Dismiss notification prompt"
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 999,
+            border: "1px solid rgba(255,255,255,0.10)",
+            background: "rgba(255,255,255,0.04)",
+            color: "#fff",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flex: "0 0 auto",
+          }}
+        >
+          <i className="fas fa-times" />
+        </button>
+      </div>
+    </div>
   );
 }
