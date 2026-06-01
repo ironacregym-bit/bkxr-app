@@ -1,8 +1,8 @@
 
 {
-  "name": "BXKR Fitness",
-  "short_name": "BXKR",
-  "description": "Fitness tracking, boxing rounds & class bookings.",
+  "name": "Iron Acre Gym",
+  "short_name": "Iron Acre",
+  "description": "Training & Booking App",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
