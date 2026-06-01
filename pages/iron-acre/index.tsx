@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import BottomNav from "../../components/BottomNav";
+import PushSubscribeButton from "../../components/PushSubscribeButton";
 import IronAcreHeader from "../../components/iron-acre/IronAcreHeader";
 import IronAcreTasks from "../../components/iron-acre/IronAcreTasks";
 import IronAcreStrengthSummary from "../../components/iron-acre/IronAcreStrengthSummary";
@@ -178,6 +179,12 @@ export default function IronAcreHome() {
           </div>
         </div>
       </main>
+
+      <PushSubscribeButton
+        variant="toast"
+        title="Turn on Iron Acre notifications"
+        message="Get class reminders, weekly booking alerts, gym updates and important notices straight to your device."
+      />
 
       <BottomNav />
     </>
