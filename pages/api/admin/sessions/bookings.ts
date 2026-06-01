@@ -116,4 +116,3 @@ export default async function handler(
     return res.status(500).json({ error: "Failed to load session bookings" });
   }
 }
-``
