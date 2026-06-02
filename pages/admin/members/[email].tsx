@@ -83,14 +83,14 @@ export default function AdminMemberDetail() {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const [showPlanForm, setShowPlanForm] = useState(false);
-  const [planKey, setPlanKey] = useState<"farm_strength" | "kettlebells">("farm_strength");
-  const [planStartDate, setPlanStartDate] = useState(todayYMD());
-  const [planGymId, setPlanGymId] = useState("g1");
-  const [planNote, setPlanNote] = useState("");
-  const [planBusy, setPlanBusy] = useState(false);
-  const [planMsg, setPlanMsg] = useState<string | null>(null);
-  const [planErr, setPlanErr] = useState<string | null>(null);
+  const [showProgramForm, setShowProgramForm] = useState(false);
+  const [programId, setProgramId] = useState("");
+  const [programStartDate, setProgramStartDate] = useState(todayYMD());
+  const [programGymId, setProgramGymId] = useState("g1");
+  const [programNote, setProgramNote] = useState("");
+  const [programBusy, setProgramBusy] = useState(false);
+  const [programMsg, setProgramMsg] = useState<string | null>(null);
+  const [programErr, setProgramErr] = useState<string | null>(null);
 
   const profileKey =
     mounted && isAllowed && email ? `/api/admin/members/get?email=${encodeURIComponent(email)}` : null;
@@ -164,11 +164,17 @@ export default function AdminMemberDetail() {
   useEffect(() => {
     const userGymId = String(profile?.gym_id || "").trim();
     if (userGymId) {
-      setPlanGymId(userGymId);
+      setProgramGymId(userGymId);
     } else {
-      setPlanGymId("g1");
+      setProgramGymId("g1");
     }
   }, [profile?.gym_id]);
+
+  useEffect(() => {
+    if (profile?.active_program_id) {
+      setProgramId(String(profile.active_program_id));
+    }
+  }, [profile?.active_program_id]);
 
   function formatPreview(v: any): string {
     if (v == null) return "—";
@@ -337,39 +343,39 @@ export default function AdminMemberDetail() {
     );
   };
 
-  async function handleAssignPlan() {
+  async function handleAssignProgram() {
     if (!email) return;
 
-    setPlanBusy(true);
-    setPlanErr(null);
-    setPlanMsg(null);
+    setProgramBusy(true);
+    setProgramErr(null);
+    setProgramMsg(null);
 
     try {
-      const res = await fetch("/api/admin/members/plans/assign", {
+      const res = await fetch("/api/admin/members/programs/assign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_email: email,
-          gym_id: planGymId,
-          plan_key: planKey,
-          start_date: planStartDate,
-          note: planNote || null,
+          gym_id: programGymId,
+          program_id: programId,
+          start_date: programStartDate,
+          note: programNote || null,
         }),
       });
 
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(String(json?.error || "Failed to assign gym plan"));
+        throw new Error(String(json?.error || "Failed to assign program"));
       }
 
       await mutateProfile();
-      setPlanMsg(`${json?.plan_name || "Gym plan"} assigned ✅`);
-      setShowPlanForm(false);
+      setProgramMsg(`${json?.program_name || "Program"} assigned ✅`);
+      setShowProgramForm(false);
     } catch (err: any) {
-      setPlanErr(String(err?.message || err || "Failed to assign gym plan"));
+      setProgramErr(String(err?.message || err || "Failed to assign program"));
     } finally {
-      setPlanBusy(false);
+      setProgramBusy(false);
     }
   }
 
@@ -480,10 +486,10 @@ export default function AdminMemberDetail() {
               <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
                 <div>
                   <div className="fw-bold" style={{ fontSize: "1.05rem" }}>
-                    Gym plan
+                    Assigned program
                   </div>
                   <div className="small text-muted">
-                    Assign a structured 12-week gym block to drive workouts, check-ins, habits and reminders.
+                    Assign an existing 12-week program to drive workouts, check-ins, habits and reminders.
                   </div>
                 </div>
 
@@ -491,9 +497,9 @@ export default function AdminMemberDetail() {
                   className="btn btn-sm"
                   type="button"
                   onClick={() => {
-                    setPlanErr(null);
-                    setPlanMsg(null);
-                    setShowPlanForm((v) => !v);
+                    setProgramErr(null);
+                    setProgramMsg(null);
+                    setShowProgramForm((v) => !v);
                   }}
                   style={{
                     borderRadius: 24,
@@ -502,45 +508,45 @@ export default function AdminMemberDetail() {
                     boxShadow: `0 0 14px ${ACCENT}66`,
                   }}
                 >
-                  {showPlanForm ? "Close" : "Assign plan"}
+                  {showProgramForm ? "Close" : "Assign program"}
                 </button>
               </div>
 
               <div className="row g-2 mt-2">
                 <div className="col-12 col-md-4">
-                  <div className="small text-muted">Active plan</div>
-                  <div className="fw-semibold">{profile?.active_gym_plan_name || "—"}</div>
+                  <div className="small text-muted">Active program</div>
+                  <div className="fw-semibold">{profile?.active_program_name || "—"}</div>
                 </div>
 
                 <div className="col-12 col-md-3">
                   <div className="small text-muted">Status</div>
-                  <div className="fw-semibold">{profile?.active_gym_plan_status || "—"}</div>
+                  <div className="fw-semibold">{profile?.active_program_status || "—"}</div>
                 </div>
 
                 <div className="col-12 col-md-2">
                   <div className="small text-muted">Start</div>
-                  <div className="fw-semibold">{formatDateOnly(profile?.active_gym_plan_start_date)}</div>
+                  <div className="fw-semibold">{formatDateOnly(profile?.active_program_start_date)}</div>
                 </div>
 
                 <div className="col-12 col-md-3">
                   <div className="small text-muted">End</div>
-                  <div className="fw-semibold">{formatDateOnly(profile?.active_gym_plan_end_date)}</div>
+                  <div className="fw-semibold">{formatDateOnly(profile?.active_program_end_date)}</div>
                 </div>
               </div>
 
-              {planMsg ? (
+              {programMsg ? (
                 <div className="alert alert-success mt-3 mb-0" role="alert">
-                  {planMsg}
+                  {programMsg}
                 </div>
               ) : null}
 
-              {planErr ? (
+              {programErr ? (
                 <div className="alert alert-danger mt-3 mb-0" role="alert">
-                  {planErr}
+                  {programErr}
                 </div>
               ) : null}
 
-              {showPlanForm ? (
+              {showProgramForm ? (
                 <div
                   className="mt-3"
                   style={{
@@ -552,15 +558,14 @@ export default function AdminMemberDetail() {
                 >
                   <div className="row g-3">
                     <div className="col-12 col-md-4">
-                      <label className="form-label">Plan</label>
-                      <select
-                        className="form-select"
-                        value={planKey}
-                        onChange={(e) => setPlanKey(e.target.value as "farm_strength" | "kettlebells")}
-                      >
-                        <option value="farm_strength">Farm Strength</option>
-                        <option value="kettlebells">Kettlebells</option>
-                      </select>
+                      <label className="form-label">Program ID</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={programId}
+                        onChange={(e) => setProgramId(e.target.value)}
+                        placeholder="Paste Firestore program id"
+                      />
                     </div>
 
                     <div className="col-12 col-md-4">
@@ -568,8 +573,8 @@ export default function AdminMemberDetail() {
                       <input
                         type="text"
                         className="form-control"
-                        value={planGymId}
-                        onChange={(e) => setPlanGymId(e.target.value)}
+                        value={programGymId}
+                        onChange={(e) => setProgramGymId(e.target.value)}
                         placeholder="g1"
                       />
                     </div>
@@ -579,8 +584,8 @@ export default function AdminMemberDetail() {
                       <input
                         type="date"
                         className="form-control"
-                        value={planStartDate}
-                        onChange={(e) => setPlanStartDate(e.target.value)}
+                        value={programStartDate}
+                        onChange={(e) => setProgramStartDate(e.target.value)}
                       />
                     </div>
 
@@ -589,9 +594,9 @@ export default function AdminMemberDetail() {
                       <textarea
                         className="form-control"
                         rows={3}
-                        value={planNote}
-                        onChange={(e) => setPlanNote(e.target.value)}
-                        placeholder="Optional note about this plan assignment"
+                        value={programNote}
+                        onChange={(e) => setProgramNote(e.target.value)}
+                        placeholder="Optional note about this program assignment"
                       />
                     </div>
                   </div>
@@ -600,8 +605,8 @@ export default function AdminMemberDetail() {
                     <button
                       type="button"
                       className="btn"
-                      onClick={handleAssignPlan}
-                      disabled={planBusy}
+                      onClick={handleAssignProgram}
+                      disabled={programBusy}
                       style={{
                         borderRadius: 24,
                         color: "#fff",
@@ -609,15 +614,15 @@ export default function AdminMemberDetail() {
                         boxShadow: `0 0 14px ${ACCENT}66`,
                       }}
                     >
-                      {planBusy ? "Assigning…" : "Save plan assignment"}
+                      {programBusy ? "Assigning…" : "Save program assignment"}
                     </button>
 
                     <button
                       type="button"
                       className="btn btn-outline-light"
                       style={{ borderRadius: 24 }}
-                      onClick={() => setShowPlanForm(false)}
-                      disabled={planBusy}
+                      onClick={() => setShowProgramForm(false)}
+                      disabled={programBusy}
                     >
                       Cancel
                     </button>
