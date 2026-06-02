@@ -1,11 +1,12 @@
+// pages/admin/members/[email].tsx
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
-import BottomNav from "../../../components/BottomNav";
 import type { GetServerSideProps } from "next";
+import BottomNav from "../../../components/BottomNav";
 
 import AssignWorkoutModal from "../../../components/admin/members/AssignWorkoutModal";
 import CreateCheckinModal from "../../../components/admin/members/CreateCheckinModal";
@@ -27,7 +28,7 @@ type ProfileResp = {
 };
 
 type FeedResp<T = any> = {
-  items: { id: string; data: any }[];
+  items: { id: string; data: T }[];
   nextCursor?: string | null;
 };
 
@@ -37,7 +38,30 @@ type CheckinRow = {
   body_fat_pct: number | null;
   photo_url?: string | null;
 };
-type CheckinsSeriesResp = { results: CheckinRow[] };
+
+type CheckinsSeriesResp = {
+  results: CheckinRow[];
+};
+
+function todayYMD() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatDateOnly(value?: string | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "—";
+
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 export default function AdminMemberDetail() {
   const mounted = useMounted();
@@ -56,9 +80,22 @@ export default function AdminMemberDetail() {
     workouts: null,
   });
 
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  const [showPlanForm, setShowPlanForm] = useState(false);
+  const [planKey, setPlanKey] = useState<"farm_strength" | "kettlebells">("farm_strength");
+  const [planStartDate, setPlanStartDate] = useState(todayYMD());
+  const [planGymId, setPlanGymId] = useState("g1");
+  const [planNote, setPlanNote] = useState("");
+  const [planBusy, setPlanBusy] = useState(false);
+  const [planMsg, setPlanMsg] = useState<string | null>(null);
+  const [planErr, setPlanErr] = useState<string | null>(null);
+
   const profileKey =
     mounted && isAllowed && email ? `/api/admin/members/get?email=${encodeURIComponent(email)}` : null;
-  const { data: profileData } = useSWR<ProfileResp>(profileKey, fetcher, {
+
+  const { data: profileData, mutate: mutateProfile } = useSWR<ProfileResp>(profileKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
@@ -95,16 +132,15 @@ export default function AdminMemberDetail() {
     fetcher,
     { revalidateOnFocus: false }
   );
-  const { data: habitsData, isValidating: loadingHabits } = useSWR<FeedResp>(
-    feeds.habits,
-    fetcher,
-    { revalidateOnFocus: false }
-  );
-  const { data: nutritionData, isValidating: loadingNutrition } = useSWR<FeedResp>(
-    feeds.nutrition,
-    fetcher,
-    { revalidateOnFocus: false }
-  );
+
+  const { data: habitsData, isValidating: loadingHabits } = useSWR<FeedResp>(feeds.habits, fetcher, {
+    revalidateOnFocus: false,
+  });
+
+  const { data: nutritionData, isValidating: loadingNutrition } = useSWR<FeedResp>(feeds.nutrition, fetcher, {
+    revalidateOnFocus: false,
+  });
+
   const { data: workoutsData, isValidating: loadingWorkouts, mutate: mutateWorkouts } = useSWR<FeedResp>(
     feeds.workouts,
     fetcher,
@@ -115,6 +151,7 @@ export default function AdminMemberDetail() {
     mounted && isAllowed && email
       ? `/api/checkins/series?email=${encodeURIComponent(email)}&limit=1000`
       : null;
+
   const { data: checkinsSeries, mutate: mutateSeries } = useSWR<CheckinsSeriesResp>(seriesKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
@@ -124,18 +161,21 @@ export default function AdminMemberDetail() {
   const profile = profileData?.user || {};
   const titleName = profile?.display_name || profile?.name || profile?.profile?.name || email || "Member";
 
-  // ===== Modals =====
-  const [showAssignModal, setShowAssignModal] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  useEffect(() => {
+    const userGymId = String(profile?.gym_id || "").trim();
+    if (userGymId) {
+      setPlanGymId(userGymId);
+    } else {
+      setPlanGymId("g1");
+    }
+  }, [profile?.gym_id]);
 
   function formatPreview(v: any): string {
     if (v == null) return "—";
-    if (typeof v === "string") return v.length > 120 ? v.slice(0, 120) + "…" : v;
+    if (typeof v === "string") return v.length > 120 ? `${v.slice(0, 120)}…` : v;
     if (typeof v === "number" || typeof v === "boolean") return String(v);
     if (typeof v?.toDate === "function") return v.toDate().toISOString();
-    if (v?.seconds && v?.nanoseconds) {
-      return new Date(v.seconds * 1000).toISOString();
-    }
+    if (v?.seconds && v?.nanoseconds) return new Date(v.seconds * 1000).toISOString();
     if (Array.isArray(v)) return `[${v.length} items]`;
     if (typeof v === "object") return "{…}";
     return String(v);
@@ -152,7 +192,7 @@ export default function AdminMemberDetail() {
           const d = it.data || {};
           const photos = {
             front: d.progress_photo_front,
-            side: d.progress_photos_side, // keep existing display keys
+            side: d.progress_photos_side,
             back: d.progress_photos_back,
           };
 
@@ -249,7 +289,10 @@ export default function AdminMemberDetail() {
   };
 
   const renderListGeneric = (items?: { id: string; data: any }[]) => {
-    if (!items || items.length === 0) return <div className="text-center text-muted py-3">No entries.</div>;
+    if (!items || items.length === 0) {
+      return <div className="text-center text-muted py-3">No entries.</div>;
+    }
+
     return (
       <div className="d-grid gap-2">
         {items.map((it) => {
@@ -294,6 +337,42 @@ export default function AdminMemberDetail() {
     );
   };
 
+  async function handleAssignPlan() {
+    if (!email) return;
+
+    setPlanBusy(true);
+    setPlanErr(null);
+    setPlanMsg(null);
+
+    try {
+      const res = await fetch("/api/admin/members/plans/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_email: email,
+          gym_id: planGymId,
+          plan_key: planKey,
+          start_date: planStartDate,
+          note: planNote || null,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(String(json?.error || "Failed to assign gym plan"));
+      }
+
+      await mutateProfile();
+      setPlanMsg(`${json?.plan_name || "Gym plan"} assigned ✅`);
+      setShowPlanForm(false);
+    } catch (err: any) {
+      setPlanErr(String(err?.message || err || "Failed to assign gym plan"));
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
   const nextCursor = {
     checkins: checkinsData?.nextCursor || null,
     habits: habitsData?.nextCursor || null,
@@ -322,8 +401,12 @@ export default function AdminMemberDetail() {
 
       <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
         <div className="d-flex align-items-center justify-content-between mb-3">
-          <Link href="/admin/members" className="btn btn-outline-secondary">← Back</Link>
+          <Link href="/admin/members" className="btn btn-outline-secondary">
+            ← Back
+          </Link>
+
           <h2 className="mb-0">Member</h2>
+
           <div className="d-flex gap-2">
             {isAllowed && email ? (
               <>
@@ -340,6 +423,7 @@ export default function AdminMemberDetail() {
                 >
                   Assign workout
                 </button>
+
                 <button
                   className="btn btn-sm btn-outline-light"
                   onClick={() => setShowCreateModal(true)}
@@ -364,7 +448,6 @@ export default function AdminMemberDetail() {
           </div>
         ) : (
           <>
-            {/* Profile header */}
             <section
               className="p-3 mb-3"
               style={{
@@ -376,14 +459,173 @@ export default function AdminMemberDetail() {
               <div className="fw-bold" style={{ fontSize: "1.25rem" }}>
                 {titleName}
               </div>
+
               <div className="small text-muted">{email}</div>
+
               <div className="small mt-2">
                 Membership: <span style={{ color: ACCENT }}>{profile?.membership_status || "—"}</span> · Sub:{" "}
-                <span style={{ color: ACCENT }}>{profile?.subscription_status || "—"}</span>
+                <span style={{ color: ACCENT }}>{profile?.subscription_status || "—"}</span> · Gym:{" "}
+                <span style={{ color: ACCENT }}>{profile?.gym_id || "—"}</span>
               </div>
             </section>
 
-            {/* Tabs */}
+            <section
+              className="p-3 mb-3"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                borderRadius: 16,
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                <div>
+                  <div className="fw-bold" style={{ fontSize: "1.05rem" }}>
+                    Gym plan
+                  </div>
+                  <div className="small text-muted">
+                    Assign a structured 12-week gym block to drive workouts, check-ins, habits and reminders.
+                  </div>
+                </div>
+
+                <button
+                  className="btn btn-sm"
+                  type="button"
+                  onClick={() => {
+                    setPlanErr(null);
+                    setPlanMsg(null);
+                    setShowPlanForm((v) => !v);
+                  }}
+                  style={{
+                    borderRadius: 24,
+                    color: "#fff",
+                    background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                    boxShadow: `0 0 14px ${ACCENT}66`,
+                  }}
+                >
+                  {showPlanForm ? "Close" : "Assign plan"}
+                </button>
+              </div>
+
+              <div className="row g-2 mt-2">
+                <div className="col-12 col-md-4">
+                  <div className="small text-muted">Active plan</div>
+                  <div className="fw-semibold">{profile?.active_gym_plan_name || "—"}</div>
+                </div>
+
+                <div className="col-12 col-md-3">
+                  <div className="small text-muted">Status</div>
+                  <div className="fw-semibold">{profile?.active_gym_plan_status || "—"}</div>
+                </div>
+
+                <div className="col-12 col-md-2">
+                  <div className="small text-muted">Start</div>
+                  <div className="fw-semibold">{formatDateOnly(profile?.active_gym_plan_start_date)}</div>
+                </div>
+
+                <div className="col-12 col-md-3">
+                  <div className="small text-muted">End</div>
+                  <div className="fw-semibold">{formatDateOnly(profile?.active_gym_plan_end_date)}</div>
+                </div>
+              </div>
+
+              {planMsg ? (
+                <div className="alert alert-success mt-3 mb-0" role="alert">
+                  {planMsg}
+                </div>
+              ) : null}
+
+              {planErr ? (
+                <div className="alert alert-danger mt-3 mb-0" role="alert">
+                  {planErr}
+                </div>
+              ) : null}
+
+              {showPlanForm ? (
+                <div
+                  className="mt-3"
+                  style={{
+                    padding: 16,
+                    borderRadius: 16,
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  <div className="row g-3">
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">Plan</label>
+                      <select
+                        className="form-select"
+                        value={planKey}
+                        onChange={(e) => setPlanKey(e.target.value as "farm_strength" | "kettlebells")}
+                      >
+                        <option value="farm_strength">Farm Strength</option>
+                        <option value="kettlebells">Kettlebells</option>
+                      </select>
+                    </div>
+
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">Gym</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={planGymId}
+                        onChange={(e) => setPlanGymId(e.target.value)}
+                        placeholder="g1"
+                      />
+                    </div>
+
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">Start date</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={planStartDate}
+                        onChange={(e) => setPlanStartDate(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="col-12">
+                      <label className="form-label">Admin note</label>
+                      <textarea
+                        className="form-control"
+                        rows={3}
+                        value={planNote}
+                        onChange={(e) => setPlanNote(e.target.value)}
+                        placeholder="Optional note about this plan assignment"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="d-flex flex-wrap gap-2 mt-3">
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={handleAssignPlan}
+                      disabled={planBusy}
+                      style={{
+                        borderRadius: 24,
+                        color: "#fff",
+                        background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
+                        boxShadow: `0 0 14px ${ACCENT}66`,
+                      }}
+                    >
+                      {planBusy ? "Assigning…" : "Save plan assignment"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-outline-light"
+                      style={{ borderRadius: 24 }}
+                      onClick={() => setShowPlanForm(false)}
+                      disabled={planBusy}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
             <div className="d-flex gap-2 mb-2">
               {(["checkins", "habits", "nutrition", "workouts"] as const).map((t) => (
                 <button
@@ -409,7 +651,6 @@ export default function AdminMemberDetail() {
               ))}
             </div>
 
-            {/* Feed */}
             <section className="mb-3">
               {tab === "checkins" && (
                 <>
@@ -417,12 +658,12 @@ export default function AdminMemberDetail() {
                   {renderCheckins(checkinsData?.items)}
                 </>
               )}
+
               {tab === "habits" && renderListGeneric(habitsData?.items)}
               {tab === "nutrition" && renderNutrition(nutritionData?.items)}
               {tab === "workouts" && renderListGeneric(workoutsData?.items)}
             </section>
 
-            {/* Load more */}
             <div className="d-grid">
               {nextCursor[tab] ? (
                 <button className="bxkr-btn" onClick={onLoadMore} disabled={loadingForTab}>
@@ -438,25 +679,28 @@ export default function AdminMemberDetail() {
         )}
       </main>
 
-      {/* Assign Workout Modal */}
       <AssignWorkoutModal
         open={showAssignModal}
         onClose={() => setShowAssignModal(false)}
         userEmail={email}
         onAssigned={() => {
-          // If your workouts feed shows assignments, revalidate
-          try { mutateWorkouts?.(); } catch {}
+          try {
+            mutateWorkouts?.();
+          } catch {}
         }}
       />
 
-      {/* Create Check-in Modal */}
       <CreateCheckinModal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         userEmail={email}
         onSaved={() => {
-          try { mutateCheckins?.(); } catch {}
-          try { mutateSeries?.(); } catch {}
+          try {
+            mutateCheckins?.();
+          } catch {}
+          try {
+            mutateSeries?.();
+          } catch {}
         }}
       />
 
@@ -465,7 +709,6 @@ export default function AdminMemberDetail() {
   );
 }
 
-// Force SSR (prevents static export attempting to pre-render a dynamic route)
 export const getServerSideProps: GetServerSideProps = async () => {
   return { props: {} };
 };
