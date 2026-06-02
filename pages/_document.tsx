@@ -20,6 +20,9 @@ export default function Document() {
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180x180.png" />
 
         {/* Favicons / icons */}
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+        <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
         <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
         {/* Optional pinned tab for Safari (macOS) */}
         <link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#ff7f32" />
