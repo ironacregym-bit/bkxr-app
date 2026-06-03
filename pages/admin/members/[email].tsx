@@ -2,7 +2,7 @@
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import type { GetServerSideProps } from "next";
@@ -44,17 +44,14 @@ type CheckinsSeriesResp = {
 };
 
 type ProgramItem = {
-  id: string;
   program_id: string;
-  name: string;
-  weeks: number;
-  created_at: string | null;
-  created_by: string | null;
-  assigned_to_count: number;
+  name?: string;
+  start_date?: string | Date | null;
+  weeks?: number;
 };
 
-type ProgramsListResp = {
-  items: ProgramItem[];
+type ProgramListResp = {
+  programs?: ProgramItem[];
 };
 
 function todayYMD() {
@@ -65,9 +62,26 @@ function todayYMD() {
   return `${y}-${m}-${day}`;
 }
 
-function formatDateOnly(value?: string | null) {
+function parseYMDToDate(value: string): Date | null {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map((x) => Number(x));
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return null;
+  }
+
+  const d = new Date(year, month - 1, day, 12, 0, 0, 0);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function addWeeks(date: Date, weeks: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + weeks * 7);
+  return d;
+}
+
+function formatDateOnly(value?: string | Date | null) {
   if (!value) return "—";
-  const d = new Date(value);
+  const d = value instanceof Date ? value : new Date(value);
   if (isNaN(d.getTime())) return "—";
 
   return d.toLocaleDateString("en-GB", {
@@ -114,13 +128,13 @@ export default function AdminMemberDetail() {
     dedupingInterval: 30_000,
   });
 
-  const programsKey = mounted && isAllowed ? "/api/admin/programs/list-simple" : null;
-  const { data: programsData } = useSWR<ProgramsListResp>(programsKey, fetcher, {
+  const programsKey = mounted && isAllowed ? "/api/programs/admin/list" : null;
+  const { data: programsResp } = useSWR<ProgramListResp>(programsKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
 
-  const programs = Array.isArray(programsData?.items) ? programsData!.items : [];
+  const programs = Array.isArray(programsResp?.programs) ? programsResp.programs : [];
 
   const feeds = {
     checkins:
@@ -183,6 +197,24 @@ export default function AdminMemberDetail() {
   const profile = profileData?.user || {};
   const titleName = profile?.display_name || profile?.name || profile?.profile?.name || email || "Member";
 
+  const selectedProgram = useMemo(
+    () => programs.find((p) => String(p.program_id) === String(programId)) || null,
+    [programs, programId]
+  );
+
+  const projectedEndDate = useMemo(() => {
+    const start = parseYMDToDate(programStartDate);
+    const weeks = Number(selectedProgram?.weeks || 0);
+
+    if (!start || !Number.isFinite(weeks) || weeks < 1) return null;
+
+    const end = addWeeks(start, weeks);
+    end.setDate(end.getDate() - 1);
+    end.setHours(23, 59, 59, 999);
+
+    return end;
+  }, [programStartDate, selectedProgram?.weeks]);
+
   useEffect(() => {
     const userGymId = String(profile?.gym_id || "").trim();
     if (userGymId) {
@@ -200,7 +232,7 @@ export default function AdminMemberDetail() {
     }
 
     if (!programId && programs.length === 1) {
-      setProgramId(programs[0].id);
+      setProgramId(String(programs[0].program_id));
     }
   }, [profile?.active_program_id, programs, programId]);
 
@@ -517,7 +549,7 @@ export default function AdminMemberDetail() {
                     Assigned program
                   </div>
                   <div className="small text-muted">
-                    Assign an existing 12-week program from Firestore to drive workouts, check-ins, habits and reminders.
+                    Assign an existing program template to this user and calculate the block end date from the program length.
                   </div>
                 </div>
 
@@ -594,8 +626,8 @@ export default function AdminMemberDetail() {
                       >
                         <option value="">Select a program</option>
                         {programs.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name} • {item.weeks} weeks
+                          <option key={item.program_id} value={item.program_id}>
+                            {item.name || item.program_id} • {item.weeks ?? 12} weeks
                           </option>
                         ))}
                       </select>
@@ -620,6 +652,20 @@ export default function AdminMemberDetail() {
                         value={programStartDate}
                         onChange={(e) => setProgramStartDate(e.target.value)}
                       />
+                    </div>
+
+                    <div className="col-12 col-md-6">
+                      <div className="small text-muted mb-1">Program length</div>
+                      <div className="fw-semibold">
+                        {selectedProgram ? `${selectedProgram.weeks ?? 12} weeks` : "—"}
+                      </div>
+                    </div>
+
+                    <div className="col-12 col-md-6">
+                      <div className="small text-muted mb-1">Projected end date</div>
+                      <div className="fw-semibold">
+                        {projectedEndDate ? formatDateOnly(projectedEndDate) : "—"}
+                      </div>
                     </div>
 
                     <div className="col-12">
