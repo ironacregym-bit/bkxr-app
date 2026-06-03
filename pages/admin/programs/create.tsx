@@ -116,9 +116,7 @@ export default function CreateProgramPage() {
             <ProgramMetaStep
               value={{
                 name: program.name,
-                start_date: "", // kept for component compatibility, not used on save
                 weeks: program.weeks,
-                assigned_to: [], // kept for component compatibility, not used on save
               }}
               onChange={(patch) =>
                 setProgram((p) => ({
@@ -155,9 +153,7 @@ export default function CreateProgramPage() {
             <ProgramReviewStep
               program={{
                 name: program.name,
-                start_date: "", // template-only now
                 weeks: program.weeks,
-                assigned_to: [], // template-only now
               }}
               schedule={program.schedule}
               week_overrides={program.week_overrides}
