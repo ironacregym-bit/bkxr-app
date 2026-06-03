@@ -3,7 +3,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import useSWR from "swr";
 
 type WorkoutItem =
   | { type: "Single"; exercise_id: string; exercise_name?: string; sets?: number | null; reps?: string | null }
@@ -61,21 +60,8 @@ type WeekRows = {
   completed: WeekRow[];
 };
 
-type ProgramsWeeklyResponse = {
-  weekStartYMD: string;
-  weekEndYMD: string;
-  days: Record<string, SimpleWorkoutRef[]>;
-  debug?: {
-    programsMatched?: number;
-    programsActiveInWeek?: number;
-    scheduleRowsRead?: number;
-    uniqueWorkoutIds?: number;
-    assignmentsMatched?: number;
-  };
-};
-
 type IronAcreWorkoutCardProps = {
-  title: string; // kept for compatibility (not rendered)
+  title: string; // kept for compatibility
   workout: Workout | null;
   workoutId: string;
   done: boolean;
@@ -87,8 +73,6 @@ type IronAcreWorkoutCardProps = {
   weeklyTotals?: WeeklyTotals;
   hasWorkoutToday: boolean;
 };
-
-const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 function flattenExercisesWithReps(w?: Workout | null) {
   const workout = w ?? null;
@@ -111,6 +95,7 @@ function flattenExercisesWithReps(w?: Workout | null) {
       }
     }
   }
+
   return out;
 }
 
@@ -130,6 +115,7 @@ function estimateSets(w?: Workout | null) {
       else total += Number(it.sets ?? 3) * (it.items?.length || 1);
     }
   }
+
   return total;
 }
 
@@ -142,41 +128,43 @@ function refsFromIds(ids: string[]) {
   return (ids || []).map((id) => ({ id: String(id) }));
 }
 
-function workoutsForLegacyWeekDay(d: DayOverview): SimpleWorkoutRef[] {
+function workoutsForWeekDay(d: DayOverview): SimpleWorkoutRef[] {
   const recurring = d.recurringWorkouts || [];
   if (recurring.length) return recurring;
-
-  const ids = d.workoutIds || [];
-  if (ids.length) return refsFromIds(ids);
 
   const optional = d.optionalWorkouts || [];
   if (optional.length) return optional;
 
+  const ids = d.workoutIds || [];
+  if (ids.length) return refsFromIds(ids);
+
   return [];
 }
 
-function doneForLegacyWeekDay(d: DayOverview): boolean {
+function doneForWeekDay(d: DayOverview): boolean {
   const recurring = d.recurringWorkouts || [];
   if (recurring.length) return Boolean(d.recurringDone);
 
   const ids = d.workoutIds || [];
   if (ids.length) return Boolean(d.workoutDone);
 
+  const optional = d.optionalWorkouts || [];
+  if (optional.length) return Boolean(d.workoutDone);
+
   return false;
 }
 
-function buildLegacyWeekRows(weekDays: DayOverview[], dateKey: string, workoutId: string): WeekRows {
+function buildWeekRows(weekDays: DayOverview[], dateKey: string, activeWorkoutId: string, done: boolean): WeekRows {
   const rows: WeekRow[] = (weekDays || [])
     .map((d) => {
-      const workouts = workoutsForLegacyWeekDay(d);
-      const done = doneForLegacyWeekDay(d);
+      const workouts = workoutsForWeekDay(d);
+      const rowDone = d.dateKey === dateKey ? Boolean(done) : doneForWeekDay(d);
 
       const filtered = workouts.filter((w) => {
         const isToday = d.dateKey === dateKey;
-        const isSameWorkout = Boolean(workoutId) && w.id === workoutId;
+        const isSameWorkout = Boolean(activeWorkoutId) && w.id === activeWorkoutId;
 
-        if (isToday && isSameWorkout && !done) return false;
-
+        if (isToday && isSameWorkout && !rowDone) return false;
         return true;
       });
 
@@ -184,42 +172,7 @@ function buildLegacyWeekRows(weekDays: DayOverview[], dateKey: string, workoutId
         ymd: d.dateKey,
         day: dayLabelFromYMD(d.dateKey),
         workouts: filtered,
-        done,
-      };
-    })
-    .filter((r) => r.workouts.length > 0);
-
-  return {
-    pending: rows.filter((r) => !r.done),
-    completed: rows.filter((r) => r.done),
-  };
-}
-
-function buildProgramWeekRows(
-  programDays: Record<string, SimpleWorkoutRef[]> | undefined,
-  dateKey: string,
-  activeWorkoutId: string,
-  done: boolean
-): WeekRows {
-  const source = programDays || {};
-
-  const rows: WeekRow[] = Object.keys(source)
-    .sort()
-    .map((ymd) => {
-      const workouts = Array.isArray(source[ymd]) ? source[ymd] : [];
-      const isToday = ymd === dateKey;
-
-      const filtered = workouts.filter((w) => {
-        const isSameWorkout = Boolean(activeWorkoutId) && w.id === activeWorkoutId;
-        if (isToday && isSameWorkout && !done) return false;
-        return true;
-      });
-
-      return {
-        ymd,
-        day: dayLabelFromYMD(ymd),
-        workouts: filtered,
-        done: isToday ? Boolean(done) : false,
+        done: rowDone,
       };
     })
     .filter((r) => r.workouts.length > 0);
@@ -231,6 +184,7 @@ function buildProgramWeekRows(
 }
 
 export default function IronAcreWorkoutCard({
+  title,
   workout,
   workoutId,
   done,
@@ -242,29 +196,25 @@ export default function IronAcreWorkoutCard({
   weeklyTotals,
   hasWorkoutToday,
 }: IronAcreWorkoutCardProps) {
-  const weeklyProgramsKey = weekStartYMD
-    ? `/api/programs/weekly?week=${encodeURIComponent(weekStartYMD)}`
-    : null;
+  const todaysDay = useMemo(() => {
+    return (weekDays || []).find((d) => d.dateKey === dateKey);
+  }, [weekDays, dateKey]);
 
-  const { data: programWeeklyData } = useSWR<ProgramsWeeklyResponse>(weeklyProgramsKey, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 30_000,
-  });
-
-  const programDays = programWeeklyData?.days || {};
-  const todaysProgramRefs = Array.isArray(programDays?.[dateKey]) ? programDays[dateKey] : [];
+  const todaysRefs = useMemo(() => {
+    return todaysDay ? workoutsForWeekDay(todaysDay) : [];
+  }, [todaysDay]);
 
   const resolvedWorkoutId = useMemo(() => {
-    if (todaysProgramRefs.length > 0) {
-      return String(todaysProgramRefs[0]?.id || "");
+    if (todaysRefs.length > 0) {
+      return String(todaysRefs[0]?.id || "");
     }
     return workoutId;
-  }, [todaysProgramRefs, workoutId]);
+  }, [todaysRefs, workoutId]);
 
   const resolvedHasWorkoutToday = useMemo(() => {
-    if (todaysProgramRefs.length > 0) return true;
+    if (todaysRefs.length > 0) return true;
     return hasWorkoutToday;
-  }, [todaysProgramRefs, hasWorkoutToday]);
+  }, [todaysRefs, hasWorkoutToday]);
 
   const flat = useMemo(() => flattenExercisesWithReps(workout), [workout]);
   const exCount = flat.length;
@@ -275,14 +225,8 @@ export default function IronAcreWorkoutCard({
   const [showWeek, setShowWeek] = useState(false);
 
   const weekRows = useMemo(() => {
-    const hasProgramWeekData = Object.keys(programDays || {}).length > 0;
-
-    if (hasProgramWeekData) {
-      return buildProgramWeekRows(programDays, dateKey, resolvedWorkoutId, done);
-    }
-
-    return buildLegacyWeekRows(weekDays, dateKey, resolvedWorkoutId);
-  }, [programDays, dateKey, resolvedWorkoutId, done, weekDays]);
+    return buildWeekRows(weekDays, dateKey, resolvedWorkoutId, done);
+  }, [weekDays, dateKey, resolvedWorkoutId, done]);
 
   const startHref = resolvedWorkoutId
     ? `/gymworkout/${encodeURIComponent(resolvedWorkoutId)}?date=${encodeURIComponent(dateKey)}`
@@ -290,7 +234,8 @@ export default function IronAcreWorkoutCard({
 
   const titleText =
     workout?.workout_name ||
-    todaysProgramRefs?.[0]?.name ||
+    todaysRefs?.[0]?.name ||
+    title ||
     "Gym session";
 
   const subtitleText = (
@@ -444,7 +389,7 @@ export default function IronAcreWorkoutCard({
                     {r.workouts.map((w) => {
                       const href = `/gymworkout/${encodeURIComponent(w.id)}?date=${encodeURIComponent(r.ymd)}`;
                       return (
-                        <Link key={w.id} href={href} className="ia-link">
+                        <Link key={`${r.ymd}-${w.id}`} href={href} className="ia-link">
                           <div
                             style={{
                               padding: "10px 12px",
@@ -497,7 +442,7 @@ export default function IronAcreWorkoutCard({
                     {r.workouts.map((w) => {
                       const href = `/gymworkout/${encodeURIComponent(w.id)}?date=${encodeURIComponent(r.ymd)}`;
                       return (
-                        <Link key={w.id} href={href} className="ia-link">
+                        <Link key={`${r.ymd}-${w.id}`} href={href} className="ia-link">
                           <div
                             style={{
                               padding: "10px 12px",
