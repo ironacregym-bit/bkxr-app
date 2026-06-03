@@ -1,3 +1,4 @@
+// pages/admin/programs/create.tsx
 import Head from "next/head";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
@@ -11,9 +12,7 @@ import ProgramReviewStep from "../../../components/program-create/ProgramReviewS
 
 export type ProgramDraft = {
   name: string;
-  start_date: string;
   weeks: number;
-  assigned_to: string[];
   schedule: ProgramScheduleItem[];
   week_overrides: {
     [workout_id: string]: {
@@ -24,6 +23,13 @@ export type ProgramDraft = {
       };
     };
   };
+};
+
+type ProgramCreatePayload = {
+  name: string;
+  weeks: number;
+  schedule: ProgramScheduleItem[];
+  week_overrides: ProgramDraft["week_overrides"];
 };
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
@@ -47,9 +53,7 @@ export default function CreateProgramPage() {
 
   const [program, setProgram] = useState<ProgramDraft>({
     name: "",
-    start_date: "",
     weeks: 12,
-    assigned_to: [],
     schedule: [],
     week_overrides: {},
   });
@@ -57,7 +61,15 @@ export default function CreateProgramPage() {
   async function createProgram() {
     try {
       setCreating(true);
-      await postJson<{ ok?: boolean; program_id?: string }>("/api/programs/create", program);
+
+      const payload: ProgramCreatePayload = {
+        name: program.name,
+        weeks: program.weeks,
+        schedule: program.schedule,
+        week_overrides: program.week_overrides,
+      };
+
+      await postJson<{ ok?: boolean; program_id?: string }>("/api/programs/create", payload);
       alert("Program created ✅");
     } catch (e: any) {
       alert(e?.message || "Failed to create program");
@@ -95,18 +107,26 @@ export default function CreateProgramPage() {
 
       <main className="container py-3 text-white" style={{ paddingBottom: 90 }}>
         <div className="ia-page-title">Create training program</div>
-        <div className="ia-page-subtitle text-dim">Build a 12-week block, schedule workouts, and set weekly %.</div>
+        <div className="ia-page-subtitle text-dim">
+          Build a reusable program template with weeks, workout schedule and progression.
+        </div>
 
         <div className="mt-3 ia-tile ia-tile-pad">
           {step === 1 && (
             <ProgramMetaStep
               value={{
                 name: program.name,
-                start_date: program.start_date,
+                start_date: "", // kept for component compatibility, not used on save
                 weeks: program.weeks,
-                assigned_to: program.assigned_to,
+                assigned_to: [], // kept for component compatibility, not used on save
               }}
-              onChange={(patch) => setProgram((p) => ({ ...p, ...patch }))}
+              onChange={(patch) =>
+                setProgram((p) => ({
+                  ...p,
+                  name: typeof patch.name === "string" ? patch.name : p.name,
+                  weeks: typeof patch.weeks === "number" ? patch.weeks : p.weeks,
+                }))
+              }
               onNext={() => setStep(2)}
             />
           )}
@@ -135,9 +155,9 @@ export default function CreateProgramPage() {
             <ProgramReviewStep
               program={{
                 name: program.name,
-                start_date: program.start_date,
+                start_date: "", // template-only now
                 weeks: program.weeks,
-                assigned_to: program.assigned_to,
+                assigned_to: [], // template-only now
               }}
               schedule={program.schedule}
               week_overrides={program.week_overrides}
