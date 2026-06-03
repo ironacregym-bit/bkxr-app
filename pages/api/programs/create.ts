@@ -1,17 +1,18 @@
+// pages/api/programs/create.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { Timestamp } from "@google-cloud/firestore";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import firestore from "../../../lib/firestoreClient";
 import { authOptions } from "../auth/[...nextauth]";
 
 type ProgramCreateBody = {
-  name?: string;
-  start_date?: string;
-  weeks?: number;
-  assigned_to?: unknown;
+  name?: unknown;
+  start_date?: unknown; // optional now
+  assigned_to?: unknown; // accepted but ignored now
+  weeks?: unknown;
   schedule?: Array<{
-    workout_id?: string;
-    day_of_week?: string | number;
+    workout_id?: unknown;
+    day_of_week?: string | number | null;
     order?: number | null;
   }>;
   week_overrides?: Record<
@@ -38,8 +39,15 @@ function isNonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.trim().length > 0;
 }
 
-function isNumber(v: unknown): v is number {
-  return typeof v === "number" && Number.isFinite(v);
+function toPositiveNumber(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+
+  if (typeof v === "string" && v.trim()) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+
+  return null;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -49,6 +57,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const session = await getServerSession(req, res, authOptions).catch(() => null);
+
   if (!session?.user?.email) {
     return res.status(401).json({ error: "Unauthorized" });
   }
@@ -60,25 +69,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const body = (req.body || {}) as ProgramCreateBody;
 
-  const name = body.name;
-  const startDateRaw = body.start_date;
-  const weeks = body.weeks;
-  const assignedTo = body.assigned_to;
+  const name = isNonEmptyString(body.name) ? body.name.trim() : "";
+  const weeks = toPositiveNumber(body.weeks);
+  const startDateRaw = isNonEmptyString(body.start_date) ? body.start_date.trim() : "";
   const schedule = Array.isArray(body.schedule) ? body.schedule : [];
   const weekOverrides =
     body.week_overrides && typeof body.week_overrides === "object" ? body.week_overrides : {};
 
-  if (!isNonEmptyString(name) || !isNonEmptyString(startDateRaw) || !isNumber(weeks) || weeks <= 0) {
-    return res.status(400).json({ error: "Missing required fields" });
+  if (!name) {
+    return res.status(400).json({ error: "Program name is required" });
   }
 
-  if (!Array.isArray(assignedTo)) {
-    return res.status(400).json({ error: "Missing required fields" });
+  if (!weeks) {
+    return res.status(400).json({ error: "Weeks must be a number greater than 0" });
   }
 
-  const tsStartDate = parseDateToTimestamp(startDateRaw);
-  if (!tsStartDate) {
-    return res.status(400).json({ error: "start_date must be a valid date" });
+  let tsStartDate: Timestamp | null = null;
+  if (startDateRaw) {
+    tsStartDate = parseDateToTimestamp(startDateRaw);
+    if (!tsStartDate) {
+      return res.status(400).json({ error: "start_date must be a valid date" });
+    }
   }
 
   try {
@@ -89,30 +100,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     batch.set(programRef, {
       program_id: programRef.id,
-      name: name.trim(),
-      start_date: tsStartDate,
+      name,
       weeks,
-      assigned_to: assignedTo,
-      created_by: session.user.email.toLowerCase(),
+      start_date: tsStartDate || null, // optional template metadata only
+      created_by: String(session.user.email || "").trim().toLowerCase(),
       created_at: now,
+      updated_at: now,
+      // assigned_to intentionally removed from template model
     });
 
     for (const s of schedule) {
-      const workoutId = s?.workout_id;
-      if (!isNonEmptyString(workoutId)) continue;
+      const workoutId =
+        typeof s?.workout_id === "string" ? s.workout_id.trim() : String(s?.workout_id || "").trim();
+
+      if (!workoutId) continue;
 
       const ref = programRef.collection("schedule").doc();
+
       batch.set(ref, {
+        schedule_id: ref.id,
         workout_id: workoutId,
         day_of_week: s.day_of_week ?? null,
-        order: s.order ?? 0,
+        order: typeof s.order === "number" && Number.isFinite(s.order) ? s.order : 0,
+        created_at: now,
       });
     }
 
     for (const workoutId of Object.keys(weekOverrides || {})) {
       if (!isNonEmptyString(workoutId)) continue;
+
       const ref = programRef.collection("week_overrides").doc(workoutId);
-      batch.set(ref, weekOverrides[workoutId] ?? {});
+
+      batch.set(ref, {
+        ...(weekOverrides[workoutId] ?? {}),
+        workout_id: workoutId,
+        updated_at: now,
+      });
     }
 
     await batch.commit();
