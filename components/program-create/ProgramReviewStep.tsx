@@ -129,7 +129,7 @@ export default function ProgramReviewStep({
                   borderRadius: 12,
                 }}
               >
-                <div className="fw-semibold">{item.workout_name || item.workout_id || "Workout"}</div>
+                <div className="fw-semibold">{item.workout_id || "Workout"}</div>
                 <div className="small text-dim">
                   {dayLabel(item.day_of_week)} • Order {item.order ?? 0}
                 </div>
