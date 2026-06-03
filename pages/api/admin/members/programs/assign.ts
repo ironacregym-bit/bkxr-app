@@ -5,6 +5,7 @@ import { Timestamp } from "@google-cloud/firestore";
 import { authOptions } from "../../../auth/[...nextauth]";
 import firestore from "../../../../../lib/firestoreClient";
 import { hasRole } from "../../../../../lib/rbac";
+import { notifyInAppAndPush } from "../../../../../lib/notify";
 
 type Body = {
   user_email?: string;
@@ -34,6 +35,18 @@ function addWeeks(date: Date, weeks: number): Date {
   const d = new Date(date);
   d.setDate(d.getDate() + weeks * 7);
   return d;
+}
+
+function formatDateOnly(value: Date): string {
+  try {
+    return value.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return value.toISOString().slice(0, 10);
+  }
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -163,6 +176,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         { merge: true }
       );
     });
+
+    // Send notification after successful transaction
+    try {
+      const href = "/iron-acre";
+      const startText = formatDateOnly(startDate);
+
+      await notifyInAppAndPush(
+        userEmail,
+        {
+          title: "Program assigned",
+          message: `You’ve been added to ${programName}. Your training block starts on ${startText}. Tap to open Iron Acre and view your programme.`,
+          href,
+          source_key: "program_assignment",
+          source_event: "program_assigned",
+          meta: {
+            gym_id: gymId,
+            program_id: programId,
+            program_name: programName,
+            assignment_id: assignmentRef.id,
+            start_date: startDate.toISOString(),
+            end_date: endDate.toISOString(),
+          },
+        },
+        {
+          title: "Program assigned",
+          body: `You’ve been added to ${programName}. Tap to view your training block.`,
+          url: href,
+        }
+      );
+    } catch (notifyErr: any) {
+      console.error("[admin/members/programs/assign] notify error:", notifyErr?.message || notifyErr);
+    }
 
     return res.status(201).json({
       ok: true,
