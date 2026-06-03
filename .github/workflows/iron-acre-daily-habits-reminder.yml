@@ -1,0 +1,32 @@
+# .github/workflows/iron-acre-daily-habits-reminder.yml
+name: Iron Acre Daily Habits Reminder
+
+on:
+  schedule:
+    # Every day at 18:00 UTC
+    - cron: "0 18 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  call-daily-habits-reminder:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Call daily habits reminder endpoint
+        env:
+          CRON_URL: ${{ secrets.IRON_ACRE_DAILY_HABITS_REMINDER_URL }}
+          CRON_KEY: ${{ secrets.CRON_KEY }}
+        run: |
+          echo "Calling $CRON_URL ..."
+          http_code=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
+            -X POST "$CRON_URL" \
+            -H "x-cron-key: $CRON_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+
+          echo "HTTP $http_code"
+          cat /tmp/resp.json || true
+
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            exit 1
+          fi
