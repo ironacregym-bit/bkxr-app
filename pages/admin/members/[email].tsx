@@ -43,6 +43,20 @@ type CheckinsSeriesResp = {
   results: CheckinRow[];
 };
 
+type ProgramItem = {
+  id: string;
+  program_id: string;
+  name: string;
+  weeks: number;
+  created_at: string | null;
+  created_by: string | null;
+  assigned_to_count: number;
+};
+
+type ProgramsListResp = {
+  items: ProgramItem[];
+};
+
 function todayYMD() {
   const d = new Date();
   const y = d.getFullYear();
@@ -99,6 +113,14 @@ export default function AdminMemberDetail() {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
+
+  const programsKey = mounted && isAllowed ? "/api/admin/programs/list-simple" : null;
+  const { data: programsData } = useSWR<ProgramsListResp>(programsKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30_000,
+  });
+
+  const programs = Array.isArray(programsData?.items) ? programsData!.items : [];
 
   const feeds = {
     checkins:
@@ -171,10 +193,16 @@ export default function AdminMemberDetail() {
   }, [profile?.gym_id]);
 
   useEffect(() => {
-    if (profile?.active_program_id) {
-      setProgramId(String(profile.active_program_id));
+    const activeProgramId = String(profile?.active_program_id || "").trim();
+    if (activeProgramId) {
+      setProgramId(activeProgramId);
+      return;
     }
-  }, [profile?.active_program_id]);
+
+    if (!programId && programs.length === 1) {
+      setProgramId(programs[0].id);
+    }
+  }, [profile?.active_program_id, programs, programId]);
 
   function formatPreview(v: any): string {
     if (v == null) return "—";
@@ -489,7 +517,7 @@ export default function AdminMemberDetail() {
                     Assigned program
                   </div>
                   <div className="small text-muted">
-                    Assign an existing 12-week program to drive workouts, check-ins, habits and reminders.
+                    Assign an existing 12-week program from Firestore to drive workouts, check-ins, habits and reminders.
                   </div>
                 </div>
 
@@ -557,18 +585,23 @@ export default function AdminMemberDetail() {
                   }}
                 >
                   <div className="row g-3">
-                    <div className="col-12 col-md-4">
-                      <label className="form-label">Program ID</label>
-                      <input
-                        type="text"
-                        className="form-control"
+                    <div className="col-12 col-md-5">
+                      <label className="form-label">Program</label>
+                      <select
+                        className="form-select"
                         value={programId}
                         onChange={(e) => setProgramId(e.target.value)}
-                        placeholder="Paste Firestore program id"
-                      />
+                      >
+                        <option value="">Select a program</option>
+                        {programs.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name} • {item.weeks} weeks
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
-                    <div className="col-12 col-md-4">
+                    <div className="col-12 col-md-3">
                       <label className="form-label">Gym</label>
                       <input
                         type="text"
@@ -606,7 +639,7 @@ export default function AdminMemberDetail() {
                       type="button"
                       className="btn"
                       onClick={handleAssignProgram}
-                      disabled={programBusy}
+                      disabled={programBusy || !programId}
                       style={{
                         borderRadius: 24,
                         color: "#fff",
