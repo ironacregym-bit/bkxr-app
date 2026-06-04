@@ -5,14 +5,28 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 type WorkoutItem =
-  | { type: "Single"; exercise_id: string; exercise_name?: string; sets?: number | null; reps?: string | null }
+  | {
+      type: "Single";
+      exercise_id: string;
+      exercise_name?: string;
+      sets?: number | null;
+      reps?: string | null;
+    }
   | {
       type: "Superset";
-      items: { exercise_id: string; exercise_name?: string; reps?: string | null }[];
+      items: {
+        exercise_id: string;
+        exercise_name?: string;
+        reps?: string | null;
+      }[];
       sets?: number | null;
     };
 
-type Round = { name: string; order: number; items: WorkoutItem[] };
+type Round = {
+  name: string;
+  order: number;
+  items: WorkoutItem[];
+};
 
 type Workout = {
   workout_id: string;
@@ -24,19 +38,21 @@ type Workout = {
   finisher?: Round | null;
 };
 
-type SimpleWorkoutRef = { id: string; name?: string; order?: number; programId?: string };
+type SimpleWorkoutRef = {
+  id: string;
+  name?: string;
+  order?: number;
+  programId?: string;
+};
 
 type DayOverview = {
   dateKey: string;
-
   hasWorkout?: boolean;
   workoutDone?: boolean;
   workoutIds?: string[];
-
   hasRecurringToday?: boolean;
   recurringWorkouts: SimpleWorkoutRef[];
   recurringDone: boolean;
-
   optionalWorkouts?: SimpleWorkoutRef[];
 };
 
@@ -61,7 +77,7 @@ type WeekRows = {
 };
 
 type IronAcreWorkoutCardProps = {
-  title: string; // kept for compatibility
+  title: string;
   workout: Workout | null;
   workoutId: string;
   done: boolean;
@@ -74,9 +90,8 @@ type IronAcreWorkoutCardProps = {
   hasWorkoutToday: boolean;
 };
 
-function flattenExercisesWithReps(w?: Workout | null) {
-  const workout = w ?? null;
-  if (!workout) return [] as Array<{ name: string; reps?: string | null }>;
+function flattenExercisesWithReps(workout?: Workout | null): Array<{ name: string; reps?: string | null }> {
+  if (!workout) return [];
 
   const rounds: Round[] = [];
   if (workout.warmup) rounds.push(workout.warmup);
@@ -84,13 +99,20 @@ function flattenExercisesWithReps(w?: Workout | null) {
   if (workout.finisher) rounds.push(workout.finisher);
 
   const out: Array<{ name: string; reps?: string | null }> = [];
-  for (const r of rounds) {
-    for (const it of r.items || []) {
-      if (it.type === "Single") {
-        out.push({ name: it.exercise_name || it.exercise_id, reps: it.reps ?? null });
+
+  for (const round of rounds) {
+    for (const item of round.items || []) {
+      if (item.type === "Single") {
+        out.push({
+          name: item.exercise_name || item.exercise_id,
+          reps: item.reps ?? null,
+        });
       } else {
-        for (const s of it.items || []) {
-          out.push({ name: s.exercise_name || s.exercise_id, reps: s.reps ?? null });
+        for (const supersetItem of item.items || []) {
+          out.push({
+            name: supersetItem.exercise_name || supersetItem.exercise_id,
+            reps: supersetItem.reps ?? null,
+          });
         }
       }
     }
@@ -99,8 +121,7 @@ function flattenExercisesWithReps(w?: Workout | null) {
   return out;
 }
 
-function estimateSets(w?: Workout | null) {
-  const workout = w ?? null;
+function estimateSets(workout?: Workout | null): number {
   if (!workout) return 0;
 
   const rounds: Round[] = [];
@@ -109,77 +130,86 @@ function estimateSets(w?: Workout | null) {
   if (workout.finisher) rounds.push(workout.finisher);
 
   let total = 0;
-  for (const r of rounds) {
-    for (const it of r.items || []) {
-      if (it.type === "Single") total += Number(it.sets ?? 3);
-      else total += Number(it.sets ?? 3) * (it.items?.length || 1);
+
+  for (const round of rounds) {
+    for (const item of round.items || []) {
+      if (item.type === "Single") {
+        total += Number(item.sets ?? 3);
+      } else {
+        total += Number(item.sets ?? 3) * (item.items?.length || 1);
+      }
     }
   }
 
   return total;
 }
 
-function dayLabelFromYMD(ymd: string) {
+function dayLabelFromYMD(ymd: string): string {
   const d = new Date(`${ymd}T00:00:00`);
   return d.toLocaleDateString(undefined, { weekday: "short" });
 }
 
-function refsFromIds(ids: string[]) {
+function refsFromIds(ids: string[]): SimpleWorkoutRef[] {
   return (ids || []).map((id) => ({ id: String(id) }));
 }
 
-function workoutsForWeekDay(d: DayOverview): SimpleWorkoutRef[] {
-  const recurring = d.recurringWorkouts || [];
+function workoutsForWeekDay(day: DayOverview): SimpleWorkoutRef[] {
+  const recurring = day.recurringWorkouts || [];
   if (recurring.length) return recurring;
 
-  const optional = d.optionalWorkouts || [];
+  const optional = day.optionalWorkouts || [];
   if (optional.length) return optional;
 
-  const ids = d.workoutIds || [];
+  const ids = day.workoutIds || [];
   if (ids.length) return refsFromIds(ids);
 
   return [];
 }
 
-function doneForWeekDay(d: DayOverview): boolean {
-  const recurring = d.recurringWorkouts || [];
-  if (recurring.length) return Boolean(d.recurringDone);
+function doneForWeekDay(day: DayOverview): boolean {
+  const recurring = day.recurringWorkouts || [];
+  if (recurring.length) return Boolean(day.recurringDone);
 
-  const ids = d.workoutIds || [];
-  if (ids.length) return Boolean(d.workoutDone);
+  const ids = day.workoutIds || [];
+  if (ids.length) return Boolean(day.workoutDone);
 
-  const optional = d.optionalWorkouts || [];
-  if (optional.length) return Boolean(d.workoutDone);
+  const optional = day.optionalWorkouts || [];
+  if (optional.length) return Boolean(day.workoutDone);
 
   return false;
 }
 
-function buildWeekRows(weekDays: DayOverview[], dateKey: string, activeWorkoutId: string, done: boolean): WeekRows {
+function buildWeekRows(
+  weekDays: DayOverview[],
+  dateKey: string,
+  activeWorkoutId: string,
+  done: boolean
+): WeekRows {
   const rows: WeekRow[] = (weekDays || [])
-    .map((d) => {
-      const workouts = workoutsForWeekDay(d);
-      const rowDone = d.dateKey === dateKey ? Boolean(done) : doneForWeekDay(d);
+    .map((day) => {
+      const workouts = workoutsForWeekDay(day);
+      const rowDone = day.dateKey === dateKey ? Boolean(done) : doneForWeekDay(day);
 
-      const filtered = workouts.filter((w) => {
-        const isToday = d.dateKey === dateKey;
-        const isSameWorkout = Boolean(activeWorkoutId) && w.id === activeWorkoutId;
+      const filtered = workouts.filter((workoutRef) => {
+        const isToday = day.dateKey === dateKey;
+        const isSameWorkout = Boolean(activeWorkoutId) && workoutRef.id === activeWorkoutId;
 
         if (isToday && isSameWorkout && !rowDone) return false;
         return true;
       });
 
       return {
-        ymd: d.dateKey,
-        day: dayLabelFromYMD(d.dateKey),
+        ymd: day.dateKey,
+        day: dayLabelFromYMD(day.dateKey),
         workouts: filtered,
         done: rowDone,
       };
     })
-    .filter((r) => r.workouts.length > 0);
+    .filter((row) => row.workouts.length > 0);
 
   return {
-    pending: rows.filter((r) => !r.done),
-    completed: rows.filter((r) => r.done),
+    pending: rows.filter((row) => !row.done),
+    completed: rows.filter((row) => row.done),
   };
 }
 
@@ -197,7 +227,7 @@ export default function IronAcreWorkoutCard({
   hasWorkoutToday,
 }: IronAcreWorkoutCardProps) {
   const todaysDay = useMemo(() => {
-    return (weekDays || []).find((d) => d.dateKey === dateKey);
+    return (weekDays || []).find((day) => day.dateKey === dateKey);
   }, [weekDays, dateKey]);
 
   const todaysRefs = useMemo(() => {
@@ -218,11 +248,10 @@ export default function IronAcreWorkoutCard({
 
   const flat = useMemo(() => flattenExercisesWithReps(workout), [workout]);
   const exCount = flat.length;
-
   const setCount = useMemo(() => estimateSets(workout), [workout]);
-  const preview = useMemo(() => flat.slice(0, 3), [flat]);
 
   const [showWeek, setShowWeek] = useState(false);
+  const [showExercises, setShowExercises] = useState(false);
 
   const weekRows = useMemo(() => {
     return buildWeekRows(weekDays, dateKey, resolvedWorkoutId, done);
@@ -232,16 +261,12 @@ export default function IronAcreWorkoutCard({
     ? `/gymworkout/${encodeURIComponent(resolvedWorkoutId)}?date=${encodeURIComponent(dateKey)}`
     : "#";
 
-  const titleText =
-    workout?.workout_name ||
-    todaysRefs?.[0]?.name ||
-    title ||
-    "Gym session";
+  const titleText = workout?.workout_name || todaysRefs?.[0]?.name || title || "Gym session";
 
   const subtitleText = (
     workout?.focus ||
     workout?.notes ||
-    "Strength session targeting key patterns with varied angles and equipment."
+    "Get today’s session done and keep the week moving."
   ).toString();
 
   return (
@@ -252,15 +277,35 @@ export default function IronAcreWorkoutCard({
           TODAY’S WORKOUT
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowWeek((v) => !v)}
-          className="ia-btn ia-btn-outline"
-          title="Toggle this week"
-        >
-          <i className={`fas fa-chevron-${showWeek ? "up" : "down"}`} style={{ marginRight: 8 }} />
-          This week
-        </button>
+        <div className="d-flex align-items-center gap-2">
+          {flat.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowExercises((v) => !v)}
+              className="ia-btn ia-btn-outline"
+              title="Toggle workout exercises"
+            >
+              <i
+                className={`fas fa-chevron-${showExercises ? "up" : "down"}`}
+                style={{ marginRight: 8 }}
+              />
+              Exercises
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => setShowWeek((v) => !v)}
+            className="ia-btn ia-btn-outline"
+            title="Toggle this week"
+          >
+            <i
+              className={`fas fa-chevron-${showWeek ? "up" : "down"}`}
+              style={{ marginRight: 8 }}
+            />
+            This week
+          </button>
+        </div>
       </div>
 
       {!resolvedHasWorkoutToday ? (
@@ -268,7 +313,9 @@ export default function IronAcreWorkoutCard({
           <div className="ia-page-title" style={{ fontSize: "1.25rem" }}>
             No workout scheduled today
           </div>
-          <div className="text-dim small mt-1">Check the “This week” section for upcoming sessions.</div>
+          <div className="text-dim small mt-1">
+            Check the “This week” section for upcoming sessions.
+          </div>
         </>
       ) : (
         <>
@@ -303,7 +350,7 @@ export default function IronAcreWorkoutCard({
             }}
           >
             <div style={{ flex: 1 }}>
-              <div style={{ color: "var(--ia-neon)", fontWeight: 650, fontSize: "1.05rem" }}>
+              <div style={{ color: "var(--ia-neon)", fontWeight: 700, fontSize: "1.05rem" }}>
                 {exCount || "—"}
               </div>
               <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
@@ -312,7 +359,7 @@ export default function IronAcreWorkoutCard({
             </div>
 
             <div style={{ flex: 1 }}>
-              <div style={{ color: "var(--ia-neon2)", fontWeight: 650, fontSize: "1.05rem" }}>
+              <div style={{ color: "var(--ia-neon2)", fontWeight: 700, fontSize: "1.05rem" }}>
                 {setCount || "—"}
               </div>
               <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
@@ -321,7 +368,7 @@ export default function IronAcreWorkoutCard({
             </div>
 
             <div style={{ flex: 1 }}>
-              <div style={{ color: "var(--ia-neon)", fontWeight: 650, fontSize: "1.05rem" }}>
+              <div style={{ color: "var(--ia-neon)", fontWeight: 700, fontSize: "1.05rem" }}>
                 {durationMinutes ?? "—"} {durationMinutes != null ? "min" : ""}
               </div>
               <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
@@ -330,21 +377,38 @@ export default function IronAcreWorkoutCard({
             </div>
           </div>
 
-          {preview.length > 0 ? (
-            <div className="mt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
-              {preview.map((x, i) => (
-                <div key={i} className="d-flex justify-content-between align-items-center" style={{ padding: "6px 0" }}>
-                  <div className="text-truncate" style={{ minWidth: 0 }}>
-                    <span className="text-dim" style={{ marginRight: 8 }}>
-                      {i + 1}
-                    </span>
-                    <span style={{ fontWeight: 600 }}>{x.name}</span>
+          {showExercises && flat.length > 0 ? (
+            <div
+              className="mt-3"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}
+            >
+              <div className="text-dim small mb-2">Today’s exercise list</div>
+
+              <div className="d-flex flex-column" style={{ gap: 8 }}>
+                {flat.map((exercise, i) => (
+                  <div
+                    key={`${exercise.name}-${i}`}
+                    className="d-flex justify-content-between align-items-center gap-2"
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 14,
+                      background: "rgba(255,255,255,0.05)",
+                      boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+                    }}
+                  >
+                    <div className="text-truncate" style={{ minWidth: 0 }}>
+                      <span className="text-dim" style={{ marginRight: 8 }}>
+                        {i + 1}
+                      </span>
+                      <span className="fw-semibold">{exercise.name}</span>
+                    </div>
+
+                    <div className="text-dim small" style={{ whiteSpace: "nowrap" }}>
+                      {exercise.reps ? exercise.reps : ""}
+                    </div>
                   </div>
-                  <div className="text-dim small" style={{ whiteSpace: "nowrap" }}>
-                    {x.reps ? x.reps : ""}
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           ) : null}
 
@@ -371,25 +435,31 @@ export default function IronAcreWorkoutCard({
       )}
 
       {showWeek ? (
-        <div className="mt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12 }}>
+        <div
+          className="mt-3"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12 }}
+        >
           {weekRows.pending.length > 0 ? (
             <>
               <div className="text-dim small mb-2">Pending</div>
 
-              {weekRows.pending.map((r) => (
-                <div key={`pending-${r.ymd}`} style={{ marginBottom: 12 }}>
+              {weekRows.pending.map((row) => (
+                <div key={`pending-${row.ymd}`} style={{ marginBottom: 12 }}>
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <div className="fw-semibold">
-                      {r.day} <span className="text-dim">({r.ymd})</span>
+                      {row.day} <span className="text-dim">({row.ymd})</span>
                     </div>
-                    <span className="ia-badge">Pending</span>
+                    <span className="ia-badge">{row.workouts.length} to do</span>
                   </div>
 
                   <div className="d-flex flex-column" style={{ gap: 8 }}>
-                    {r.workouts.map((w) => {
-                      const href = `/gymworkout/${encodeURIComponent(w.id)}?date=${encodeURIComponent(r.ymd)}`;
+                    {row.workouts.map((workoutRef) => {
+                      const href = `/gymworkout/${encodeURIComponent(workoutRef.id)}?date=${encodeURIComponent(
+                        row.ymd
+                      )}`;
+
                       return (
-                        <Link key={`${r.ymd}-${w.id}`} href={href} className="ia-link">
+                        <Link key={`${row.ymd}-${workoutRef.id}`} href={href} className="ia-link">
                           <div
                             style={{
                               padding: "10px 12px",
@@ -403,8 +473,12 @@ export default function IronAcreWorkoutCard({
                             }}
                           >
                             <div className="text-truncate" style={{ minWidth: 0 }}>
-                              <div className="fw-semibold text-truncate">{w.name || "Gym session"}</div>
-                              {!w.name ? <div className="text-dim small text-truncate">{w.id}</div> : null}
+                              <div className="fw-semibold text-truncate">
+                                {workoutRef.name || "Gym session"}
+                              </div>
+                              {!workoutRef.name ? (
+                                <div className="text-dim small text-truncate">{workoutRef.id}</div>
+                              ) : null}
                             </div>
                             <i className="fas fa-chevron-right text-dim" />
                           </div>
@@ -419,15 +493,18 @@ export default function IronAcreWorkoutCard({
 
           {weekRows.completed.length > 0 ? (
             <>
-              <div className="text-dim small mb-2" style={{ marginTop: weekRows.pending.length ? 6 : 0 }}>
+              <div
+                className="text-dim small mb-2"
+                style={{ marginTop: weekRows.pending.length ? 6 : 0 }}
+              >
                 Completed
               </div>
 
-              {weekRows.completed.map((r) => (
-                <div key={`done-${r.ymd}`} style={{ marginBottom: 12 }}>
+              {weekRows.completed.map((row) => (
+                <div key={`done-${row.ymd}`} style={{ marginBottom: 12 }}>
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <div className="fw-semibold">
-                      {r.day} <span className="text-dim">({r.ymd})</span>
+                      {row.day} <span className="text-dim">({row.ymd})</span>
                     </div>
                     <span
                       className="ia-badge ia-badge-neon"
@@ -439,10 +516,13 @@ export default function IronAcreWorkoutCard({
                   </div>
 
                   <div className="d-flex flex-column" style={{ gap: 8 }}>
-                    {r.workouts.map((w) => {
-                      const href = `/gymworkout/${encodeURIComponent(w.id)}?date=${encodeURIComponent(r.ymd)}`;
+                    {row.workouts.map((workoutRef) => {
+                      const href = `/gymworkout/${encodeURIComponent(workoutRef.id)}?date=${encodeURIComponent(
+                        row.ymd
+                      )}`;
+
                       return (
-                        <Link key={`${r.ymd}-${w.id}`} href={href} className="ia-link">
+                        <Link key={`${row.ymd}-${workoutRef.id}`} href={href} className="ia-link">
                           <div
                             style={{
                               padding: "10px 12px",
@@ -456,8 +536,12 @@ export default function IronAcreWorkoutCard({
                             }}
                           >
                             <div className="text-truncate" style={{ minWidth: 0 }}>
-                              <div className="fw-semibold text-truncate">{w.name || "Gym session"}</div>
-                              {!w.name ? <div className="text-dim small text-truncate">{w.id}</div> : null}
+                              <div className="fw-semibold text-truncate">
+                                {workoutRef.name || "Gym session"}
+                              </div>
+                              {!workoutRef.name ? (
+                                <div className="text-dim small text-truncate">{workoutRef.id}</div>
+                              ) : null}
                             </div>
                             <i className="fas fa-chevron-right text-dim" />
                           </div>
