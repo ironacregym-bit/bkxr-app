@@ -56,30 +56,23 @@ export default function NotificationsBanner() {
         {supported ? (
           subscribed ? (
             <div
+              className="ia-badge"
               style={{
-                borderRadius: 999,
-                padding: "6px 10px",
-                background: "rgba(36, 255, 176, 0.10)",
-                border: "1px solid rgba(36, 255, 176, 0.30)",
-                color: "#d8fff1",
-                fontSize: 12,
-                fontWeight: 600,
-                whiteSpace: "nowrap",
+                background: "rgba(22, 219, 170, 0.12)",
+                border: "1px solid rgba(22, 219, 170, 0.28)",
+                color: "#d9fff5",
+                boxShadow: "0 0 0 1px rgba(255,255,255,0.02) inset",
               }}
             >
               Push enabled
             </div>
           ) : (
             <div
+              className="ia-badge"
               style={{
-                borderRadius: 999,
-                padding: "6px 10px",
                 background: "rgba(255,255,255,0.05)",
                 border: "1px solid rgba(255,255,255,0.10)",
                 color: "rgba(255,255,255,0.82)",
-                fontSize: 12,
-                fontWeight: 600,
-                whiteSpace: "nowrap",
               }}
             >
               Push off
@@ -87,15 +80,11 @@ export default function NotificationsBanner() {
           )
         ) : (
           <div
+            className="ia-badge"
             style={{
-              borderRadius: 999,
-              padding: "6px 10px",
               background: "rgba(255,255,255,0.05)",
               border: "1px solid rgba(255,255,255,0.10)",
               color: "rgba(255,255,255,0.60)",
-              fontSize: 12,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
             }}
           >
             Unsupported
@@ -103,14 +92,15 @@ export default function NotificationsBanner() {
         )}
       </div>
 
-      {supported && !subscribed && (
+      {supported && !subscribed ? (
         <div
+          className="mb-3"
           style={{
             borderRadius: 18,
             padding: 14,
-            marginBottom: 14,
-            background: "rgba(255,127,50,0.08)",
-            border: "1px solid rgba(255,127,50,0.20)",
+            background: "rgba(22, 219, 170, 0.08)",
+            border: "1px solid rgba(22, 219, 170, 0.18)",
+            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.03)",
           }}
         >
           <div style={{ fontWeight: 700, color: "#fff", marginBottom: 6 }}>
@@ -128,7 +118,7 @@ export default function NotificationsBanner() {
             Get workout reminders, class updates and important gym alerts straight to your device.
           </div>
 
-          {permission === "denied" && (
+          {permission === "denied" ? (
             <div
               style={{
                 color: "#ffb3b3",
@@ -139,9 +129,9 @@ export default function NotificationsBanner() {
             >
               Notifications are currently blocked in your browser settings.
             </div>
-          )}
+          ) : null}
 
-          {!!pushError && (
+          {!!pushError ? (
             <div
               style={{
                 color: "#ffb3b3",
@@ -152,26 +142,28 @@ export default function NotificationsBanner() {
             >
               {pushError}
             </div>
-          )}
+          ) : null}
 
           <PushSubscribeButton
-            className="btn btn-sm ia-btn"
+            className="ia-btn ia-btn-primary"
             style={{
               borderRadius: 999,
               whiteSpace: "nowrap",
               minHeight: 40,
+              width: "100%",
+              justifyContent: "center",
             }}
           >
             {busy ? "Enabling..." : "Enable push notifications"}
           </PushSubscribeButton>
         </div>
-      )}
+      ) : null}
 
       {error ? (
         <div
           style={{
             borderRadius: 16,
-            padding: "14px",
+            padding: 14,
             background: "rgba(255,255,255,0.03)",
             border: "1px solid rgba(255,255,255,0.08)",
             color: "rgba(255,255,255,0.72)",
@@ -216,15 +208,23 @@ export default function NotificationsBanner() {
       ) : items.length ? (
         <div style={{ display: "grid", gap: 10 }}>
           {items.map((item) => {
+            const unread = !item.read_at;
+
             const content = (
               <div
                 style={{
                   borderRadius: 16,
                   padding: "12px 14px",
-                  background: item.read_at ? "rgba(255,255,255,0.03)" : "rgba(255,127,50,0.10)",
-                  border: item.read_at
-                    ? "1px solid rgba(255,255,255,0.08)"
-                    : "1px solid rgba(255,127,50,0.24)",
+                  background: unread
+                    ? "linear-gradient(180deg, rgba(14, 44, 36, 0.82) 0%, rgba(10, 28, 24, 0.88) 100%)"
+                    : "rgba(255,255,255,0.03)",
+                  border: unread
+                    ? "1px solid rgba(22, 219, 170, 0.24)"
+                    : "1px solid rgba(255,255,255,0.08)",
+                  boxShadow: unread
+                    ? "0 0 0 1px rgba(255,255,255,0.02) inset, 0 8px 22px rgba(0,0,0,0.18)"
+                    : "none",
+                  transition: "all 0.2s ease",
                 }}
               >
                 <div className="d-flex align-items-start justify-content-between gap-2">
@@ -236,8 +236,8 @@ export default function NotificationsBanner() {
                         borderRadius: "50%",
                         marginTop: 6,
                         flex: "0 0 auto",
-                        background: item.read_at ? "rgba(255,255,255,0.25)" : "#ff7f32",
-                        boxShadow: item.read_at ? "none" : "0 0 0 4px rgba(255,127,50,0.12)",
+                        background: unread ? "#16dbaa" : "rgba(255,255,255,0.25)",
+                        boxShadow: unread ? "0 0 0 4px rgba(22, 219, 170, 0.12)" : "none",
                       }}
                     />
 
@@ -258,7 +258,7 @@ export default function NotificationsBanner() {
                         style={{
                           fontSize: 13,
                           lineHeight: 1.45,
-                          color: "rgba(255,255,255,0.82)",
+                          color: unread ? "rgba(235,255,249,0.88)" : "rgba(255,255,255,0.82)",
                         }}
                       >
                         {item.message}
@@ -269,7 +269,7 @@ export default function NotificationsBanner() {
                   <div
                     style={{
                       fontSize: 11,
-                      color: "rgba(255,255,255,0.55)",
+                      color: unread ? "rgba(195, 255, 240, 0.62)" : "rgba(255,255,255,0.55)",
                       whiteSpace: "nowrap",
                       flex: "0 0 auto",
                     }}
@@ -300,7 +300,7 @@ export default function NotificationsBanner() {
         <div
           style={{
             borderRadius: 16,
-            padding: "14px",
+            padding: 14,
             background: "rgba(255,255,255,0.03)",
             border: "1px solid rgba(255,255,255,0.08)",
             color: "rgba(255,255,255,0.72)",
