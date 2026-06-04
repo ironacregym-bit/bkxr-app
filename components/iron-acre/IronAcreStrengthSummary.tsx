@@ -1,3 +1,6 @@
+// components/iron-acre/IronAcreStrengthSummary.tsx
+"use client";
+
 import Link from "next/link";
 import { BIG_LIFTS, resolveProfileLift } from "../../lib/iron-acre/strengthLifts";
 
@@ -49,9 +52,14 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
       <div className="d-flex justify-content-between align-items-center mb-2">
         <div className="ia-kicker">
           <i className="fas fa-dumbbell" style={{ color: "var(--ia-neon)" }} />
-          Strength
+          STRENGTH
         </div>
+
         <span className="ia-badge ia-badge-neon">e1RM + 1RM</span>
+      </div>
+
+      <div className="text-dim small mb-2">
+        Snapshot of your current big-lift numbers pulled from your saved strength profile.
       </div>
 
       <div className="d-flex flex-column">
@@ -61,9 +69,10 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
             href={r.href}
             className="ia-link d-flex justify-content-between align-items-center"
             style={{
-              paddingTop: 10,
-              paddingBottom: 10,
+              paddingTop: 12,
+              paddingBottom: 12,
               borderTop: idx === 0 ? "none" : "1px solid rgba(255,255,255,0.08)",
+              textDecoration: "none",
             }}
             aria-label={`Open ${r.label} strength details`}
           >
@@ -71,13 +80,30 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
               <div className="fw-semibold" style={{ fontSize: "1rem" }}>
                 {r.label}
               </div>
-              <div className="ia-lift-sub">{r.sourceLabel}</div>
+
+              <div
+                className="text-dim small"
+                style={{
+                  lineHeight: 1.3,
+                  marginTop: 2,
+                }}
+              >
+                {r.sourceLabel}
+              </div>
             </div>
 
-            <div className="d-flex align-items-center gap-2">
-              <div className="ia-lift-value" style={{ marginTop: 0, fontSize: "1.15rem" }}>
-                <span style={{ color: "var(--ia-neon)" }}>{formatKg(r.value)}</span>
+            <div className="d-flex align-items-center gap-2" style={{ flex: "0 0 auto" }}>
+              <div
+                style={{
+                  fontWeight: 700,
+                  fontSize: "1.1rem",
+                  color: "var(--ia-neon)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {formatKg(r.value)}
               </div>
+
               <i className="fas fa-chevron-right text-dim" />
             </div>
           </Link>
