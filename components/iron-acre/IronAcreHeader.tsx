@@ -1,10 +1,12 @@
 // components/iron-acre/IronAcreHeader.tsx
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
-import NotificationsBanner from "../NotificationsBanner";
 
 type IronAcreHeaderProps = {
   userName: string;
   dateLabel: string;
+  notificationsContent?: React.ReactNode;
 };
 
 const TIME_UPDATE_MS = 30_000;
@@ -28,8 +30,12 @@ type DropdownPosition = {
   width: number;
 };
 
-export default function IronAcreHeader({ userName, dateLabel }: IronAcreHeaderProps) {
-  const [timeText, setTimeText] = useState<string>("");
+export default function IronAcreHeader({
+  userName,
+  dateLabel,
+  notificationsContent,
+}: IronAcreHeaderProps) {
+  const [timeText, setTimeText] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<DropdownPosition>({
     top: 78,
@@ -105,10 +111,18 @@ export default function IronAcreHeader({ userName, dateLabel }: IronAcreHeaderPr
 
   return (
     <>
-      <section className="futuristic-card ia-tile ia-tile-pad mb-3">
-        <div className="d-flex justify-content-between align-items-start gap-2">
+      <section className="ia-tile ia-tile-pad mb-3">
+        <div className="d-flex justify-content-between align-items-start gap-3">
           <div style={{ minWidth: 0 }}>
-            <div className="d-flex align-items-center gap-2 text-dim small">
+            <div
+              className="text-dim small"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                letterSpacing: "0.04em",
+              }}
+            >
               <span>{timeText}</span>
               <span>•</span>
               <span>{dateLabel}</span>
@@ -124,33 +138,43 @@ export default function IronAcreHeader({ userName, dateLabel }: IronAcreHeaderPr
           <button
             ref={buttonRef}
             type="button"
-            className="btn btn-sm ia-btn-outline"
-            style={{
-              width: 40,
-              height: 40,
-              padding: 0,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 999,
-            }}
+            className="btn"
             title="Notifications"
             aria-label="Open notifications"
             aria-expanded={notificationsOpen}
             aria-haspopup="dialog"
             onClick={() => setNotificationsOpen((prev) => !prev)}
+            style={{
+              width: 44,
+              height: 44,
+              padding: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 999,
+              border: notificationsOpen
+                ? "1px solid rgba(255,127,50,0.30)"
+                : "1px solid rgba(255,255,255,0.10)",
+              background: notificationsOpen
+                ? "rgba(255,127,50,0.12)"
+                : "rgba(255,255,255,0.05)",
+              color: notificationsOpen ? "#ff7f32" : "#fff",
+              boxShadow: notificationsOpen ? "0 0 14px rgba(255,127,50,0.18)" : "none",
+              transition: "all 0.2s ease",
+              flex: "0 0 auto",
+            }}
           >
             <i className="fas fa-bell" />
           </button>
         </div>
       </section>
 
-      {notificationsOpen && (
+      {notificationsOpen ? (
         <div
           ref={dropdownRef}
           role="dialog"
           aria-label="Notifications"
-          className="futuristic-card ia-tile"
+          className="ia-tile"
           style={{
             position: "fixed",
             top: dropdownPos.top,
@@ -161,12 +185,19 @@ export default function IronAcreHeader({ userName, dateLabel }: IronAcreHeaderPr
             zIndex: 1050,
             padding: 16,
             borderRadius: 22,
+            background:
+              "linear-gradient(180deg, rgba(14,18,24,0.98) 0%, rgba(10,14,20,0.98) 100%)",
+            border: "1px solid rgba(255,255,255,0.10)",
             boxShadow: "0 18px 48px rgba(0,0,0,0.45)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
           }}
         >
-          <NotificationsBanner />
+          {notificationsContent || (
+            <div className="text-dim small">No notifications available.</div>
+          )}
         </div>
-      )}
+      ) : null}
     </>
   );
 }
