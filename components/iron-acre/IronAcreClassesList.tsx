@@ -1,10 +1,7 @@
 // components/iron-acre/IronAcreClassesList.tsx
-import { useMemo, useState } from "react";
-import useSWR from "swr";
-import { useSession } from "next-auth/react";
-import { toMillis } from "../../lib/time";
+"use client";
 
-const fetcher = (u: string) => fetch(u).then((r) => r.json());
+import { useMemo, useState } from "react";
 
 type Gym = {
   id: string;
@@ -31,11 +28,20 @@ type UserAccess = {
   gym_id?: string | null;
 };
 
-type BookingsMineResponse = {
-  sessionIds?: string[];
+type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
+
+type IronAcreClassesListProps = {
+  isAuthed: boolean;
+  authedEmail?: string | null;
+  gyms: Gym[];
+  profile: UserAccess | null;
+  sessions: SessionItem[];
+  bookedSessionIds: string[];
+  onJoinGym?: (gymId: string) => Promise<void>;
+  onBook?: (sessionId: string, paymentMethod: PaymentMethod) => Promise<void>;
 };
 
-type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
+const ACCENT = "#FF8A2A";
 
 function startOfAlignedWeek(d: Date) {
   const day = d.getDay();
@@ -46,23 +52,9 @@ function startOfAlignedWeek(d: Date) {
   return s;
 }
 
-function endOfAlignedWeek(d: Date) {
-  const s = startOfAlignedWeek(d);
-  const e = new Date(s);
-  e.setDate(s.getDate() + 13);
-  e.setHours(23, 59, 59, 999);
-  return e;
-}
-
-function ymdLocal(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 function renderStartStr(start_time: string | null) {
   if (!start_time) return "TBC";
+
   const d = new Date(start_time);
   return isNaN(d.getTime())
     ? "TBC"
@@ -76,27 +68,28 @@ function renderStartStr(start_time: string | null) {
       });
 }
 
-export default function IronAcreClassesList() {
-  const { data: authSession } = useSession();
-  const isAuthed = Boolean(authSession?.user?.email);
-  const authedEmail = authSession?.user?.email || "";
+function toMillis(v?: string | null) {
+  if (!v) return 0;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
 
-  const { data: gymsResp } = useSWR("/api/gyms/list", fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 60_000,
-  });
+function ymdLocal(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
-  const gyms: Gym[] = Array.isArray(gymsResp?.gyms) ? gymsResp.gyms : [];
-
-  const profileKey = authedEmail ? `/api/profile?email=${encodeURIComponent(authedEmail)}` : null;
-  const {
-    data: profile,
-    mutate: mutateProfile,
-  } = useSWR<UserAccess>(profileKey, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 60_000,
-  });
-
+export default function IronAcreClassesList({
+  isAuthed,
+  gyms,
+  profile,
+  sessions,
+  bookedSessionIds,
+  onJoinGym,
+  onBook,
+}: IronAcreClassesListProps) {
   const userGymId = String(profile?.gym_id || "").trim();
   const isGymMember = String(profile?.membership_status || "").toLowerCase() === "gym_member";
   const isCashPayer = String(profile?.payment_type || "").toLowerCase() === "cash";
@@ -113,38 +106,6 @@ export default function IronAcreClassesList() {
     return g1 || gyms[0] || null;
   }, [gyms, selectedGym]);
 
-  const now = new Date();
-  const weekStart = startOfAlignedWeek(now);
-  const weekEnd = endOfAlignedWeek(now);
-
-  const fromISO = weekStart.toISOString();
-  const toISO = weekEnd.toISOString();
-
-  const shouldLoadSessions = Boolean(selectedGym?.location);
-
-  const { data: sessionsResp, mutate: mutateSessions } = useSWR(
-    shouldLoadSessions
-      ? `/api/schedule/upcoming?location=${encodeURIComponent(selectedGym!.location || "")}&from=${encodeURIComponent(
-          fromISO
-        )}&to=${encodeURIComponent(toISO)}`
-      : null,
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 30_000 }
-  );
-
-  const sessions: SessionItem[] = Array.isArray(sessionsResp?.sessions) ? sessionsResp.sessions : [];
-
-  const bookingsKey =
-    isAuthed && shouldLoadSessions
-      ? `/api/bookings/mine?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`
-      : null;
-
-  const { data: bookingsResp, mutate: mutateBookings } = useSWR<BookingsMineResponse>(
-    bookingsKey,
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 20_000 }
-  );
-
   const [localBookedIds, setLocalBookedIds] = useState<string[]>([]);
   const [bookingBusy, setBookingBusy] = useState<string | null>(null);
   const [joinBusy, setJoinBusy] = useState(false);
@@ -152,11 +113,11 @@ export default function IronAcreClassesList() {
   const [msg, setMsg] = useState<string | null>(null);
 
   const bookedSet = useMemo(() => {
-    const fromApi = Array.isArray(bookingsResp?.sessionIds) ? bookingsResp.sessionIds : [];
-    return new Set<string>([...fromApi, ...localBookedIds]);
-  }, [bookingsResp?.sessionIds, localBookedIds]);
+    return new Set<string>([...(bookedSessionIds || []), ...localBookedIds]);
+  }, [bookedSessionIds, localBookedIds]);
 
   const byWeek = useMemo(() => {
+    const now = new Date();
     const thisWeekStart = startOfAlignedWeek(now);
     const thisWeekEnd = new Date(thisWeekStart);
     thisWeekEnd.setDate(thisWeekStart.getDate() + 6);
@@ -173,7 +134,7 @@ export default function IronAcreClassesList() {
     const thisWeek: SessionItem[] = [];
     const nextWeek: SessionItem[] = [];
 
-    for (const s of sessions) {
+    for (const s of sessions || []) {
       const ms = toMillis(s.start_time);
       if (!ms) continue;
 
@@ -201,29 +162,17 @@ export default function IronAcreClassesList() {
       thisWeek: group(thisWeek),
       nextWeek: group(nextWeek),
     };
-  }, [sessions, now]);
+  }, [sessions]);
 
   async function handleJoinGym() {
-    if (!joinableGym?.id) return;
+    if (!joinableGym?.id || !onJoinGym) return;
 
     setErr(null);
     setMsg(null);
     setJoinBusy(true);
 
     try {
-      const res = await fetch("/api/profile/join-gym", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gym_id: joinableGym.id }),
-      });
-
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(json?.error || "Failed to join gym");
-      }
-
-      await mutateProfile();
+      await onJoinGym(joinableGym.id);
       setMsg(`You are now linked to ${joinableGym.name}. Class updates and gym sessions will now show here.`);
     } catch (e: any) {
       setErr(e?.message || "Failed to join gym");
@@ -233,6 +182,8 @@ export default function IronAcreClassesList() {
   }
 
   async function book(sessionId: string, payOnDay: boolean) {
+    if (!onBook) return;
+
     setErr(null);
     setMsg(null);
     setBookingBusy(sessionId);
@@ -250,45 +201,19 @@ export default function IronAcreClassesList() {
         method = "stripe";
       }
 
-      const res = await fetch("/api/bookings/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, payment_method: method }),
-      });
-
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Booking failed");
-
-      if (json.status === "pending_payment") {
-        const checkoutRes = await fetch("/api/billing/create-checkout-session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ purpose: "class_booking", booking_id: json.booking_id }),
-        });
-
-        const cj = await checkoutRes.json().catch(() => ({}));
-
-        if (!checkoutRes.ok) throw new Error(cj?.error || "Stripe error");
-        if (!cj?.url) throw new Error("Stripe checkout created but no URL returned");
-
-        window.location.href = cj.url;
-        return;
-      }
+      await onBook(sessionId, method);
 
       setLocalBookedIds((prev) => (prev.includes(sessionId) ? prev : [...prev, sessionId]));
 
       setMsg(
-        json.payment_method === "member_free"
+        method === "member_free"
           ? "Booked ✅ Gym member booking (free)"
           : isCashPayer
           ? "Booked ✅ Pay £8 cash at the gym"
-          : json.payment_method === "pay_on_day"
+          : method === "pay_on_day"
           ? "Booked ✅ Pay £10 on arrival"
-          : "Booked ✅"
+          : "Redirecting to payment…"
       );
-
-      mutateSessions?.();
-      mutateBookings?.();
     } catch (e: any) {
       setErr(e?.message || "Booking failed");
     } finally {
@@ -348,7 +273,7 @@ export default function IronAcreClassesList() {
                       <button
                         type="button"
                         className={alreadyBooked ? "btn btn-sm ia-btn" : "btn btn-sm ia-btn-primary"}
-                        disabled={alreadyBooked || full || bookingBusy === s.id}
+                        disabled={alreadyBooked || full || bookingBusy === s.id || !onBook}
                         onClick={() => book(s.id, false)}
                         style={{ opacity: full ? 0.6 : 1 }}
                       >
@@ -359,7 +284,7 @@ export default function IronAcreClassesList() {
                         <button
                           type="button"
                           className="btn btn-sm ia-btn"
-                          disabled={full || bookingBusy === s.id}
+                          disabled={full || bookingBusy === s.id || !onBook}
                           onClick={() => book(s.id, true)}
                         >
                           Pay on day
@@ -436,7 +361,7 @@ export default function IronAcreClassesList() {
               type="button"
               className="btn btn-sm ia-btn-primary"
               onClick={handleJoinGym}
-              disabled={joinBusy || !joinableGym?.id}
+              disabled={joinBusy || !joinableGym?.id || !onJoinGym}
             >
               {joinBusy ? "Joining…" : `Join ${joinableGym?.name || "gym"}`}
             </button>
