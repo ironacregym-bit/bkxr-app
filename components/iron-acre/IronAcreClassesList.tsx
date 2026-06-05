@@ -1,6 +1,7 @@
 // components/iron-acre/IronAcreClassesList.tsx
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 type Gym = {
@@ -41,21 +42,10 @@ type IronAcreClassesListProps = {
   onBook?: (sessionId: string, paymentMethod: PaymentMethod) => Promise<void>;
 };
 
-const ACCENT = "#FF8A2A";
+function renderStartStr(startTime: string | null) {
+  if (!startTime) return "TBC";
 
-function startOfAlignedWeek(d: Date) {
-  const day = d.getDay();
-  const diffToMon = (day + 6) % 7;
-  const s = new Date(d);
-  s.setDate(d.getDate() - diffToMon);
-  s.setHours(0, 0, 0, 0);
-  return s;
-}
-
-function renderStartStr(start_time: string | null) {
-  if (!start_time) return "TBC";
-
-  const d = new Date(start_time);
+  const d = new Date(startTime);
   return isNaN(d.getTime())
     ? "TBC"
     : d.toLocaleString("en-GB", {
@@ -74,13 +64,6 @@ function toMillis(v?: string | null) {
   return isNaN(d.getTime()) ? 0 : d.getTime();
 }
 
-function ymdLocal(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 export default function IronAcreClassesList({
   isAuthed,
   gyms,
@@ -88,11 +71,8 @@ export default function IronAcreClassesList({
   sessions,
   bookedSessionIds,
   onJoinGym,
-  onBook,
 }: IronAcreClassesListProps) {
   const userGymId = String(profile?.gym_id || "").trim();
-  const isGymMember = String(profile?.membership_status || "").toLowerCase() === "gym_member";
-  const isCashPayer = String(profile?.payment_type || "").toLowerCase() === "cash";
 
   const selectedGym = useMemo(() => {
     if (!userGymId) return null;
@@ -106,63 +86,17 @@ export default function IronAcreClassesList({
     return g1 || gyms[0] || null;
   }, [gyms, selectedGym]);
 
-  const [localBookedIds, setLocalBookedIds] = useState<string[]>([]);
-  const [bookingBusy, setBookingBusy] = useState<string | null>(null);
   const [joinBusy, setJoinBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const bookedSet = useMemo(() => {
-    return new Set<string>([...(bookedSessionIds || []), ...localBookedIds]);
-  }, [bookedSessionIds, localBookedIds]);
+  const bookedSet = useMemo(() => new Set<string>(bookedSessionIds || []), [bookedSessionIds]);
 
-  const byWeek = useMemo(() => {
-    const now = new Date();
-    const thisWeekStart = startOfAlignedWeek(now);
-    const thisWeekEnd = new Date(thisWeekStart);
-    thisWeekEnd.setDate(thisWeekStart.getDate() + 6);
-    thisWeekEnd.setHours(23, 59, 59, 999);
-
-    const nextWeekStart = new Date(thisWeekStart);
-    nextWeekStart.setDate(nextWeekStart.getDate() + 7);
-    nextWeekStart.setHours(0, 0, 0, 0);
-
-    const nextWeekEnd = new Date(nextWeekStart);
-    nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
-    nextWeekEnd.setHours(23, 59, 59, 999);
-
-    const thisWeek: SessionItem[] = [];
-    const nextWeek: SessionItem[] = [];
-
-    for (const s of sessions || []) {
-      const ms = toMillis(s.start_time);
-      if (!ms) continue;
-
-      const d = new Date(ms);
-
-      if (d >= thisWeekStart && d <= thisWeekEnd) {
-        thisWeek.push(s);
-      } else if (d >= nextWeekStart && d <= nextWeekEnd) {
-        nextWeek.push(s);
-      }
-    }
-
-    const group = (arr: SessionItem[]) => {
-      const out: Record<string, SessionItem[]> = {};
-      for (const s of arr) {
-        const ms = toMillis(s.start_time);
-        if (!ms) continue;
-        const key = ymdLocal(new Date(ms));
-        (out[key] ??= []).push(s);
-      }
-      return out;
-    };
-
-    return {
-      thisWeek: group(thisWeek),
-      nextWeek: group(nextWeek),
-    };
-  }, [sessions]);
+  const bookedSessions = useMemo(() => {
+    return (sessions || [])
+      .filter((session) => bookedSet.has(session.id))
+      .sort((a, b) => toMillis(a.start_time) - toMillis(b.start_time));
+  }, [sessions, bookedSet]);
 
   async function handleJoinGym() {
     if (!joinableGym?.id || !onJoinGym) return;
@@ -173,7 +107,7 @@ export default function IronAcreClassesList({
 
     try {
       await onJoinGym(joinableGym.id);
-      setMsg(`You are now linked to ${joinableGym.name}. Class updates and gym sessions will now show here.`);
+      setMsg(`You are now linked to ${joinableGym.name}.`);
     } catch (e: any) {
       setErr(e?.message || "Failed to join gym");
     } finally {
@@ -181,185 +115,38 @@ export default function IronAcreClassesList({
     }
   }
 
-  async function book(sessionId: string, payOnDay: boolean) {
-    if (!onBook) return;
-
-    setErr(null);
-    setMsg(null);
-    setBookingBusy(sessionId);
-
-    try {
-      let method: PaymentMethod;
-
-      if (isGymMember && isAuthed) {
-        method = "member_free";
-      } else if (isCashPayer && isAuthed) {
-        method = "pay_on_day";
-      } else if (payOnDay) {
-        method = "pay_on_day";
-      } else {
-        method = "stripe";
-      }
-
-      await onBook(sessionId, method);
-
-      setLocalBookedIds((prev) => (prev.includes(sessionId) ? prev : [...prev, sessionId]));
-
-      setMsg(
-        method === "member_free"
-          ? "Booked ✅ Gym member booking (free)"
-          : isCashPayer
-          ? "Booked ✅ Pay £8 cash at the gym"
-          : method === "pay_on_day"
-          ? "Booked ✅ Pay £10 on arrival"
-          : "Redirecting to payment…"
-      );
-    } catch (e: any) {
-      setErr(e?.message || "Booking failed");
-    } finally {
-      setBookingBusy(null);
-    }
-  }
-
-  function renderWeek(title: string, groups: Record<string, SessionItem[]>) {
-    const days = Object.keys(groups).sort();
-
-    if (!days.length) return null;
-
-    return (
-      <div className="mb-3">
-        <div className="ia-kicker mb-2">{title.toUpperCase()}</div>
-
-        {days.map((ymd) => (
-          <div key={ymd} className="mb-2">
-            <div className="text-dim small mb-1">{ymd}</div>
-
-            {(groups[ymd] || []).map((s) => {
-              const full = s.max_attendance > 0 && s.current_attendance >= s.max_attendance;
-              const startStr = renderStartStr(s.start_time);
-              const alreadyBooked = bookedSet.has(s.id);
-
-              return (
-                <div
-                  key={s.id}
-                  className="mb-2"
-                  style={{
-                    padding: "12px 12px",
-                    borderRadius: 14,
-                    background: "rgba(255,255,255,0.05)",
-                    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
-                  }}
-                >
-                  <div className="d-flex justify-content-between align-items-start gap-2">
-                    <div style={{ minWidth: 0 }}>
-                      <div className="ia-tile-title" style={{ fontSize: "1rem" }}>
-                        {s.class_id || "Class"}
-                        {s.gym_name ? ` • ${s.gym_name}` : ""}
-                      </div>
-
-                      <div className="text-dim small">
-                        {startStr}
-                        {s.coach_name ? ` • Coach: ${s.coach_name}` : ""}
-                      </div>
-
-                      <div className="text-dim small mt-1">
-                        Seats: {s.current_attendance}/{s.max_attendance || "∞"}
-                        {isGymMember ? " • Members book free" : ""}
-                        {isCashPayer ? " • Cash members £8 pay on arrival" : ""}
-                      </div>
-                    </div>
-
-                    <div className="d-flex flex-column gap-2" style={{ minWidth: 120 }}>
-                      <button
-                        type="button"
-                        className={alreadyBooked ? "btn btn-sm ia-btn" : "btn btn-sm ia-btn-primary"}
-                        disabled={alreadyBooked || full || bookingBusy === s.id || !onBook}
-                        onClick={() => book(s.id, false)}
-                        style={{ opacity: full ? 0.6 : 1 }}
-                      >
-                        {alreadyBooked ? "Booked" : full ? "Full" : bookingBusy === s.id ? "…" : "Book"}
-                      </button>
-
-                      {!isGymMember && !alreadyBooked ? (
-                        <button
-                          type="button"
-                          className="btn btn-sm ia-btn"
-                          disabled={full || bookingBusy === s.id || !onBook}
-                          onClick={() => book(s.id, true)}
-                        >
-                          Pay on day
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  const emptyThis = Object.keys(byWeek.thisWeek || {}).length === 0;
-  const emptyNext = Object.keys(byWeek.nextWeek || {}).length === 0;
-  const emptyAll = emptyThis && emptyNext;
   const hasGym = Boolean(userGymId);
 
   return (
-    <section className="futuristic-card ia-tile ia-tile-pad mb-3">
-      <div className="d-flex justify-content-between align-items-center mb-2">
+    <section className="ia-tile ia-tile-pad mb-3">
+      <div className="ia-section-header mb-2">
         <div className="ia-kicker">
-          <i className="fas fa-calendar-alt" style={{ color: "var(--ia-neon)" }} />
+          <i className="fas fa-calendar-alt" />
           CLASSES
         </div>
 
-        <span className="ia-badge ia-badge-neon">This week + next</span>
+        <Link href="/schedule" className="ia-btn ia-btn-outline ia-task-link-btn">
+          View all
+        </Link>
       </div>
 
-      {msg ? (
-        <div
-          className="mb-2"
-          style={{
-            borderRadius: 999,
-            padding: "8px 12px",
-            background: "rgba(24,255,154,0.14)",
-            color: "var(--ia-neon)",
-            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
-            fontWeight: 600,
-            fontSize: ".85rem",
-          }}
-        >
-          {msg}
-        </div>
-      ) : null}
-
-      {err ? <div className="alert alert-danger mb-2">{err}</div> : null}
+      {msg ? <div className="ia-inline-note-success mb-2">{msg}</div> : null}
+      {err ? <div className="ia-inline-note-error mb-2">{err}</div> : null}
 
       {!isAuthed ? (
-        <div className="text-dim small">Sign in to view your gym classes and book sessions.</div>
+        <div className="text-dim small">Sign in to view your booked classes.</div>
       ) : !hasGym ? (
-        <div
-          style={{
-            padding: "14px 14px",
-            borderRadius: 14,
-            background: "rgba(255,255,255,0.05)",
-            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
-          }}
-        >
-          <div className="ia-tile-title" style={{ fontSize: "1rem" }}>
-            Join a gym to receive classes
-          </div>
+        <div className="ia-join-panel">
+          <div className="ia-tile-title">Join a gym to see your classes</div>
 
           <div className="text-dim small mt-1">
-            Link your account to {joinableGym?.name || "the gym"} to see the timetable, book classes and receive gym
-            notifications.
+            Link your account to {joinableGym?.name || "the gym"} to see your booked sessions and the timetable.
           </div>
 
-          <div className="mt-3">
+          <div className="mt-2">
             <button
               type="button"
-              className="btn btn-sm ia-btn-primary"
+              className="ia-btn ia-btn-primary"
               onClick={handleJoinGym}
               disabled={joinBusy || !joinableGym?.id || !onJoinGym}
             >
@@ -367,14 +154,37 @@ export default function IronAcreClassesList({
             </button>
           </div>
         </div>
-      ) : emptyAll ? (
-        <div className="text-dim small">No classes scheduled.</div>
+      ) : bookedSessions.length === 0 ? (
+        <div className="text-dim small">No booked classes yet.</div>
       ) : (
-        <>
-          {renderWeek("This week", byWeek.thisWeek)}
-          {renderWeek("Next week", byWeek.nextWeek)}
-        </>
+        <div className="ia-class-list">
+          {bookedSessions.map((session) => (
+            <div key={session.id} className="ia-class-item">
+              <div className="d-flex justify-content-between align-items-start gap-2">
+                <div style={{ minWidth: 0 }}>
+                  <div className="ia-class-item-title">
+                    {session.class_id || "Class"}
+                    {session.gym_name ? ` • ${session.gym_name}` : ""}
+                  </div>
+
+                  <div className="ia-class-item-meta mt-1">
+                    {renderStartStr(session.start_time)}
+                    {session.coach_name ? ` • Coach: ${session.coach_name}` : ""}
+                  </div>
+
+                  <div className="ia-class-item-meta mt-1">
+                    Seats: {session.current_attendance}/{session.max_attendance || "∞"}
+                  </div>
+                </div>
+
+                <div className="ia-class-item-status">
+                  <span className="ia-badge ia-badge-neon">Booked</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </section>
   );
-}
+}fz\
