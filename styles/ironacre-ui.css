@@ -164,6 +164,25 @@ a {
 /* ─────────────────────────
    Buttons
 ───────────────────────── */
+.ia-btn,
+.ia-btn-primary,
+.ia-btn-outline,
+.btn.ia-btn,
+.btn.ia-btn-primary,
+.btn.ia-btn-outline {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  vertical-align: middle !important;
+  text-transform: none !important;
+  text-decoration: none !important;
+  cursor: pointer;
+}
+
 .ia-btn {
   border-radius: var(--ia-r-pill) !important;
   padding: 0 11px !important;
@@ -172,10 +191,7 @@ a {
   background: var(--ia-btn-bg) !important;
   color: var(--ia-btn-text) !important;
   font-weight: var(--ia-fw-semi) !important;
-  text-transform: none !important;
   font-size: 0.84rem !important;
-  line-height: 1 !important;
-  white-space: nowrap;
 }
 
 .ia-btn:hover {
@@ -198,10 +214,7 @@ a {
   color: var(--ia-btn-outline-text) !important;
   font-weight: var(--ia-fw-semi) !important;
   box-shadow: 0 0 12px rgba(24, 255, 154, 0.08);
-  text-transform: none !important;
   font-size: 0.84rem !important;
-  line-height: 1 !important;
-  white-space: nowrap;
 }
 
 .ia-btn-primary {
@@ -214,10 +227,7 @@ a {
   font-weight: 700 !important;
   letter-spacing: 0 !important;
   box-shadow: var(--ia-btn-primary-shadow);
-  text-transform: none !important;
   font-size: 0.82rem !important;
-  line-height: 1 !important;
-  white-space: nowrap;
 }
 
 .ia-btn-primary:hover,
@@ -231,7 +241,6 @@ a {
   padding: 0 10px !important;
   border-radius: 8px !important;
   font-size: 0.76rem !important;
-  line-height: 1 !important;
 }
 
 .ia-btn-icon-right i {
@@ -688,29 +697,26 @@ a {
   gap: 8px;
 }
 
-.ia-class-day-label {
-  font-size: 0.72rem;
-  color: var(--ia-muted);
-  margin-bottom: 4px;
-}
-
 .ia-class-item {
-  padding: 10px 12px;
+  padding: 9px 10px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.05);
   box-shadow: var(--ia-inner-stroke);
 }
 
 .ia-class-item-title {
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1.08;
 }
 
 .ia-class-item-meta {
   font-size: 0.78rem;
   color: var(--ia-muted);
-  line-height: 1.25;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ia-class-item-status {
