@@ -282,7 +282,7 @@ function TasksCard({
                     ? "Completed this week."
                     : `Open for ${fridayYMD}.`
                 }
-                href="/check-in"
+                href="/checkin"
                 buttonLabel={checkinDone ? "View" : "Open"}
               />
             </div>
