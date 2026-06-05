@@ -1,5 +1,7 @@
+// pages/schedule.tsx
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
@@ -46,10 +48,33 @@ function ymdLocal(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
+function formatDateTime(value: string | number | null) {
+  const ms = toMillis(value);
+  if (!ms) return "TBC";
+  return new Date(ms).toLocaleString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function formatTime(value: string | number | null) {
+  const ms = toMillis(value);
+  if (!ms) return "";
+  return new Date(ms).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 export default function SchedulePage() {
   const { data: authSession } = useSession();
   const isAuthed = Boolean(authSession?.user?.email);
-  const authedEmail = authSession?.user?.email || "";
+  const authedEmail = String(authSession?.user?.email || "").trim();
 
   const profileKey = authedEmail ? `/api/profile?email=${encodeURIComponent(authedEmail)}` : null;
   const { data: profile } = useSWR<UserAccess>(profileKey, fetcher, {
@@ -60,15 +85,24 @@ export default function SchedulePage() {
   const isGymMember = String(profile?.membership_status || "").toLowerCase() === "gym_member";
   const isCashPayer = String(profile?.payment_type || "").toLowerCase() === "cash";
 
-  const { data: gymsResp, error: gymsError } = useSWR("/api/gyms/list", fetcher);
-  const gyms: Gym[] = gymsResp?.gyms ?? [];
+  const { data: gymsResp, error: gymsError } = useSWR("/api/gyms/list", fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60_000,
+  });
+
+  const gyms: Gym[] = Array.isArray(gymsResp?.gyms) ? gymsResp.gyms : [];
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!selectedGymId && gyms.length > 0) setSelectedGymId(gyms[0].id);
+    if (!selectedGymId && gyms.length > 0) {
+      setSelectedGymId(gyms[0].id);
+    }
   }, [gyms, selectedGymId]);
 
-  const selectedGym = useMemo(() => gyms.find((g) => g.id === selectedGymId) || null, [gyms, selectedGymId]);
+  const selectedGym = useMemo(
+    () => gyms.find((g) => g.id === selectedGymId) || null,
+    [gyms, selectedGymId]
+  );
 
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -79,7 +113,7 @@ export default function SchedulePage() {
 
   const monthLabel = useMemo(
     () =>
-      monthStart.toLocaleString(undefined, {
+      monthStart.toLocaleString("en-GB", {
         month: "long",
         year: "numeric",
       }),
@@ -116,10 +150,13 @@ export default function SchedulePage() {
         )}&to=${encodeURIComponent(toISO)}`
       : null,
     fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30_000,
+    }
   );
 
-  const sessions: SessionItem[] = sessionsResp?.sessions ?? [];
+  const sessions: SessionItem[] = Array.isArray(sessionsResp?.sessions) ? sessionsResp.sessions : [];
 
   const sessionsByDay = useMemo(() => {
     const map: Record<string, SessionItem[]> = {};
@@ -129,6 +166,9 @@ export default function SchedulePage() {
       const key = ymdLocal(new Date(ms));
       (map[key] ??= []).push(s);
     }
+    Object.values(map).forEach((items) =>
+      items.sort((a, b) => toMillis(a.start_time) - toMillis(b.start_time))
+    );
     return map;
   }, [sessions]);
 
@@ -136,19 +176,33 @@ export default function SchedulePage() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const cells: Cell[] = useMemo(() => {
-    const blanks: Cell[] = Array.from({ length: firstWeekday }, (_, i) => ({ key: `blank-${i}`, blank: true }));
+    const blanks: Cell[] = Array.from({ length: firstWeekday }, (_, i) => ({
+      key: `blank-${i}`,
+      blank: true,
+    }));
+
     const days: Cell[] = Array.from({ length: daysInMonth }, (_, i) => {
       const dayNum = i + 1;
       const date = new Date(year, month, dayNum);
       const ymd = ymdLocal(date);
       const count = (sessionsByDay[ymd] || []).length;
       const isToday = date.toDateString() === new Date().toDateString();
-      return { key: `d-${ymd}`, blank: false, day: dayNum, ymd, count, isToday };
+
+      return {
+        key: `d-${ymd}`,
+        blank: false,
+        day: dayNum,
+        ymd,
+        count,
+        isToday,
+      };
     });
+
     return [...blanks, ...days];
   }, [firstWeekday, daysInMonth, year, month, sessionsByDay]);
 
   const [activeDay, setActiveDay] = useState<string | null>(null);
+
   useEffect(() => {
     setActiveDay(null);
   }, [year, month, selectedGymId]);
@@ -158,20 +212,26 @@ export default function SchedulePage() {
   const [sharing, setSharing] = useState<{ message: string; link: string } | null>(null);
   const [pending, setPending] = useState<string | null>(null);
 
-  async function shareWhatsApp(session_id: string) {
+  async function shareWhatsApp(sessionId: string) {
     try {
-      setPending(session_id);
+      setPending(sessionId);
       setActionErr(null);
       setActionMsg(null);
+
       const res = await fetch("/api/bookings/generate-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id }),
+        body: JSON.stringify({ session_id: sessionId }),
       });
-      const json = await res.json();
+
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to generate link");
-      setSharing({ message: json.whatsappMessage, link: json.link });
-      setActionMsg("Share link generated ✨");
+
+      setSharing({
+        message: String(json?.whatsappMessage || ""),
+        link: String(json?.link || ""),
+      });
+      setActionMsg("Share link generated.");
     } catch (e: any) {
       setActionErr(e?.message || "Failed to generate link");
     } finally {
@@ -184,7 +244,6 @@ export default function SchedulePage() {
 
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
-
   const [payOnDay, setPayOnDay] = useState(false);
   const [bookMsg, setBookMsg] = useState<string | null>(null);
   const [bookErr, setBookErr] = useState<string | null>(null);
@@ -199,13 +258,15 @@ export default function SchedulePage() {
     setGuestEmail("");
     setPayOnDay(false);
   }
+
   useEffect(() => {
     const n = String((authSession?.user as any)?.name || "").trim();
     const e = String(authSession?.user?.email || "").trim();
+
     if (e) setGuestEmail(e);
     if (n) setGuestName(n);
-  }, [authSession?.user?.email]);
-  
+  }, [authSession?.user]);
+
   async function confirmBooking() {
     if (!activeSession) return;
 
@@ -224,11 +285,11 @@ export default function SchedulePage() {
       if (isGymMember && isAuthed) {
         method = "member_free";
       } else if (isCashPayer && isAuthed) {
-        method = "pay_on_day"; // £8 cash
+        method = "pay_on_day";
       } else if (payOnDay) {
-        method = "pay_on_day"; // £10
+        method = "pay_on_day";
       } else {
-        method = "stripe"; // £8 Stripe
+        method = "stripe";
       }
 
       const res = await fetch("/api/bookings/create", {
@@ -264,13 +325,13 @@ export default function SchedulePage() {
       }
 
       if (method === "member_free") {
-        setBookMsg("Booked ✅ Gym member booking (free)");
+        setBookMsg("Booked. Gym member booking is free.");
       } else if (isCashPayer) {
-        setBookMsg("Booked ✅ Pay £8 cash at the gym");
+        setBookMsg("Booked. Pay £8 cash at the gym.");
       } else if (method === "pay_on_day") {
-        setBookMsg("Booked ✅ Pay £10 on arrival");
+        setBookMsg("Booked. Pay £10 on arrival.");
       } else {
-        setBookMsg("Booked ✅");
+        setBookMsg("Booked.");
       }
 
       mutateSessions?.();
@@ -281,264 +342,365 @@ export default function SchedulePage() {
     }
   }
 
+  const activeDaySessions = activeDay ? sessionsByDay[activeDay] || [] : [];
+
   return (
     <>
-      <main className="container py-3 schedule-page" style={{ paddingBottom: "90px", color: "#fff" }}>
-        <div className="schedule-toolbar">
-          <button className="btn btn-bxkr-outline" onClick={prevMonth} aria-label="Previous month">
-            ← Previous
-          </button>
-          <h2 className="mb-0 month-title">Schedule — {monthLabel}</h2>
-          <button className="btn btn-bxkr-outline" onClick={nextMonth} aria-label="Next month">
-            Next →
-          </button>
-        </div>
-
-        <div className="futuristic-card p-3 mb-3">
-          <label className="form-label">Select gym</label>
-          {gymsError && <div className="text-danger">Failed to load gyms.</div>}
-          <select
-            className="form-select gym-select"
-            value={selectedGymId ?? ""}
-            onChange={(e) => setSelectedGymId(e.target.value || null)}
-            aria-label="Select a gym that runs BXKR classes"
-          >
-            {gyms.length === 0 && <option value="">No gyms found</option>}
-            {gyms.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name} — {g.location}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="schedule-calendar mb-3" role="grid" aria-label={`Calendar for ${monthLabel}`}>
-          <div className="calendar-weekdays">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-              <div key={d} className="weekday">
-                {d}
+      <main className="container py-2 iron-acre-home ia-home-main" style={{ color: "#fff" }}>
+        <section className="ia-tile ia-tile-pad mb-3">
+          <div className="d-flex justify-content-between align-items-start gap-2">
+            <div style={{ minWidth: 0 }}>
+              <div className="ia-kicker">
+                <i className="fas fa-calendar-alt" />
+                SCHEDULE
               </div>
-            ))}
+              <div className="ia-page-title">Book sessions</div>
+              <div className="ia-page-subtitle">
+                Browse your gym timetable, pick a date and book onto a session.
+              </div>
+            </div>
+
+            /iron-acre
+              Back
+            </Link>
+          </div>
+        </section>
+
+        <section className="ia-tile ia-tile-pad mb-3">
+          <div className="d-flex justify-content-between align-items-center gap-2 mb-2">
+            <button
+              type="button"
+              className="ia-btn ia-btn-outline ia-btn-icon-left"
+              onClick={prevMonth}
+              aria-label="Previous month"
+            >
+              <i className="fas fa-chevron-left" />
+              Prev
+            </button>
+
+            <div className="ia-card-title-compact text-center">{monthLabel}</div>
+
+            <button
+              type="button"
+              className="ia-btn ia-btn-outline ia-btn-icon-right"
+              onClick={nextMonth}
+              aria-label="Next month"
+            >
+              Next
+              <i className="fas fa-chevron-right" />
+            </button>
           </div>
 
-          <div className="calendar-grid">
-            {cells.map((cell) => {
-              if (cell.blank) return <div key={cell.key} />;
-              return (
-                <button
-                  key={cell.key}
-                  className={`calendar-day ${cell.isToday ? "today" : ""} ${
-                    cell.ymd === activeDay ? "active" : ""
-                  } ${(cell.count ?? 0) > 0 ? "has-sessions" : ""}`.trim()}
-                  onClick={() => setActiveDay(cell.ymd)}
-                  aria-label={`${cell.ymd}: ${cell.count} session${cell.count === 1 ? "" : "s"}`}
-                >
-                  <div className="num">{cell.day}</div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+          <div className="mb-2">
+            <label className="text-dim small mb-1 d-block">Gym</label>
 
-        {activeDay && (
-          <div className="futuristic-card p-3 day-panel">
-            <div className="panel-header">
-              <h5 className="mb-0 title">Sessions on {activeDay}</h5>
-              <button className="btn btn-bxkr-outline" onClick={() => setActiveDay(null)}>
+            {gymsError ? <div className="ia-inline-note-error mb-2">Failed to load gyms.</div> : null}
+
+            <select
+              className="form-select gym-select"
+              value={selectedGymId ?? ""}
+              onChange={(e) => setSelectedGymId(e.target.value || null)}
+              aria-label="Select a gym"
+            >
+              {gyms.length === 0 ? <option value="">No gyms found</option> : null}
+              {gyms.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name} — {g.location}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="schedule-calendar" role="grid" aria-label={`Calendar for ${monthLabel}`}>
+            <div className="calendar-weekdays">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                <div key={d} className="weekday">
+                  {d}
+                </div>
+              ))}
+            </div>
+
+            <div className="calendar-grid">
+              {cells.map((cell) => {
+                if (cell.blank) {
+                  return <div key={cell.key} />;
+                }
+
+                return (
+                  <button
+                    key={cell.key}
+                    className={`calendar-day ${cell.isToday ? "today" : ""} ${
+                      cell.ymd === activeDay ? "active" : ""
+                    } ${(cell.count ?? 0) > 0 ? "has-sessions" : ""}`.trim()}
+                    onClick={() => setActiveDay(cell.ymd)}
+                    aria-label={`${cell.ymd}: ${cell.count} session${cell.count === 1 ? "" : "s"}`}
+                  >
+                    <div className="num">{cell.day}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {activeDay ? (
+          <section className="ia-tile ia-tile-pad mb-3">
+            <div className="d-flex justify-content-between align-items-center gap-2 mb-2">
+              <div>
+                <div className="ia-kicker">
+                  <i className="fas fa-clock" />
+                  DAY VIEW
+                </div>
+                <div className="ia-card-title-compact">{activeDay}</div>
+              </div>
+
+              <button type="button" className="ia-btn ia-btn-outline" onClick={() => setActiveDay(null)}>
                 Close
               </button>
             </div>
 
-            {sessionsLoading && <div>Loading sessions…</div>}
-            {sessionsError && <div className="text-danger">Failed to load sessions for this range.</div>}
+            {sessionsLoading ? <div className="text-dim small">Loading sessions…</div> : null}
+            {sessionsError ? <div className="ia-inline-note-error">Failed to load sessions for this range.</div> : null}
 
-            {!sessionsLoading && (sessionsByDay[activeDay]?.length ?? 0) === 0 && (
-              <div className="text-dim">No BXKR sessions scheduled on this day at {selectedGym?.name}.</div>
-            )}
+            {!sessionsLoading && activeDaySessions.length === 0 ? (
+              <div className="text-dim small">
+                No sessions scheduled on this day at {selectedGym?.name || "this gym"}.
+              </div>
+            ) : null}
 
-            {(sessionsByDay[activeDay] || []).map((s) => {
+            {activeDaySessions.map((s) => {
               const startMs = toMillis(s.start_time);
               const endMs = toMillis(s.end_time);
-              const startStr = startMs ? new Date(startMs).toLocaleString() : "Unknown";
-              const endStr = endMs ? new Date(endMs).toLocaleTimeString() : "";
-
               const full = s.max_attendance > 0 && s.current_attendance >= s.max_attendance;
-              const pct =
-                s.max_attendance > 0 ? Math.min(100, Math.round((s.current_attendance / s.max_attendance) * 100)) : 0;
 
               return (
-                <div key={s.id} className="session-card">
-                  <div className="session-info">
-                    <div className="name">
-                      {s.class_id} — {s.gym_name}
-                    </div>
-                    <div className="sub">
-                      Coach: {s.coach_name || "TBC"} • {startStr}
-                      {endStr ? ` — ${endStr}` : ""}
-                    </div>
-                    <div className="session-meta">
-                      <span className="chip">
-                        £8 prebook / £10 pay on day
-                        {isGymMember ? " • Members book free" : ""}
-                        {isCashPayer ? " • Cash members £8 pay on arrival" : ""}
-                      </span>
-                      <span className="chip capacity">
-                        <span>
-                          {s.current_attendance}/{s.max_attendance || "∞"}
-                        </span>
-                        <span className="bar">
-                          <span style={{ width: `${pct}%` }} />
-                        </span>
-                      </span>
-                    </div>
-                  </div>
+                <div key={s.id} className="ia-class-item">
+                  <div className="d-flex justify-content-between align-items-start gap-2">
+                    <div style={{ minWidth: 0 }}>
+                      <div className="ia-class-item-title">
+                        {s.class_id} • {s.gym_name}
+                      </div>
 
-                  <div className="session-actions">
-                    <button
-                      className="btn btn-bxkr"
-                      onClick={() => openBookingModal(s)}
-                      disabled={full || pending === s.id}
-                      title={full ? "Session is full" : "Book"}
-                    >
-                      {full ? "Full" : "Book"}
-                    </button>
+                      <div className="ia-class-item-meta mt-1">
+                        {formatDateTime(s.start_time)}
+                        {endMs ? ` — ${formatTime(s.end_time)}` : ""}
+                      </div>
 
-                    <button
-                      className="btn btn-bxkr-outline"
-                      onClick={() => shareWhatsApp(s.id)}
-                      disabled={pending === s.id}
-                      title="Generate WhatsApp link"
-                    >
-                      Share
-                    </button>
+                      <div className="ia-class-item-meta mt-1">
+                        {s.coach_name ? `Coach: ${s.coach_name}` : "Coach: TBC"} •{" "}
+                        {s.current_attendance}/{s.max_attendance || "∞"} booked
+                      </div>
+
+                      <div className="ia-class-item-meta mt-1">
+                        {isGymMember
+                          ? "Members book free"
+                          : isCashPayer
+                          ? "Cash members £8 on arrival"
+                          : "£8 prebook / £10 pay on day"}
+                      </div>
+                    </div>
+
+                    <div className="d-flex flex-column gap-2" style={{ flex: "0 0 auto" }}>
+                      <button
+                        type="button"
+                        className="ia-btn ia-btn-primary"
+                        onClick={() => openBookingModal(s)}
+                        disabled={full || pending === s.id}
+                      >
+                        {full ? "Full" : "Book"}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="ia-btn ia-btn-outline"
+                        onClick={() => shareWhatsApp(s.id)}
+                        disabled={pending === s.id}
+                      >
+                        Share
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
             })}
 
-            {(actionMsg || actionErr || sharing) && (
-              <div className="mt-2">
-                {actionMsg && <div className="pill-success mb-2">{actionMsg}</div>}
-                {actionErr && <div className="text-danger mb-2">{actionErr}</div>}
-                {sharing && (
-                  <div className="futuristic-card p-2">
-                    <div className="small mb-2">WhatsApp message</div>
-                    <textarea className="form-control mb-2" rows={3} readOnly value={sharing.message} />
-                    <div className="d-flex gap-2">
+            {actionMsg || actionErr || sharing ? (
+              <div className="mt-3">
+                {actionMsg ? <div className="ia-inline-note-success mb-2">{actionMsg}</div> : null}
+                {actionErr ? <div className="ia-inline-note-error mb-2">{actionErr}</div> : null}
+
+                {sharing ? (
+                  <section className="ia-tile ia-tile-pad">
+                    <div className="ia-kicker mb-2">
+                      <i className="fas fa-share-alt" />
+                      SHARE LINK
+                    </div>
+
+                    <div className="text-dim small mb-2">WhatsApp message</div>
+
+                    <textarea
+                      className="form-control mb-2"
+                      rows={3}
+                      readOnly
+                      value={sharing.message}
+                    />
+
+                    <div className="d-flex gap-2 flex-wrap">
                       <button
-                        className="btn btn-bxkr"
-                        onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(sharing.message)}`, "_blank")}
+                        type="button"
+                        className="ia-btn ia-btn-primary"
+                        onClick={() =>
+                          window.open(
+                            `https://wa.me/?text=${encodeURIComponent(sharing.message)}`,
+                            "_blank",
+                            "noopener,noreferrer"
+                          )
+                        }
                       >
                         Open WhatsApp
                       </button>
-                      <button className="btn btn-bxkr-outline" onClick={() => navigator.clipboard?.writeText(sharing.message)}>
+
+                      <button
+                        type="button"
+                        className="ia-btn ia-btn-outline"
+                        onClick={() => navigator.clipboard?.writeText(sharing.message)}
+                      >
                         Copy message
                       </button>
                     </div>
-                  </div>
-                )}
+                  </section>
+                ) : null}
               </div>
-            )}
-          </div>
-        )}
-
-        {showBookModal && activeSession && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.6)",
-              backdropFilter: "blur(6px)",
-              zIndex: 3000,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 16,
-            }}
-            onClick={() => {
-              if (!bookingBusy) setShowBookModal(false);
-            }}
-          >
-            <div className="futuristic-card p-3" style={{ width: "min(520px, 92vw)" }} onClick={(e) => e.stopPropagation()}>
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <h5 className="m-0">Book session</h5>
-                <button className="btn btn-bxkr-outline btn-sm" onClick={() => setShowBookModal(false)} disabled={bookingBusy}>
-                  Close
-                </button>
-              </div>
-
-              <div className="mb-2">
-                <div className="fw-semibold">
-                  {activeSession.class_id} — {activeSession.gym_name}
-                </div>
-                <div className="small text-dim">
-                  {(() => {
-                    const ms = toMillis(activeSession.start_time);
-                    return ms ? new Date(ms).toLocaleString() : "TBC";
-                  })()}{" "}
-                  • Coach: {activeSession.coach_name || "TBC"}
-                </div>
-              </div>
-
-              {!isAuthed && (
-                <>
-                  <div className="mb-2">
-                    <label className="form-label">Name</label>
-                    <input className="form-control" value={guestName} onChange={(e) => setGuestName(e.target.value)} disabled={bookingBusy} />
-                  </div>
-                  <div className="mb-2">
-                    <label className="form-label">Email</label>
-                    <input
-                      className="form-control"
-                      type="email"
-                      value={guestEmail}
-                      onChange={(e) => setGuestEmail(e.target.value)}
-                      disabled={bookingBusy}
-                    />
-                  </div>
-                </>
-              )}
-
-              {!isGymMember && (
-                <div className="form-check mt-2">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    id="payOnDay"
-                    checked={payOnDay}
-                    onChange={(e) => setPayOnDay(e.target.checked)}
-                    disabled={bookingBusy}
-                  />
-                  <label className="form-check-label" htmlFor="payOnDay">
-                    {isCashPayer ? "Pay £8 cash on the day" : "Pay on the day (£10)"}
-                  </label>
-                </div>
-              )}
-
-              {isGymMember && (
-                <div className="alert alert-info mt-2" style={{ marginBottom: 0 }}>
-                  You’re a member. This booking is free.
-                </div>
-              )}
-
-              {bookErr && <div className="alert alert-danger mt-2">{bookErr}</div>}
-              {bookMsg && <div className="alert alert-success mt-2">{bookMsg}</div>}
-
-              <div className="d-grid gap-2 mt-3">
-                <button className="btn btn-bxkr" onClick={confirmBooking} disabled={bookingBusy}>
-                  {bookingBusy ? "Processing…" : isGymMember ? "Book free" : payOnDay ? "Confirm booking" : "Pay £8 now (Stripe)"}
-                </button>
-              </div>
-
-              <div className="small text-dim mt-2">
-                {!isGymMember ? (payOnDay ? "You’ll pay £10 at the gym." : "You’ll be redirected to Stripe to pay £8.") : null}
-              </div>
+            ) : null}
+          </section>
+        ) : (
+          <section className="ia-tile ia-tile-pad mb-3">
+            <div className="text-dim small">
+              Select a day in the calendar to view available sessions.
             </div>
-          </div>
+          </section>
         )}
       </main>
+
+      {showBookModal && activeSession ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.62)",
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
+            zIndex: 3000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 14,
+          }}
+          onClick={() => {
+            if (!bookingBusy) setShowBookModal(false);
+          }}
+        >
+          <div
+            className="ia-tile ia-tile-pad"
+            style={{ width: "min(520px, 92vw)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex justify-content-between align-items-center gap-2 mb-2">
+              <div>
+                <div className="ia-kicker">
+                  <i className="fas fa-ticket-alt" />
+                  BOOK SESSION
+                </div>
+                <div className="ia-card-title-compact">
+                  {activeSession.class_id} • {activeSession.gym_name}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="ia-btn ia-btn-outline"
+                onClick={() => setShowBookModal(false)}
+                disabled={bookingBusy}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="text-dim small mb-2">
+              {formatDateTime(activeSession.start_time)}
+              {activeSession.coach_name ? ` • Coach: ${activeSession.coach_name}` : ""}
+            </div>
+
+            {!isAuthed ? (
+              <>
+                <div className="mb-2">
+                  <label className="text-dim small mb-1 d-block">Name</label>
+                  <input
+                    className="form-control"
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    disabled={bookingBusy}
+                  />
+                </div>
+
+                <div className="mb-2">
+                  <label className="text-dim small mb-1 d-block">Email</label>
+                  <input
+                    className="form-control"
+                    type="email"
+                    value={guestEmail}
+                    onChange={(e) => setGuestEmail(e.target.value)}
+                    disabled={bookingBusy}
+                  />
+                </div>
+              </>
+            ) : null}
+
+            {!isGymMember ? (
+              <div className="form-check mt-2">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  id="payOnDay"
+                  checked={payOnDay}
+                  onChange={(e) => setPayOnDay(e.target.checked)}
+                  disabled={bookingBusy}
+                />
+                <label className="form-check-label" htmlFor="payOnDay">
+                  {isCashPayer ? "Pay £8 cash on the day" : "Pay on the day (£10)"}
+                </label>
+              </div>
+            ) : (
+              <div className="ia-inline-note-success mt-2">You’re a member. This booking is free.</div>
+            )}
+
+            {bookErr ? <div className="ia-inline-note-error mt-2">{bookErr}</div> : null}
+            {bookMsg ? <div className="ia-inline-note-success mt-2">{bookMsg}</div> : null}
+
+            <div className="d-grid gap-2 mt-3">
+              <button type="button" className="ia-btn ia-btn-primary" onClick={confirmBooking} disabled={bookingBusy}>
+                {bookingBusy
+                  ? "Processing…"
+                  : isGymMember
+                  ? "Book free"
+                  : payOnDay
+                  ? "Confirm booking"
+                  : "Pay £8 now"}
+              </button>
+            </div>
+
+            <div className="text-dim small mt-2">
+              {!isGymMember
+                ? payOnDay
+                  ? "You’ll pay £10 at the gym."
+                  : "You’ll be redirected to Stripe to pay £8."
+                : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <BottomNav />
     </>
