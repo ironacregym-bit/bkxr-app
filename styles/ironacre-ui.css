@@ -1,8 +1,7 @@
 /* styles/ironacre-ui.css */
-/* Iron Acre UI primitives: typography + tiles + buttons */
 
 /* ─────────────────────────
-   Design tokens
+   Iron Acre design tokens
 ───────────────────────── */
 :root {
   --ia-font: var(--font-sans, ui-sans-serif), system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -12,47 +11,47 @@
   --ia-fw-semi: 600;
   --ia-fw-bold: 700;
 
-  --ia-page-title-size: 1.35rem;
+  --ia-page-title-size: 1rem;
   --ia-page-title-fw: 700;
-  --ia-page-title-lh: 1.2;
+  --ia-page-title-lh: 1.12;
 
-  --ia-tile-title-size: 1.05rem;
+  --ia-tile-title-size: 0.94rem;
   --ia-tile-title-fw: 650;
-  --ia-tile-title-lh: 1.2;
+  --ia-tile-title-lh: 1.15;
 
-  --ia-kicker-size: 0.78rem;
-  --ia-kicker-fw: 650;
-  --ia-kicker-letter: 0.9px;
+  --ia-kicker-size: 0.68rem;
+  --ia-kicker-fw: 700;
+  --ia-kicker-letter: 0.08em;
 
   --ia-muted: #9fb0c3;
   --ia-text: #ffffff;
   --ia-bg: #070b10;
 
-  --ia-surface: rgba(255, 255, 255, 0.06);
-  --ia-surface-2: rgba(255, 255, 255, 0.07);
+  --ia-surface: rgba(255, 255, 255, 0.05);
+  --ia-surface-2: rgba(255, 255, 255, 0.06);
   --ia-inner-stroke: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-  --ia-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  --ia-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
 
-  --ia-r-lg: 18px;
-  --ia-r-md: 16px;
+  --ia-r-lg: 16px;
+  --ia-r-md: 14px;
   --ia-r-pill: 999px;
 
   --ia-neon: #18ff9a;
   --ia-neon2: #00e5ff;
 
   --ia-btn-bg: rgba(255, 255, 255, 0.08);
-  --ia-btn-bg-hover: rgba(255, 255, 255, 0.12);
+  --ia-btn-bg-hover: rgba(24, 255, 154, 0.10);
   --ia-btn-text: #fff;
 
-  --ia-btn-outline-border: rgba(24, 255, 154, 0.3);
+  --ia-btn-outline-border: rgba(24, 255, 154, 0.24);
   --ia-btn-outline-text: var(--ia-neon);
   --ia-btn-outline-bg: rgba(24, 255, 154, 0.08);
 
   --ia-btn-primary-bg: linear-gradient(90deg, var(--ia-neon), var(--ia-neon2));
   --ia-btn-primary-text: #06110c;
-  --ia-btn-primary-shadow: 0 10px 24px rgba(24, 255, 154, 0.22);
+  --ia-btn-primary-shadow: 0 8px 18px rgba(24, 255, 154, 0.18);
 
-  --ia-focus: 0 0 0 3px rgba(24, 255, 154, 0.22);
+  --ia-focus: 0 0 0 3px rgba(24, 255, 154, 0.18);
 }
 
 /* ─────────────────────────
@@ -80,6 +79,14 @@ b {
   font-weight: var(--ia-fw-semi);
 }
 
+a {
+  text-decoration: none !important;
+}
+
+.text-dim {
+  color: var(--ia-muted) !important;
+}
+
 /* ─────────────────────────
    Typography
 ───────────────────────── */
@@ -92,20 +99,24 @@ b {
 
 .ia-page-subtitle {
   color: var(--ia-muted);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: var(--ia-fw-medium);
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .ia-kicker {
-  color: var(--ia-muted);
+  color: var(--ia-neon);
   font-size: var(--ia-kicker-size);
   font-weight: var(--ia-kicker-fw);
   letter-spacing: var(--ia-kicker-letter);
   text-transform: uppercase;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+.ia-kicker i {
+  color: var(--ia-neon);
 }
 
 .ia-tile-title {
@@ -113,6 +124,15 @@ b {
   font-weight: var(--ia-tile-title-fw);
   line-height: var(--ia-tile-title-lh);
   margin: 0;
+  color: var(--ia-text);
+}
+
+.ia-card-title-compact {
+  margin: 0;
+  color: var(--ia-text);
+  font-size: 0.9rem;
+  line-height: 1.12;
+  font-weight: 600;
 }
 
 /* ─────────────────────────
@@ -120,12 +140,13 @@ b {
 ───────────────────────── */
 .ia-tile {
   border-radius: var(--ia-r-lg);
-  background: var(--ia-surface);
+  background: linear-gradient(180deg, rgba(14, 19, 27, 0.96) 0%, rgba(10, 14, 20, 0.96) 100%);
   box-shadow: var(--ia-shadow);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .ia-tile-pad {
-  padding: 16px;
+  padding: 12px;
 }
 
 .ia-tile-flat {
@@ -133,17 +154,28 @@ b {
   box-shadow: none;
 }
 
+.ia-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 /* ─────────────────────────
    Buttons
 ───────────────────────── */
 .ia-btn {
   border-radius: var(--ia-r-pill) !important;
-  padding: 8px 12px !important;
+  padding: 0 11px !important;
+  min-height: 34px;
   border: none !important;
   background: var(--ia-btn-bg) !important;
   color: var(--ia-btn-text) !important;
   font-weight: var(--ia-fw-semi) !important;
   text-transform: none !important;
+  font-size: 0.84rem !important;
+  line-height: 1 !important;
+  white-space: nowrap;
 }
 
 .ia-btn:hover {
@@ -159,18 +191,23 @@ b {
 
 .ia-btn-outline {
   border-radius: var(--ia-r-pill) !important;
-  padding: 8px 12px !important;
+  padding: 0 11px !important;
+  min-height: 34px;
   border: 1px solid var(--ia-btn-outline-border) !important;
   background: var(--ia-btn-outline-bg) !important;
   color: var(--ia-btn-outline-text) !important;
   font-weight: var(--ia-fw-semi) !important;
-  box-shadow: 0 0 14px rgba(24, 255, 154, 0.1);
+  box-shadow: 0 0 12px rgba(24, 255, 154, 0.08);
   text-transform: none !important;
+  font-size: 0.84rem !important;
+  line-height: 1 !important;
+  white-space: nowrap;
 }
 
 .ia-btn-primary {
-  border-radius: 14px !important;
-  padding: 12px 14px !important;
+  border-radius: 10px !important;
+  padding: 0 12px !important;
+  min-height: 32px;
   border: none !important;
   background: var(--ia-btn-primary-bg) !important;
   color: var(--ia-btn-primary-text) !important;
@@ -178,6 +215,9 @@ b {
   letter-spacing: 0 !important;
   box-shadow: var(--ia-btn-primary-shadow);
   text-transform: none !important;
+  font-size: 0.82rem !important;
+  line-height: 1 !important;
+  white-space: nowrap;
 }
 
 .ia-btn-primary:hover,
@@ -185,73 +225,44 @@ b {
   filter: brightness(1.03);
 }
 
+.ia-btn-sm {
+  min-height: 28px !important;
+  height: 28px !important;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
+  font-size: 0.76rem !important;
+  line-height: 1 !important;
+}
+
+.ia-btn-icon-right i {
+  margin-left: 6px;
+}
+
+.ia-btn-icon-left i {
+  margin-right: 6px;
+}
+
 /* ─────────────────────────
    Badges
 ───────────────────────── */
 .ia-badge {
-  border-radius: 12px;
-  padding: 4px 10px;
-  font-size: 0.78rem;
+  border-radius: 999px;
+  padding: 3px 7px;
+  min-height: 20px;
+  font-size: 0.66rem;
   font-weight: var(--ia-fw-semi);
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .ia-badge-neon {
   background: rgba(24, 255, 154, 0.12);
   color: var(--ia-neon);
   border: 1px solid rgba(24, 255, 154, 0.18);
-}
-
-/* ─────────────────────────
-   Strength lift tiles
-───────────────────────── */
-.ia-lift-tile {
-  border-radius: var(--ia-r-md);
-  background: var(--ia-surface-2);
-  box-shadow: var(--ia-inner-stroke);
-  min-height: 112px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.ia-lift-kicker {
-  color: var(--ia-muted);
-  font-size: 0.8rem;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-}
-
-.ia-lift-value {
-  margin-top: 6px;
-  font-size: 1.4rem;
-  font-weight: 650;
-}
-
-.ia-lift-unit {
-  color: var(--ia-muted);
-  margin-left: 6px;
-  font-size: 0.95rem;
-  font-weight: var(--ia-fw-medium);
-}
-
-.ia-lift-sub {
-  color: var(--ia-muted);
-  font-size: 0.825rem;
-  margin-top: 4px;
-}
-
-.ia-mini-bar {
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-  margin-top: 10px;
-}
-
-.ia-mini-bar-fill {
-  height: 100%;
 }
 
 /* ─────────────────────────
@@ -268,6 +279,35 @@ b {
 }
 
 /* ─────────────────────────
+   Shared stats rows
+───────────────────────── */
+.ia-stats-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  padding: 8px 10px;
+  box-shadow: var(--ia-inner-stroke);
+}
+
+.ia-stat {
+  flex: 1;
+  text-align: center;
+}
+
+.ia-stat-value {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.ia-stat-label {
+  font-size: 0.64rem;
+  letter-spacing: 0.05em;
+  color: var(--ia-muted);
+}
+
+/* ─────────────────────────
    Task cards
 ───────────────────────── */
 .ia-task-card {
@@ -276,7 +316,7 @@ b {
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 9px 10px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.05);
   background: linear-gradient(180deg, rgba(18, 24, 33, 0.92) 0%, rgba(12, 17, 24, 0.92) 100%);
@@ -317,7 +357,7 @@ b {
   margin: 0;
   min-width: 0;
   color: #ffffff;
-  font-size: 0.94rem;
+  font-size: 0.9rem;
   line-height: 1.1;
   font-weight: 700;
 }
@@ -325,10 +365,10 @@ b {
 .ia-task-card__meta {
   flex: 0 0 auto;
   color: var(--ia-neon);
-  font-size: 0.76rem;
+  font-size: 0.71rem;
   line-height: 1;
   font-weight: 700;
-  padding: 3px 7px;
+  padding: 2px 6px;
   border-radius: 999px;
   background: rgba(24, 255, 154, 0.08);
   border: 1px solid rgba(24, 255, 154, 0.16);
@@ -337,7 +377,7 @@ b {
 .ia-task-card__subtitle {
   margin: 3px 0 0;
   color: var(--ia-muted);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   line-height: 1.25;
 }
 
@@ -349,18 +389,457 @@ b {
 
 .ia-task-card__button,
 .btn.ia-task-card__button {
-  min-height: 30px;
-  height: 30px;
-  padding: 0 12px !important;
-  border-radius: 10px !important;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.84rem;
+  font-size: 0.76rem;
   line-height: 1;
   font-weight: 700 !important;
   white-space: nowrap;
   box-shadow: 0 8px 18px rgba(24, 255, 154, 0.16);
+}
+
+/* ─────────────────────────
+   Homepage layout
+───────────────────────── */
+.iron-acre-home.container {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.iron-acre-home {
+  padding-bottom: 86px !important;
+}
+
+.iron-acre-home .ia-tile {
+  border-radius: 16px;
+}
+
+.iron-acre-home .ia-tile-pad {
+  padding: 10px 12px;
+}
+
+.iron-acre-home .mb-3 {
+  margin-bottom: 0.6rem !important;
+}
+
+.iron-acre-home .mb-2 {
+  margin-bottom: 0.45rem !important;
+}
+
+.iron-acre-home .mt-3 {
+  margin-top: 0.6rem !important;
+}
+
+.iron-acre-home .mt-2 {
+  margin-top: 0.4rem !important;
+}
+
+.iron-acre-home .ia-kicker {
+  font-size: 0.67rem;
+  gap: 5px;
+}
+
+.iron-acre-home .ia-page-title {
+  font-size: 0.98rem;
+  line-height: 1.12;
+}
+
+.iron-acre-home .ia-page-subtitle,
+.iron-acre-home .text-dim.small,
+.iron-acre-home .small {
+  font-size: 0.82rem;
+}
+
+.iron-acre-home .ia-btn,
+.iron-acre-home .ia-btn-primary,
+.iron-acre-home .ia-btn-outline,
+.iron-acre-home .btn.ia-btn,
+.iron-acre-home .btn.ia-btn-primary,
+.iron-acre-home .btn.ia-btn-outline {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.8rem;
+  border-radius: 10px;
+}
+
+.iron-acre-home .ia-badge {
+  min-height: 18px;
+  padding: 2px 6px;
+  font-size: 0.64rem;
+}
+
+.iron-acre-home .ia-page-title + .text-dim.small,
+.iron-acre-home .ia-page-title + .ia-page-subtitle {
+  margin-top: 2px !important;
+}
+
+/* Loading */
+.ia-home-loading {
+  color: #fff;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 90px;
+}
+
+.ia-home-loading-card {
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+}
+
+.ia-home-loading-icon {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(22, 219, 170, 0.10);
+  border: 1px solid rgba(22, 219, 170, 0.24);
+  box-shadow: 0 0 22px rgba(22, 219, 170, 0.12);
+}
+
+.ia-home-loading-icon i {
+  font-size: 20px;
+  color: #16dbaa;
+}
+
+.ia-section-loading {
+  margin-bottom: 0.5rem;
+}
+
+/* Tasks card container */
+.ia-task-toggle {
+  min-height: 28px !important;
+  height: 28px !important;
+  padding: 0 8px !important;
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+  flex: 0 0 auto !important;
+  font-size: 0.72rem !important;
+  gap: 6px !important;
+}
+
+.ia-task-toggle i {
+  margin-right: 0 !important;
+  font-size: 0.68rem;
+}
+
+.ia-task-summary {
+  margin-top: 0.3rem;
+}
+
+.ia-task-list {
+  margin-top: 0.4rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 4px;
+}
+
+.ia-task-divider {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ia-task-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.ia-task-row:last-child {
+  padding-bottom: 2px;
+}
+
+.ia-task-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ia-task-title {
+  font-size: 0.88rem;
+  line-height: 1.08;
+  font-weight: 600;
+}
+
+.ia-task-subtitle {
+  line-height: 1.24;
+  margin-top: 2px;
+}
+
+.ia-task-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: fit-content;
+  white-space: nowrap;
+}
+
+.ia-task-link-btn {
+  min-height: 28px !important;
+  height: 28px !important;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
+  white-space: nowrap !important;
+  font-size: 0.76rem !important;
+}
+
+/* Header */
+.ia-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.04em;
+}
+
+.ia-header-bell {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  transition: all 0.2s ease;
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.ia-header-bell[data-unread="true"] {
+  border-color: rgba(22, 219, 170, 0.34);
+  background: rgba(22, 219, 170, 0.12);
+  color: #16dbaa;
+  box-shadow: 0 0 16px rgba(22, 219, 170, 0.16);
+  animation: iaBellPulse 1.8s ease-in-out infinite;
+}
+
+.ia-header-bell[data-active="true"] {
+  border-color: rgba(22, 219, 170, 0.24);
+  background: rgba(22, 219, 170, 0.08);
+  color: #16dbaa;
+  box-shadow: 0 0 10px rgba(22, 219, 170, 0.10);
+  animation: none;
+}
+
+.ia-header-bell-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #16dbaa;
+  color: #062820;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px rgba(10, 14, 20, 0.95), 0 0 10px rgba(22, 219, 170, 0.24);
+}
+
+.ia-header-notifications-dropdown {
+  position: fixed;
+  max-height: min(70vh, 640px);
+  overflow-y: auto;
+  z-index: 1050;
+  padding: 14px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(14, 18, 24, 0.98) 0%, rgba(10, 14, 20, 0.98) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+@keyframes iaBellPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(22, 219, 170, 0);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 20px rgba(22, 219, 170, 0.20);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(22, 219, 170, 0);
+  }
+}
+
+/* Classes list */
+.ia-class-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ia-class-day-label {
+  font-size: 0.72rem;
+  color: var(--ia-muted);
+  margin-bottom: 4px;
+}
+
+.ia-class-item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: var(--ia-inner-stroke);
+}
+
+.ia-class-item-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.ia-class-item-meta {
+  font-size: 0.78rem;
+  color: var(--ia-muted);
+  line-height: 1.25;
+}
+
+.ia-class-item-status {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.ia-inline-note-success {
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(24, 255, 154, 0.14);
+  color: var(--ia-neon);
+  box-shadow: var(--ia-inner-stroke);
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.ia-inline-note-error {
+  color: #ffb3b3;
+  font-size: 0.78rem;
+}
+
+.ia-join-panel {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: var(--ia-inner-stroke);
+}
+
+/* Strength */
+.ia-strength-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 0;
+  gap: 8px;
+}
+
+.ia-strength-row + .ia-strength-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ia-strength-value {
+  font-weight: 700;
+  color: var(--ia-neon);
+  white-space: nowrap;
+}
+
+/* Bottom nav */
+.bottom-nav {
+  background: rgba(10, 14, 20, 0.68);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 6px !important;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+.bottom-nav .nav-icon {
+  width: 40px !important;
+  height: 40px !important;
+}
+
+.bottom-nav .bxkr-bottomnav-link div:last-child {
+  font-size: 10px !important;
+  margin-top: 4px !important;
+}
+
+/* Generic BXKR button hover corrected to green scheme */
+.btn-bxkr-outline:hover,
+.btn-bxkr-outline:focus {
+  background: rgba(22, 219, 170, 0.10) !important;
+  border-color: rgba(22, 219, 170, 0.30) !important;
+  color: #d9fff5 !important;
+  box-shadow: 0 0 14px rgba(22, 219, 170, 0.12) !important;
+}
+
+.nav-icon:hover {
+  background: rgba(22, 219, 170, 0.12) !important;
+  box-shadow: 0 0 15px rgba(22, 219, 170, 0.20) !important;
+  transform: scale(1.05);
+}
+
+.inline-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #16dbaa;
+  animation: ia-spin 0.8s linear infinite;
+  margin-left: 8px;
+}
+
+@keyframes ia-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (min-width: 641px) {
+  .iron-acre-home.container {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .iron-acre-home .ia-tile-pad {
+    padding: 12px 14px;
+  }
+
+  .iron-acre-home .ia-page-title {
+    font-size: 1.04rem;
+  }
+
+  .iron-acre-home .ia-page-subtitle,
+  .iron-acre-home .text-dim.small,
+  .iron-acre-home .small {
+    font-size: 0.86rem;
+  }
+
+  .iron-acre-home .ia-btn,
+  .iron-acre-home .ia-btn-primary,
+  .iron-acre-home .ia-btn-outline,
+  .iron-acre-home .btn.ia-btn,
+  .iron-acre-home .btn.ia-btn-primary,
+  .iron-acre-home .btn.ia-btn-outline {
+    min-height: 34px;
+    padding: 0 11px;
+    font-size: 0.84rem;
+  }
 }
 
 @media (max-width: 640px) {
@@ -387,7 +866,17 @@ b {
     min-height: 28px;
     height: 28px;
     padding: 0 10px !important;
-    border-radius: 9px !important;
-    font-size: 0.8rem;
+    border-radius: 8px !important;
+    font-size: 0.76rem;
+  }
+
+  .ia-header-bell {
+    width: 38px;
+    height: 38px;
+  }
+
+  .ia-header-notifications-dropdown {
+    padding: 12px;
+    border-radius: 16px;
   }
 }
