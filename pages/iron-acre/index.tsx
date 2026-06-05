@@ -8,7 +8,7 @@ import BottomNav from "../../components/BottomNav";
 import PushSubscribeButton from "../../components/PushSubscribeButton";
 import NotificationsBanner from "../../components/NotificationsBanner";
 import IronAcreHeader from "../../components/iron-acre/IronAcreHeader";
-import IronAcreTasks from "../../components/iron-acre/IronAcreTasks";
+import IronAcreWorkoutCard from "../../components/iron-acre/IronAcreWorkoutCard";
 import IronAcreNutritionCard from "../../components/iron-acre/IronAcreNutritionCard";
 import IronAcreStrengthSummary from "../../components/iron-acre/IronAcreStrengthSummary";
 import IronAcreClassesList from "../../components/iron-acre/IronAcreClassesList";
@@ -221,6 +221,21 @@ function SectionLoadingCard({
   );
 }
 
+function firstWorkoutRefForDay(day?: DayOverview): SimpleWorkoutRef | null {
+  if (!day) return null;
+
+  const recurring = Array.isArray(day.recurringWorkouts) ? day.recurringWorkouts : [];
+  if (recurring.length) return recurring[0] || null;
+
+  const optional = Array.isArray(day.optionalWorkouts) ? day.optionalWorkouts : [];
+  if (optional.length) return optional[0] || null;
+
+  const ids = Array.isArray(day.workoutIds) ? day.workoutIds : [];
+  if (ids.length) return { id: ids[0] };
+
+  return null;
+}
+
 function DailyHabitsCard({ todayData }: { todayData?: DayOverview }) {
   const completed = Number(todayData?.habitSummary?.completed || 0);
   const total = Number(todayData?.habitSummary?.total || 5);
@@ -228,85 +243,72 @@ function DailyHabitsCard({ todayData }: { todayData?: DayOverview }) {
 
   return (
     <section className="ia-tile ia-tile-pad mb-3">
-      <div className="d-flex justify-content-between align-items-center mb-2">
-        <div className="ia-kicker">
-          <i className="fas fa-check-circle" style={{ color: "var(--ia-neon)" }} />
-          DAILY HABITS
+      <div className="d-flex justify-content-between align-items-center gap-2">
+        <div>
+          <div className="ia-kicker">
+            <i className="fas fa-check-circle" style={{ color: "var(--ia-neon)" }} />
+            DAILY HABITS
+          </div>
+
+          <div className="ia-page-title" style={{ fontSize: "1.15rem" }}>
+            {allDone ? "Daily habits completed" : "Daily habits are open"}
+          </div>
+
+          <div className="text-dim small mt-1">
+            {allDone
+              ? "Your daily habits are all logged for today."
+              : `Complete your daily habits for today (${completed}/${total}).`}
+          </div>
         </div>
 
-        <span
-          className="ia-badge"
-          style={{
-            background: allDone ? "rgba(22, 219, 170, 0.12)" : "rgba(255,255,255,0.06)",
-            border: allDone
-              ? "1px solid rgba(22, 219, 170, 0.26)"
-              : "1px solid rgba(255,255,255,0.10)",
-            color: allDone ? "#d9fff5" : "rgba(255,255,255,0.86)",
-          }}
+        <Link
+          href="/habits"
+          className={allDone ? "ia-btn ia-btn-outline" : "ia-btn ia-btn-primary"}
+          style={{ textTransform: "none" }}
         >
-          {completed}/{total}
-        </span>
-      </div>
-
-      <div className="ia-page-title" style={{ fontSize: "1.2rem" }}>
-        {allDone ? "Daily habits complete" : "Complete today’s habits"}
-      </div>
-
-      <div className="text-dim small mt-1" style={{ maxWidth: 560 }}>
-        {allDone
-          ? "All daily habits are logged for today."
-          : "Log your water, macros, steps, time outside and scheduled workout for today."}
-      </div>
-
-      <div
-        className="d-flex justify-content-between text-center mt-3"
-        style={{
-          gap: 10,
-          background: "rgba(255,255,255,0.04)",
-          borderRadius: 14,
-          padding: "10px 12px",
-          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
-        }}
-      >
-        <div style={{ flex: 1 }}>
-          <div style={{ color: "var(--ia-neon)", fontWeight: 700, fontSize: "1.05rem" }}>
-            {completed}
-          </div>
-          <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
-            DONE
-          </div>
-        </div>
-
-        <div style={{ flex: 1 }}>
-          <div style={{ color: "var(--ia-neon2)", fontWeight: 700, fontSize: "1.05rem" }}>
-            {Math.max(0, total - completed)}
-          </div>
-          <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
-            LEFT
-          </div>
-        </div>
-
-        <div style={{ flex: 1 }}>
-          <div style={{ color: "var(--ia-neon)", fontWeight: 700, fontSize: "1.05rem" }}>
-            {total}
-          </div>
-          <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
-            TOTAL
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-3">
-        <Link href="/habits" className="ia-btn ia-btn-primary w-100">
-          {allDone ? "VIEW HABITS" : "OPEN DAILY HABITS"}{" "}
-          <i className="fas fa-arrow-right" style={{ marginLeft: 10 }} />
+          {allDone ? "View" : "Open"}
         </Link>
+      </div>
+    </section>
+  );
+}
 
-        <div className="text-dim small mt-2">
-          {allDone
-            ? "Everything is ticked off for today"
-            : `${Math.max(0, total - completed)} habits still to do today`}
+function WeeklyCheckInCard({
+  fridayYMD,
+  fridayData,
+}: {
+  fridayYMD: string;
+  fridayData?: DayOverview;
+}) {
+  const complete = Boolean(fridayData?.checkinComplete);
+
+  return (
+    <section className="ia-tile ia-tile-pad mb-3">
+      <div className="d-flex justify-content-between align-items-center gap-2">
+        <div>
+          <div className="ia-kicker">
+            <i className="fas fa-clipboard-check" style={{ color: "var(--ia-neon)" }} />
+            WEEKLY CHECK-IN
+          </div>
+
+          <div className="ia-page-title" style={{ fontSize: "1.15rem" }}>
+            {complete ? "Weekly check-in completed" : "Weekly check-in is open"}
+          </div>
+
+          <div className="text-dim small mt-1">
+            {complete
+              ? "Your Friday check-in has already been submitted for this week."
+              : `Complete your Friday check-in for ${fridayYMD}.`}
+          </div>
         </div>
+
+        <Link
+          href="/check-in"
+          className={complete ? "ia-btn ia-btn-outline" : "ia-btn ia-btn-primary"}
+          style={{ textTransform: "none" }}
+        >
+          {complete ? "View" : "Open"}
+        </Link>
       </div>
     </section>
   );
@@ -367,6 +369,20 @@ export default function IronAcreHome() {
     const days = homeOverview?.days || [];
     return days.find((d) => d.dateKey === fridayYMD);
   }, [homeOverview]);
+
+  const showWeeklyCheckIn = Boolean(todayData?.isFriday);
+
+  const workoutRef = useMemo(() => firstWorkoutRefForDay(todayData), [todayData]);
+  const workoutId = String(workoutRef?.id || "");
+  const workoutTitle = workoutRef?.name || "Today’s session";
+  const hasWorkoutToday =
+    Boolean(todayData?.hasWorkout) ||
+    Boolean(todayData?.hasRecurringToday) ||
+    Boolean(workoutRef);
+  const workoutDone = todayData?.hasRecurringToday
+    ? Boolean(todayData?.recurringDone)
+    : Boolean(todayData?.workoutDone);
+  const durationMinutes = Number(todayData?.workoutSummary?.duration || 0) || null;
 
   const { data: strengthProfile, error: strengthError } = useSWR(
     mounted ? "/api/strength/profile/get" : null,
@@ -547,7 +563,10 @@ export default function IronAcreHome() {
   const classesLoading =
     !profileError &&
     !gymsError &&
-    (!!profileKey && !profile || (mounted && isAuthed && !gymsResp) || (shouldLoadSessions && !sessionsResp) || (bookingsKey && !bookingsResp));
+    ((!!profileKey && !profile) ||
+      (mounted && isAuthed && !gymsResp) ||
+      (shouldLoadSessions && !sessionsResp) ||
+      (bookingsKey && !bookingsResp));
 
   const strengthLoading = !strengthProfile && !strengthError;
 
@@ -567,6 +586,13 @@ export default function IronAcreHome() {
 
         <DailyHabitsCard todayData={todayData} />
 
+        {showWeeklyCheckIn ? (
+          <WeeklyCheckInCard
+            fridayYMD={homeOverview?.fridayYMD || ""}
+            fridayData={fridayData}
+          />
+        ) : null}
+
         {classesLoading ? (
           <SectionLoadingCard title="Classes" icon="fa-calendar-alt" />
         ) : (
@@ -582,15 +608,18 @@ export default function IronAcreHome() {
           />
         )}
 
-        <IronAcreTasks
-          todayKey={effectiveTodayKey}
-          todayData={todayData}
-          fridayYMD={homeOverview?.fridayYMD || ""}
-          fridayData={fridayData}
+        <IronAcreWorkoutCard
+          title={workoutTitle}
+          workout={null}
+          workoutId={workoutId}
+          done={workoutDone}
+          durationMinutes={durationMinutes}
+          dateKey={effectiveTodayKey}
           weekDays={homeOverview?.days || []}
           weekStartYMD={homeOverview?.weekStartYMD || ""}
           weekEndYMD={homeOverview?.weekEndYMD || ""}
           weeklyTotals={homeOverview?.weeklyTotals}
+          hasWorkoutToday={hasWorkoutToday}
         />
 
         <IronAcreNutritionCard
