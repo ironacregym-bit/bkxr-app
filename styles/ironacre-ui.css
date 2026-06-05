@@ -1,867 +1,275 @@
 /* styles/ironacre-ui.css */
+/* Iron Acre UI primitives: typography + tiles + buttons */
 
 /* ─────────────────────────
-   Iron Acre design tokens
+   Design tokens
 ───────────────────────── */
 :root {
+  /* Font stack
+     IMPORTANT:
+     - Use a fallback value for --font-sans so it never invalidates.
+     - The actual Google font variable (--font-sans) is provided by next/font on the element
+       that has appFont.variable applied (we use .ia-app for that). */
   --ia-font: var(--font-sans, ui-sans-serif), system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 
-  --ia-bg: #070b10;
-  --ia-bg-soft: #0b1118;
-  --ia-surface: rgba(255, 255, 255, 0.035);
-  --ia-surface-2: rgba(255, 255, 255, 0.05);
-  --ia-border: rgba(255, 255, 255, 0.08);
-  --ia-border-strong: rgba(255, 255, 255, 0.12);
+  /* Weights */
+  --ia-fw-body: 400;
+  --ia-fw-medium: 500;
+  --ia-fw-semi: 600;
+  --ia-fw-bold: 700;
 
-  --ia-text: #ffffff;
-  --ia-text-soft: rgba(255, 255, 255, 0.84);
-  --ia-text-dim: rgba(255, 255, 255, 0.62);
+  /* Page titles (match “Good morning, Iron Acre Gym”) */
+  --ia-page-title-size: 1.35rem;
+  --ia-page-title-fw: 700;
+  --ia-page-title-lh: 1.2;
 
-  --ia-neon: #16dbaa;
-  --ia-neon2: #1ef2df;
-  --ia-neon-soft: rgba(22, 219, 170, 0.12);
-  --ia-neon-border: rgba(22, 219, 170, 0.26);
-  --ia-neon-shadow: 0 0 18px rgba(22, 219, 170, 0.12);
+  /* Tile titles */
+  --ia-tile-title-size: 1.05rem;
+  --ia-tile-title-fw: 650;
+  --ia-tile-title-lh: 1.2;
 
-  --ia-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  /* Kicker labels (TODAY’S WORKOUT / CLASSES / STRENGTH) */
+  --ia-kicker-size: 0.78rem;
+  --ia-kicker-fw: 650;
+  --ia-kicker-letter: 0.9px;
 
-  --ia-r-lg: 20px;
+  /* Muted text */
+  --ia-muted: #9fb0c3;
+
+  /* Surfaces */
+  --ia-surface: rgba(255,255,255,0.06);
+  --ia-surface-2: rgba(255,255,255,0.07);
+  --ia-inner-stroke: inset 0 0 0 1px rgba(255,255,255,0.04);
+  --ia-shadow: 0 18px 40px rgba(0,0,0,0.35);
+
+  /* Radius */
+  --ia-r-lg: 18px;
   --ia-r-md: 16px;
   --ia-r-pill: 999px;
 
-  --ia-page-title-size: 1.16rem;
-  --ia-page-title-lh: 1.15;
-  --ia-page-title-fw: 800;
+  /* Accents */
+  --ia-neon: #18ff9a;
+  --ia-neon2: #00e5ff;
 
-  --ia-page-subtitle-size: 0.92rem;
-  --ia-page-subtitle-fw: 500;
+  /* Buttons */
+  --ia-btn-bg: rgba(255,255,255,0.08);
+  --ia-btn-bg-hover: rgba(255,255,255,0.12);
+  --ia-btn-text: #fff;
 
-  --ia-tile-title-size: 1rem;
-  --ia-tile-title-fw: 700;
-  --ia-tile-title-lh: 1.15;
+  --ia-btn-outline-border: rgba(24,255,154,0.45);
+  --ia-btn-outline-text: var(--ia-neon);
+  --ia-btn-outline-bg: rgba(0,0,0,0.20);
 
-  --ia-kicker-size: 0.72rem;
-  --ia-kicker-fw: 800;
-  --ia-kicker-letter: 0.08em;
+  --ia-btn-primary-bg: linear-gradient(90deg, var(--ia-neon), var(--ia-neon2));
+  --ia-btn-primary-text: #06110c;
+  --ia-btn-primary-shadow: 0 0 24px rgba(24,255,154,0.32);
 
-  --ia-body-small-size: 0.88rem;
-  --ia-badge-size: 0.72rem;
-  --ia-button-size: 0.94rem;
-
-  --ia-button-height: 38px;
-  --ia-button-pad-x: 13px;
-
-  --ia-tile-pad-y: 12px;
-  --ia-tile-pad-x: 14px;
+  /* Focus */
+  --ia-focus: 0 0 0 3px rgba(24,255,154,0.22);
 }
 
 /* ─────────────────────────
-   Base
+   Global baseline (IMPORTANT)
+   Apply typography to .ia-app because that element has appFont.variable
+   which defines --font-sans. html/body do NOT inherit CSS variables from children.
 ───────────────────────── */
-html,
-body {
-  background: var(--ia-bg);
-  color: var(--ia-text);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+.ia-app {
+  font-family: var(--ia-font);
+  font-weight: var(--ia-fw-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-.ia-app {
-  font-family: var(--ia-font);
+/* Keep html/body sane even before React mounts */
+html,
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  text-decoration: none !important;
-}
-
-.text-dim {
-  color: var(--ia-text-dim) !important;
+strong,
+b {
+  font-weight: var(--ia-fw-semi);
 }
 
 /* ─────────────────────────
-   Iron Acre primitives
+   Typography
 ───────────────────────── */
-.ia-tile {
-  background: linear-gradient(180deg, rgba(17, 22, 30, 0.96) 0%, rgba(11, 16, 24, 0.96) 100%);
-  border: 1px solid var(--ia-border);
-  border-radius: var(--ia-r-lg);
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.02);
-}
-
-.ia-tile-pad {
-  padding: var(--ia-tile-pad-y) var(--ia-tile-pad-x);
-}
-
 .ia-page-title {
-  margin: 0;
-  color: var(--ia-text);
   font-size: var(--ia-page-title-size);
-  line-height: var(--ia-page-title-lh);
   font-weight: var(--ia-page-title-fw);
+  line-height: var(--ia-page-title-lh);
+  margin: 0;
 }
 
 .ia-page-subtitle {
-  margin-top: 4px;
-  color: var(--ia-text-dim);
-  font-size: var(--ia-page-subtitle-size);
-  line-height: 1.35;
-  font-weight: var(--ia-page-subtitle-fw);
+  color: var(--ia-muted);
+  font-size: 0.9rem;
+  font-weight: var(--ia-fw-medium);
+  margin-top: 6px;
 }
 
 .ia-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: rgba(229, 255, 248, 0.92);
+  color: var(--ia-muted);
   font-size: var(--ia-kicker-size);
   font-weight: var(--ia-kicker-fw);
   letter-spacing: var(--ia-kicker-letter);
   text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .ia-tile-title {
-  color: var(--ia-text);
   font-size: var(--ia-tile-title-size);
-  line-height: var(--ia-tile-title-lh);
   font-weight: var(--ia-tile-title-fw);
-}
-
-.ia-btn,
-.ia-btn-primary,
-.ia-btn-outline,
-.btn.ia-btn,
-.btn.ia-btn-primary,
-.btn.ia-btn-outline {
-  min-height: var(--ia-button-height);
-  padding: 0 var(--ia-button-pad-x);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 12px;
-  font-size: var(--ia-button-size);
-  font-weight: 700;
-  text-transform: none !important;
-  text-decoration: none !important;
-  white-space: nowrap;
-  transition:
-    background 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.12s ease,
-    opacity 0.18s ease;
-  cursor: pointer;
-}
-
-.ia-btn:active,
-.ia-btn-primary:active,
-.ia-btn-outline:active,
-.btn.ia-btn:active,
-.btn.ia-btn-primary:active,
-.btn.ia-btn-outline:active {
-  transform: translateY(1px);
-}
-
-.ia-btn-primary,
-.btn.ia-btn-primary {
-  background: linear-gradient(180deg, #1ef2df 0%, #16dbaa 100%);
-  border: 1px solid rgba(30, 242, 223, 0.18);
-  color: #041512 !important;
-  box-shadow: 0 8px 20px rgba(22, 219, 170, 0.16);
-}
-
-.ia-btn-primary:hover,
-.ia-btn-primary:focus,
-.btn.ia-btn-primary:hover,
-.btn.ia-btn-primary:focus {
-  background: linear-gradient(180deg, #3af6e7 0%, #18e5b3 100%) !important;
-  border-color: rgba(58, 246, 231, 0.24) !important;
-  color: #031311 !important;
-  box-shadow: 0 10px 22px rgba(22, 219, 170, 0.2) !important;
-}
-
-.ia-btn-outline,
-.btn.ia-btn-outline,
-.ia-btn,
-.btn.ia-btn {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--ia-border-strong);
-  color: var(--ia-text) !important;
-}
-
-.ia-btn-outline:hover,
-.ia-btn-outline:focus,
-.ia-btn:hover,
-.ia-btn:focus,
-.btn.ia-btn-outline:hover,
-.btn.ia-btn-outline:focus,
-.btn.ia-btn:hover,
-.btn.ia-btn:focus,
-.btn-outline-light:hover,
-.btn-outline-light:focus,
-.btn-outline-light:active {
-  background: var(--ia-neon-soft) !important;
-  border-color: var(--ia-neon-border) !important;
-  color: #d9fff5 !important;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.02) inset,
-    0 0 14px rgba(22, 219, 170, 0.12) !important;
-}
-
-.ia-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 22px;
-  padding: 3px 8px;
-  border-radius: var(--ia-r-pill);
-  font-size: var(--ia-badge-size);
-  font-weight: 800;
-  line-height: 1;
-  text-transform: none !important;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--ia-border-strong);
-  color: var(--ia-text-soft);
-  white-space: nowrap;
-}
-
-.ia-badge-neon {
-  background: rgba(22, 219, 170, 0.12);
-  border: 1px solid rgba(22, 219, 170, 0.28);
-  color: #d9fff5;
-}
-
-.ia-link {
-  color: inherit;
-  text-decoration: none !important;
-}
-
-.ia-link:hover,
-.ia-link:focus {
-  color: inherit;
-  text-decoration: none !important;
+  line-height: var(--ia-tile-title-lh);
+  margin: 0;
 }
 
 /* ─────────────────────────
-   Iron Acre home layout
+   Surfaces / tiles
 ───────────────────────── */
-.iron-acre-home.container {
-  padding-left: 10px;
-  padding-right: 10px;
+.ia-tile {
+  border-radius: var(--ia-r-lg);
+  background: var(--ia-surface);
+  box-shadow: var(--ia-shadow);
 }
 
-.iron-acre-home {
-  padding-bottom: 86px !important;
+.ia-tile-pad {
+  padding: 16px;
 }
 
-.iron-acre-home .ia-tile {
-  border-radius: 16px;
+.ia-tile-flat {
+  background: transparent;
+  box-shadow: none;
 }
 
-.iron-acre-home .ia-tile-pad {
-  padding: 10px 12px;
+/* ─────────────────────────
+   Buttons
+───────────────────────── */
+.ia-btn {
+  border-radius: var(--ia-r-pill) !important;
+  padding: 8px 12px !important;
+  border: none !important;
+  background: var(--ia-btn-bg) !important;
+  color: var(--ia-btn-text) !important;
+  font-weight: var(--ia-fw-semi) !important;
 }
 
-.iron-acre-home .mb-3 {
-  margin-bottom: 0.6rem !important;
+.ia-btn:hover {
+  background: var(--ia-btn-bg-hover) !important;
 }
 
-.iron-acre-home .mb-2 {
-  margin-bottom: 0.45rem !important;
+.ia-btn:focus-visible,
+.ia-btn-outline:focus-visible,
+.ia-btn-primary:focus-visible {
+  outline: none !important;
+  box-shadow: var(--ia-focus) !important;
 }
 
-.iron-acre-home .mt-3 {
-  margin-top: 0.6rem !important;
+.ia-btn-outline {
+  border-radius: var(--ia-r-pill) !important;
+  padding: 8px 12px !important;
+  border: 1px solid var(--ia-btn-outline-border) !important;
+  background: var(--ia-btn-outline-bg) !important;
+  color: var(--ia-btn-outline-text) !important;
+  font-weight: var(--ia-fw-semi) !important;
+  box-shadow: 0 0 14px rgba(24,255,154,0.14);
 }
 
-.iron-acre-home .mt-2 {
-  margin-top: 0.4rem !important;
+.ia-btn-primary {
+  border-radius: 14px !important;
+  padding: 12px 14px !important;
+  border: none !important;
+  background: var(--ia-btn-primary-bg) !important;
+  color: var(--ia-btn-primary-text) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.6px;
+  box-shadow: var(--ia-btn-primary-shadow);
 }
 
-.iron-acre-home .ia-kicker {
-  font-size: 0.67rem;
-  gap: 5px;
-}
-
-.iron-acre-home .ia-page-title {
-  font-size: 0.98rem;
-  line-height: 1.12;
-}
-
-.iron-acre-home .ia-page-subtitle,
-.iron-acre-home .text-dim.small,
-.iron-acre-home .small {
-  font-size: 0.82rem;
-}
-
-.iron-acre-home .ia-btn,
-.iron-acre-home .ia-btn-primary,
-.iron-acre-home .ia-btn-outline,
-.iron-acre-home .btn.ia-btn,
-.iron-acre-home .btn.ia-btn-primary,
-.iron-acre-home .btn.ia-btn-outline {
-  min-height: 34px;
-  padding: 0 11px;
-  font-size: 0.88rem;
-  border-radius: 11px;
-}
-
-.iron-acre-home .ia-badge {
-  min-height: 20px;
-  padding: 3px 7px;
-  font-size: 0.66rem;
-}
-
-.iron-acre-home .ia-page-title + .text-dim.small,
-.iron-acre-home .ia-page-title + .ia-page-subtitle {
-  margin-top: 2px !important;
-}
-
-/* Loading */
-.ia-home-loading {
+/* ─────────────────────────
+   Badges
+───────────────────────── */
+.ia-badge {
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: var(--ia-fw-semi);
+  background: rgba(255,255,255,0.08);
   color: #fff;
-  min-height: 100vh;
+}
+
+.ia-badge-neon {
+  background: rgba(24,255,154,0.12);
+  color: var(--ia-neon);
+  border: 1px solid rgba(24,255,154,0.18);
+}
+
+/* ─────────────────────────
+   Strength lift tiles
+───────────────────────── */
+.ia-lift-tile {
+  border-radius: var(--ia-r-md);
+  background: var(--ia-surface-2);
+  box-shadow: var(--ia-inner-stroke);
+  min-height: 112px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding-bottom: 90px;
-}
-
-.ia-home-loading-card {
-  width: 100%;
-  max-width: 360px;
-  text-align: center;
-}
-
-.ia-home-loading-icon {
-  width: 56px;
-  height: 56px;
-  margin: 0 auto 12px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: rgba(22, 219, 170, 0.1);
-  border: 1px solid rgba(22, 219, 170, 0.24);
-  box-shadow: 0 0 24px rgba(22, 219, 170, 0.12);
-}
-
-.ia-home-loading-icon i {
-  font-size: 22px;
-  color: #16dbaa;
-}
-
-.ia-section-loading {
-  margin-bottom: 0.5rem;
-}
-
-/* Tasks card */
-.ia-task-toggle {
-  min-height: 34px !important;
-  padding: 0 11px !important;
-  border-radius: 999px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  white-space: nowrap !important;
-  flex: 0 0 auto !important;
-}
-
-.ia-task-toggle i {
-  margin-right: 8px;
-}
-
-.ia-task-summary {
-  margin-top: 0.35rem;
-}
-
-.ia-task-list {
-  margin-top: 0.45rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 4px;
-}
-
-.ia-task-divider {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.ia-task-row {
-  display: flex;
+  flex-direction: column;
   justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 0;
 }
 
-.ia-task-row:last-child {
-  padding-bottom: 4px;
-}
-
-.ia-task-main {
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.ia-task-title {
-  font-size: 0.92rem;
-  line-height: 1.1;
-  font-weight: 700;
-}
-
-.ia-task-subtitle {
-  line-height: 1.32;
-  margin-top: 2px;
-}
-
-.ia-task-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  min-width: fit-content;
-}
-
-.ia-task-link-btn {
-  min-height: 32px !important;
-  padding: 0 10px !important;
-  border-radius: 11px !important;
-  white-space: nowrap !important;
-}
-
-/* Generic compact stats rows */
-.iron-acre-home .d-flex.justify-content-between.text-center.mt-3 {
-  gap: 8px !important;
-  padding: 8px 10px !important;
-  border-radius: 12px !important;
-}
-
-.iron-acre-home .d-flex.justify-content-between.text-center.mt-3 > div > div:first-child {
-  font-size: 0.95rem !important;
-}
-
-.iron-acre-home .d-flex.justify-content-between.text-center.mt-3 > div > div:last-child {
-  font-size: 0.66rem !important;
-  letter-spacing: 0.05em !important;
-}
-
-/* Workout card */
-.ia-workout-card {
-  overflow: hidden;
-}
-
-.ia-workout-card__top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 0.45rem;
-}
-
-.ia-workout-card__kicker {
-  color: var(--ia-neon);
-}
-
-.ia-workout-card__kicker i {
-  color: var(--ia-neon);
-}
-
-.ia-workout-card__actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.ia-workout-toggle {
-  min-height: 30px !important;
-  padding: 0 10px !important;
-  border-radius: 999px !important;
-  background: rgba(22, 219, 170, 0.08) !important;
-  border-color: rgba(22, 219, 170, 0.18) !important;
-  color: #d9fff5 !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
-}
-
-.ia-workout-toggle i {
-  color: var(--ia-neon);
-}
-
-.ia-workout-toggle:hover,
-.ia-workout-toggle:focus {
-  background: rgba(22, 219, 170, 0.14) !important;
-  border-color: rgba(22, 219, 170, 0.28) !important;
-  color: #ebfff9 !important;
-}
-
-.ia-workout-card__empty {
-  padding-top: 2px;
-}
-
-.ia-workout-card__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.ia-workout-card__title {
-  min-width: 0;
-  color: var(--ia-neon);
-  font-size: 1.06rem;
-  line-height: 1.08;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-}
-
-.ia-workout-card__titleText {
-  display: block;
-  color: inherit;
-}
-
-.ia-workout-card__subtitle {
-  margin-top: 4px;
-  color: var(--ia-text-dim);
-  font-size: 0.81rem;
-  line-height: 1.35;
-  max-width: 40ch;
-}
-
-.ia-workout-card__complete {
-  flex: 0 0 auto;
-  min-height: 24px;
-  padding: 0 8px;
-  gap: 5px;
-}
-
-.ia-workout-card__stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  margin-top: 0.55rem;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.03) 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
-    0 4px 14px rgba(0, 0, 0, 0.12);
-  overflow: hidden;
-}
-
-.ia-workout-card__stat {
-  padding: 9px 8px;
-  text-align: center;
-}
-
-.ia-workout-card__stat:not(:last-child) {
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.ia-workout-card__statValue {
-  color: var(--ia-neon);
-  font-size: 0.98rem;
-  line-height: 1;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.ia-workout-card__statValue--alt {
-  color: var(--ia-neon2);
-}
-
-.ia-workout-card__statLabel {
-  margin-top: 4px;
-  color: rgba(255, 255, 255, 0.46);
-  font-size: 0.62rem;
-  line-height: 1.1;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+.ia-lift-kicker {
+  color: var(--ia-muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
 }
 
-.ia-workout-card__exerciseWrap {
-  margin-top: 0.6rem;
+.ia-lift-value {
+  margin-top: 6px;
+  font-size: 1.4rem;
+  font-weight: 650;
 }
 
-.ia-workout-card__sectionLabel {
-  margin-bottom: 0.4rem;
-  color: var(--ia-text-dim);
-  font-size: 0.76rem;
-  line-height: 1.2;
-  font-weight: 700;
+.ia-lift-unit {
+  color: var(--ia-muted);
+  margin-left: 6px;
+  font-size: 0.95rem;
+  font-weight: var(--ia-fw-medium);
 }
 
-.ia-workout-card__exerciseList,
-.ia-workout-card__weekList {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.ia-lift-sub {
+  color: var(--ia-muted);
+  font-size: 0.825rem;
+  margin-top: 4px;
 }
 
-.ia-workout-card__exerciseItem,
-.ia-workout-card__weekLinkInner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
-  padding: 10px 11px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0.04) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+/* Mini bar */
+.ia-mini-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+  margin-top: 10px;
 }
 
-.ia-workout-card__exerciseMain,
-.ia-workout-card__weekLinkMain {
-  min-width: 0;
-  flex: 1 1 auto;
+.ia-mini-bar-fill {
+  height: 100%;
 }
 
-.ia-workout-card__exerciseNameRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.ia-workout-card__exerciseIndex {
-  flex: 0 0 auto;
-  color: var(--ia-neon);
-  font-size: 0.76rem;
-  line-height: 1;
-  font-weight: 800;
-}
-
-.ia-workout-card__exerciseName {
-  min-width: 0;
-  color: var(--ia-text);
-  font-size: 0.87rem;
-  line-height: 1.15;
-  font-weight: 700;
-}
-
-.ia-workout-card__exerciseReps {
-  flex: 0 0 auto;
-  color: var(--ia-text-dim);
-  font-size: 0.76rem;
-  line-height: 1.1;
-  white-space: nowrap;
-}
-
-.ia-workout-card__cta {
-  margin-top: 0.6rem;
-}
-
-.ia-workout-card__cta .ia-btn-primary {
-  min-height: 38px;
-  border-radius: 12px;
-  font-size: 0.9rem;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-}
-
-.ia-workout-card__cta .ia-btn-primary i {
-  font-size: 0.8rem;
-}
-
-.ia-workout-card__cta .ia-btn-primary.ia-btn-disabled {
-  pointer-events: none;
-  opacity: 0.55;
-}
-
-.ia-workout-card__meta {
-  margin-top: 0.45rem;
-  color: var(--ia-text-dim);
-  font-size: 0.76rem;
-  line-height: 1.35;
-}
-
-.ia-workout-card__week {
-  margin-top: 0.6rem;
-  padding-top: 0.55rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.ia-workout-card__weekBlock + .ia-workout-card__weekBlock {
-  margin-top: 0.55rem;
-}
-
-.ia-workout-card__weekBlockTitle {
-  margin-bottom: 0.4rem;
-  color: var(--ia-text-dim);
-  font-size: 0.77rem;
-  line-height: 1.15;
-  font-weight: 700;
-}
-
-.ia-workout-card__weekDay {
-  margin-bottom: 0.35rem;
-}
-
-.ia-workout-card__weekDayHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 0.35rem;
-}
-
-.ia-workout-card__weekDayTitle {
-  min-width: 0;
-  color: var(--ia-text);
-  font-size: 0.84rem;
-  line-height: 1.15;
-  font-weight: 700;
-}
-
-.ia-workout-card__weekDayDate {
-  color: var(--ia-text-dim);
-  font-weight: 600;
-}
-
-.ia-workout-card__weekLink {
+/* ─────────────────────────
+   Clickable tiles
+───────────────────────── */
+.ia-link {
+  text-decoration: none;
+  color: #fff;
   display: block;
 }
 
-.ia-workout-card__weekLink:hover .ia-workout-card__weekLinkInner,
-.ia-workout-card__weekLink:focus .ia-workout-card__weekLinkInner {
-  background: linear-gradient(180deg, rgba(22, 219, 170, 0.11) 0%, rgba(22, 219, 170, 0.07) 100%);
-  border-color: rgba(22, 219, 170, 0.18);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
-    0 0 0 1px rgba(22, 219, 170, 0.05);
-}
-
-.ia-workout-card__weekLinkTitle {
-  color: var(--ia-text);
-  font-size: 0.85rem;
-  line-height: 1.15;
-  font-weight: 700;
-}
-
-.ia-workout-card__weekLinkSubtitle {
-  margin-top: 2px;
-  color: var(--ia-text-dim);
-  font-size: 0.74rem;
-  line-height: 1.2;
-}
-
-.ia-workout-card__weekChevron {
-  flex: 0 0 auto;
-  color: var(--ia-neon);
-  font-size: 0.82rem;
-}
-
-.ia-workout-card__emptyWeek {
-  color: var(--ia-text-dim);
-  font-size: 0.78rem;
-  line-height: 1.35;
-}
-
-/* Bottom nav */
-.bottom-nav {
-  background: rgba(10, 14, 20, 0.68);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-top: 1px solid var(--ia-border);
-  padding-top: 6px !important;
-  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)) !important;
-}
-
-.bottom-nav .nav-icon {
-  width: 40px !important;
-  height: 40px !important;
-}
-
-.bottom-nav .bxkr-bottomnav-link div:last-child {
-  font-size: 10px !important;
-  margin-top: 4px !important;
-}
-
-/* Generic BXKR button hover corrected to green scheme */
-.btn-bxkr-outline:hover,
-.btn-bxkr-outline:focus {
-  background: rgba(22, 219, 170, 0.1) !important;
-  border-color: rgba(22, 219, 170, 0.3) !important;
-  color: #d9fff5 !important;
-  box-shadow: 0 0 14px rgba(22, 219, 170, 0.12) !important;
-}
-
-.nav-icon:hover {
-  background: rgba(22, 219, 170, 0.12) !important;
-  box-shadow: 0 0 15px rgba(22, 219, 170, 0.2) !important;
-  transform: scale(1.05);
-}
-
-.inline-spinner {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.25);
-  border-top-color: #16dbaa;
-  animation: ia-spin 0.8s linear infinite;
-  margin-left: 8px;
-}
-
-@keyframes ia-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (min-width: 641px) {
-  .iron-acre-home.container {
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
-  .iron-acre-home .ia-tile-pad {
-    padding: 12px 14px;
-  }
-
-  .iron-acre-home .ia-page-title {
-    font-size: 1.04rem;
-  }
-
-  .iron-acre-home .ia-page-subtitle,
-  .iron-acre-home .text-dim.small,
-  .iron-acre-home .small {
-    font-size: 0.86rem;
-  }
-
-  .iron-acre-home .ia-btn,
-  .iron-acre-home .ia-btn-primary,
-  .iron-acre-home .ia-btn-outline,
-  .iron-acre-home .btn.ia-btn,
-  .iron-acre-home .btn.ia-btn-primary,
-  .iron-acre-home .btn.ia-btn-outline {
-    min-height: 36px;
-    padding: 0 12px;
-    font-size: 0.9rem;
-  }
-
-  .ia-workout-card__title {
-    font-size: 1.12rem;
-  }
-
-  .ia-workout-card__stats {
-    margin-top: 0.65rem;
-  }
-
-  .ia-workout-card__stat {
-    padding: 10px 9px;
-  }
-
-  .ia-workout-card__statValue {
-    font-size: 1.04rem;
-  }
-
-  .ia-workout-card__exerciseItem,
-  .ia-workout-card__weekLinkInner {
-    padding: 11px 12px;
-  }
+.ia-link:hover {
+  color: #fff;
 }
