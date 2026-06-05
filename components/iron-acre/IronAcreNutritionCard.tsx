@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import { NUTRITION_COLORS as COLORS } from "../nutrition/nutritionTheme";
 
 type NutritionToday = {
   logged: boolean;
@@ -16,6 +17,10 @@ type IronAcreNutritionCardProps = {
   nutritionToday: NutritionToday;
   href?: string;
 };
+
+function fmt0(n: number | undefined | null) {
+  return Number.isFinite(Number(n)) ? String(Math.round(Number(n))) : "0";
+}
 
 export default function IronAcreNutritionCard({
   nutritionToday,
@@ -32,7 +37,7 @@ export default function IronAcreNutritionCard({
     <section className="ia-tile ia-tile-pad mb-3">
       <div className="d-flex justify-content-between align-items-center mb-2">
         <div className="ia-kicker">
-          <i className="fas fa-utensils" style={{ color: "var(--ia-neon2)" }} />
+          <i className="fas fa-utensils" style={{ color: COLORS.calories }} />
           TODAY’S NUTRITION
         </div>
 
@@ -73,8 +78,8 @@ export default function IronAcreNutritionCard({
         }}
       >
         <div style={{ flex: 1 }}>
-          <div style={{ color: "var(--ia-neon)", fontWeight: 700, fontSize: "1.05rem" }}>
-            {Math.round(calories)}
+          <div style={{ color: COLORS.calories, fontWeight: 700, fontSize: "1.05rem" }}>
+            {fmt0(calories)}
           </div>
           <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
             KCAL
@@ -82,8 +87,8 @@ export default function IronAcreNutritionCard({
         </div>
 
         <div style={{ flex: 1 }}>
-          <div style={{ color: "var(--ia-neon2)", fontWeight: 700, fontSize: "1.05rem" }}>
-            {Math.round(protein)}g
+          <div style={{ color: COLORS.protein, fontWeight: 700, fontSize: "1.05rem" }}>
+            {fmt0(protein)}g
           </div>
           <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
             PROTEIN
@@ -91,8 +96,8 @@ export default function IronAcreNutritionCard({
         </div>
 
         <div style={{ flex: 1 }}>
-          <div style={{ color: "var(--ia-neon)", fontWeight: 700, fontSize: "1.05rem" }}>
-            {Math.round(carbs)}g
+          <div style={{ color: COLORS.carbs, fontWeight: 700, fontSize: "1.05rem" }}>
+            {fmt0(carbs)}g
           </div>
           <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
             CARBS
@@ -100,8 +105,8 @@ export default function IronAcreNutritionCard({
         </div>
 
         <div style={{ flex: 1 }}>
-          <div style={{ color: "var(--ia-neon2)", fontWeight: 700, fontSize: "1.05rem" }}>
-            {Math.round(fat)}g
+          <div style={{ color: COLORS.fat, fontWeight: 700, fontSize: "1.05rem" }}>
+            {fmt0(fat)}g
           </div>
           <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
             FAT
