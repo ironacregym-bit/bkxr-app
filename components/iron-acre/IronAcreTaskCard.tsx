@@ -15,36 +15,17 @@ export type IronAcreTaskCardProps = {
   muted?: boolean;
   variant?: Variant;
   highlight?: boolean;
-
-  // New
   schedule?: Schedule;
   dateKey?: string; // YYYY-MM-DD, defaults to today if not provided
 };
 
-const BASE_CLASS = "futuristic-card ia-tile ia-tile-pad mb-2";
-
-function buildStyle(highlight?: boolean, muted?: boolean): React.CSSProperties | undefined {
-  if (!highlight && !muted) return undefined;
-
-  const style: React.CSSProperties = {};
-
-  if (muted) {
-    style.opacity = 0.75;
-  }
-
-  if (highlight) {
-    style.border = "1px solid var(--ia-neon)";
-    style.boxShadow = "0 0 0 1px rgba(24,255,154,0.18) inset, 0 0 18px rgba(24,255,154,0.12)";
-  }
-
-  return style;
-}
+const BASE_CLASS = "futuristic-card ia-tile ia-tile-pad mb-2 ia-task-card";
 
 function getDayIndexFromDateKey(dateKey?: string): number {
   if (dateKey) {
-    const d = new Date(`${dateKey}T00:00:00`);
-    if (!Number.isNaN(d.getTime())) {
-      return d.getDay();
+    const date = new Date(`${dateKey}T00:00:00`);
+    if (!Number.isNaN(date.getTime())) {
+      return date.getDay();
     }
   }
 
@@ -56,6 +37,26 @@ function shouldRender(schedule: Schedule, dateKey?: string): boolean {
   if (schedule === "daily") return true;
   if (schedule === "friday") return getDayIndexFromDateKey(dateKey) === 5;
   return true;
+}
+
+function buildCardClassName(highlight?: boolean, muted?: boolean, variant?: Variant): string {
+  const classes = [BASE_CLASS];
+
+  if (highlight) {
+    classes.push("ia-task-card--highlight");
+  }
+
+  if (muted) {
+    classes.push("ia-task-card--muted");
+  }
+
+  if (variant === "classic") {
+    classes.push("ia-task-card--classic");
+  } else {
+    classes.push("ia-task-card--neon");
+  }
+
+  return classes.join(" ");
 }
 
 export default function IronAcreTaskCard({
@@ -70,27 +71,28 @@ export default function IronAcreTaskCard({
   schedule = "always",
   dateKey,
 }: IronAcreTaskCardProps) {
-  const className = BASE_CLASS;
-
-  const style = useMemo(() => buildStyle(highlight, muted), [highlight, muted]);
   const visible = useMemo(() => shouldRender(schedule, dateKey), [schedule, dateKey]);
+  const className = useMemo(
+    () => buildCardClassName(highlight, muted, variant),
+    [highlight, muted, variant]
+  );
 
   if (!visible) {
     return null;
   }
 
   return (
-    <section className={className} style={style} data-variant={variant}>
-      <div className="d-flex justify-content-between align-items-center gap-2">
-        <div style={{ minWidth: 0 }}>
-          <div className="ia-tile-title">{title}</div>
-          <div className="text-dim small">{subtitle}</div>
+    <section className={className} data-variant={variant}>
+      <div className="ia-task-card__row">
+        <div className="ia-task-card__content">
+          <div className="ia-task-card__title">{title}</div>
+          <div className="ia-task-card__subtitle">{subtitle}</div>
         </div>
 
-        <div className="d-flex align-items-center gap-2">
-          {rightMeta ? <div className="text-dim small">{rightMeta}</div> : null}
+        <div className="ia-task-card__actions">
+          {rightMeta ? <div className="ia-task-card__meta">{rightMeta}</div> : null}
 
-          <button type="button" className="btn btn-sm ia-btn-primary" onClick={onCta}>
+          <button type="button" className="btn btn-sm ia-btn-primary ia-task-card__button" onClick={onCta}>
             {ctaLabel}
           </button>
         </div>
