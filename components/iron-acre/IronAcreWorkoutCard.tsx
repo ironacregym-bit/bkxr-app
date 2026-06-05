@@ -262,6 +262,7 @@ export default function IronAcreWorkoutCard({
     : "#";
 
   const titleText = workout?.workout_name || todaysRefs?.[0]?.name || title || "Gym session";
+
   const subtitleText = (
     workout?.focus ||
     workout?.notes ||
@@ -269,111 +270,161 @@ export default function IronAcreWorkoutCard({
   ).toString();
 
   return (
-    <section className="ia-tile ia-tile-pad mb-3 ia-workout-card">
-      <div className="ia-workout-card__top">
-        <div className="ia-kicker ia-workout-card__kicker">
-          <i className="fas fa-dumbbell" />
+    <section className="ia-tile ia-tile-pad mb-3">
+      <div className="d-flex justify-content-between align-items-center mb-2">
+        <div className="ia-kicker">
+          <i className="fas fa-dumbbell" style={{ color: "var(--ia-neon)" }} />
           TODAY’S WORKOUT
         </div>
 
-        <div className="ia-workout-card__actions">
+        <div className="d-flex align-items-center gap-2">
           {flat.length > 0 ? (
             <button
               type="button"
-              onClick={() => setShowExercises((value) => !value)}
-              className="ia-btn ia-btn-outline ia-workout-toggle"
+              onClick={() => setShowExercises((v) => !v)}
+              className="ia-btn ia-btn-outline"
               title="Toggle workout exercises"
             >
-              <i className={`fas fa-chevron-${showExercises ? "up" : "down"}`} />
+              <i
+                className={`fas fa-chevron-${showExercises ? "up" : "down"}`}
+                style={{ marginRight: 8 }}
+              />
               Exercises
             </button>
           ) : null}
 
           <button
             type="button"
-            onClick={() => setShowWeek((value) => !value)}
-            className="ia-btn ia-btn-outline ia-workout-toggle"
+            onClick={() => setShowWeek((v) => !v)}
+            className="ia-btn ia-btn-outline"
             title="Toggle this week"
           >
-            <i className={`fas fa-chevron-${showWeek ? "up" : "down"}`} />
+            <i
+              className={`fas fa-chevron-${showWeek ? "up" : "down"}`}
+              style={{ marginRight: 8 }}
+            />
             This week
           </button>
         </div>
       </div>
 
       {!resolvedHasWorkoutToday ? (
-        <div className="ia-workout-card__empty">
-          <div className="ia-page-title">No workout scheduled today</div>
-          <div className="text-dim small mt-1">Check the “This week” section for upcoming sessions.</div>
-        </div>
+        <>
+          <div className="ia-page-title" style={{ fontSize: "1.25rem" }}>
+            No workout scheduled today
+          </div>
+          <div className="text-dim small mt-1">
+            Check the “This week” section for upcoming sessions.
+          </div>
+        </>
       ) : (
         <>
-          <div className="ia-workout-card__header">
-            <div className="ia-workout-card__title">
-              <span className="ia-workout-card__titleText text-truncate">{titleText}</span>
-              <div className="ia-workout-card__subtitle">{subtitleText}</div>
+          <div className="d-flex justify-content-between align-items-start gap-2">
+            <div className="ia-page-title" style={{ fontSize: "1.25rem" }}>
+              {titleText}
             </div>
 
             {done ? (
-              <span className="ia-badge ia-badge-neon ia-workout-card__complete">
+              <span
+                className="ia-badge ia-badge-neon"
+                style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
+              >
                 <i className="fas fa-check" />
                 Completed
               </span>
             ) : null}
           </div>
 
-          <div className="ia-workout-card__stats">
-            <div className="ia-workout-card__stat">
-              <div className="ia-workout-card__statValue">{exCount || "—"}</div>
-              <div className="ia-workout-card__statLabel">Exercises</div>
+          <div className="text-dim small mt-1" style={{ maxWidth: 520 }}>
+            {subtitleText}
+          </div>
+
+          <div
+            className="d-flex justify-content-between text-center mt-3"
+            style={{
+              gap: 10,
+              background: "rgba(255,255,255,0.04)",
+              borderRadius: 14,
+              padding: "10px 12px",
+              boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <div style={{ color: "var(--ia-neon)", fontWeight: 700, fontSize: "1.05rem" }}>
+                {exCount || "—"}
+              </div>
+              <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
+                EXERCISES
+              </div>
             </div>
 
-            <div className="ia-workout-card__stat">
-              <div className="ia-workout-card__statValue ia-workout-card__statValue--alt">
+            <div style={{ flex: 1 }}>
+              <div style={{ color: "var(--ia-neon2)", fontWeight: 700, fontSize: "1.05rem" }}>
                 {setCount || "—"}
               </div>
-              <div className="ia-workout-card__statLabel">Sets</div>
+              <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
+                SETS
+              </div>
             </div>
 
-            <div className="ia-workout-card__stat">
-              <div className="ia-workout-card__statValue">
-                {durationMinutes ?? "—"}
-                {durationMinutes != null ? " min" : ""}
+            <div style={{ flex: 1 }}>
+              <div style={{ color: "var(--ia-neon)", fontWeight: 700, fontSize: "1.05rem" }}>
+                {durationMinutes ?? "—"} {durationMinutes != null ? "min" : ""}
               </div>
-              <div className="ia-workout-card__statLabel">Duration</div>
+              <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
+                DURATION
+              </div>
             </div>
           </div>
 
           {showExercises && flat.length > 0 ? (
-            <div className="ia-workout-card__exerciseWrap">
-              <div className="ia-workout-card__sectionLabel">Today’s exercise list</div>
+            <div
+              className="mt-3"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}
+            >
+              <div className="text-dim small mb-2">Today’s exercise list</div>
 
-              <div className="ia-workout-card__exerciseList">
-                {flat.map((exercise, index) => (
-                  <div key={`${exercise.name}-${index}`} className="ia-workout-card__exerciseItem">
-                    <div className="ia-workout-card__exerciseMain">
-                      <div className="ia-workout-card__exerciseNameRow">
-                        <span className="ia-workout-card__exerciseIndex">{index + 1}</span>
-                        <span className="ia-workout-card__exerciseName text-truncate">{exercise.name}</span>
-                      </div>
+              <div className="d-flex flex-column" style={{ gap: 8 }}>
+                {flat.map((exercise, i) => (
+                  <div
+                    key={`${exercise.name}-${i}`}
+                    className="d-flex justify-content-between align-items-center gap-2"
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 14,
+                      background: "rgba(255,255,255,0.05)",
+                      boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+                    }}
+                  >
+                    <div className="text-truncate" style={{ minWidth: 0 }}>
+                      <span className="text-dim" style={{ marginRight: 8 }}>
+                        {i + 1}
+                      </span>
+                      <span className="fw-semibold">{exercise.name}</span>
                     </div>
 
-                    <div className="ia-workout-card__exerciseReps">{exercise.reps ? exercise.reps : ""}</div>
+                    <div className="text-dim small" style={{ whiteSpace: "nowrap" }}>
+                      {exercise.reps ? exercise.reps : ""}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           ) : null}
 
-          <div className="ia-workout-card__cta">
+          <div className="mt-3">
             <Link
               href={startHref}
-              className={`ia-btn ia-btn-primary w-100${resolvedWorkoutId ? "" : " ia-btn-disabled"}`}
+              className="ia-btn ia-btn-primary w-100"
+              style={{
+                pointerEvents: resolvedWorkoutId ? "auto" : "none",
+                opacity: resolvedWorkoutId ? 1 : 0.6,
+              }}
             >
-              Start <i className="fas fa-play" />
+              START <i className="fas fa-play" style={{ marginLeft: 10 }} />
             </Link>
 
-            <div className="ia-workout-card__meta">
+            <div className="text-dim small mt-2">
               Week {weekStartYMD} → {weekEndYMD}
               {weeklyTotals?.completedTasks != null && weeklyTotals?.totalTasks != null ? (
                 <span> • {weeklyTotals.completedTasks}/{weeklyTotals.totalTasks} tasks</span>
@@ -384,38 +435,52 @@ export default function IronAcreWorkoutCard({
       )}
 
       {showWeek ? (
-        <div className="ia-workout-card__week">
+        <div
+          className="mt-3"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12 }}
+        >
           {weekRows.pending.length > 0 ? (
-            <div className="ia-workout-card__weekBlock">
-              <div className="ia-workout-card__weekBlockTitle">Pending</div>
+            <>
+              <div className="text-dim small mb-2">Pending</div>
 
               {weekRows.pending.map((row) => (
-                <div key={`pending-${row.ymd}`} className="ia-workout-card__weekDay">
-                  <div className="ia-workout-card__weekDayHead">
-                    <div className="ia-workout-card__weekDayTitle">
-                      {row.day} <span className="ia-workout-card__weekDayDate">({row.ymd})</span>
+                <div key={`pending-${row.ymd}`} style={{ marginBottom: 12 }}>
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <div className="fw-semibold">
+                      {row.day} <span className="text-dim">({row.ymd})</span>
                     </div>
                     <span className="ia-badge">{row.workouts.length} to do</span>
                   </div>
 
-                  <div className="ia-workout-card__weekList">
+                  <div className="d-flex flex-column" style={{ gap: 8 }}>
                     {row.workouts.map((workoutRef) => {
-                      const href = `/gymworkout/${encodeURIComponent(workoutRef.id)}?date=${encodeURIComponent(row.ymd)}`;
+                      const href = `/gymworkout/${encodeURIComponent(workoutRef.id)}?date=${encodeURIComponent(
+                        row.ymd
+                      )}`;
 
                       return (
-                        <Link key={`${row.ymd}-${workoutRef.id}`} href={href} className="ia-link ia-workout-card__weekLink">
-                          <div className="ia-workout-card__weekLinkInner">
-                            <div className="ia-workout-card__weekLinkMain">
-                              <div className="ia-workout-card__weekLinkTitle text-truncate">
+                        <Link key={`${row.ymd}-${workoutRef.id}`} href={href} className="ia-link">
+                          <div
+                            style={{
+                              padding: "10px 12px",
+                              borderRadius: 14,
+                              background: "rgba(255,255,255,0.05)",
+                              boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 10,
+                            }}
+                          >
+                            <div className="text-truncate" style={{ minWidth: 0 }}>
+                              <div className="fw-semibold text-truncate">
                                 {workoutRef.name || "Gym session"}
                               </div>
                               {!workoutRef.name ? (
-                                <div className="ia-workout-card__weekLinkSubtitle text-truncate">
-                                  {workoutRef.id}
-                                </div>
+                                <div className="text-dim small text-truncate">{workoutRef.id}</div>
                               ) : null}
                             </div>
-                            <i className="fas fa-chevron-right ia-workout-card__weekChevron" />
+                            <i className="fas fa-chevron-right text-dim" />
                           </div>
                         </Link>
                       );
@@ -423,43 +488,62 @@ export default function IronAcreWorkoutCard({
                   </div>
                 </div>
               ))}
-            </div>
+            </>
           ) : null}
 
           {weekRows.completed.length > 0 ? (
-            <div className="ia-workout-card__weekBlock">
-              <div className="ia-workout-card__weekBlockTitle">Completed</div>
+            <>
+              <div
+                className="text-dim small mb-2"
+                style={{ marginTop: weekRows.pending.length ? 6 : 0 }}
+              >
+                Completed
+              </div>
 
               {weekRows.completed.map((row) => (
-                <div key={`done-${row.ymd}`} className="ia-workout-card__weekDay">
-                  <div className="ia-workout-card__weekDayHead">
-                    <div className="ia-workout-card__weekDayTitle">
-                      {row.day} <span className="ia-workout-card__weekDayDate">({row.ymd})</span>
+                <div key={`done-${row.ymd}`} style={{ marginBottom: 12 }}>
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <div className="fw-semibold">
+                      {row.day} <span className="text-dim">({row.ymd})</span>
                     </div>
-                    <span className="ia-badge ia-badge-neon">
+                    <span
+                      className="ia-badge ia-badge-neon"
+                      style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
+                    >
                       <i className="fas fa-check" />
                       Completed
                     </span>
                   </div>
 
-                  <div className="ia-workout-card__weekList">
+                  <div className="d-flex flex-column" style={{ gap: 8 }}>
                     {row.workouts.map((workoutRef) => {
-                      const href = `/gymworkout/${encodeURIComponent(workoutRef.id)}?date=${encodeURIComponent(row.ymd)}`;
+                      const href = `/gymworkout/${encodeURIComponent(workoutRef.id)}?date=${encodeURIComponent(
+                        row.ymd
+                      )}`;
 
                       return (
-                        <Link key={`${row.ymd}-${workoutRef.id}`} href={href} className="ia-link ia-workout-card__weekLink">
-                          <div className="ia-workout-card__weekLinkInner">
-                            <div className="ia-workout-card__weekLinkMain">
-                              <div className="ia-workout-card__weekLinkTitle text-truncate">
+                        <Link key={`${row.ymd}-${workoutRef.id}`} href={href} className="ia-link">
+                          <div
+                            style={{
+                              padding: "10px 12px",
+                              borderRadius: 14,
+                              background: "rgba(255,255,255,0.05)",
+                              boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 10,
+                            }}
+                          >
+                            <div className="text-truncate" style={{ minWidth: 0 }}>
+                              <div className="fw-semibold text-truncate">
                                 {workoutRef.name || "Gym session"}
                               </div>
                               {!workoutRef.name ? (
-                                <div className="ia-workout-card__weekLinkSubtitle text-truncate">
-                                  {workoutRef.id}
-                                </div>
+                                <div className="text-dim small text-truncate">{workoutRef.id}</div>
                               ) : null}
                             </div>
-                            <i className="fas fa-chevron-right ia-workout-card__weekChevron" />
+                            <i className="fas fa-chevron-right text-dim" />
                           </div>
                         </Link>
                       );
@@ -467,11 +551,11 @@ export default function IronAcreWorkoutCard({
                   </div>
                 </div>
               ))}
-            </div>
+            </>
           ) : null}
 
           {weekRows.pending.length === 0 && weekRows.completed.length === 0 ? (
-            <div className="ia-workout-card__emptyWeek">No workouts found for this week.</div>
+            <div className="text-dim small">No workouts found for this week.</div>
           ) : null}
         </div>
       ) : null}
