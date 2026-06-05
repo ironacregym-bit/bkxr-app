@@ -37,65 +37,92 @@ export default function IronAcreNutritionCard({
     <section className="ia-tile ia-tile-pad mb-3">
       <div className="d-flex justify-content-between align-items-center mb-2">
         <div className="ia-kicker">
-          <i className="fas fa-utensils" />
+          <i className="fas fa-utensils" style={{ color: COLORS.calories }} />
           TODAY’S NUTRITION
         </div>
 
-        <span className={`ia-badge ${logged ? "ia-badge-neon" : ""}`}>
-          {logged ? `${entriesCount} logged` : "No logs"}
+        <span
+          className="ia-badge"
+          style={{
+            background: logged ? "rgba(36,255,160,0.10)" : "rgba(255,255,255,0.06)",
+            border: logged
+              ? "1px solid rgba(36,255,160,0.24)"
+              : "1px solid rgba(255,255,255,0.10)",
+            color: logged ? "#d8fff1" : "rgba(255,255,255,0.82)",
+          }}
+        >
+          {logged ? `${entriesCount} logged` : "Nothing logged yet"}
         </span>
       </div>
 
-      <div className="ia-page-title">
-        {logged ? "Today’s intake" : "Start logging meals"}
+      <div className="d-flex justify-content-between align-items-start gap-2">
+        <div className="ia-page-title" style={{ fontSize: "1.2rem" }}>
+          {logged ? "Today’s intake" : "Start logging your meals"}
+        </div>
       </div>
 
-      <div className="text-dim small mt-1">
+      <div className="text-dim small mt-1" style={{ maxWidth: 560 }}>
         {logged
-          ? "Quick snapshot of your nutrition today."
-          : "Log meals and track your macros."}
+          ? "Quick snapshot of what you’ve logged today."
+          : "Log meals, track macros and keep your nutrition aligned with your training."}
       </div>
 
-      {/* Stats */}
-      <div className="ia-stats-row mt-3">
-        <div className="ia-stat">
-          <div className="ia-stat-value" style={{ color: COLORS.calories }}>
+      <div
+        className="d-flex justify-content-between text-center mt-3"
+        style={{
+          gap: 10,
+          background: "rgba(255,255,255,0.04)",
+          borderRadius: 14,
+          padding: "10px 12px",
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <div style={{ color: COLORS.calories, fontWeight: 700, fontSize: "1.05rem" }}>
             {fmt0(calories)}
           </div>
-          <div className="ia-stat-label">KCAL</div>
+          <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
+            KCAL
+          </div>
         </div>
 
-        <div className="ia-stat">
-          <div className="ia-stat-value" style={{ color: COLORS.protein }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ color: COLORS.protein, fontWeight: 700, fontSize: "1.05rem" }}>
             {fmt0(protein)}g
           </div>
-          <div className="ia-stat-label">PROTEIN</div>
+          <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
+            PROTEIN
+          </div>
         </div>
 
-        <div className="ia-stat">
-          <div className="ia-stat-value" style={{ color: COLORS.carbs }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ color: COLORS.carbs, fontWeight: 700, fontSize: "1.05rem" }}>
             {fmt0(carbs)}g
           </div>
-          <div className="ia-stat-label">CARBS</div>
+          <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
+            CARBS
+          </div>
         </div>
 
-        <div className="ia-stat">
-          <div className="ia-stat-value" style={{ color: COLORS.fat }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ color: COLORS.fat, fontWeight: 700, fontSize: "1.05rem" }}>
             {fmt0(fat)}g
           </div>
-          <div className="ia-stat-label">FAT</div>
+          <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
+            FAT
+          </div>
         </div>
       </div>
 
       <div className="mt-3">
         <Link href={href} className="ia-btn ia-btn-primary w-100">
-          Open <i className="fas fa-arrow-right" />
+          OPEN NUTRITION <i className="fas fa-arrow-right" style={{ marginLeft: 10 }} />
         </Link>
 
         <div className="text-dim small mt-2">
           {logged
-            ? `${entriesCount} entr${entriesCount === 1 ? "y" : "ies"} logged`
-            : "Nothing logged yet"}
+            ? `Logged today: ${entriesCount} entr${entriesCount === 1 ? "y" : "ies"}`
+            : "No meals logged yet today"}
         </div>
       </div>
     </section>
