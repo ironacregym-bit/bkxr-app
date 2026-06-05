@@ -1,4 +1,6 @@
-/* styles/ironacre-ui.css *//* styles/* ─────────────────────────
+/* styles/ironacre-ui.css */
+
+/* ─────────────────────────
    Iron Acre design tokens
 ───────────────────────── */
 :root {
@@ -81,8 +83,7 @@ a {
    Iron Acre primitives
 ───────────────────────── */
 .ia-tile {
-  background:
-    linear-gradient(180deg, rgba(17, 22, 30, 0.96) 0%, rgba(11, 16, 24, 0.96) 100%);
+  background: linear-gradient(180deg, rgba(17, 22, 30, 0.96) 0%, rgba(11, 16, 24, 0.96) 100%);
   border: 1px solid var(--ia-border);
   border-radius: var(--ia-r-lg);
   box-shadow:
@@ -151,7 +152,8 @@ a {
     border-color 0.18s ease,
     color 0.18s ease,
     box-shadow 0.18s ease,
-    transform 0.12s ease;
+    transform 0.12s ease,
+    opacity 0.18s ease;
   cursor: pointer;
 }
 
@@ -179,7 +181,7 @@ a {
   background: linear-gradient(180deg, #3af6e7 0%, #18e5b3 100%) !important;
   border-color: rgba(58, 246, 231, 0.24) !important;
   color: #031311 !important;
-  box-shadow: 0 10px 22px rgba(22, 219, 170, 0.20) !important;
+  box-shadow: 0 10px 22px rgba(22, 219, 170, 0.2) !important;
 }
 
 .ia-btn-outline,
@@ -319,7 +321,7 @@ a {
   margin-top: 2px !important;
 }
 
-/* Tasks card */
+/* Loading */
 .ia-home-loading {
   color: #fff;
   min-height: 100vh;
@@ -342,7 +344,7 @@ a {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: rgba(22, 219, 170, 0.10);
+  background: rgba(22, 219, 170, 0.1);
   border: 1px solid rgba(22, 219, 170, 0.24);
   box-shadow: 0 0 24px rgba(22, 219, 170, 0.12);
 }
@@ -356,6 +358,7 @@ a {
   margin-bottom: 0.5rem;
 }
 
+/* Tasks card */
 .ia-task-toggle {
   min-height: 34px !important;
   padding: 0 11px !important;
@@ -428,7 +431,7 @@ a {
   white-space: nowrap !important;
 }
 
-/* Stats rows */
+/* Generic compact stats rows */
 .iron-acre-home .d-flex.justify-content-between.text-center.mt-3 {
   gap: 8px !important;
   padding: 8px 10px !important;
@@ -442,6 +445,321 @@ a {
 .iron-acre-home .d-flex.justify-content-between.text-center.mt-3 > div > div:last-child {
   font-size: 0.66rem !important;
   letter-spacing: 0.05em !important;
+}
+
+/* Workout card */
+.ia-workout-card {
+  overflow: hidden;
+}
+
+.ia-workout-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 0.45rem;
+}
+
+.ia-workout-card__kicker {
+  color: var(--ia-neon);
+}
+
+.ia-workout-card__kicker i {
+  color: var(--ia-neon);
+}
+
+.ia-workout-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ia-workout-toggle {
+  min-height: 30px !important;
+  padding: 0 10px !important;
+  border-radius: 999px !important;
+  background: rgba(22, 219, 170, 0.08) !important;
+  border-color: rgba(22, 219, 170, 0.18) !important;
+  color: #d9fff5 !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.ia-workout-toggle i {
+  color: var(--ia-neon);
+}
+
+.ia-workout-toggle:hover,
+.ia-workout-toggle:focus {
+  background: rgba(22, 219, 170, 0.14) !important;
+  border-color: rgba(22, 219, 170, 0.28) !important;
+  color: #ebfff9 !important;
+}
+
+.ia-workout-card__empty {
+  padding-top: 2px;
+}
+
+.ia-workout-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ia-workout-card__title {
+  min-width: 0;
+  color: var(--ia-neon);
+  font-size: 1.06rem;
+  line-height: 1.08;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.ia-workout-card__titleText {
+  display: block;
+  color: inherit;
+}
+
+.ia-workout-card__subtitle {
+  margin-top: 4px;
+  color: var(--ia-text-dim);
+  font-size: 0.81rem;
+  line-height: 1.35;
+  max-width: 40ch;
+}
+
+.ia-workout-card__complete {
+  flex: 0 0 auto;
+  min-height: 24px;
+  padding: 0 8px;
+  gap: 5px;
+}
+
+.ia-workout-card__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 0.55rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.03) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+    0 4px 14px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.ia-workout-card__stat {
+  padding: 9px 8px;
+  text-align: center;
+}
+
+.ia-workout-card__stat:not(:last-child) {
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ia-workout-card__statValue {
+  color: var(--ia-neon);
+  font-size: 0.98rem;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.ia-workout-card__statValue--alt {
+  color: var(--ia-neon2);
+}
+
+.ia-workout-card__statLabel {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.62rem;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ia-workout-card__exerciseWrap {
+  margin-top: 0.6rem;
+}
+
+.ia-workout-card__sectionLabel {
+  margin-bottom: 0.4rem;
+  color: var(--ia-text-dim);
+  font-size: 0.76rem;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.ia-workout-card__exerciseList,
+.ia-workout-card__weekList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ia-workout-card__exerciseItem,
+.ia-workout-card__weekLinkInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 11px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0.04) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.ia-workout-card__exerciseMain,
+.ia-workout-card__weekLinkMain {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ia-workout-card__exerciseNameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ia-workout-card__exerciseIndex {
+  flex: 0 0 auto;
+  color: var(--ia-neon);
+  font-size: 0.76rem;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.ia-workout-card__exerciseName {
+  min-width: 0;
+  color: var(--ia-text);
+  font-size: 0.87rem;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+.ia-workout-card__exerciseReps {
+  flex: 0 0 auto;
+  color: var(--ia-text-dim);
+  font-size: 0.76rem;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.ia-workout-card__cta {
+  margin-top: 0.6rem;
+}
+
+.ia-workout-card__cta .ia-btn-primary {
+  min-height: 38px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.ia-workout-card__cta .ia-btn-primary i {
+  font-size: 0.8rem;
+}
+
+.ia-workout-card__cta .ia-btn-primary.ia-btn-disabled {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.ia-workout-card__meta {
+  margin-top: 0.45rem;
+  color: var(--ia-text-dim);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.ia-workout-card__week {
+  margin-top: 0.6rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ia-workout-card__weekBlock + .ia-workout-card__weekBlock {
+  margin-top: 0.55rem;
+}
+
+.ia-workout-card__weekBlockTitle {
+  margin-bottom: 0.4rem;
+  color: var(--ia-text-dim);
+  font-size: 0.77rem;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+.ia-workout-card__weekDay {
+  margin-bottom: 0.35rem;
+}
+
+.ia-workout-card__weekDayHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 0.35rem;
+}
+
+.ia-workout-card__weekDayTitle {
+  min-width: 0;
+  color: var(--ia-text);
+  font-size: 0.84rem;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+.ia-workout-card__weekDayDate {
+  color: var(--ia-text-dim);
+  font-weight: 600;
+}
+
+.ia-workout-card__weekLink {
+  display: block;
+}
+
+.ia-workout-card__weekLink:hover .ia-workout-card__weekLinkInner,
+.ia-workout-card__weekLink:focus .ia-workout-card__weekLinkInner {
+  background: linear-gradient(180deg, rgba(22, 219, 170, 0.11) 0%, rgba(22, 219, 170, 0.07) 100%);
+  border-color: rgba(22, 219, 170, 0.18);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+    0 0 0 1px rgba(22, 219, 170, 0.05);
+}
+
+.ia-workout-card__weekLinkTitle {
+  color: var(--ia-text);
+  font-size: 0.85rem;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+.ia-workout-card__weekLinkSubtitle {
+  margin-top: 2px;
+  color: var(--ia-text-dim);
+  font-size: 0.74rem;
+  line-height: 1.2;
+}
+
+.ia-workout-card__weekChevron {
+  flex: 0 0 auto;
+  color: var(--ia-neon);
+  font-size: 0.82rem;
+}
+
+.ia-workout-card__emptyWeek {
+  color: var(--ia-text-dim);
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 /* Bottom nav */
@@ -467,15 +785,15 @@ a {
 /* Generic BXKR button hover corrected to green scheme */
 .btn-bxkr-outline:hover,
 .btn-bxkr-outline:focus {
-  background: rgba(22, 219, 170, 0.10) !important;
-  border-color: rgba(22, 219, 170, 0.30) !important;
+  background: rgba(22, 219, 170, 0.1) !important;
+  border-color: rgba(22, 219, 170, 0.3) !important;
   color: #d9fff5 !important;
   box-shadow: 0 0 14px rgba(22, 219, 170, 0.12) !important;
 }
 
 .nav-icon:hover {
   background: rgba(22, 219, 170, 0.12) !important;
-  box-shadow: 0 0 15px rgba(22, 219, 170, 0.20) !important;
+  box-shadow: 0 0 15px rgba(22, 219, 170, 0.2) !important;
   transform: scale(1.05);
 }
 
@@ -525,5 +843,25 @@ a {
     padding: 0 12px;
     font-size: 0.9rem;
   }
-}
 
+  .ia-workout-card__title {
+    font-size: 1.12rem;
+  }
+
+  .ia-workout-card__stats {
+    margin-top: 0.65rem;
+  }
+
+  .ia-workout-card__stat {
+    padding: 10px 9px;
+  }
+
+  .ia-workout-card__statValue {
+    font-size: 1.04rem;
+  }
+
+  .ia-workout-card__exerciseItem,
+  .ia-workout-card__weekLinkInner {
+    padding: 11px 12px;
+  }
+}
