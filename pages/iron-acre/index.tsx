@@ -145,51 +145,13 @@ type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
 
 function HomeLoadingScreen() {
   return (
-    <main
-      className="container py-4"
-      style={{
-        color: "#fff",
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        paddingBottom: 90,
-      }}
-    >
-      <div
-        className="ia-tile ia-tile-pad"
-        style={{
-          width: "100%",
-          maxWidth: 360,
-          textAlign: "center",
-        }}
-      >
-        <div
-          style={{
-            width: 56,
-            height: 56,
-            margin: "0 auto 12px",
-            borderRadius: "50%",
-            display: "grid",
-            placeItems: "center",
-            background: "rgba(22, 219, 170, 0.10)",
-            border: "1px solid rgba(22, 219, 170, 0.24)",
-            boxShadow: "0 0 24px rgba(22, 219, 170, 0.12)",
-          }}
-        >
-          <i
-            className="fas fa-spinner fa-spin"
-            style={{
-              fontSize: 22,
-              color: "#16dbaa",
-            }}
-          />
+    <main className="container py-4 ia-home-loading">
+      <div className="ia-tile ia-tile-pad ia-home-loading-card">
+        <div className="ia-home-loading-icon">
+          <i className="fas fa-spinner fa-spin" />
         </div>
 
-        <div className="ia-page-title" style={{ fontSize: "1.1rem" }}>
-          Loading Iron Acre
-        </div>
-
+        <div className="ia-page-title">Loading Iron Acre</div>
         <div className="text-dim small mt-1">Pulling in your dashboard and daily tasks.</div>
       </div>
     </main>
@@ -204,13 +166,12 @@ function SectionLoadingCard({
   icon: string;
 }) {
   return (
-    <section className="ia-tile ia-tile-pad mb-2">
+    <section className="ia-tile ia-tile-pad mb-2 ia-section-loading">
       <div className="d-flex justify-content-between align-items-center">
         <div className="ia-kicker">
           <i className={`fas ${icon}`} style={{ color: "var(--ia-neon)" }} />
           {title.toUpperCase()}
         </div>
-
         <i className="fas fa-spinner fa-spin text-dim" />
       </div>
 
@@ -248,41 +209,16 @@ function CompactTaskRow({
   buttonLabel: string;
 }) {
   return (
-    <div
-      className="ia-task-row"
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: 10,
-        padding: "10px 0",
-      }}
-    >
-      <div style={{ minWidth: 0 }}>
-        <div className="fw-semibold" style={{ fontSize: ".98rem", lineHeight: 1.15 }}>
-          {title}
-        </div>
-        <div className="text-dim small" style={{ lineHeight: 1.35, marginTop: 2 }}>
-          {subtitle}
-        </div>
+    <div className="ia-task-row">
+      <div className="ia-task-main">
+        <div className="ia-task-title">{title}</div>
+        <div className="text-dim small ia-task-subtitle">{subtitle}</div>
       </div>
 
-      <div className="d-flex align-items-center gap-2" style={{ flex: "0 0 auto" }}>
+      <div className="ia-task-actions">
         {badge ? <span className="ia-badge">{badge}</span> : null}
 
-        <Link
-          href={href}
-          className="ia-btn ia-btn-primary"
-          style={{
-            textTransform: "none",
-            minHeight: 38,
-            padding: "0 14px",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 14,
-          }}
-        >
+        <Link href={href} className="ia-btn ia-btn-primary ia-task-link-btn">
           {buttonLabel}
         </Link>
       </div>
@@ -321,35 +257,23 @@ function TasksCard({
             TASKS
           </div>
 
-          <div className="ia-page-title" style={{ fontSize: "1.05rem", marginBottom: 0 }}>
+          <div className="ia-page-title">
             {showWeeklyCheckIn ? "Daily habits and weekly check-in" : "Daily habits"}
           </div>
         </div>
 
         <button
           type="button"
-          className="ia-btn ia-btn-outline"
+          className="ia-btn ia-btn-outline ia-task-toggle"
           onClick={() => setOpen((v) => !v)}
-          style={{
-            textTransform: "none",
-            minHeight: 36,
-            padding: "0 12px",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 999,
-          }}
         >
-          <i
-            className={`fas fa-chevron-${open ? "up" : "down"}`}
-            style={{ marginRight: 8 }}
-          />
-          {taskCount} task{taskCount === 1 ? "" : "s"}
+          <i className={`fas fa-chevron-${open ? "up" : "down"}`} />
+          <span>{taskCount} task{taskCount === 1 ? "" : "s"}</span>
         </button>
       </div>
 
       {open ? (
-        <div className="mt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 4 }}>
+        <div className="ia-task-list">
           <CompactTaskRow
             title={habitsDone ? "Daily habits completed" : "Daily habits are open"}
             subtitle={
@@ -363,7 +287,7 @@ function TasksCard({
           />
 
           {showWeeklyCheckIn ? (
-            <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+            <div className="ia-task-divider">
               <CompactTaskRow
                 title={checkinDone ? "Weekly check-in completed" : "Weekly check-in is open"}
                 subtitle={
@@ -378,7 +302,7 @@ function TasksCard({
           ) : null}
         </div>
       ) : (
-        <div className="text-dim small mt-2">
+        <div className="text-dim small ia-task-summary">
           {showWeeklyCheckIn
             ? `${habitsCompleted}/${habitsTotal} habits logged • weekly check-in ${checkinDone ? "done" : "open"}`
             : `${habitsCompleted}/${habitsTotal} habits logged`}
@@ -719,149 +643,7 @@ export default function IronAcreHome() {
       />
 
       <BottomNav />
-
-      <style jsx global>{`
-        .iron-acre-home {
-          --ia-mobile-kicker-size: 0.72rem;
-          --ia-mobile-title-size: 1.02rem;
-          --ia-mobile-subtitle-size: 0.87rem;
-        }
-
-        .iron-acre-home .ia-tile {
-          border-radius: 18px;
-        }
-
-        .iron-acre-home .ia-tile-pad {
-          padding: 12px 14px;
-        }
-
-        .iron-acre-home .mb-3 {
-          margin-bottom: 0.75rem !important;
-        }
-
-        .iron-acre-home .mb-2 {
-          margin-bottom: 0.55rem !important;
-        }
-
-        .iron-acre-home .mt-3 {
-          margin-top: 0.75rem !important;
-        }
-
-        .iron-acre-home .mt-2 {
-          margin-top: 0.45rem !important;
-        }
-
-        .iron-acre-home .ia-kicker {
-          font-size: var(--ia-mobile-kicker-size);
-          letter-spacing: 0.08em;
-          gap: 6px;
-        }
-
-        .iron-acre-home .ia-page-title {
-          font-size: var(--ia-mobile-title-size);
-          line-height: 1.15;
-          margin-bottom: 4px;
-        }
-
-        .iron-acre-home .ia-page-subtitle,
-        .iron-acre-home .text-dim.small,
-        .iron-acre-home .small {
-          font-size: var(--ia-mobile-subtitle-size);
-        }
-
-        .iron-acre-home .ia-btn,
-        .iron-acre-home .ia-btn-primary,
-        .iron-acre-home .ia-btn-outline,
-        .iron-acre-home .btn.ia-btn,
-        .iron-acre-home .btn.ia-btn-primary,
-        .iron-acre-home .btn.ia-btn-outline {
-          min-height: 38px;
-          padding: 0 14px;
-          font-size: 0.94rem;
-          border-radius: 14px;
-          text-transform: none !important;
-        }
-
-        .iron-acre-home .ia-badge {
-          font-size: 0.72rem;
-          min-height: 24px;
-          padding: 4px 8px;
-          text-transform: none !important;
-        }
-
-        .iron-acre-home .ia-btn:hover,
-        .iron-acre-home .ia-btn-primary:hover,
-        .iron-acre-home .ia-btn-outline:hover,
-        .iron-acre-home .btn.ia-btn:hover,
-        .iron-acre-home .btn.ia-btn-primary:hover,
-        .iron-acre-home .btn.ia-btn-outline:hover {
-          background: rgba(22, 219, 170, 0.12) !important;
-          border-color: rgba(22, 219, 170, 0.30) !important;
-          color: #d9fff5 !important;
-          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02) inset,
-            0 0 14px rgba(22, 219, 170, 0.12) !important;
-        }
-
-        .iron-acre-home .btn-outline-light:hover,
-        .iron-acre-home .btn-outline-light:focus,
-        .iron-acre-home .btn-outline-light:active {
-          background: rgba(22, 219, 170, 0.12) !important;
-          border-color: rgba(22, 219, 170, 0.30) !important;
-          color: #d9fff5 !important;
-          box-shadow: 0 0 14px rgba(22, 219, 170, 0.12) !important;
-        }
-
-        .iron-acre-home .ia-task-row:last-child {
-          padding-bottom: 6px;
-        }
-
-        @media (max-width: 640px) {
-          .iron-acre-home.container {
-            padding-left: 10px;
-            padding-right: 10px;
-          }
-
-          .iron-acre-home .ia-tile {
-            border-radius: 16px;
-          }
-
-          .iron-acre-home .ia-tile-pad {
-            padding: 10px 12px;
-          }
-
-          .iron-acre-home .ia-page-title {
-            font-size: 0.98rem !important;
-          }
-
-          .iron-acre-home .ia-page-subtitle,
-          .iron-acre-home .text-dim.small,
-          .iron-acre-home .small {
-            font-size: 0.82rem !important;
-          }
-
-          .iron-acre-home .ia-kicker {
-            font-size: 0.68rem !important;
-          }
-
-          .iron-acre-home .ia-btn,
-          .iron-acre-home .ia-btn-primary,
-          .iron-acre-home .ia-btn-outline,
-          .iron-acre-home .btn.ia-btn,
-          .iron-acre-home .btn.ia-btn-primary,
-          .iron-acre-home .btn.ia-btn-outline {
-            min-height: 34px;
-            padding: 0 12px;
-            font-size: 0.9rem;
-            border-radius: 12px;
-          }
-
-          .iron-acre-home .ia-badge {
-            font-size: 0.68rem;
-            min-height: 22px;
-            padding: 3px 7px;
-          }
-        }
-      `}</style>
     </>
   );
 }
+
