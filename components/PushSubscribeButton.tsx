@@ -22,6 +22,7 @@ const DISMISS_KEY = "ia_push_toast_dismissed";
 export function usePushNotifications() {
   const [supported, setSupported] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
+  const [firestoreHasCurrentDevice, setFirestoreHasCurrentDevice] = useState(false);
   const [busy, setBusy] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [error, setError] = useState("");
@@ -40,6 +41,7 @@ export function usePushNotifications() {
     if (!ok) {
       setPermission("unsupported");
       setSubscribed(false);
+      setFirestoreHasCurrentDevice(false);
       setChecked(true);
       return;
     }
@@ -55,14 +57,45 @@ export function usePushNotifications() {
 
       if (!reg) {
         setSubscribed(false);
+        setFirestoreHasCurrentDevice(false);
         setChecked(true);
         return;
       }
 
       const existing = await reg.pushManager.getSubscription();
-      setSubscribed(!!existing);
+      const hasBrowserSub = !!existing;
+      setSubscribed(hasBrowserSub);
+
+      if (!existing) {
+        setFirestoreHasCurrentDevice(false);
+        setChecked(true);
+        return;
+      }
+
+      const endpoint = String((existing.toJSON() as any)?.endpoint || "").trim();
+
+      if (!endpoint) {
+        setFirestoreHasCurrentDevice(false);
+        setChecked(true);
+        return;
+      }
+
+      const res = await fetch("/api/notifications/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setFirestoreHasCurrentDevice(false);
+      } else {
+        setFirestoreHasCurrentDevice(Boolean(json?.endpoint_present));
+      }
     } catch {
       setSubscribed(false);
+      setFirestoreHasCurrentDevice(false);
     } finally {
       setChecked(true);
     }
@@ -121,6 +154,7 @@ export function usePushNotifications() {
       if (perm !== "granted") {
         setError("Notifications are blocked in your browser settings.");
         setSubscribed(false);
+        setFirestoreHasCurrentDevice(false);
         return false;
       }
 
@@ -150,6 +184,7 @@ export function usePushNotifications() {
       }
 
       setSubscribed(true);
+      setFirestoreHasCurrentDevice(true);
       setError("");
       resetDismissed();
       return true;
@@ -157,6 +192,7 @@ export function usePushNotifications() {
       console.error("[push subscribe]", e);
       setError("Failed to enable push notifications.");
       setSubscribed(false);
+      setFirestoreHasCurrentDevice(false);
       return false;
     } finally {
       setBusy(false);
@@ -166,14 +202,18 @@ export function usePushNotifications() {
   const shouldPrompt = useMemo(() => {
     if (!checked) return false;
     if (!supported) return false;
-    if (subscribed) return false;
     if (dismissed) return false;
-    return true;
-  }, [checked, supported, subscribed, dismissed]);
+
+    if (!subscribed) return true;
+    if (!firestoreHasCurrentDevice) return true;
+
+    return false;
+  }, [checked, supported, dismissed, subscribed, firestoreHasCurrentDevice]);
 
   return {
     supported,
     subscribed,
+    firestoreHasCurrentDevice,
     busy,
     permission,
     error,
@@ -209,6 +249,7 @@ export default function PushSubscribeButton({
   const {
     supported,
     subscribed,
+    firestoreHasCurrentDevice,
     busy,
     subscribe,
     permission,
@@ -218,7 +259,7 @@ export default function PushSubscribeButton({
   } = usePushNotifications();
 
   if (variant === "button") {
-    if (!supported || subscribed) {
+    if (!supported || (subscribed && firestoreHasCurrentDevice)) {
       return null;
     }
 
@@ -237,13 +278,15 @@ export default function PushSubscribeButton({
     );
   }
 
-  if (!supported || subscribed || !shouldPrompt) {
+  if (!supported || !shouldPrompt) {
     return null;
   }
 
   if (hideIfDenied && permission === "denied") {
     return null;
   }
+
+  const missingDeviceRegistration = subscribed && !firestoreHasCurrentDevice;
 
   return (
     <div
@@ -303,6 +346,8 @@ export default function PushSubscribeButton({
           >
             {permission === "denied"
               ? "Notifications are currently blocked in your browser settings. Enable them there to receive class and gym reminders."
+              : missingDeviceRegistration
+              ? "This device/browser has permission for notifications, but it is not currently registered in Firestore. Enable again to register this device properly."
               : message}
           </div>
 
@@ -329,15 +374,15 @@ export default function PushSubscribeButton({
                 disabled={busy}
                 className="ia-btn"
               >
-                {busy ? "Enabling..." : "Enable notifications"}
+                {busy
+                  ? "Enabling..."
+                  : missingDeviceRegistration
+                  ? "Register this device"
+                  : "Enable notifications"}
               </button>
             ) : null}
 
-            <button
-              type="button"
-              onClick={dismissPrompt}
-              className="ia-btn ia-btn-outline"
-            >
+            <button type="button" onClick={dismissPrompt} className="ia-btn ia-btn-outline">
               Not now
             </button>
           </div>
