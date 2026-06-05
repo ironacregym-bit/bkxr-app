@@ -36,12 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Valid subscription object required" });
     }
 
-    if (
-      !sub.keys ||
-      typeof sub.keys !== "object" ||
-      !sub.keys.p256dh ||
-      !sub.keys.auth
-    ) {
+    if (!sub.keys || typeof sub.keys !== "object" || !sub.keys.p256dh || !sub.keys.auth) {
       return res.status(400).json({ error: "Valid subscription keys are required" });
     }
 
@@ -62,15 +57,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const docRef = firestore.collection("web_push_subscriptions").doc(email);
     const snap = await docRef.get();
+
     const current =
       snap.exists && Array.isArray(snap.data()?.subs) ? (snap.data()!.subs as any[]) : [];
 
-    // Remove any exact endpoint duplicates from the old list first
-    const dedupedOld = current.filter((s: any) => String(s?.endpoint || "") !== cleanedSub.endpoint);
+    // Remove exact endpoint duplicates first
+    const withoutSameEndpoint = current.filter(
+      (s: any) => String(s?.endpoint || "") !== cleanedSub.endpoint
+    );
 
-    // Enforce exactly ONE active subscription per user/email.
-    // We keep the newest/current device subscription only.
-    const finalSubs = [cleanedSub];
+    // Keep multiple device/browser subscriptions for the same user
+    const finalSubs = [cleanedSub, ...withoutSameEndpoint]
+      // defensive dedupe in case of weird older data
+      .filter(
+        (subItem, index, arr) =>
+          arr.findIndex((x) => String(x?.endpoint || "") === String(subItem?.endpoint || "")) === index
+      )
+      // optional cap so the doc does not grow forever
+      .slice(0, 10);
 
     await docRef.set(
       {
@@ -84,7 +88,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({
       ok: true,
       email,
-      replaced_count: dedupedOld.length,
       stored: finalSubs.length,
     });
   } catch (e: any) {
