@@ -5,73 +5,58 @@
    Design tokens
 ───────────────────────── */
 :root {
-  /* Font stack
-     IMPORTANT:
-     - Use a fallback value for --font-sans so it never invalidates.
-     - The actual Google font variable (--font-sans) is provided by next/font on the element
-       that has appFont.variable applied (we use .ia-app for that). */
   --ia-font: var(--font-sans, ui-sans-serif), system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 
-  /* Weights */
   --ia-fw-body: 400;
   --ia-fw-medium: 500;
   --ia-fw-semi: 600;
   --ia-fw-bold: 700;
 
-  /* Page titles (match “Good morning, Iron Acre Gym”) */
   --ia-page-title-size: 1.35rem;
   --ia-page-title-fw: 700;
   --ia-page-title-lh: 1.2;
 
-  /* Tile titles */
   --ia-tile-title-size: 1.05rem;
   --ia-tile-title-fw: 650;
   --ia-tile-title-lh: 1.2;
 
-  /* Kicker labels (TODAY’S WORKOUT / CLASSES / STRENGTH) */
   --ia-kicker-size: 0.78rem;
   --ia-kicker-fw: 650;
   --ia-kicker-letter: 0.9px;
 
-  /* Muted text */
   --ia-muted: #9fb0c3;
+  --ia-text: #ffffff;
+  --ia-bg: #070b10;
 
-  /* Surfaces */
-  --ia-surface: rgba(255,255,255,0.06);
-  --ia-surface-2: rgba(255,255,255,0.07);
-  --ia-inner-stroke: inset 0 0 0 1px rgba(255,255,255,0.04);
-  --ia-shadow: 0 18px 40px rgba(0,0,0,0.35);
+  --ia-surface: rgba(255, 255, 255, 0.06);
+  --ia-surface-2: rgba(255, 255, 255, 0.07);
+  --ia-inner-stroke: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --ia-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
 
-  /* Radius */
   --ia-r-lg: 18px;
   --ia-r-md: 16px;
   --ia-r-pill: 999px;
 
-  /* Accents */
   --ia-neon: #18ff9a;
   --ia-neon2: #00e5ff;
 
-  /* Buttons */
-  --ia-btn-bg: rgba(255,255,255,0.08);
-  --ia-btn-bg-hover: rgba(255,255,255,0.12);
+  --ia-btn-bg: rgba(255, 255, 255, 0.08);
+  --ia-btn-bg-hover: rgba(255, 255, 255, 0.12);
   --ia-btn-text: #fff;
 
-  --ia-btn-outline-border: rgba(24,255,154,0.45);
+  --ia-btn-outline-border: rgba(24, 255, 154, 0.3);
   --ia-btn-outline-text: var(--ia-neon);
-  --ia-btn-outline-bg: rgba(0,0,0,0.20);
+  --ia-btn-outline-bg: rgba(24, 255, 154, 0.08);
 
   --ia-btn-primary-bg: linear-gradient(90deg, var(--ia-neon), var(--ia-neon2));
   --ia-btn-primary-text: #06110c;
-  --ia-btn-primary-shadow: 0 0 24px rgba(24,255,154,0.32);
+  --ia-btn-primary-shadow: 0 10px 24px rgba(24, 255, 154, 0.22);
 
-  /* Focus */
-  --ia-focus: 0 0 0 3px rgba(24,255,154,0.22);
+  --ia-focus: 0 0 0 3px rgba(24, 255, 154, 0.22);
 }
 
 /* ─────────────────────────
-   Global baseline (IMPORTANT)
-   Apply typography to .ia-app because that element has appFont.variable
-   which defines --font-sans. html/body do NOT inherit CSS variables from children.
+   Global baseline
 ───────────────────────── */
 .ia-app {
   font-family: var(--ia-font);
@@ -80,13 +65,14 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Keep html/body sane even before React mounts */
 html,
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: var(--ia-bg);
+  color: var(--ia-text);
 }
 
 strong,
@@ -157,6 +143,7 @@ b {
   background: var(--ia-btn-bg) !important;
   color: var(--ia-btn-text) !important;
   font-weight: var(--ia-fw-semi) !important;
+  text-transform: none !important;
 }
 
 .ia-btn:hover {
@@ -177,7 +164,8 @@ b {
   background: var(--ia-btn-outline-bg) !important;
   color: var(--ia-btn-outline-text) !important;
   font-weight: var(--ia-fw-semi) !important;
-  box-shadow: 0 0 14px rgba(24,255,154,0.14);
+  box-shadow: 0 0 14px rgba(24, 255, 154, 0.1);
+  text-transform: none !important;
 }
 
 .ia-btn-primary {
@@ -187,8 +175,14 @@ b {
   background: var(--ia-btn-primary-bg) !important;
   color: var(--ia-btn-primary-text) !important;
   font-weight: 700 !important;
-  letter-spacing: 0.6px;
+  letter-spacing: 0 !important;
   box-shadow: var(--ia-btn-primary-shadow);
+  text-transform: none !important;
+}
+
+.ia-btn-primary:hover,
+.ia-btn-primary:focus {
+  filter: brightness(1.03);
 }
 
 /* ─────────────────────────
@@ -199,14 +193,14 @@ b {
   padding: 4px 10px;
   font-size: 0.78rem;
   font-weight: var(--ia-fw-semi);
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
 .ia-badge-neon {
-  background: rgba(24,255,154,0.12);
+  background: rgba(24, 255, 154, 0.12);
   color: var(--ia-neon);
-  border: 1px solid rgba(24,255,154,0.18);
+  border: 1px solid rgba(24, 255, 154, 0.18);
 }
 
 /* ─────────────────────────
@@ -248,11 +242,10 @@ b {
   margin-top: 4px;
 }
 
-/* Mini bar */
 .ia-mini-bar {
   height: 8px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   overflow: hidden;
   margin-top: 10px;
 }
@@ -272,4 +265,100 @@ b {
 
 .ia-link:hover {
   color: #fff;
+}
+
+/* ─────────────────────────
+   Task cards
+───────────────────────── */
+.ia-task-card {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, rgba(17, 22, 31, 0.96) 0%, rgba(12, 17, 25, 0.96) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 14px 32px rgba(0, 0, 0, 0.24);
+}
+
+.ia-task-card--highlight {
+  border-color: rgba(24, 255, 154, 0.22);
+  box-shadow:
+    inset 0 0 0 1px rgba(24, 255, 154, 0.12),
+    0 14px 32px rgba(0, 0, 0, 0.24);
+}
+
+.ia-task-card--muted {
+  opacity: 0.75;
+}
+
+.ia-task-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ia-task-card__content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ia-task-card__title {
+  margin: 0;
+  color: #ffffff;
+  font-size: 0.98rem;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+.ia-task-card__subtitle {
+  margin-top: 4px;
+  color: var(--ia-muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.ia-task-card__actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.ia-task-card__meta {
+  color: var(--ia-muted);
+  font-size: 0.8rem;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.ia-task-card__button,
+.btn.ia-task-card__button {
+  min-height: 34px;
+  padding: 0 14px !important;
+  border-radius: 12px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.92rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .ia-task-card__row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ia-task-card__actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .ia-task-card__button,
+  .btn.ia-task-card__button {
+    min-width: 88px;
+  }
 }
