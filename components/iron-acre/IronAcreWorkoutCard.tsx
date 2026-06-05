@@ -273,11 +273,11 @@ export default function IronAcreWorkoutCard({
     <section className="ia-tile ia-tile-pad mb-3">
       <div className="d-flex justify-content-between align-items-center mb-2">
         <div className="ia-kicker">
-          <i className="fas fa-dumbbell" style={{ color: "var(--ia-neon)" }} />
+          <i className="fas fa-dumbbell" />
           TODAY’S WORKOUT
         </div>
 
-        <div className="d-flex align-items-center gap-2">
+        <div className="d-flex align-items-center gap-2 flex-wrap justify-content-end">
           {flat.length > 0 ? (
             <button
               type="button"
@@ -285,10 +285,7 @@ export default function IronAcreWorkoutCard({
               className="ia-btn ia-btn-outline"
               title="Toggle workout exercises"
             >
-              <i
-                className={`fas fa-chevron-${showExercises ? "up" : "down"}`}
-                style={{ marginRight: 8 }}
-              />
+              <i className={`fas fa-chevron-${showExercises ? "up" : "down"}`} />
               Exercises
             </button>
           ) : null}
@@ -299,10 +296,7 @@ export default function IronAcreWorkoutCard({
             className="ia-btn ia-btn-outline"
             title="Toggle this week"
           >
-            <i
-              className={`fas fa-chevron-${showWeek ? "up" : "down"}`}
-              style={{ marginRight: 8 }}
-            />
+            <i className={`fas fa-chevron-${showWeek ? "up" : "down"}`} />
             This week
           </button>
         </div>
@@ -310,34 +304,23 @@ export default function IronAcreWorkoutCard({
 
       {!resolvedHasWorkoutToday ? (
         <>
-          <div className="ia-page-title" style={{ fontSize: "1.25rem" }}>
-            No workout scheduled today
-          </div>
-          <div className="text-dim small mt-1">
-            Check the “This week” section for upcoming sessions.
-          </div>
+          <div className="ia-page-title">No workout scheduled today</div>
+          <div className="text-dim small mt-1">Check the “This week” section for upcoming sessions.</div>
         </>
       ) : (
         <>
           <div className="d-flex justify-content-between align-items-start gap-2">
-            <div className="ia-page-title" style={{ fontSize: "1.25rem" }}>
-              {titleText}
-            </div>
+            <div className="ia-page-title">{titleText}</div>
 
             {done ? (
-              <span
-                className="ia-badge ia-badge-neon"
-                style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
-              >
+              <span className="ia-badge ia-badge-neon d-inline-flex align-items-center gap-1">
                 <i className="fas fa-check" />
                 Completed
               </span>
             ) : null}
           </div>
 
-          <div className="text-dim small mt-1" style={{ maxWidth: 520 }}>
-            {subtitleText}
-          </div>
+          <div className="text-dim small mt-1">{subtitleText}</div>
 
           <div
             className="d-flex justify-content-between text-center mt-3"
@@ -378,10 +361,7 @@ export default function IronAcreWorkoutCard({
           </div>
 
           {showExercises && flat.length > 0 ? (
-            <div
-              className="mt-3"
-              style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}
-            >
+            <div className="mt-3">
               <div className="text-dim small mb-2">Today’s exercise list</div>
 
               <div className="d-flex flex-column" style={{ gap: 8 }}>
@@ -421,7 +401,7 @@ export default function IronAcreWorkoutCard({
                 opacity: resolvedWorkoutId ? 1 : 0.6,
               }}
             >
-              START <i className="fas fa-play" style={{ marginLeft: 10 }} />
+              Start <i className="fas fa-play" />
             </Link>
 
             <div className="text-dim small mt-2">
@@ -435,16 +415,13 @@ export default function IronAcreWorkoutCard({
       )}
 
       {showWeek ? (
-        <div
-          className="mt-3"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12 }}
-        >
+        <div className="mt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
           {weekRows.pending.length > 0 ? (
             <>
               <div className="text-dim small mb-2">Pending</div>
 
               {weekRows.pending.map((row) => (
-                <div key={`pending-${row.ymd}`} style={{ marginBottom: 12 }}>
+                <div key={`pending-${row.ymd}`} style={{ marginBottom: 10 }}>
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <div className="fw-semibold">
                       {row.day} <span className="text-dim">({row.ymd})</span>
@@ -454,9 +431,7 @@ export default function IronAcreWorkoutCard({
 
                   <div className="d-flex flex-column" style={{ gap: 8 }}>
                     {row.workouts.map((workoutRef) => {
-                      const href = `/gymworkout/${encodeURIComponent(workoutRef.id)}?date=${encodeURIComponent(
-                        row.ymd
-                      )}`;
+                      const href = `/gymworkout/${encodeURIComponent(workoutRef.id)}?date=${encodeURIComponent(row.ymd)}`;
 
                       return (
                         <Link key={`${row.ymd}-${workoutRef.id}`} href={href} className="ia-link">
@@ -493,23 +468,17 @@ export default function IronAcreWorkoutCard({
 
           {weekRows.completed.length > 0 ? (
             <>
-              <div
-                className="text-dim small mb-2"
-                style={{ marginTop: weekRows.pending.length ? 6 : 0 }}
-              >
+              <div className="text-dim small mb-2" style={{ marginTop: weekRows.pending.length ? 6 : 0 }}>
                 Completed
               </div>
 
               {weekRows.completed.map((row) => (
-                <div key={`done-${row.ymd}`} style={{ marginBottom: 12 }}>
+                <div key={`done-${row.ymd}`} style={{ marginBottom: 10 }}>
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <div className="fw-semibold">
                       {row.day} <span className="text-dim">({row.ymd})</span>
                     </div>
-                    <span
-                      className="ia-badge ia-badge-neon"
-                      style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
-                    >
+                    <span className="ia-badge ia-badge-neon d-inline-flex align-items-center gap-1">
                       <i className="fas fa-check" />
                       Completed
                     </span>
@@ -517,9 +486,7 @@ export default function IronAcreWorkoutCard({
 
                   <div className="d-flex flex-column" style={{ gap: 8 }}>
                     {row.workouts.map((workoutRef) => {
-                      const href = `/gymworkout/${encodeURIComponent(workoutRef.id)}?date=${encodeURIComponent(
-                        row.ymd
-                      )}`;
+                      const href = `/gymworkout/${encodeURIComponent(workoutRef.id)}?date=${encodeURIComponent(row.ymd)}`;
 
                       return (
                         <Link key={`${row.ymd}-${workoutRef.id}`} href={href} className="ia-link">
