@@ -26,6 +26,8 @@ type NotificationsFeedResp = {
 
 const TIME_UPDATE_MS = 30_000;
 const DROPDOWN_MAX_WIDTH = 420;
+const FEED_KEY = "/api/notifications/feed?limit=20";
+
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 function greetingForHour(hour: number): string {
@@ -58,13 +60,16 @@ export default function IronAcreHeader({
 
   const greeting = useMemo(() => greetingForHour(new Date().getHours()), []);
 
-  const { data: feed } = useSWR<NotificationsFeedResp>("/api/notifications/feed?limit=20", fetcher, {
+  const {
+    data: feed,
+    mutate,
+  } = useSWR<NotificationsFeedResp>(FEED_KEY, fetcher, {
     revalidateOnFocus: true,
-    dedupingInterval: 15_000,
+    dedupingInterval: 10_000,
   });
 
   const unreadCount = useMemo(() => {
-    const items = Array.isArray(feed?.items) ? feed!.items! : [];
+    const items = Array.isArray(feed?.items) ? feed.items : [];
     return items.filter((item) => !item.dismissed_at && !item.read_at).length;
   }, [feed]);
 
@@ -77,6 +82,17 @@ export default function IronAcreHeader({
     const timer = window.setInterval(tick, TIME_UPDATE_MS);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const onNotificationsChanged = () => {
+      void mutate();
+    };
+
+    window.addEventListener("notifications:changed", onNotificationsChanged as EventListener);
+    return () => {
+      window.removeEventListener("notifications:changed", onNotificationsChanged as EventListener);
+    };
+  }, [mutate]);
 
   useEffect(() => {
     if (!notificationsOpen) return;
@@ -193,7 +209,10 @@ export default function IronAcreHeader({
               transition: "all 0.2s ease",
               flex: "0 0 auto",
               position: "relative",
-              animation: bellHasUnread && !notificationsOpen ? "iaBellPulse 1.8s ease-in-out infinite" : "none",
+              animation:
+                bellHasUnread && !notificationsOpen
+                  ? "iaBellPulse 1.8s ease-in-out infinite"
+                  : "none",
             }}
           >
             <i className="fas fa-bell" />
@@ -214,7 +233,8 @@ export default function IronAcreHeader({
                   fontWeight: 800,
                   lineHeight: "20px",
                   textAlign: "center",
-                  boxShadow: "0 0 0 2px rgba(10,14,20,0.95), 0 0 12px rgba(22, 219, 170, 0.28)",
+                  boxShadow:
+                    "0 0 0 2px rgba(10,14,20,0.95), 0 0 12px rgba(22, 219, 170, 0.28)",
                 }}
               >
                 {unreadCount > 9 ? "9+" : unreadCount}
