@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import PushSubscribeButton, { usePushNotifications } from "./PushSubscribeButton";
 
@@ -14,6 +15,11 @@ type FeedItem = {
   href?: string | null;
   read_at?: string | null;
   created_at?: string | null;
+  dismissed_at?: string | null;
+};
+
+type FeedResp = {
+  items?: FeedItem[];
 };
 
 function formatCreatedAt(value?: string | null) {
@@ -29,13 +35,129 @@ function formatCreatedAt(value?: string | null) {
 }
 
 export default function NotificationsBanner() {
-  const { data, error, isLoading } = useSWR("/api/notifications/feed?limit=8", fetcher, {
+  const { data, error, isLoading, mutate } = useSWR<FeedResp>("/api/notifications/feed?limit=8", fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
 
-  const items: FeedItem[] = Array.isArray(data?.items) ? data.items : [];
+  const items = useMemo(() => {
+    const raw = Array.isArray(data?.items) ? data!.items! : [];
+    return raw.filter((item) => !item.dismissed_at);
+  }, [data]);
+
+  const unreadCount = useMemo(() => {
+    return items.filter((item) => !item.read_at).length;
+  }, [items]);
+
   const { supported, subscribed, permission, busy, error: pushError } = usePushNotifications();
+
+  const [workingId, setWorkingId] = useState<string | null>(null);
+  const [markingAll, setMarkingAll] = useState(false);
+  const openedOnceRef = useRef(false);
+
+  useEffect(() => {
+    if (openedOnceRef.current) return;
+    if (!items.length) return;
+    if (unreadCount <= 0) return;
+
+    openedOnceRef.current = true;
+
+    void (async () => {
+      try {
+        await fetch("/api/notifications/mark-all-read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+
+        await mutate(
+          (current) => {
+            const currentItems = Array.isArray(current?.items) ? current!.items! : [];
+            return {
+              items: currentItems.map((item) =>
+                item.read_at
+                  ? item
+                  : {
+                      ...item,
+                      read_at: new Date().toISOString(),
+                    }
+              ),
+            };
+          },
+          false
+        );
+      } catch {
+        // no-op
+      }
+    })();
+  }, [items.length, unreadCount, mutate]);
+
+  async function handleMarkAllRead() {
+    if (!unreadCount) return;
+
+    try {
+      setMarkingAll(true);
+
+      const res = await fetch("/api/notifications/mark-all-read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(String(json?.error || "Failed to mark all as read"));
+
+      await mutate(
+        (current) => {
+          const currentItems = Array.isArray(current?.items) ? current!.items! : [];
+          return {
+            items: currentItems.map((item) =>
+              item.read_at
+                ? item
+                : {
+                    ...item,
+                    read_at: new Date().toISOString(),
+                  }
+            ),
+          };
+        },
+        false
+      );
+    } catch {
+      // no-op
+    } finally {
+      setMarkingAll(false);
+    }
+  }
+
+  async function handleDismiss(id: string) {
+    if (!id) return;
+
+    try {
+      setWorkingId(id);
+
+      const res = await fetch("/api/notifications/dismiss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(String(json?.error || "Failed to dismiss notification"));
+
+      await mutate(
+        (current) => {
+          const currentItems = Array.isArray(current?.items) ? current!.items! : [];
+          return {
+            items: currentItems.filter((item) => item.id !== id),
+          };
+        },
+        false
+      );
+    } catch {
+      // no-op
+    } finally {
+      setWorkingId(null);
+    }
+  }
 
   return (
     <div>
@@ -53,44 +175,74 @@ export default function NotificationsBanner() {
           </div>
         </div>
 
-        {supported ? (
-          subscribed ? (
-            <div
+        <div className="d-flex align-items-center gap-2">
+          {unreadCount > 0 ? (
+            <span
               className="ia-badge"
               style={{
                 background: "rgba(22, 219, 170, 0.12)",
                 border: "1px solid rgba(22, 219, 170, 0.28)",
                 color: "#d9fff5",
-                boxShadow: "0 0 0 1px rgba(255,255,255,0.02) inset",
+                minWidth: 30,
+                justifyContent: "center",
               }}
             >
-              Push enabled
-            </div>
+              {unreadCount}
+            </span>
+          ) : null}
+
+          {supported ? (
+            subscribed ? (
+              <div
+                className="ia-badge"
+                style={{
+                  background: "rgba(22, 219, 170, 0.12)",
+                  border: "1px solid rgba(22, 219, 170, 0.28)",
+                  color: "#d9fff5",
+                  boxShadow: "0 0 0 1px rgba(255,255,255,0.02) inset",
+                }}
+              >
+                Push enabled
+              </div>
+            ) : (
+              <div
+                className="ia-badge"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  color: "rgba(255,255,255,0.82)",
+                }}
+              >
+                Push off
+              </div>
+            )
           ) : (
             <div
               className="ia-badge"
               style={{
                 background: "rgba(255,255,255,0.05)",
                 border: "1px solid rgba(255,255,255,0.10)",
-                color: "rgba(255,255,255,0.82)",
+                color: "rgba(255,255,255,0.60)",
               }}
             >
-              Push off
+              Unsupported
             </div>
-          )
-        ) : (
-          <div
-            className="ia-badge"
-            style={{
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              color: "rgba(255,255,255,0.60)",
-            }}
-          >
-            Unsupported
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      {unreadCount > 0 ? (
+        <div className="d-flex justify-content-end mb-3">
+          <button
+            type="button"
+            className="ia-btn ia-btn-outline"
+            onClick={handleMarkAllRead}
+            disabled={markingAll}
+          >
+            {markingAll ? "Marking…" : "Mark all as read"}
+          </button>
+        </div>
+      ) : null}
 
       {supported && !subscribed ? (
         <div
@@ -225,9 +377,39 @@ export default function NotificationsBanner() {
                     ? "0 0 0 1px rgba(255,255,255,0.02) inset, 0 8px 22px rgba(0,0,0,0.18)"
                     : "none",
                   transition: "all 0.2s ease",
+                  position: "relative",
                 }}
               >
-                <div className="d-flex align-items-start justify-content-between gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void handleDismiss(item.id);
+                  }}
+                  disabled={workingId === item.id}
+                  aria-label="Dismiss notification"
+                  style={{
+                    position: "absolute",
+                    top: 10,
+                    right: 10,
+                    width: 24,
+                    height: 24,
+                    borderRadius: 999,
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: "rgba(255,255,255,0.04)",
+                    color: "rgba(255,255,255,0.78)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 0,
+                    cursor: "pointer",
+                  }}
+                >
+                  {workingId === item.id ? "…" : "×"}
+                </button>
+
+                <div className="d-flex align-items-start justify-content-between gap-2" style={{ paddingRight: 30 }}>
                   <div className="d-flex align-items-start gap-2" style={{ minWidth: 0 }}>
                     <div
                       style={{
