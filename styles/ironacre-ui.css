@@ -271,94 +271,123 @@ b {
    Task cards
 ───────────────────────── */
 .ia-task-card {
-  position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: linear-gradient(180deg, rgba(17, 22, 31, 0.96) 0%, rgba(12, 17, 25, 0.96) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 14px 32px rgba(0, 0, 0, 0.24);
-}
-
-.ia-task-card--highlight {
-  border-color: rgba(24, 255, 154, 0.22);
-  box-shadow:
-    inset 0 0 0 1px rgba(24, 255, 154, 0.12),
-    0 14px 32px rgba(0, 0, 0, 0.24);
-}
-
-.ia-task-card--muted {
-  opacity: 0.75;
-}
-
-.ia-task-card__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, rgba(18, 24, 33, 0.92) 0%, rgba(12, 17, 24, 0.92) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 10px 24px rgba(0, 0, 0, 0.2);
 }
 
-.ia-task-card__content {
+.ia-task-card + .ia-task-card {
+  margin-top: 8px;
+}
+
+.ia-task-card--highlight {
+  border-color: rgba(24, 255, 154, 0.18);
+  box-shadow:
+    inset 0 0 0 1px rgba(24, 255, 154, 0.08),
+    0 10px 24px rgba(0, 0, 0, 0.2);
+}
+
+.ia-task-card--muted {
+  opacity: 0.72;
+}
+
+.ia-task-card__main {
+  min-width: 0;
   flex: 1 1 auto;
+}
+
+.ia-task-card__titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   min-width: 0;
 }
 
 .ia-task-card__title {
   margin: 0;
+  min-width: 0;
   color: #ffffff;
-  font-size: 0.98rem;
-  line-height: 1.15;
+  font-size: 0.94rem;
+  line-height: 1.1;
   font-weight: 700;
 }
 
-.ia-task-card__subtitle {
-  margin-top: 4px;
-  color: var(--ia-muted);
-  font-size: 0.82rem;
-  line-height: 1.35;
-}
-
-.ia-task-card__actions {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
 .ia-task-card__meta {
-  color: var(--ia-muted);
-  font-size: 0.8rem;
+  flex: 0 0 auto;
+  color: var(--ia-neon);
+  font-size: 0.76rem;
   line-height: 1;
-  font-weight: 600;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(24, 255, 154, 0.08);
+  border: 1px solid rgba(24, 255, 154, 0.16);
+}
+
+.ia-task-card__subtitle {
+  margin: 3px 0 0;
+  color: var(--ia-muted);
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.ia-task-card__aside {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
 }
 
 .ia-task-card__button,
 .btn.ia-task-card__button {
-  min-height: 34px;
-  padding: 0 14px !important;
-  border-radius: 12px !important;
+  min-height: 30px;
+  height: 30px;
+  padding: 0 12px !important;
+  border-radius: 10px !important;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.92rem;
+  font-size: 0.84rem;
   line-height: 1;
+  font-weight: 700 !important;
   white-space: nowrap;
+  box-shadow: 0 8px 18px rgba(24, 255, 154, 0.16);
 }
 
 @media (max-width: 640px) {
-  .ia-task-card__row {
-    align-items: flex-start;
-    flex-direction: column;
+  .ia-task-card {
+    padding: 9px 10px;
+    gap: 8px;
   }
 
-  .ia-task-card__actions {
-    width: 100%;
-    justify-content: space-between;
+  .ia-task-card__title {
+    font-size: 0.9rem;
+  }
+
+  .ia-task-card__subtitle {
+    font-size: 0.75rem;
+  }
+
+  .ia-task-card__meta {
+    font-size: 0.71rem;
+    padding: 2px 6px;
   }
 
   .ia-task-card__button,
   .btn.ia-task-card__button {
-    min-width: 88px;
+    min-height: 28px;
+    height: 28px;
+    padding: 0 10px !important;
+    border-radius: 9px !important;
+    font-size: 0.8rem;
   }
 }
