@@ -160,20 +160,16 @@ export default function IronAcreClassesList({
         <div className="ia-class-list">
           {bookedSessions.map((session) => (
             <div key={session.id} className="ia-class-item">
-              <div className="d-flex justify-content-between align-items-start gap-2">
-                <div style={{ minWidth: 0 }}>
-                  <div className="ia-class-item-title">
+              <div className="d-flex justify-content-between align-items-center gap-2">
+                <div className="text-truncate" style={{ minWidth: 0 }}>
+                  <div className="ia-class-item-title text-truncate">
                     {session.class_id || "Class"}
                     {session.gym_name ? ` • ${session.gym_name}` : ""}
                   </div>
 
-                  <div className="ia-class-item-meta mt-1">
+                  <div className="ia-class-item-meta text-truncate">
                     {renderStartStr(session.start_time)}
                     {session.coach_name ? ` • Coach: ${session.coach_name}` : ""}
-                  </div>
-
-                  <div className="ia-class-item-meta mt-1">
-                    Seats: {session.current_attendance}/{session.max_attendance || "∞"}
                   </div>
                 </div>
 
