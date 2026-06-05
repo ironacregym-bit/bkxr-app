@@ -160,15 +160,15 @@ function HomeLoadingScreen() {
         className="ia-tile ia-tile-pad"
         style={{
           width: "100%",
-          maxWidth: 420,
+          maxWidth: 360,
           textAlign: "center",
         }}
       >
         <div
           style={{
-            width: 64,
-            height: 64,
-            margin: "0 auto 14px",
+            width: 56,
+            height: 56,
+            margin: "0 auto 12px",
             borderRadius: "50%",
             display: "grid",
             placeItems: "center",
@@ -180,19 +180,17 @@ function HomeLoadingScreen() {
           <i
             className="fas fa-spinner fa-spin"
             style={{
-              fontSize: 24,
+              fontSize: 22,
               color: "#16dbaa",
             }}
           />
         </div>
 
-        <div className="ia-page-title" style={{ fontSize: "1.2rem" }}>
+        <div className="ia-page-title" style={{ fontSize: "1.1rem" }}>
           Loading Iron Acre
         </div>
 
-        <div className="text-dim small mt-1">
-          Pulling in your dashboard, classes and daily tasks.
-        </div>
+        <div className="text-dim small mt-1">Pulling in your dashboard and daily tasks.</div>
       </div>
     </main>
   );
@@ -206,7 +204,7 @@ function SectionLoadingCard({
   icon: string;
 }) {
   return (
-    <section className="ia-tile ia-tile-pad mb-3">
+    <section className="ia-tile ia-tile-pad mb-2">
       <div className="d-flex justify-content-between align-items-center">
         <div className="ia-kicker">
           <i className={`fas ${icon}`} style={{ color: "var(--ia-neon)" }} />
@@ -236,80 +234,156 @@ function firstWorkoutRefForDay(day?: DayOverview): SimpleWorkoutRef | null {
   return null;
 }
 
-function DailyHabitsCard({ todayData }: { todayData?: DayOverview }) {
-  const completed = Number(todayData?.habitSummary?.completed || 0);
-  const total = Number(todayData?.habitSummary?.total || 5);
-  const allDone = Boolean(todayData?.habitAllDone);
-
+function CompactTaskRow({
+  title,
+  subtitle,
+  badge,
+  href,
+  buttonLabel,
+}: {
+  title: string;
+  subtitle: string;
+  badge?: string;
+  href: string;
+  buttonLabel: string;
+}) {
   return (
-    <section className="ia-tile ia-tile-pad mb-3">
-      <div className="d-flex justify-content-between align-items-center gap-2">
-        <div>
-          <div className="ia-kicker">
-            <i className="fas fa-check-circle" style={{ color: "var(--ia-neon)" }} />
-            DAILY HABITS
-          </div>
-
-          <div className="ia-page-title" style={{ fontSize: "1.15rem" }}>
-            {allDone ? "Daily habits completed" : "Daily habits are open"}
-          </div>
-
-          <div className="text-dim small mt-1">
-            {allDone
-              ? "Your daily habits are all logged for today."
-              : `Complete your daily habits for today (${completed}/${total}).`}
-          </div>
+    <div
+      className="ia-task-row"
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 10,
+        padding: "10px 0",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div className="fw-semibold" style={{ fontSize: ".98rem", lineHeight: 1.15 }}>
+          {title}
         </div>
+        <div className="text-dim small" style={{ lineHeight: 1.35, marginTop: 2 }}>
+          {subtitle}
+        </div>
+      </div>
+
+      <div className="d-flex align-items-center gap-2" style={{ flex: "0 0 auto" }}>
+        {badge ? <span className="ia-badge">{badge}</span> : null}
 
         <Link
-          href="/habits"
-          className={allDone ? "ia-btn ia-btn-outline" : "ia-btn ia-btn-primary"}
-          style={{ textTransform: "none" }}
+          href={href}
+          className="ia-btn ia-btn-primary"
+          style={{
+            textTransform: "none",
+            minHeight: 38,
+            padding: "0 14px",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 14,
+          }}
         >
-          {allDone ? "View" : "Open"}
+          {buttonLabel}
         </Link>
       </div>
-    </section>
+    </div>
   );
 }
 
-function WeeklyCheckInCard({
+function TasksCard({
+  todayData,
   fridayYMD,
   fridayData,
+  compactDefaultOpen = false,
 }: {
+  todayData?: DayOverview;
   fridayYMD: string;
   fridayData?: DayOverview;
+  compactDefaultOpen?: boolean;
 }) {
-  const complete = Boolean(fridayData?.checkinComplete);
+  const [open, setOpen] = useState(compactDefaultOpen);
+
+  const habitsCompleted = Number(todayData?.habitSummary?.completed || 0);
+  const habitsTotal = Number(todayData?.habitSummary?.total || 5);
+  const habitsDone = Boolean(todayData?.habitAllDone);
+
+  const showWeeklyCheckIn = Boolean(todayData?.isFriday);
+  const checkinDone = Boolean(fridayData?.checkinComplete);
+
+  const taskCount = showWeeklyCheckIn ? 2 : 1;
 
   return (
-    <section className="ia-tile ia-tile-pad mb-3">
+    <section className="ia-tile ia-tile-pad mb-2">
       <div className="d-flex justify-content-between align-items-center gap-2">
         <div>
           <div className="ia-kicker">
-            <i className="fas fa-clipboard-check" style={{ color: "var(--ia-neon)" }} />
-            WEEKLY CHECK-IN
+            <i className="fas fa-list-check" style={{ color: "var(--ia-neon)" }} />
+            TASKS
           </div>
 
-          <div className="ia-page-title" style={{ fontSize: "1.15rem" }}>
-            {complete ? "Weekly check-in completed" : "Weekly check-in is open"}
-          </div>
-
-          <div className="text-dim small mt-1">
-            {complete
-              ? "Your Friday check-in has already been submitted for this week."
-              : `Complete your Friday check-in for ${fridayYMD}.`}
+          <div className="ia-page-title" style={{ fontSize: "1.05rem", marginBottom: 0 }}>
+            {showWeeklyCheckIn ? "Daily habits and weekly check-in" : "Daily habits"}
           </div>
         </div>
 
-        <Link
-          href="/check-in"
-          className={complete ? "ia-btn ia-btn-outline" : "ia-btn ia-btn-primary"}
-          style={{ textTransform: "none" }}
+        <button
+          type="button"
+          className="ia-btn ia-btn-outline"
+          onClick={() => setOpen((v) => !v)}
+          style={{
+            textTransform: "none",
+            minHeight: 36,
+            padding: "0 12px",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 999,
+          }}
         >
-          {complete ? "View" : "Open"}
-        </Link>
+          <i
+            className={`fas fa-chevron-${open ? "up" : "down"}`}
+            style={{ marginRight: 8 }}
+          />
+          {taskCount} task{taskCount === 1 ? "" : "s"}
+        </button>
       </div>
+
+      {open ? (
+        <div className="mt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 4 }}>
+          <CompactTaskRow
+            title={habitsDone ? "Daily habits completed" : "Daily habits are open"}
+            subtitle={
+              habitsDone
+                ? "Your daily habits are all logged for today."
+                : `Complete your daily habits for today (${habitsCompleted}/${habitsTotal}).`
+            }
+            badge={`${habitsCompleted}/${habitsTotal}`}
+            href="/habits"
+            buttonLabel={habitsDone ? "View" : "Open"}
+          />
+
+          {showWeeklyCheckIn ? (
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+              <CompactTaskRow
+                title={checkinDone ? "Weekly check-in completed" : "Weekly check-in is open"}
+                subtitle={
+                  checkinDone
+                    ? "Your Friday check-in has already been submitted for this week."
+                    : `Complete your Friday check-in for ${fridayYMD}.`
+                }
+                href="/check-in"
+                buttonLabel={checkinDone ? "View" : "Open"}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="text-dim small mt-2">
+          {showWeeklyCheckIn
+            ? `${habitsCompleted}/${habitsTotal} habits logged • weekly check-in ${checkinDone ? "done" : "open"}`
+            : `${habitsCompleted}/${habitsTotal} habits logged`}
+        </div>
+      )}
     </section>
   );
 }
@@ -369,8 +443,6 @@ export default function IronAcreHome() {
     const days = homeOverview?.days || [];
     return days.find((d) => d.dateKey === fridayYMD);
   }, [homeOverview]);
-
-  const showWeeklyCheckIn = Boolean(todayData?.isFriday);
 
   const workoutRef = useMemo(() => firstWorkoutRefForDay(todayData), [todayData]);
   const workoutId = String(workoutRef?.id || "");
@@ -577,21 +649,19 @@ export default function IronAcreHome() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
 
-      <main className="container py-3" style={{ color: "#fff", paddingBottom: 90 }}>
+      <main className="container py-2 iron-acre-home" style={{ color: "#fff", paddingBottom: 86 }}>
         <IronAcreHeader
           userName={userName}
           dateLabel={dateLabel}
           notificationsContent={<NotificationsBanner />}
         />
 
-        <DailyHabitsCard todayData={todayData} />
-
-        {showWeeklyCheckIn ? (
-          <WeeklyCheckInCard
-            fridayYMD={homeOverview?.fridayYMD || ""}
-            fridayData={fridayData}
-          />
-        ) : null}
+        <TasksCard
+          todayData={todayData}
+          fridayYMD={homeOverview?.fridayYMD || ""}
+          fridayData={fridayData}
+          compactDefaultOpen={false}
+        />
 
         {classesLoading ? (
           <SectionLoadingCard title="Classes" icon="fa-calendar-alt" />
@@ -649,6 +719,149 @@ export default function IronAcreHome() {
       />
 
       <BottomNav />
+
+      <style jsx global>{`
+        .iron-acre-home {
+          --ia-mobile-kicker-size: 0.72rem;
+          --ia-mobile-title-size: 1.02rem;
+          --ia-mobile-subtitle-size: 0.87rem;
+        }
+
+        .iron-acre-home .ia-tile {
+          border-radius: 18px;
+        }
+
+        .iron-acre-home .ia-tile-pad {
+          padding: 12px 14px;
+        }
+
+        .iron-acre-home .mb-3 {
+          margin-bottom: 0.75rem !important;
+        }
+
+        .iron-acre-home .mb-2 {
+          margin-bottom: 0.55rem !important;
+        }
+
+        .iron-acre-home .mt-3 {
+          margin-top: 0.75rem !important;
+        }
+
+        .iron-acre-home .mt-2 {
+          margin-top: 0.45rem !important;
+        }
+
+        .iron-acre-home .ia-kicker {
+          font-size: var(--ia-mobile-kicker-size);
+          letter-spacing: 0.08em;
+          gap: 6px;
+        }
+
+        .iron-acre-home .ia-page-title {
+          font-size: var(--ia-mobile-title-size);
+          line-height: 1.15;
+          margin-bottom: 4px;
+        }
+
+        .iron-acre-home .ia-page-subtitle,
+        .iron-acre-home .text-dim.small,
+        .iron-acre-home .small {
+          font-size: var(--ia-mobile-subtitle-size);
+        }
+
+        .iron-acre-home .ia-btn,
+        .iron-acre-home .ia-btn-primary,
+        .iron-acre-home .ia-btn-outline,
+        .iron-acre-home .btn.ia-btn,
+        .iron-acre-home .btn.ia-btn-primary,
+        .iron-acre-home .btn.ia-btn-outline {
+          min-height: 38px;
+          padding: 0 14px;
+          font-size: 0.94rem;
+          border-radius: 14px;
+          text-transform: none !important;
+        }
+
+        .iron-acre-home .ia-badge {
+          font-size: 0.72rem;
+          min-height: 24px;
+          padding: 4px 8px;
+          text-transform: none !important;
+        }
+
+        .iron-acre-home .ia-btn:hover,
+        .iron-acre-home .ia-btn-primary:hover,
+        .iron-acre-home .ia-btn-outline:hover,
+        .iron-acre-home .btn.ia-btn:hover,
+        .iron-acre-home .btn.ia-btn-primary:hover,
+        .iron-acre-home .btn.ia-btn-outline:hover {
+          background: rgba(22, 219, 170, 0.12) !important;
+          border-color: rgba(22, 219, 170, 0.30) !important;
+          color: #d9fff5 !important;
+          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+            0 0 14px rgba(22, 219, 170, 0.12) !important;
+        }
+
+        .iron-acre-home .btn-outline-light:hover,
+        .iron-acre-home .btn-outline-light:focus,
+        .iron-acre-home .btn-outline-light:active {
+          background: rgba(22, 219, 170, 0.12) !important;
+          border-color: rgba(22, 219, 170, 0.30) !important;
+          color: #d9fff5 !important;
+          box-shadow: 0 0 14px rgba(22, 219, 170, 0.12) !important;
+        }
+
+        .iron-acre-home .ia-task-row:last-child {
+          padding-bottom: 6px;
+        }
+
+        @media (max-width: 640px) {
+          .iron-acre-home.container {
+            padding-left: 10px;
+            padding-right: 10px;
+          }
+
+          .iron-acre-home .ia-tile {
+            border-radius: 16px;
+          }
+
+          .iron-acre-home .ia-tile-pad {
+            padding: 10px 12px;
+          }
+
+          .iron-acre-home .ia-page-title {
+            font-size: 0.98rem !important;
+          }
+
+          .iron-acre-home .ia-page-subtitle,
+          .iron-acre-home .text-dim.small,
+          .iron-acre-home .small {
+            font-size: 0.82rem !important;
+          }
+
+          .iron-acre-home .ia-kicker {
+            font-size: 0.68rem !important;
+          }
+
+          .iron-acre-home .ia-btn,
+          .iron-acre-home .ia-btn-primary,
+          .iron-acre-home .ia-btn-outline,
+          .iron-acre-home .btn.ia-btn,
+          .iron-acre-home .btn.ia-btn-primary,
+          .iron-acre-home .btn.ia-btn-outline {
+            min-height: 34px;
+            padding: 0 12px;
+            font-size: 0.9rem;
+            border-radius: 12px;
+          }
+
+          .iron-acre-home .ia-badge {
+            font-size: 0.68rem;
+            min-height: 22px;
+            padding: 3px 7px;
+          }
+        }
+      `}</style>
     </>
   );
 }
