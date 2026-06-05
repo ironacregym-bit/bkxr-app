@@ -11,7 +11,6 @@ import IronAcreHeader from "../../components/iron-acre/IronAcreHeader";
 import IronAcreTasks from "../../components/iron-acre/IronAcreTasks";
 import IronAcreNutritionCard from "../../components/iron-acre/IronAcreNutritionCard";
 import IronAcreStrengthSummary from "../../components/iron-acre/IronAcreStrengthSummary";
-import IronAcreRecentSessions from "../../components/iron-acre/IronAcreRecentSessions";
 import IronAcreClassesList from "../../components/iron-acre/IronAcreClassesList";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
@@ -144,6 +143,175 @@ type BookingsMineResponse = {
 
 type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
 
+function HomeLoadingScreen() {
+  return (
+    <main
+      className="container py-4"
+      style={{
+        color: "#fff",
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingBottom: 90,
+      }}
+    >
+      <div
+        className="ia-tile ia-tile-pad"
+        style={{
+          width: "100%",
+          maxWidth: 420,
+          textAlign: "center",
+        }}
+      >
+        <div
+          style={{
+            width: 64,
+            height: 64,
+            margin: "0 auto 14px",
+            borderRadius: "50%",
+            display: "grid",
+            placeItems: "center",
+            background: "rgba(22, 219, 170, 0.10)",
+            border: "1px solid rgba(22, 219, 170, 0.24)",
+            boxShadow: "0 0 24px rgba(22, 219, 170, 0.12)",
+          }}
+        >
+          <i
+            className="fas fa-spinner fa-spin"
+            style={{
+              fontSize: 24,
+              color: "#16dbaa",
+            }}
+          />
+        </div>
+
+        <div className="ia-page-title" style={{ fontSize: "1.2rem" }}>
+          Loading Iron Acre
+        </div>
+
+        <div className="text-dim small mt-1">
+          Pulling in your dashboard, classes and daily tasks.
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function SectionLoadingCard({
+  title,
+  icon,
+}: {
+  title: string;
+  icon: string;
+}) {
+  return (
+    <section className="ia-tile ia-tile-pad mb-3">
+      <div className="d-flex justify-content-between align-items-center">
+        <div className="ia-kicker">
+          <i className={`fas ${icon}`} style={{ color: "var(--ia-neon)" }} />
+          {title.toUpperCase()}
+        </div>
+
+        <i className="fas fa-spinner fa-spin text-dim" />
+      </div>
+
+      <div className="text-dim small mt-2">Loading {title.toLowerCase()}…</div>
+    </section>
+  );
+}
+
+function DailyHabitsCard({ todayData }: { todayData?: DayOverview }) {
+  const completed = Number(todayData?.habitSummary?.completed || 0);
+  const total = Number(todayData?.habitSummary?.total || 5);
+  const allDone = Boolean(todayData?.habitAllDone);
+
+  return (
+    <section className="ia-tile ia-tile-pad mb-3">
+      <div className="d-flex justify-content-between align-items-center mb-2">
+        <div className="ia-kicker">
+          <i className="fas fa-check-circle" style={{ color: "var(--ia-neon)" }} />
+          DAILY HABITS
+        </div>
+
+        <span
+          className="ia-badge"
+          style={{
+            background: allDone ? "rgba(22, 219, 170, 0.12)" : "rgba(255,255,255,0.06)",
+            border: allDone
+              ? "1px solid rgba(22, 219, 170, 0.26)"
+              : "1px solid rgba(255,255,255,0.10)",
+            color: allDone ? "#d9fff5" : "rgba(255,255,255,0.86)",
+          }}
+        >
+          {completed}/{total}
+        </span>
+      </div>
+
+      <div className="ia-page-title" style={{ fontSize: "1.2rem" }}>
+        {allDone ? "Daily habits complete" : "Complete today’s habits"}
+      </div>
+
+      <div className="text-dim small mt-1" style={{ maxWidth: 560 }}>
+        {allDone
+          ? "All daily habits are logged for today."
+          : "Log your water, macros, steps, time outside and scheduled workout for today."}
+      </div>
+
+      <div
+        className="d-flex justify-content-between text-center mt-3"
+        style={{
+          gap: 10,
+          background: "rgba(255,255,255,0.04)",
+          borderRadius: 14,
+          padding: "10px 12px",
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <div style={{ color: "var(--ia-neon)", fontWeight: 700, fontSize: "1.05rem" }}>
+            {completed}
+          </div>
+          <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
+            DONE
+          </div>
+        </div>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ color: "var(--ia-neon2)", fontWeight: 700, fontSize: "1.05rem" }}>
+            {Math.max(0, total - completed)}
+          </div>
+          <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
+            LEFT
+          </div>
+        </div>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ color: "var(--ia-neon)", fontWeight: 700, fontSize: "1.05rem" }}>
+            {total}
+          </div>
+          <div className="text-dim" style={{ fontSize: ".75rem", letterSpacing: 0.6 }}>
+            TOTAL
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <Link href="/habits" className="ia-btn ia-btn-primary w-100">
+          {allDone ? "VIEW HABITS" : "OPEN DAILY HABITS"}{" "}
+          <i className="fas fa-arrow-right" style={{ marginLeft: 10 }} />
+        </Link>
+
+        <div className="text-dim small mt-2">
+          {allDone
+            ? "Everything is ticked off for today"
+            : `${Math.max(0, total - completed)} habits still to do today`}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function IronAcreHome() {
   const { data: session, status } = useSession();
   const [mounted, setMounted] = useState(false);
@@ -172,7 +340,10 @@ export default function IronAcreHome() {
     return formatYMD(startOfAlignedWeek(new Date()));
   }, [mounted]);
 
-  const { data: homeOverview } = useSWR<IronAcreHomeOverviewResponse>(
+  const {
+    data: homeOverview,
+    error: homeOverviewError,
+  } = useSWR<IronAcreHomeOverviewResponse>(
     mounted && weekStartKey ? `/api/iron-acre/home-overview?week=${encodeURIComponent(weekStartKey)}` : null,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 }
@@ -197,7 +368,7 @@ export default function IronAcreHome() {
     return days.find((d) => d.dateKey === fridayYMD);
   }, [homeOverview]);
 
-  const { data: strengthProfile } = useSWR(
+  const { data: strengthProfile, error: strengthError } = useSWR(
     mounted ? "/api/strength/profile/get" : null,
     fetcher,
     {
@@ -206,7 +377,7 @@ export default function IronAcreHome() {
     }
   );
 
-  const { data: gymsResp } = useSWR(
+  const { data: gymsResp, error: gymsError } = useSWR(
     mounted && isAuthed ? "/api/gyms/list" : null,
     fetcher,
     {
@@ -221,6 +392,7 @@ export default function IronAcreHome() {
   const {
     data: profile,
     mutate: mutateProfile,
+    error: profileError,
   } = useSWR<UserAccess>(profileKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
@@ -247,6 +419,7 @@ export default function IronAcreHome() {
   const {
     data: sessionsResp,
     mutate: mutateSessions,
+    error: sessionsError,
   } = useSWR(
     mounted && shouldLoadSessions
       ? `/api/schedule/upcoming?location=${encodeURIComponent(selectedGym?.location || "")}&from=${encodeURIComponent(
@@ -270,6 +443,7 @@ export default function IronAcreHome() {
   const {
     data: bookingsResp,
     mutate: mutateBookings,
+    error: bookingsError,
   } = useSWR<BookingsMineResponse>(bookingsKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 20_000,
@@ -329,13 +503,18 @@ export default function IronAcreHome() {
     await Promise.allSettled([mutateSessions?.(), mutateBookings?.()]);
   }
 
-  if (!mounted) return null;
+  const coreReady = mounted && status !== "loading" && (!session || !!homeOverview || !!homeOverviewError);
 
-  if (status === "loading") {
+  if (!mounted || !coreReady) {
     return (
-      <main className="container py-4" style={{ color: "#fff" }}>
-        Loading…
-      </main>
+      <>
+        <Head>
+          <title>Iron Acre Gym</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        </Head>
+        <HomeLoadingScreen />
+        <BottomNav />
+      </>
     );
   }
 
@@ -365,6 +544,13 @@ export default function IronAcreHome() {
     );
   }
 
+  const classesLoading =
+    !profileError &&
+    !gymsError &&
+    (!!profileKey && !profile || (mounted && isAuthed && !gymsResp) || (shouldLoadSessions && !sessionsResp) || (bookingsKey && !bookingsResp));
+
+  const strengthLoading = !strengthProfile && !strengthError;
+
   return (
     <>
       <Head>
@@ -378,6 +564,23 @@ export default function IronAcreHome() {
           dateLabel={dateLabel}
           notificationsContent={<NotificationsBanner />}
         />
+
+        <DailyHabitsCard todayData={todayData} />
+
+        {classesLoading ? (
+          <SectionLoadingCard title="Classes" icon="fa-calendar-alt" />
+        ) : (
+          <IronAcreClassesList
+            isAuthed={isAuthed}
+            authedEmail={authedEmail}
+            gyms={gyms}
+            profile={profile || null}
+            sessions={sessions}
+            bookedSessionIds={bookedSessionIds}
+            onJoinGym={handleJoinGym}
+            onBook={handleBook}
+          />
+        )}
 
         <IronAcreTasks
           todayKey={effectiveTodayKey}
@@ -403,26 +606,11 @@ export default function IronAcreHome() {
           }
         />
 
-        <IronAcreClassesList
-          isAuthed={isAuthed}
-          authedEmail={authedEmail}
-          gyms={gyms}
-          profile={profile || null}
-          sessions={sessions}
-          bookedSessionIds={bookedSessionIds}
-          onJoinGym={handleJoinGym}
-          onBook={handleBook}
-        />
-
-        <div className="row g-2">
-          <div className="col-12 col-lg-6">
-            <IronAcreStrengthSummary profile={strengthProfile?.profile} />
-          </div>
-
-          <div className="col-12 col-lg-6">
-            <IronAcreRecentSessions />
-          </div>
-        </div>
+        {strengthLoading ? (
+          <SectionLoadingCard title="Strength" icon="fa-dumbbell" />
+        ) : (
+          <IronAcreStrengthSummary profile={strengthProfile?.profile} />
+        )}
       </main>
 
       <PushSubscribeButton
