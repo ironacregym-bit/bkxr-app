@@ -51,7 +51,7 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
     <section className="ia-tile ia-tile-pad mb-3">
       <div className="d-flex justify-content-between align-items-center mb-2">
         <div className="ia-kicker">
-          <i className="fas fa-dumbbell" style={{ color: "var(--ia-neon)" }} />
+          <i className="fas fa-dumbbell" />
           STRENGTH
         </div>
 
@@ -69,36 +69,22 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
             href={r.href}
             className="ia-link d-flex justify-content-between align-items-center"
             style={{
-              paddingTop: 12,
-              paddingBottom: 12,
+              paddingTop: 10,
+              paddingBottom: 10,
               borderTop: idx === 0 ? "none" : "1px solid rgba(255,255,255,0.08)",
-              textDecoration: "none",
             }}
             aria-label={`Open ${r.label} strength details`}
           >
             <div style={{ minWidth: 0 }}>
-              <div className="fw-semibold" style={{ fontSize: "1rem" }}>
-                {r.label}
-              </div>
-
-              <div
-                className="text-dim small"
-                style={{
-                  lineHeight: 1.3,
-                  marginTop: 2,
-                }}
-              >
-                {r.sourceLabel}
-              </div>
+              <div className="fw-semibold">{r.label}</div>
+              <div className="text-dim small">{r.sourceLabel}</div>
             </div>
 
-            <div className="d-flex align-items-center gap-2" style={{ flex: "0 0 auto" }}>
+            <div className="d-flex align-items-center gap-2" style={{ flex: "0 0 auto", whiteSpace: "nowrap" }}>
               <div
                 style={{
                   fontWeight: 700,
-                  fontSize: "1.1rem",
                   color: "var(--ia-neon)",
-                  whiteSpace: "nowrap",
                 }}
               >
                 {formatKg(r.value)}
@@ -110,8 +96,8 @@ export default function IronAcreStrengthSummary({ profile }: { profile?: Strengt
         ))}
       </div>
 
-      <div className="mt-3">
-        <Link href="/iron-acre/strength" className="text-dim small" style={{ textDecoration: "none" }}>
+      <div className="mt-2">
+        <Link href="/iron-acre/strength" className="text-dim small ia-link">
           View strength details <i className="fas fa-chevron-right" style={{ marginLeft: 6 }} />
         </Link>
       </div>
