@@ -46,7 +46,6 @@ type SimpleWorkoutRef = {
 type DayOverview = {
   dateKey: string;
   isFriday: boolean;
-
   nutritionLogged: boolean;
   nutritionSummary?: {
     calories: number;
@@ -54,10 +53,8 @@ type DayOverview = {
     carbs?: number;
     fat?: number;
   };
-
   habitAllDone: boolean;
   habitSummary?: { completed: number; total: number };
-
   checkinComplete: boolean;
   checkinSummary?: {
     weight: number;
@@ -65,12 +62,10 @@ type DayOverview = {
     weightChange?: number;
     bfChange?: number;
   };
-
   hasWorkout: boolean;
   workoutDone: boolean;
   workoutIds: string[];
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
-
   hasRecurringToday: boolean;
   recurringWorkouts: SimpleWorkoutRef[];
   recurringDone: boolean;
@@ -150,7 +145,6 @@ function HomeLoadingScreen() {
         <div className="ia-home-loading-icon">
           <i className="fas fa-spinner fa-spin" />
         </div>
-
         <div className="ia-page-title">Loading Iron Acre</div>
         <div className="text-dim small mt-1">Pulling in your dashboard and daily tasks.</div>
       </div>
@@ -169,12 +163,11 @@ function SectionLoadingCard({
     <section className="ia-tile ia-tile-pad mb-2 ia-section-loading">
       <div className="d-flex justify-content-between align-items-center">
         <div className="ia-kicker">
-          <i className={`fas ${icon}`} style={{ color: "var(--ia-neon)" }} />
+          <i className={`fas ${icon}`} />
           {title.toUpperCase()}
         </div>
         <i className="fas fa-spinner fa-spin text-dim" />
       </div>
-
       <div className="text-dim small mt-2">Loading {title.toLowerCase()}…</div>
     </section>
   );
@@ -250,16 +243,10 @@ function TasksCard({
 
   return (
     <section className="ia-tile ia-tile-pad mb-2">
-      <div className="d-flex justify-content-between align-items-center gap-2">
-        <div>
-          <div className="ia-kicker">
-            <i className="fas fa-list-check" style={{ color: "var(--ia-neon)" }} />
-            TASKS
-          </div>
-
-          <div className="ia-page-title">
-            {showWeeklyCheckIn ? "Daily habits and weekly check-in" : "Daily habits"}
-          </div>
+      <div className="ia-section-header">
+        <div className="ia-kicker">
+          <i className="fas fa-list-check" />
+          TASKS
         </div>
 
         <button
@@ -275,11 +262,11 @@ function TasksCard({
       {open ? (
         <div className="ia-task-list">
           <CompactTaskRow
-            title={habitsDone ? "Daily habits completed" : "Daily habits are open"}
+            title="Daily habits"
             subtitle={
               habitsDone
-                ? "Your daily habits are all logged for today."
-                : `Complete your daily habits for today (${habitsCompleted}/${habitsTotal}).`
+                ? "Completed for today."
+                : `${habitsCompleted}/${habitsTotal} completed today.`
             }
             badge={`${habitsCompleted}/${habitsTotal}`}
             href="/habits"
@@ -289,11 +276,11 @@ function TasksCard({
           {showWeeklyCheckIn ? (
             <div className="ia-task-divider">
               <CompactTaskRow
-                title={checkinDone ? "Weekly check-in completed" : "Weekly check-in is open"}
+                title="Weekly check-in"
                 subtitle={
                   checkinDone
-                    ? "Your Friday check-in has already been submitted for this week."
-                    : `Complete your Friday check-in for ${fridayYMD}.`
+                    ? "Completed this week."
+                    : `Open for ${fridayYMD}.`
                 }
                 href="/check-in"
                 buttonLabel={checkinDone ? "View" : "Open"}
@@ -304,7 +291,7 @@ function TasksCard({
       ) : (
         <div className="text-dim small ia-task-summary">
           {showWeeklyCheckIn
-            ? `${habitsCompleted}/${habitsTotal} habits logged • weekly check-in ${checkinDone ? "done" : "open"}`
+            ? `${habitsCompleted}/${habitsTotal} habits • weekly check-in ${checkinDone ? "done" : "open"}`
             : `${habitsCompleted}/${habitsTotal} habits logged`}
         </div>
       )}
@@ -539,8 +526,8 @@ export default function IronAcreHome() {
           <title>Iron Acre Gym</title>
         </Head>
 
-        <main className="container py-4" style={{ color: "#fff", paddingBottom: 90 }}>
-          <section className="futuristic-card p-3">
+        <main className="container py-4 ia-auth-shell">
+          <section className="futuristic-card ia-auth-card">
             <h2 className="m-0">Iron Acre Gym</h2>
             <div className="text-dim mt-2">Please sign in to view your performance dashboard.</div>
             <div className="mt-3">
@@ -573,7 +560,7 @@ export default function IronAcreHome() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
 
-      <main className="container py-2 iron-acre-home" style={{ color: "#fff", paddingBottom: 86 }}>
+      <main className="container py-2 iron-acre-home ia-home-main">
         <IronAcreHeader
           userName={userName}
           dateLabel={dateLabel}
@@ -646,4 +633,3 @@ export default function IronAcreHome() {
     </>
   );
 }
-
