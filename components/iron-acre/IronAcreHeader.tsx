@@ -50,8 +50,8 @@ export default function IronAcreHeader({
   const [timeText, setTimeText] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<DropdownPosition>({
-    top: 70,
-    right: 10,
+    top: 78,
+    right: 12,
     width: DROPDOWN_MAX_WIDTH,
   });
 
@@ -60,7 +60,10 @@ export default function IronAcreHeader({
 
   const greeting = useMemo(() => greetingForHour(new Date().getHours()), []);
 
-  const { data: feed, mutate } = useSWR<NotificationsFeedResp>(FEED_KEY, fetcher, {
+  const {
+    data: feed,
+    mutate,
+  } = useSWR<NotificationsFeedResp>(FEED_KEY, fetcher, {
     revalidateOnFocus: true,
     dedupingInterval: 10_000,
   });
@@ -97,9 +100,9 @@ export default function IronAcreHeader({
     const updatePosition = () => {
       const rect = buttonRef.current?.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
-      const width = Math.min(DROPDOWN_MAX_WIDTH, viewportWidth - 20);
-      const right = rect ? Math.max(10, viewportWidth - rect.right) : 10;
-      const top = rect ? rect.bottom + 8 : 70;
+      const width = Math.min(DROPDOWN_MAX_WIDTH, viewportWidth - 24);
+      const right = rect ? Math.max(12, viewportWidth - rect.right) : 12;
+      const top = rect ? rect.bottom + 10 : 78;
 
       setDropdownPos({ top, right, width });
     };
@@ -147,9 +150,17 @@ export default function IronAcreHeader({
   return (
     <>
       <section className="ia-tile ia-tile-pad mb-3">
-        <div className="d-flex justify-content-between align-items-start gap-2">
-          <div style={{ minWidth: 0, flex: "1 1 auto" }}>
-            <div className="d-flex align-items-center gap-2 text-dim small">
+        <div className="d-flex justify-content-between align-items-start gap-3">
+          <div style={{ minWidth: 0 }}>
+            <div
+              className="text-dim small"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                letterSpacing: "0.04em",
+              }}
+            >
               <span>{timeText}</span>
               <span>•</span>
               <span>{dateLabel}</span>
@@ -165,19 +176,67 @@ export default function IronAcreHeader({
           <button
             ref={buttonRef}
             type="button"
-            className="ia-header-bell"
+            className="btn"
             title="Notifications"
             aria-label="Open notifications"
             aria-expanded={notificationsOpen}
             aria-haspopup="dialog"
             onClick={() => setNotificationsOpen((prev) => !prev)}
-            data-active={notificationsOpen ? "true" : "false"}
-            data-unread={bellHasUnread ? "true" : "false"}
+            style={{
+              width: 46,
+              height: 46,
+              padding: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 999,
+              border: bellHasUnread
+                ? "1px solid rgba(22, 219, 170, 0.34)"
+                : notificationsOpen
+                ? "1px solid rgba(22, 219, 170, 0.24)"
+                : "1px solid rgba(255,255,255,0.10)",
+              background: bellHasUnread
+                ? "rgba(22, 219, 170, 0.12)"
+                : notificationsOpen
+                ? "rgba(22, 219, 170, 0.08)"
+                : "rgba(255,255,255,0.05)",
+              color: bellHasUnread || notificationsOpen ? "#16dbaa" : "#fff",
+              boxShadow: bellHasUnread
+                ? "0 0 18px rgba(22, 219, 170, 0.18)"
+                : notificationsOpen
+                ? "0 0 12px rgba(22, 219, 170, 0.12)"
+                : "none",
+              transition: "all 0.2s ease",
+              flex: "0 0 auto",
+              position: "relative",
+              animation:
+                bellHasUnread && !notificationsOpen
+                  ? "iaBellPulse 1.8s ease-in-out infinite"
+                  : "none",
+            }}
           >
             <i className="fas fa-bell" />
 
             {unreadCount > 0 ? (
-              <span className="ia-header-bell-count">
+              <span
+                style={{
+                  position: "absolute",
+                  top: -4,
+                  right: -4,
+                  minWidth: 20,
+                  height: 20,
+                  padding: "0 6px",
+                  borderRadius: 999,
+                  background: "#16dbaa",
+                  color: "#062820",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  lineHeight: "20px",
+                  textAlign: "center",
+                  boxShadow:
+                    "0 0 0 2px rgba(10,14,20,0.95), 0 0 12px rgba(22, 219, 170, 0.28)",
+                }}
+              >
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             ) : null}
@@ -190,16 +249,45 @@ export default function IronAcreHeader({
           ref={dropdownRef}
           role="dialog"
           aria-label="Notifications"
-          className="ia-header-notifications-dropdown ia-tile"
+          className="ia-tile"
           style={{
+            position: "fixed",
             top: dropdownPos.top,
             right: dropdownPos.right,
             width: dropdownPos.width,
+            maxHeight: "min(70vh, 640px)",
+            overflowY: "auto",
+            zIndex: 1050,
+            padding: 16,
+            borderRadius: 22,
+            background:
+              "linear-gradient(180deg, rgba(14,18,24,0.98) 0%, rgba(10,14,20,0.98) 100%)",
+            border: "1px solid rgba(255,255,255,0.10)",
+            boxShadow: "0 18px 48px rgba(0,0,0,0.45)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
           }}
         >
           {notificationsContent || <div className="text-dim small">No notifications available.</div>}
         </div>
       ) : null}
+
+      <style jsx>{`
+        @keyframes iaBellPulse {
+          0% {
+            transform: scale(1);
+            box-shadow: 0 0 0 rgba(22, 219, 170, 0);
+          }
+          50% {
+            transform: scale(1.04);
+            box-shadow: 0 0 22px rgba(22, 219, 170, 0.22);
+          }
+          100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 rgba(22, 219, 170, 0);
+          }
+        }
+      `}</style>
     </>
   );
 }
