@@ -15,11 +15,13 @@ export type IronAcreTaskCardProps = {
   muted?: boolean;
   variant?: Variant;
   highlight?: boolean;
+
+  // New
   schedule?: Schedule;
-  dateKey?: string;
+  dateKey?: string; // YYYY-MM-DD, defaults to today if not provided
 };
 
-const BASE_CLASS = "ia-tile ia-tile-pad mb-2";
+const BASE_CLASS = "futuristic-card ia-tile ia-tile-pad mb-2";
 
 function buildStyle(highlight?: boolean, muted?: boolean): React.CSSProperties | undefined {
   if (!highlight && !muted) return undefined;
@@ -32,7 +34,7 @@ function buildStyle(highlight?: boolean, muted?: boolean): React.CSSProperties |
 
   if (highlight) {
     style.border = "1px solid var(--ia-neon)";
-    style.boxShadow = "0 0 0 1px rgba(22,219,170,0.18) inset, 0 0 18px rgba(22,219,170,0.12)";
+    style.boxShadow = "0 0 0 1px rgba(24,255,154,0.18) inset, 0 0 18px rgba(24,255,154,0.12)";
   }
 
   return style;
@@ -69,6 +71,7 @@ export default function IronAcreTaskCard({
   dateKey,
 }: IronAcreTaskCardProps) {
   const className = BASE_CLASS;
+
   const style = useMemo(() => buildStyle(highlight, muted), [highlight, muted]);
   const visible = useMemo(() => shouldRender(schedule, dateKey), [schedule, dateKey]);
 
@@ -79,15 +82,15 @@ export default function IronAcreTaskCard({
   return (
     <section className={className} style={style} data-variant={variant}>
       <div className="d-flex justify-content-between align-items-center gap-2">
-        <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+        <div style={{ minWidth: 0 }}>
           <div className="ia-tile-title">{title}</div>
           <div className="text-dim small">{subtitle}</div>
         </div>
 
-        <div className="d-flex align-items-center gap-2" style={{ flex: "0 0 auto", whiteSpace: "nowrap" }}>
+        <div className="d-flex align-items-center gap-2">
           {rightMeta ? <div className="text-dim small">{rightMeta}</div> : null}
 
-          <button type="button" className="ia-btn ia-btn-primary" onClick={onCta}>
+          <button type="button" className="btn btn-sm ia-btn-primary" onClick={onCta}>
             {ctaLabel}
           </button>
         </div>
