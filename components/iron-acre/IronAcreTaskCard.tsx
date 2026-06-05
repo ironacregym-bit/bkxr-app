@@ -75,7 +75,7 @@ export default function TasksCard({
                 </div>
               </div>
 
-              <Link href="/check-in" className="ia-btn ia-btn-primary ia-btn-sm">
+              <Link href="/checkin" className="ia-btn ia-btn-primary ia-btn-sm">
                 Open
               </Link>
             </div>
