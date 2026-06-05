@@ -1,18 +1,38 @@
-// File: components/iron-acre/IronAcreTasks.tsx
+// components/iron-acre/IronAcreTasks.tsx
+"use client";
 
-import { useRouter } from "next/router";
-import useSWR from "swr";
-import IronAcreTaskCard from "./IronAcreTaskCard";
+import Link from "next/link";
 import IronAcreWorkoutCard from "./IronAcreWorkoutCard";
 
-const fetcher = (u: string) => fetch(u).then((r) => r.json());
-
-type SimpleWorkoutRef = { id: string; name?: string };
+type SimpleWorkoutRef = {
+  id: string;
+  name?: string;
+  order?: number;
+  programId?: string;
+};
 
 type DayOverview = {
   dateKey: string;
   isFriday: boolean;
+
+  nutritionLogged: boolean;
+  nutritionSummary?: {
+    calories: number;
+    protein: number;
+    carbs?: number;
+    fat?: number;
+  };
+
+  habitAllDone: boolean;
+  habitSummary?: { completed: number; total: number };
+
   checkinComplete: boolean;
+  checkinSummary?: {
+    weight: number;
+    body_fat_pct: number;
+    weightChange?: number;
+    bfChange?: number;
+  };
 
   hasWorkout: boolean;
   workoutDone: boolean;
@@ -33,88 +53,121 @@ type WeeklyTotals = {
   totalCaloriesBurned: number;
 };
 
-type WorkoutApi = {
-  workout_id: string;
-  workout_name: string;
-  focus?: string | null;
-  notes?: string | null;
-  warmup?: any;
-  main: any;
-  finisher?: any;
-};
-
-export default function IronAcreTasks({
-  todayKey,
-  fridayYMD,
-  todayData,
-  fridayData,
-  weekDays,
-  weekStartYMD,
-  weekEndYMD,
-  weeklyTotals,
-}: {
+type IronAcreTasksProps = {
   todayKey: string;
-  fridayYMD: string;
   todayData?: DayOverview;
+  fridayYMD: string;
   fridayData?: DayOverview;
   weekDays: DayOverview[];
   weekStartYMD: string;
   weekEndYMD: string;
   weeklyTotals?: WeeklyTotals;
+};
+
+function firstWorkoutRefForDay(day?: DayOverview): SimpleWorkoutRef | null {
+  if (!day) return null;
+
+  const recurring = Array.isArray(day.recurringWorkouts) ? day.recurringWorkouts : [];
+  if (recurring.length) return recurring[0] || null;
+
+  const optional = Array.isArray(day.optionalWorkouts) ? day.optionalWorkouts : [];
+  if (optional.length) return optional[0] || null;
+
+  const ids = Array.isArray(day.workoutIds) ? day.workoutIds : [];
+  if (ids.length) {
+    return { id: ids[0] };
+  }
+
+  return null;
+}
+
+function WeeklyCheckInCard({
+  fridayYMD,
+  fridayData,
+}: {
+  fridayYMD: string;
+  fridayData?: DayOverview;
 }) {
-  const router = useRouter();
-
-  const checkinDone = Boolean(fridayData?.checkinComplete);
-  const isFriday = Boolean(todayData?.isFriday);
-  const checkinTargetDate = fridayYMD || todayKey;
-
-  const checkinSubtitle = isFriday
-    ? checkinDone
-      ? "Completed"
-      : "Complete your weekly check-in"
-    : checkinDone
-    ? `Completed for ${fridayYMD}`
-    : `Next check-in: ${fridayYMD || "Friday"}`;
-
-  // ✅ Only today's workout (do NOT pick next)
-  // Use the API's mandatory workout selection (workoutIds/hasWorkout) which now includes program workouts.
-  const sessionId = String(todayData?.workoutIds?.[0] || "");
-  const sessionDone = Boolean(todayData?.workoutDone);
-
-  const durationMinutes =
-    typeof todayData?.workoutSummary?.duration === "number" ? todayData.workoutSummary.duration : null;
-
-  const { data: workoutData } = useSWR<WorkoutApi>(
-    sessionId ? `/api/workouts/${encodeURIComponent(sessionId)}` : null,
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60_000 }
-  );
+  const complete = Boolean(fridayData?.checkinComplete);
 
   return (
-    <div className="mb-3">
-      <IronAcreTaskCard
-        title="Weekly check-in"
-        subtitle={checkinSubtitle}
-        ctaLabel={checkinDone ? "View" : "Open"}
-        rightMeta={checkinDone ? "✓" : undefined}
-        onCta={() => router.push(`/checkin?date=${encodeURIComponent(checkinTargetDate)}`)}
-        variant="neon"
-        highlight
-      />
+    <section className="ia-tile ia-tile-pad mb-3">
+      <div className="d-flex justify-content-between align-items-center gap-2">
+        <div>
+          <div className="ia-kicker">
+            <i className="fas fa-clipboard-check" style={{ color: "var(--ia-neon)" }} />
+            WEEKLY CHECK-IN
+          </div>
+
+          <div className="ia-page-title" style={{ fontSize: "1.15rem" }}>
+            {complete ? "Weekly check-in completed" : "Weekly check-in is open"}
+          </div>
+
+          <div className="text-dim small mt-1">
+            {complete
+              ? "Your Friday check-in has already been submitted for this week."
+              : `Complete your Friday check-in for ${fridayYMD}.`}
+          </div>
+        </div>
+
+        <Link
+          href="/check-in"
+          className={complete ? "ia-btn ia-btn-outline" : "ia-btn ia-btn-primary"}
+        >
+          {complete ? "View" : "Open"}
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+export default function IronAcreTasks({
+  todayKey,
+  todayData,
+  fridayYMD,
+  fridayData,
+  weekDays,
+  weekStartYMD,
+  weekEndYMD,
+  weeklyTotals,
+}: IronAcreTasksProps) {
+  const workoutRef = firstWorkoutRefForDay(todayData);
+
+  const workoutId = String(workoutRef?.id || "");
+  const workoutTitle = workoutRef?.name || "Today’s session";
+
+  const hasWorkoutToday =
+    Boolean(todayData?.hasWorkout) ||
+    Boolean(todayData?.hasRecurringToday) ||
+    Boolean(workoutRef);
+
+  const workoutDone = todayData?.hasRecurringToday
+    ? Boolean(todayData?.recurringDone)
+    : Boolean(todayData?.workoutDone);
+
+  const durationMinutes = Number(todayData?.workoutSummary?.duration || 0) || null;
+
+  const showWeeklyCheckIn = Boolean(todayData?.isFriday);
+
+  return (
+    <>
+      {showWeeklyCheckIn ? (
+        <WeeklyCheckInCard fridayYMD={fridayYMD} fridayData={fridayData} />
+      ) : null}
 
       <IronAcreWorkoutCard
-        title="Today’s workout"
-        workout={workoutData || null}
-        workoutId={sessionId}
-        done={sessionDone}
+        title={workoutTitle}
+        workout={null}
+        workoutId={workoutId}
+        done={workoutDone}
         durationMinutes={durationMinutes}
         dateKey={todayKey}
         weekDays={weekDays}
         weekStartYMD={weekStartYMD}
         weekEndYMD={weekEndYMD}
         weeklyTotals={weeklyTotals}
-        hasWorkoutToday={Boolean(sessionId)}
+        hasWorkoutToday={hasWorkoutToday}
       />
-    </div>
+    </>
   );
 }
