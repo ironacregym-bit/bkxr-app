@@ -16,10 +16,10 @@ export type IronAcreTaskCardProps = {
   variant?: Variant;
   highlight?: boolean;
   schedule?: Schedule;
-  dateKey?: string; // YYYY-MM-DD, defaults to today if not provided
+  dateKey?: string;
 };
 
-const BASE_CLASS = "futuristic-card ia-tile ia-tile-pad mb-2 ia-task-card";
+const BASE_CLASS = "ia-task-card";
 
 function getDayIndexFromDateKey(dateKey?: string): number {
   if (dateKey) {
@@ -39,22 +39,26 @@ function shouldRender(schedule: Schedule, dateKey?: string): boolean {
   return true;
 }
 
-function buildCardClassName(highlight?: boolean, muted?: boolean, variant?: Variant): string {
+function buildClassName({
+  muted,
+  highlight,
+  variant,
+}: {
+  muted?: boolean;
+  highlight?: boolean;
+  variant: Variant;
+}): string {
   const classes = [BASE_CLASS];
-
-  if (highlight) {
-    classes.push("ia-task-card--highlight");
-  }
 
   if (muted) {
     classes.push("ia-task-card--muted");
   }
 
-  if (variant === "classic") {
-    classes.push("ia-task-card--classic");
-  } else {
-    classes.push("ia-task-card--neon");
+  if (highlight) {
+    classes.push("ia-task-card--highlight");
   }
+
+  classes.push(variant === "classic" ? "ia-task-card--classic" : "ia-task-card--neon");
 
   return classes.join(" ");
 }
@@ -73,8 +77,13 @@ export default function IronAcreTaskCard({
 }: IronAcreTaskCardProps) {
   const visible = useMemo(() => shouldRender(schedule, dateKey), [schedule, dateKey]);
   const className = useMemo(
-    () => buildCardClassName(highlight, muted, variant),
-    [highlight, muted, variant]
+    () =>
+      buildClassName({
+        muted,
+        highlight,
+        variant,
+      }),
+    [muted, highlight, variant]
   );
 
   if (!visible) {
@@ -83,19 +92,23 @@ export default function IronAcreTaskCard({
 
   return (
     <section className={className} data-variant={variant}>
-      <div className="ia-task-card__row">
-        <div className="ia-task-card__content">
-          <div className="ia-task-card__title">{title}</div>
-          <div className="ia-task-card__subtitle">{subtitle}</div>
+      <div className="ia-task-card__main">
+        <div className="ia-task-card__titleRow">
+          <h3 className="ia-task-card__title">{title}</h3>
+          {rightMeta ? <span className="ia-task-card__meta">{rightMeta}</span> : null}
         </div>
 
-        <div className="ia-task-card__actions">
-          {rightMeta ? <div className="ia-task-card__meta">{rightMeta}</div> : null}
+        <p className="ia-task-card__subtitle">{subtitle}</p>
+      </div>
 
-          <button type="button" className="btn btn-sm ia-btn-primary ia-task-card__button" onClick={onCta}>
-            {ctaLabel}
-          </button>
-        </div>
+      <div className="ia-task-card__aside">
+        <button
+          type="button"
+          className="btn btn-sm ia-btn-primary ia-task-card__button"
+          onClick={onCta}
+        >
+          {ctaLabel}
+        </button>
       </div>
     </section>
   );
