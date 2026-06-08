@@ -269,7 +269,7 @@ function TasksCard({
                 : `${habitsCompleted}/${habitsTotal} completed today.`
             }
             badge={`${habitsCompleted}/${habitsTotal}`}
-            href="/habits"
+            href="/habit"
             buttonLabel={habitsDone ? "View" : "Open"}
           />
 
