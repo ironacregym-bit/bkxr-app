@@ -5,39 +5,49 @@ import type Stripe from "stripe";
 import firestore from "../../../lib/firestoreClient";
 import { FieldValue, Timestamp } from "@google-cloud/firestore";
 
-// Disable Next.js body parser to access the raw body for Stripe signature verification
 export const config = {
   api: { bodyParser: false },
 };
 
-// ---- RAW BUFFER HELPER (required for Stripe signature verification) ----
 function buffer(readable: any): Promise<Buffer> {
   return new Promise<Buffer>((resolve, reject) => {
     const chunks: any[] = [];
-    readable.on("data", (chunk: any) => chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk));
+    readable.on("data", (chunk: any) =>
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk)
+    );
     readable.on("end", () => resolve(Buffer.concat(chunks)));
     readable.on("error", reject);
   });
 }
 
-// ---- UTILITIES ----
-function origin() {
-  return process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+function appBaseUrl() {
+  if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "";
 }
-async function emitEmail(event: string, email: string, context: Record<string, any> = {}, force = false) {
-  const BASE = origin();
+
+async function emitEmail(
+  event: string,
+  email: string,
+  context: Record<string, any> = {},
+  force = false
+) {
+  const BASE = appBaseUrl();
   if (!BASE || !email) return;
+
   await fetch(`${BASE}/api/notify/emit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ event, email, context, force }),
   }).catch(() => null);
 }
+
 async function notifyAdmins(event: string, context: Record<string, any> = {}) {
   const list = (process.env.NOTIFY_ADMIN_EMAILS || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+
   await Promise.all(list.map((email) => emitEmail(event, email, context)));
 }
 
@@ -59,12 +69,18 @@ function isPremiumFromStatus(status: string): boolean {
 }
 
 async function emitUpgradeCta(email: string) {
-  const BASE = origin();
+  const BASE = appBaseUrl();
   if (!BASE) return;
+
   await fetch(`${BASE}/api/notify/emit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event: "upgrade_cta", email, context: { reason: "subscription_status" }, force: false }),
+    body: JSON.stringify({
+      event: "upgrade_cta",
+      email,
+      context: { reason: "subscription_status" },
+      force: false,
+    }),
   }).catch(() => null);
 }
 
@@ -74,19 +90,19 @@ function currentMonth() {
 }
 
 function computeCommissionRate(activeCount: number): number {
-  if (activeCount >= 50) return 0.30;
+  if (activeCount >= 50) return 0.3;
   if (activeCount >= 40) return 0.25;
-  if (activeCount >= 30) return 0.20;
+  if (activeCount >= 30) return 0.2;
   if (activeCount >= 20) return 0.15;
-  if (activeCount >= 10) return 0.10;
+  if (activeCount >= 10) return 0.1;
   return 0.05;
 }
 
-// NEW: Idempotency guard so Stripe retries don’t double-process
 async function alreadyProcessed(eventId: string) {
   const ref = firestore.collection("stripe_events").doc(eventId);
   const snap = await ref.get();
   if (snap.exists) return true;
+
   await ref.set({ received_at: new Date().toISOString() });
   return false;
 }
@@ -100,27 +116,68 @@ function hasTrialExpired(trialEndIso: string | null): boolean {
 
 function groupBy<T, K extends string | number>(arr: T[], keyFn: (x: T) => K) {
   const map = new Map<K, T[]>();
+
   for (const item of arr) {
     const k = keyFn(item);
     const list = map.get(k) || [];
     list.push(item);
     map.set(k, list);
   }
+
   return [...map.entries()].map(([key, items]) => ({ key, items }));
 }
 
-// ---- WEBHOOK HANDLER ----
+async function findBookingByChargeOrPaymentIntent(charge: Stripe.Charge) {
+  const chargeId = String(charge.id || "").trim();
+  const paymentIntentId =
+    typeof charge.payment_intent === "string" ? charge.payment_intent : "";
+
+  if (chargeId) {
+    const byCharge = await firestore
+      .collection("bookings")
+      .where("stripe_charge_id", "==", chargeId)
+      .limit(1)
+      .get();
+
+    if (!byCharge.empty) {
+      return byCharge.docs[0];
+    }
+  }
+
+  if (paymentIntentId) {
+    const byPi = await firestore
+      .collection("bookings")
+      .where("stripe_payment_intent_id", "==", paymentIntentId)
+      .limit(1)
+      .get();
+
+    if (!byPi.empty) {
+      return byPi.docs[0];
+    }
+  }
+
+  return null;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
+  if (req.method !== "POST") {
+    return res.status(405).send("Method Not Allowed");
+  }
 
   const sig = req.headers["stripe-signature"];
-  if (!sig) return res.status(400).send("Missing stripe-signature header");
+  if (!sig) {
+    return res.status(400).send("Missing stripe-signature header");
+  }
 
   let event: Stripe.Event;
 
   try {
     const buf = await buffer(req);
-    event = stripe.webhooks.constructEvent(buf, sig, process.env.STRIPE_WEBHOOK_SECRET!);
+    event = stripe.webhooks.constructEvent(
+      buf,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET as string
+    );
   } catch (e: any) {
     console.error("[webhook] signature verification failed:", e?.message);
     return res.status(400).send(`Webhook Error: ${e.message}`);
@@ -131,8 +188,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (await alreadyProcessed(event.id)) {
         return res.status(200).json({ received: true, duplicate: true });
       }
-    } catch (e) {
-      console.warn("[webhook] idempotency guard issue:", (e as any)?.message);
+    } catch (e: any) {
+      console.warn("[webhook] idempotency guard issue:", e?.message || e);
     }
 
     switch (event.type) {
@@ -169,6 +226,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             await emitEmail("trial_expired", email, { trial_end: trialEndIso });
           }
         }
+
         break;
       }
 
@@ -176,7 +234,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const invoice = event.data.object as Stripe.Invoice;
         const customerId = invoice.customer as string;
         const email = await getCustomerEmail(customerId);
-        const subscriptionId = (invoice.subscription as string) || undefined;
+        const subscriptionId =
+          typeof invoice.subscription === "string" ? invoice.subscription : undefined;
+
         if (!email) break;
 
         await firestore.collection("users").doc(email).set(
@@ -192,7 +252,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
 
         try {
-          const refSnap = await firestore.collection("referrals").where("referred_email", "==", email).limit(1).get();
+          const refSnap = await firestore
+            .collection("referrals")
+            .where("referred_email", "==", email)
+            .limit(1)
+            .get();
+
           if (refSnap.empty) break;
 
           const refDoc = refSnap.docs[0];
@@ -203,7 +268,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const month = currentMonth();
           const invoiceAmount = (invoice.total || 0) / 100;
 
-          const existingEntries: Array<any> = Array.isArray(ref.commission_entries) ? ref.commission_entries : [];
+          const existingEntries: Array<any> = Array.isArray(ref.commission_entries)
+            ? ref.commission_entries
+            : [];
+
           const duplicate = existingEntries.some((e) => e?.invoice_id === invoice.id);
           if (duplicate) break;
 
@@ -254,6 +322,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } catch (err) {
           console.error("[webhook] referral commission error:", err);
         }
+
         break;
       }
 
@@ -261,7 +330,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const invoice = event.data.object as Stripe.Invoice;
         const customerId = invoice.customer as string;
         const email = await getCustomerEmail(customerId);
-        const subscriptionId = (invoice.subscription as string) || undefined;
+        const subscriptionId =
+          typeof invoice.subscription === "string" ? invoice.subscription : undefined;
+
         if (!email) break;
 
         const update: Record<string, any> = {
@@ -274,6 +345,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const userSnap = await firestore.collection("users").doc(email).get();
         const trialEnd = (userSnap.data()?.trial_end as string) || null;
+
         if (hasTrialExpired(trialEnd)) {
           update.membership_status = "expired";
           await emitEmail("trial_expired", email, { trial_end: trialEnd });
@@ -281,6 +353,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         await firestore.collection("users").doc(email).set(update, { merge: true });
         await emitUpgradeCta(email);
+
         break;
       }
 
@@ -302,6 +375,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         await emitUpgradeCta(email);
         await emitEmail("trial_expired", email, { reason: "subscription_canceled" });
+
         break;
       }
 
@@ -309,7 +383,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const transfer = event.data.object as Stripe.Transfer;
         const transferId = transfer.id;
 
-        const paySnap = await firestore.collection("referral_payouts").where("transfer_id", "==", transferId).limit(1).get();
+        const paySnap = await firestore
+          .collection("referral_payouts")
+          .where("transfer_id", "==", transferId)
+          .limit(1)
+          .get();
+
         if (paySnap.empty) break;
 
         const payoutRef = paySnap.docs[0].ref;
@@ -324,13 +403,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const docRef = firestore.collection("referrals").doc(group.key);
             const snap = await tx.get(docRef);
             if (!snap.exists) continue;
+
             const d = snap.data() || {};
             const arr: any[] = Array.isArray(d.commission_entries) ? d.commission_entries : [];
 
             const updated = arr.map((e) => {
               const match = group.items.find((m) => m.invoice_id === e?.invoice_id);
               if (!match) return e;
-              if (String(e?.payout_id || "") !== payoutRef.id || e?.status !== "requested") return e;
+              if (String(e?.payout_id || "") !== payoutRef.id || e?.status !== "requested") {
+                return e;
+              }
               return { ...e, status: "paid", paid_at: new Date().toISOString() };
             });
 
@@ -339,7 +421,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
           tx.set(
             payoutRef,
-            { status: "paid", paid_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            {
+              status: "paid",
+              paid_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
             { merge: true }
           );
         });
@@ -351,6 +437,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             amount_gbp: payout.amount_gbp || 0,
           });
         }
+
         await notifyAdmins("admin_referral_payout_paid", {
           payout_id: payoutRef.id,
           transfer_id: transferId,
@@ -365,7 +452,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const transfer = event.data.object as Stripe.Transfer;
         const transferId = transfer.id;
 
-        const paySnap = await firestore.collection("referral_payouts").where("transfer_id", "==", transferId).limit(1).get();
+        const paySnap = await firestore
+          .collection("referral_payouts")
+          .where("transfer_id", "==", transferId)
+          .limit(1)
+          .get();
+
         if (paySnap.empty) break;
 
         const payoutRef = paySnap.docs[0].ref;
@@ -378,6 +470,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const docRef = firestore.collection("referrals").doc(group.key);
             const snap = await tx.get(docRef);
             if (!snap.exists) continue;
+
             const d = snap.data() || {};
             const arr: any[] = Array.isArray(d.commission_entries) ? d.commission_entries : [];
 
@@ -385,10 +478,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               const match = group.items.find((m) => m.invoice_id === e?.invoice_id);
               if (!match) return e;
               if (String(e?.payout_id || "") !== payoutRef.id) return e;
+
               if (e?.status === "requested" || e?.status === "paid") {
-                const { payout_id: _a, requested_at: _b, transfer_id: _c, paid_at: _d, ...rest } = e || {};
+                const { payout_id: _a, requested_at: _b, transfer_id: _c, paid_at: _d, ...rest } =
+                  e || {};
                 return { ...rest, status: "unpaid", reversed_at: new Date().toISOString() };
               }
+
               return e;
             });
 
@@ -397,7 +493,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
           tx.set(
             payoutRef,
-            { status: "reversed", updated_at: new Date().toISOString() },
+            {
+              status: "reversed",
+              updated_at: new Date().toISOString(),
+            },
             { merge: true }
           );
         });
@@ -409,6 +508,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             amount_gbp: payout.amount_gbp || 0,
           });
         }
+
         await notifyAdmins("admin_referral_payout_reversed", {
           payout_id: payoutRef.id,
           transfer_id: transferId,
@@ -423,47 +523,106 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const s = event.data.object as Stripe.Checkout.Session;
 
         const purpose = String(s.metadata?.purpose || "");
-        const bookingId = String(s.metadata?.booking_id || "");
+        const bookingType = String(s.metadata?.booking_type || "");
+        const bookingId = String(s.metadata?.booking_id || "").trim();
 
-        // Only handle our one-off class booking payments here
-        if (purpose === "class_booking" && bookingId) {
+        const isClassBooking =
+          bookingId &&
+          (purpose === "class_booking" || bookingType === "class_prebook" || !purpose);
+
+        if (isClassBooking) {
           const paid = s.payment_status === "paid";
           if (!paid) break;
-        
+
           const bookingRef = firestore.collection("bookings").doc(bookingId);
-        
-          // Confirm booking
+
+          const paymentIntentId =
+            typeof s.payment_intent === "string" ? s.payment_intent : null;
+
+          let stripeChargeId: string | null = null;
+
+          if (paymentIntentId) {
+            try {
+              const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+              stripeChargeId =
+                typeof pi.latest_charge === "string" ? pi.latest_charge : null;
+            } catch (e: any) {
+              console.warn("[webhook] payment intent lookup failed:", e?.message || e);
+            }
+          }
+
           await bookingRef.set(
             {
               status: "confirmed",
               paid: true,
               paid_at: Timestamp.now(),
               stripe_checkout_session_id: s.id,
-              stripe_payment_intent_id: typeof s.payment_intent === "string" ? s.payment_intent : null,
+              stripe_payment_intent_id: paymentIntentId,
+              stripe_charge_id: stripeChargeId,
+              refund_status: "none",
               updated_at: Timestamp.now(),
             },
             { merge: true }
           );
-        
-          // Email confirmation (guest-safe and logged-in safe)
+
           try {
             const bSnap = await bookingRef.get();
-            const b = bSnap.exists ? (bSnap.data() as any) : null;
-        
-            const recipient = String(b?.guest_email || b?.user_email || "").trim().toLowerCase();
+            const booking = bSnap.exists ? (bSnap.data() as any) : null;
+
+            const sessionId = String(booking?.session_id || "").trim();
+            let sessionData: any = null;
+
+            if (sessionId) {
+              const sessionSnap = await firestore.collection("session").doc(sessionId).get();
+              if (sessionSnap.exists) {
+                sessionData = sessionSnap.data() as any;
+              }
+            }
+
+            const recipient = String(
+              booking?.guest_email || booking?.user_email || ""
+            )
+              .trim()
+              .toLowerCase();
+
             if (recipient) {
               await emitEmail("class_booking_confirmed", recipient, {
                 booking_id: bookingId,
-                session_id: b?.session_id || "",
+                session_id: sessionId,
                 payment_method: "stripe",
-                amount_gbp: 8,
-                note: "Paid £8 via Stripe",
+                amount_gbp: Number(booking?.amount_gbp || 9),
+                class_id: sessionData?.class_id || booking?.class_id || "",
+                class_name: sessionData?.class_name || booking?.class_name || "",
+                gym_name: sessionData?.gym_name || booking?.gym_name || "",
+                start_time: sessionData?.start_time || booking?.session_start_at || null,
+                note: "Paid £9 via Stripe",
               });
             }
           } catch (e: any) {
             console.warn("[webhook] class booking email failed:", e?.message || e);
           }
         }
+
+        break;
+      }
+
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        const bookingSnap = await findBookingByChargeOrPaymentIntent(charge);
+
+        if (!bookingSnap) break;
+
+        const amountRefundedGbp = Number(((charge.amount_refunded || 0) / 100).toFixed(2));
+
+        await bookingSnap.ref.set(
+          {
+            stripe_charge_id: charge.id,
+            refund_status: charge.refunded ? "succeeded" : "pending",
+            amount_refunded_gbp: amountRefundedGbp,
+            updated_at: Timestamp.now(),
+          },
+          { merge: true }
+        );
 
         break;
       }
