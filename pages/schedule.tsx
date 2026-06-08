@@ -45,6 +45,11 @@ type Cell =
   | { key: string; blank: true }
   | { key: string; blank: false; day: number; ymd: string; count: number; isToday: boolean };
 
+function safeMillis(value: string | number | null | undefined): number {
+  const ms = toMillis(value);
+  return typeof ms === "number" && Number.isFinite(ms) ? ms : 0;
+}
+
 function ymdLocal(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -53,7 +58,7 @@ function ymdLocal(d: Date) {
 }
 
 function formatDateTime(value: string | number | null) {
-  const ms = toMillis(value);
+  const ms = safeMillis(value);
   if (!ms) return "TBC";
 
   return new Date(ms).toLocaleString("en-GB", {
@@ -67,7 +72,7 @@ function formatDateTime(value: string | number | null) {
 }
 
 function formatTime(value: string | number | null) {
-  const ms = toMillis(value);
+  const ms = safeMillis(value);
   if (!ms) return "";
 
   return new Date(ms).toLocaleTimeString("en-GB", {
@@ -78,7 +83,7 @@ function formatTime(value: string | number | null) {
 }
 
 function compareSessionStart(a: SessionItem, b: SessionItem) {
-  return toMillis(a.start_time) - toMillis(b.start_time);
+  return safeMillis(a.start_time) - safeMillis(b.start_time);
 }
 
 export default function SchedulePage() {
@@ -204,7 +209,7 @@ export default function SchedulePage() {
     const map: Record<string, SessionItem[]> = {};
 
     for (const session of sessions) {
-      const ms = toMillis(session.start_time);
+      const ms = safeMillis(session.start_time);
       if (!ms) continue;
 
       const key = ymdLocal(new Date(ms));
@@ -407,7 +412,7 @@ export default function SchedulePage() {
               </div>
             </div>
 
-            /iron-acre
+            <Link href="/iron-acre" className="ia-btn ia-btn-outline ia-btn-icon-left">
               <i className="fas fa-chevron-left" />
               Back
             </Link>
@@ -515,7 +520,7 @@ export default function SchedulePage() {
             ) : null}
 
             {activeDaySessions.map((session) => {
-              const endMs = toMillis(session.end_time);
+              const endMs = safeMillis(session.end_time);
               const full =
                 session.max_attendance > 0 &&
                 session.current_attendance >= session.max_attendance;
