@@ -1,3 +1,4 @@
+// pages/api/bookings/create.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
@@ -18,16 +19,17 @@ function resolveUid(session: any) {
   return user?.id || user?.uid || user?.email || null;
 }
 
-// Prefer request host for multi-domain (bxkr + ironacregym) rather than NEXTAUTH_URL
 function baseFromReq(req: NextApiRequest) {
   const proto =
     (req.headers["x-forwarded-proto"] as string) ||
     (req.headers["x-forwarded-protocol"] as string) ||
     "https";
+
   const host =
     (req.headers["x-forwarded-host"] as string) ||
     (req.headers.host as string) ||
     "";
+
   if (!host) return "";
   return `${proto}://${host}`;
 }
@@ -41,6 +43,7 @@ async function emitEmail(
 ) {
   const BASE = baseFromReq(req);
   if (!BASE || !email) return;
+
   await fetch(`${BASE}/api/notify/emit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -48,26 +51,99 @@ async function emitEmail(
   }).catch(() => null);
 }
 
-async function getUserFlags(email: string): Promise<{
-  isGymMember: boolean;
+function asDate(value: any): Date | null {
+  if (!value) return null;
+
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return value;
+  }
+
+  if (typeof value?.toDate === "function") {
+    const d = value.toDate();
+    return d instanceof Date && !isNaN(d.getTime()) ? d : null;
+  }
+
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function asTimestamp(value: any): Timestamp | null {
+  const d = asDate(value);
+  return d ? Timestamp.fromDate(d) : null;
+}
+
+type UserFlags = {
+  membershipScope: string;
+  membershipStatus: string;
+  subscriptionStatus: string;
+  paymentType: string;
+  isIncludedMember: boolean;
+  isOnlineOnly: boolean;
+  canBookClasses: boolean;
   isCashPayer: boolean;
-}> {
-  if (!email) return { isGymMember: false, isCashPayer: false };
+};
+
+async function getUserFlags(email: string): Promise<UserFlags> {
+  const fallback: UserFlags = {
+    membershipScope: "none",
+    membershipStatus: "none",
+    subscriptionStatus: "none",
+    paymentType: "",
+    isIncludedMember: false,
+    isOnlineOnly: false,
+    canBookClasses: true,
+    isCashPayer: false,
+  };
+
+  if (!email) return fallback;
+
   const snap = await firestore.collection("users").doc(email).get();
-  if (!snap.exists) return { isGymMember: false, isCashPayer: false };
+  if (!snap.exists) return fallback;
+
   const d = snap.data() as any;
+
+  const membershipScope = String(d?.membership_scope || d?.program_scope || "none")
+    .trim()
+    .toLowerCase();
+
+  const membershipStatus = String(d?.membership_status || "none")
+    .trim()
+    .toLowerCase();
+
+  const subscriptionStatus = String(d?.subscription_status || "none")
+    .trim()
+    .toLowerCase();
+
+  const paymentType = String(d?.payment_type || "")
+    .trim()
+    .toLowerCase();
+
+  const isOnlineOnly = membershipScope === "online";
+
+  const isIncludedMember =
+    membershipStatus === "gym_member" ||
+    ((membershipScope === "gym" || membershipScope === "hybrid") &&
+      (subscriptionStatus === "active" || subscriptionStatus === "trialing"));
+
   return {
-    isGymMember: String(d?.membership_status || "").toLowerCase() === "gym_member",
-    isCashPayer: String(d?.payment_type || "").toLowerCase() === "cash",
+    membershipScope,
+    membershipStatus,
+    subscriptionStatus,
+    paymentType,
+    isIncludedMember,
+    isOnlineOnly,
+    canBookClasses: !isOnlineOnly,
+    isCashPayer: paymentType === "cash",
   };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
   const session = await getServerSession(req, res, authOptions).catch(() => null);
 
-  // Signed-in users must have a valid role. Guests allowed.
   if (session && !hasRole(session, ["user", "gym", "admin"])) {
     return res.status(403).json({ error: "Forbidden" });
   }
@@ -79,11 +155,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     guest_email?: string;
   };
 
-  if (!session_id) return res.status(400).json({ error: "session_id is required" });
+  if (!session_id) {
+    return res.status(400).json({ error: "session_id is required" });
+  }
 
   const requested = String(payment_method || "").trim() as PaymentMethod;
+
   if (!["stripe", "pay_on_day", "member_free"].includes(requested)) {
-    return res.status(400).json({ error: "payment_method must be stripe | pay_on_day | member_free" });
+    return res
+      .status(400)
+      .json({ error: "payment_method must be stripe | pay_on_day | member_free" });
   }
 
   const email = session ? originEmail(session) : "";
@@ -93,29 +174,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const guestEmail = String(guest_email || "").trim().toLowerCase();
 
   if (!uidFromSession) {
-    if (!guestName) return res.status(400).json({ error: "guest_name is required for guests" });
-    if (!guestEmail) return res.status(400).json({ error: "guest_email is required for guests" });
+    if (!guestName) {
+      return res.status(400).json({ error: "guest_name is required for guests" });
+    }
+    if (!guestEmail) {
+      return res.status(400).json({ error: "guest_email is required for guests" });
+    }
   }
 
-  const { isGymMember, isCashPayer } = email
-    ? await getUserFlags(email)
-    : { isGymMember: false, isCashPayer: false };
+  const userFlags = email ? await getUserFlags(email) : null;
+
+  if (userFlags?.isOnlineOnly) {
+    return res
+      .status(403)
+      .json({ error: "Your plan does not include gym class booking." });
+  }
 
   let method: PaymentMethod;
 
-  if (isGymMember) {
+  if (userFlags?.isIncludedMember) {
     method = "member_free";
-  } else if (isCashPayer) {
-    method = "pay_on_day"; // £8 cash on arrival
+  } else if (userFlags?.isCashPayer) {
+    method = "pay_on_day";
   } else {
     method = requested;
   }
 
-  if (!isGymMember && requested === "member_free") {
-    return res.status(403).json({ error: "Member-free booking is only available to gym members" });
+  if (!userFlags?.isIncludedMember && requested === "member_free") {
+    return res
+      .status(403)
+      .json({ error: "Free class booking is only available to eligible gym members." });
   }
 
-  const uid = uidFromSession ? String(uidFromSession).trim().toLowerCase() : `guest_${guestEmail}`;
+  const uid = uidFromSession
+    ? String(uidFromSession).trim().toLowerCase()
+    : `guest_${guestEmail}`;
+
   const bookingId = `${session_id}_${uid}`;
   const now = Timestamp.now();
 
@@ -133,33 +227,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const amount_gbp =
       method === "member_free"
         ? 0
-        : isCashPayer
-        ? 8
         : method === "pay_on_day"
-        ? 10
-        : 8;
+        ? 12
+        : 9;
 
     let sessData: any = null;
 
     await firestore.runTransaction(async (tx) => {
       const sessSnap = await tx.get(sessionRef);
-      if (!sessSnap.exists) throw new Error("Session not found");
+      if (!sessSnap.exists) {
+        throw new Error("Session not found");
+      }
 
       sessData = sessSnap.data() as any;
-      const max = Number(sessData?.max_attendance) || 0;
 
-      const reservedSnap = await firestore
+      const max = Number(sessData?.max_attendance) || 0;
+      const sessionStartTs = asTimestamp(sessData?.start_time);
+      const sessionStartDate = sessionStartTs?.toDate() || null;
+      const refundCutoffTs =
+        sessionStartDate
+          ? Timestamp.fromDate(new Date(sessionStartDate.getTime() - 24 * 60 * 60 * 1000))
+          : null;
+
+      const reservedQuery = firestore
         .collection("bookings")
         .where("session_id", "==", session_id)
-        .where("status", "in", RESERVED_STATUSES as any)
-        .get();
+        .where("status", "in", RESERVED_STATUSES as unknown as string[]);
 
-      if (max > 0 && reservedSnap.size >= max) throw new Error("Session is full");
+      const reservedSnap = await tx.get(reservedQuery);
+
+      if (max > 0 && reservedSnap.size >= max) {
+        throw new Error("Session is full");
+      }
 
       const existing = await tx.get(bookingRef);
+
       if (existing.exists) {
         const ex = existing.data() as any;
-        if (String(ex?.status) === "confirmed") return;
+        const existingStatus = String(ex?.status || "").trim().toLowerCase();
+
+        if (existingStatus === "confirmed" || existingStatus === "pay_on_day" || existingStatus === "member_free") {
+          return;
+        }
 
         tx.set(
           bookingRef,
@@ -171,9 +280,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             user_email: uidFromSession ? email : null,
             guest_name: uidFromSession ? null : guestName,
             guest_email: uidFromSession ? null : guestEmail,
+            paid: method === "member_free",
+            session_start_at: sessionStartTs,
+            refund_cutoff_at: refundCutoffTs,
+            refund_eligible: method === "stripe",
           },
           { merge: true }
         );
+
         return;
       }
 
@@ -187,17 +301,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         status,
         payment_method: method,
         amount_gbp,
-        paid: method === "member_free" ? true : false,
+        paid: method === "member_free",
         stripe_checkout_session_id: null,
         stripe_payment_intent_id: null,
+        stripe_charge_id: null,
+        stripe_refund_id: null,
+        refund_status: "none",
         source: "schedule",
         created_at: now,
         updated_at: now,
+        cancelled_at: null,
+        cancelled_by: null,
+        cancel_reason: null,
+        amount_refunded_gbp: 0,
+        session_start_at: sessionStartTs,
+        refund_cutoff_at: refundCutoffTs,
+        refund_eligible: method === "stripe",
+        was_late_cancel: false,
       });
     });
 
-    // Send confirmation email immediately for non-Stripe bookings only
-    // Stripe bookings will be emailed in the webhook after payment.
     const recipient = uidFromSession ? email : guestEmail;
 
     if (recipient && status !== "pending_payment") {
@@ -207,14 +330,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         payment_method: method,
         amount_gbp,
         class_id: sessData?.class_id || "",
+        class_name: sessData?.class_name || "",
         gym_name: sessData?.gym_name || "",
         start_time: sessData?.start_time || null,
         note:
           method === "member_free"
-            ? "Gym member booking (free)"
-            : isCashPayer
-            ? "Pay £8 cash at the gym"
-            : "Pay £10 on arrival",
+            ? "Included with your membership"
+            : method === "pay_on_day"
+            ? "Pay £12 on arrival"
+            : "Prebooked at £9",
       });
     }
 
@@ -224,12 +348,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       status,
       payment_method: method,
       amount_gbp,
-      is_member_free: isGymMember,
-      is_cash_payer: isCashPayer,
+      is_member_free: Boolean(userFlags?.isIncludedMember),
+      is_cash_payer: Boolean(userFlags?.isCashPayer),
+      membership_scope: userFlags?.membershipScope || "none",
+      can_book_classes: userFlags?.canBookClasses ?? true,
     });
   } catch (err: any) {
     const msg = err?.message || "Failed to create booking";
-    const code = msg === "Session is full" ? 409 : msg === "Session not found" ? 404 : 500;
+    const code =
+      msg === "Session is full" ? 409 : msg === "Session not found" ? 404 : 500;
+
     return res.status(code).json({ error: msg });
   }
 }
