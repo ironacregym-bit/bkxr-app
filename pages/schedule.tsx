@@ -19,6 +19,7 @@ type Gym = {
 type SessionItem = {
   id: string;
   class_id: string;
+  class_name?: string | null;
   coach_name?: string;
   start_time: string | number | null;
   end_time: string | number | null;
@@ -33,6 +34,7 @@ type UserAccess = {
   subscription_status?: string | null;
   membership_status?: string | null;
   payment_type?: string | null;
+  membership_scope?: string | null;
 };
 
 type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
@@ -40,6 +42,23 @@ type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
 type BookingsMineResponse = {
   sessionIds?: string[];
 };
+
+type CancelBookingResponse =
+  | {
+      ok: true;
+      booking_id: string;
+      status:
+        | "cancelled_refunded"
+        | "cancelled_no_refund"
+        | "cancelled_pay_on_day"
+        | "cancelled_member";
+      payment_method: PaymentMethod;
+      refunded: boolean;
+      refund_amount_gbp: number;
+      was_late_cancel: boolean;
+      refund_cutoff_passed: boolean;
+    }
+  | { error: string };
 
 type Cell =
   | { key: string; blank: true }
@@ -86,10 +105,22 @@ function compareSessionStart(a: SessionItem, b: SessionItem) {
   return safeMillis(a.start_time) - safeMillis(b.start_time);
 }
 
+function resolveSessionUserKey(authSession: any) {
+  const user = authSession?.user as any;
+  return String(user?.id || user?.uid || user?.email || "")
+    .trim()
+    .toLowerCase();
+}
+
+function classLabel(session: SessionItem) {
+  return String(session.class_name || session.class_id || "Class").trim();
+}
+
 export default function SchedulePage() {
   const { data: authSession } = useSession();
   const isAuthed = Boolean(authSession?.user?.email);
   const authedEmail = String(authSession?.user?.email || "").trim();
+  const bookingUserKey = useMemo(() => resolveSessionUserKey(authSession), [authSession]);
 
   const profileKey = authedEmail
     ? `/api/profile?email=${encodeURIComponent(authedEmail)}`
@@ -101,7 +132,10 @@ export default function SchedulePage() {
   });
 
   const isGymMember =
-    String(profile?.membership_status || "").toLowerCase() === "gym_member";
+    String(profile?.membership_status || "").toLowerCase() === "gym_member" ||
+    (["active", "trialing"].includes(String(profile?.subscription_status || "").toLowerCase()) &&
+      ["gym", "hybrid"].includes(String(profile?.membership_scope || "").toLowerCase()));
+
   const isCashPayer =
     String(profile?.payment_type || "").toLowerCase() === "cash";
 
@@ -194,7 +228,10 @@ export default function SchedulePage() {
         )}`
       : null;
 
-  const { data: bookingsResp } = useSWR<BookingsMineResponse>(bookingsKey, fetcher, {
+  const {
+    data: bookingsResp,
+    mutate: mutateBookings,
+  } = useSWR<BookingsMineResponse>(bookingsKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 20_000,
   });
@@ -263,6 +300,7 @@ export default function SchedulePage() {
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [sharing, setSharing] = useState<{ message: string; link: string } | null>(null);
   const [pending, setPending] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
 
   async function shareWhatsApp(sessionId: string) {
     try {
@@ -288,6 +326,61 @@ export default function SchedulePage() {
       setActionErr(e?.message || "Failed to generate link");
     } finally {
       setPending(null);
+    }
+  }
+
+  function bookingIdForSession(sessionId: string) {
+    if (!bookingUserKey) return null;
+    return `${sessionId}_${bookingUserKey}`;
+  }
+
+  async function cancelBooking(session: SessionItem) {
+    const bookingId = bookingIdForSession(session.id);
+
+    if (!bookingId) {
+      setActionErr("Could not determine booking id for this session.");
+      setActionMsg(null);
+      return;
+    }
+
+    const proceed = window.confirm(
+      "Cancel this booking?\n\nIf this was a £9 prebook and you are more than 24 hours before the session start, you will be refunded.\nIf it is within 24 hours, no refund will be issued.\nPay-on-day and included member bookings can be cancelled without a refund calculation."
+    );
+
+    if (!proceed) return;
+
+    try {
+      setCancelling(session.id);
+      setActionErr(null);
+      setActionMsg(null);
+
+      const res = await fetch("/api/bookings/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: bookingId }),
+      });
+
+      const json = (await res.json().catch(() => ({}))) as CancelBookingResponse;
+
+      if (!res.ok || !("ok" in json && json.ok)) {
+        throw new Error((json as any)?.error || "Failed to cancel booking");
+      }
+
+      if (json.refunded) {
+        setActionMsg(`Booking cancelled. £${json.refund_amount_gbp} refunded.`);
+      } else if (json.status === "cancelled_no_refund") {
+        setActionMsg("Booking cancelled. No refund issued because this is within 24 hours.");
+      } else if (json.status === "cancelled_pay_on_day") {
+        setActionMsg("Pay-on-day booking cancelled.");
+      } else {
+        setActionMsg("Booking cancelled.");
+      }
+
+      await Promise.allSettled([mutateBookings?.(), mutateSessions?.()]);
+    } catch (e: any) {
+      setActionErr(e?.message || "Failed to cancel booking");
+    } finally {
+      setCancelling(null);
     }
   }
 
@@ -359,11 +452,10 @@ export default function SchedulePage() {
       if (!res.ok) throw new Error(json?.error || "Failed to create booking");
 
       if (json.status === "pending_payment") {
-        const checkoutRes = await fetch("/api/billing/create-checkout-session", {
+        const checkoutRes = await fetch("/api/bookings/stripe/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            purpose: "class_booking",
             booking_id: json.booking_id,
           }),
         });
@@ -377,16 +469,14 @@ export default function SchedulePage() {
       }
 
       if (method === "member_free") {
-        setBookMsg("Booked. Gym member booking is free.");
-      } else if (isCashPayer) {
-        setBookMsg("Booked. Pay £8 cash at the gym.");
+        setBookMsg("Booked. Included with your membership.");
       } else if (method === "pay_on_day") {
-        setBookMsg("Booked. Pay £10 on arrival.");
+        setBookMsg("Booked. Pay £12 on arrival.");
       } else {
         setBookMsg("Booked.");
       }
 
-      mutateSessions?.();
+      await Promise.allSettled([mutateBookings?.(), mutateSessions?.()]);
     } catch (e: any) {
       setBookErr(e?.message || "Booking failed");
     } finally {
@@ -404,7 +494,7 @@ export default function SchedulePage() {
             <div style={{ minWidth: 0 }}>
               <div className="ia-kicker">
                 <i className="fas fa-calendar-alt" />
-                SCHEDULE
+                schedule
               </div>
               <div className="ia-page-title">Book sessions</div>
               <div className="ia-page-subtitle">
@@ -500,7 +590,7 @@ export default function SchedulePage() {
               <div>
                 <div className="ia-kicker">
                   <i className="fas fa-clock" />
-                  DAY VIEW
+                  day view
                 </div>
                 <div className="ia-card-title-compact">{activeDay}</div>
               </div>
@@ -525,6 +615,7 @@ export default function SchedulePage() {
                 session.max_attendance > 0 &&
                 session.current_attendance >= session.max_attendance;
               const alreadyBooked = bookedSet.has(session.id);
+              const displayName = classLabel(session);
 
               return (
                 <div
@@ -535,7 +626,7 @@ export default function SchedulePage() {
                   <div className="d-flex justify-content-between align-items-start gap-2">
                     <div style={{ minWidth: 0 }}>
                       <div className="ia-class-item-title">
-                        {session.class_id} • {session.gym_name}
+                        {displayName} • {session.gym_name}
                       </div>
 
                       <div className="ia-class-item-meta mt-1">
@@ -550,18 +641,28 @@ export default function SchedulePage() {
 
                       <div className="ia-class-item-meta mt-1">
                         {isGymMember
-                          ? "Members book free"
+                          ? "Included with membership"
                           : isCashPayer
-                          ? "Cash members £8 on arrival"
-                          : "£8 prebook / £10 pay on day"}
+                          ? "Pay £12 on arrival"
+                          : "£9 prebook / £12 pay on day"}
                       </div>
                     </div>
 
                     <div className="d-flex flex-column gap-2" style={{ flex: "0 0 auto" }}>
                       {alreadyBooked ? (
-                        <button type="button" className="ia-btn ia-btn-outline" disabled>
-                          Booked
-                        </button>
+                        <>
+                          <button type="button" className="ia-btn ia-btn-outline" disabled>
+                            Booked
+                          </button>
+                          <button
+                            type="button"
+                            className="ia-btn ia-btn-outline"
+                            onClick={() => cancelBooking(session)}
+                            disabled={cancelling === session.id}
+                          >
+                            {cancelling === session.id ? "Cancelling…" : "Cancel"}
+                          </button>
+                        </>
                       ) : (
                         <button
                           type="button"
@@ -577,7 +678,7 @@ export default function SchedulePage() {
                         type="button"
                         className="ia-btn ia-btn-outline"
                         onClick={() => shareWhatsApp(session.id)}
-                        disabled={pending === session.id}
+                        disabled={pending === session.id || cancelling === session.id}
                       >
                         Share
                       </button>
@@ -596,7 +697,7 @@ export default function SchedulePage() {
                   <section className="ia-tile ia-tile-pad">
                     <div className="ia-kicker mb-2">
                       <i className="fas fa-share-alt" />
-                      SHARE LINK
+                      share link
                     </div>
 
                     <div className="text-dim small mb-2">WhatsApp message</div>
@@ -674,10 +775,10 @@ export default function SchedulePage() {
               <div>
                 <div className="ia-kicker">
                   <i className="fas fa-ticket-alt" />
-                  BOOK SESSION
+                  book session
                 </div>
                 <div className="ia-card-title-compact">
-                  {activeSession.class_id} • {activeSession.gym_name}
+                  {classLabel(activeSession)} • {activeSession.gym_name}
                 </div>
               </div>
 
@@ -732,33 +833,40 @@ export default function SchedulePage() {
                   disabled={bookingBusy}
                 />
                 <label className="form-check-label" htmlFor="payOnDay">
-                  {isCashPayer ? "Pay £8 cash on the day" : "Pay on the day (£10)"}
+                  Pay on the day (£12)
                 </label>
               </div>
             ) : (
-              <div className="ia-inline-note-success mt-2">You’re a member. This booking is free.</div>
+              <div className="ia-inline-note-success mt-2">
+                Included with your membership.
+              </div>
             )}
 
             {bookErr ? <div className="ia-inline-note-error mt-2">{bookErr}</div> : null}
             {bookMsg ? <div className="ia-inline-note-success mt-2">{bookMsg}</div> : null}
 
             <div className="d-grid gap-2 mt-3">
-              <button type="button" className="ia-btn ia-btn-primary" onClick={confirmBooking} disabled={bookingBusy}>
+              <button
+                type="button"
+                className="ia-btn ia-btn-primary"
+                onClick={confirmBooking}
+                disabled={bookingBusy}
+              >
                 {bookingBusy
                   ? "Processing…"
                   : isGymMember
                   ? "Book free"
                   : payOnDay
                   ? "Confirm booking"
-                  : "Pay £8 now"}
+                  : "Pay £9 now"}
               </button>
             </div>
 
             <div className="text-dim small mt-2">
               {!isGymMember
                 ? payOnDay
-                  ? "You’ll pay £10 at the gym."
-                  : "You’ll be redirected to Stripe to pay £8."
+                  ? "You’ll pay £12 at the gym."
+                  : "You’ll be redirected to Stripe to pay £9."
                 : null}
             </div>
           </div>
