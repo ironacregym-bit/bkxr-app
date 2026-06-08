@@ -8,6 +8,79 @@ import { useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 import { toMillis } from "../lib/time";
 
+type Gym = {
+  id: string;
+  name: string;
+  location: string;
+};
+
+type SessionItem = {
+  id: string;
+  class_id: string;
+  coach_name?: string;
+  start_time: string | number | null;
+  end_time: string | number | null;
+  price: number;
+  max_attendance: number;
+  current_attendance: number;
+  gym_name: string;
+  location: string;
+};
+
+type UserAccess = {
+  subscription_status?: string | null;
+  membership_status?: string | null;
+  payment_type?: string | null;
+};
+
+type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
+
+type BookingsMineResponse = {
+  sessionIds?: string[];
+};
+
+type Cell =
+  | { key: string; blank: true }
+  | { key: string; blank: false; day: number; ymd: string; count: number; isToday: boolean };
+
+function ymdLocal(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatDateTime(value: string | number | null) {
+  const ms = toMillis(value);
+  if (!ms) return "TBC";
+  return new Date(ms).toLocaleString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+Yep — that error is because TypeScript still doesn’t narrow `map[key]` strongly enough on the next line, even after the guard.
+
+The simplest clean fix is:
+- assign `map[key]` to a local variable after initialising it
+- sort that local variable
+- then continue
+
+Here is the **full updated file** for `pages/schedule.tsx` with that fixed properly.
+
+```tsx
+// pages/schedule.tsx
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
+import { useSession } from "next-auth/react";
+import BottomNav from "../components/BottomNav";
+import { toMillis } from "../lib/time";
+
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 type Gym = {
@@ -188,8 +261,9 @@ export default function SchedulePage() {
         map[key] = [];
       }
 
-      map[key].push(s);
-      map[key].sort((a, b) => toMillis(a.start_time) - toMillis(b.start_time));
+      const daySessions = map[key];
+      daySessions.push(s);
+      daySessions.sort((a, b) => toMillis(a.start_time) - toMillis(b.start_time));
     }
 
     return map;
@@ -742,3 +816,4 @@ export default function SchedulePage() {
     </>
   );
 }
+
