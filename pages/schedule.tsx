@@ -37,6 +37,10 @@ type UserAccess = {
 
 type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
 
+type BookingsMineResponse = {
+  sessionIds?: string[];
+};
+
 type Cell =
   | { key: string; blank: true }
   | { key: string; blank: false; day: number; ymd: string; count: number; isToday: boolean };
@@ -158,17 +162,36 @@ export default function SchedulePage() {
 
   const sessions: SessionItem[] = Array.isArray(sessionsResp?.sessions) ? sessionsResp.sessions : [];
 
+  const bookingsKey =
+    isAuthed && shouldLoadSessions
+      ? `/api/bookings/mine?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`
+      : null;
+
+  const { data: bookingsResp } = useSWR<BookingsMineResponse>(bookingsKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 20_000,
+  });
+
+  const bookedSessionIds = Array.isArray(bookingsResp?.sessionIds) ? bookingsResp.sessionIds : [];
+  const bookedSet = useMemo(() => new Set<string>(bookedSessionIds), [bookedSessionIds]);
+
   const sessionsByDay = useMemo(() => {
     const map: Record<string, SessionItem[]> = {};
+
     for (const s of sessions) {
       const ms = toMillis(s.start_time);
       if (!ms) continue;
+
       const key = ymdLocal(new Date(ms));
-      (map[key] ??= []).push(s);
+
+      if (!map[key]) {
+        map[key] = [];
+      }
+
+      map[key].push(s);
+      map[key].sort((a, b) => toMillis(a.start_time) - toMillis(b.start_time));
     }
-    Object.values(map).forEach((items) =>
-      items.sort((a, b) => toMillis(a.start_time) - toMillis(b.start_time))
-    );
+
     return map;
   }, [sessions]);
 
@@ -356,11 +379,12 @@ export default function SchedulePage() {
               </div>
               <div className="ia-page-title">Book sessions</div>
               <div className="ia-page-subtitle">
-                Browse your gym timetable, pick a date and book onto a session.
+                Browse the timetable, pick a day and book your next class.
               </div>
             </div>
 
-            /iron-acre
+            <Link href="/iron-acre" className="ia-btn ia-btn-outline ia-btn-icon-left">
+              <i className="fas fa-chevron-left" />
               Back
             </Link>
           </div>
@@ -469,12 +493,18 @@ export default function SchedulePage() {
             ) : null}
 
             {activeDaySessions.map((s) => {
-              const startMs = toMillis(s.start_time);
               const endMs = toMillis(s.end_time);
               const full = s.max_attendance > 0 && s.current_attendance >= s.max_attendance;
+              const alreadyBooked = bookedSet.has(s.id);
 
               return (
-                <div key={s.id} className="ia-class-item">
+                <div
+                  key={s.id}
+                  className="ia-class-item"
+                  style={{
+                    opacity: full && !alreadyBooked ? 0.55 : 1,
+                  }}
+                >
                   <div className="d-flex justify-content-between align-items-start gap-2">
                     <div style={{ minWidth: 0 }}>
                       <div className="ia-class-item-title">
@@ -501,14 +531,20 @@ export default function SchedulePage() {
                     </div>
 
                     <div className="d-flex flex-column gap-2" style={{ flex: "0 0 auto" }}>
-                      <button
-                        type="button"
-                        className="ia-btn ia-btn-primary"
-                        onClick={() => openBookingModal(s)}
-                        disabled={full || pending === s.id}
-                      >
-                        {full ? "Full" : "Book"}
-                      </button>
+                      {alreadyBooked ? (
+                        <button type="button" className="ia-btn ia-btn-outline" disabled>
+                          Booked
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="ia-btn ia-btn-primary"
+                          onClick={() => openBookingModal(s)}
+                          disabled={full || pending === s.id}
+                        >
+                          {full ? "Full" : "Book"}
+                        </button>
+                      )}
 
                       <button
                         type="button"
