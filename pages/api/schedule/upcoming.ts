@@ -6,6 +6,7 @@ const ACTIVE_BOOKING_STATUSES = new Set([
   "confirmed",
   "pending_payment",
   "pay_on_day",
+  "member_free",
   "bank_pending",
 ]);
 
@@ -19,6 +20,22 @@ function toIsoOrNull(value: any): string | null {
 
   const d = new Date(value);
   return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+async function getClassData(classId: string) {
+  if (!classId) return null;
+
+  const classesDoc = await firestore.collection("classes").doc(classId).get();
+  if (classesDoc.exists) {
+    return classesDoc.data() as any;
+  }
+
+  const classDoc = await firestore.collection("class").doc(classId).get();
+  if (classDoc.exists) {
+    return classDoc.data() as any;
+  }
+
+  return null;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -56,8 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         const classId = String(data?.class_id || "").trim();
-        const classDoc = classId ? await firestore.collection("classes").doc(classId).get() : null;
-        const classData = classDoc?.exists ? (classDoc.data() as any) : null;
+        const classData = await getClassData(classId);
 
         const bookingsSnap = await firestore
           .collection("bookings")
@@ -76,6 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           class_name:
             String(classData?.name || "").trim() ||
             String(classData?.title || "").trim() ||
+            String(classData?.class_name || "").trim() ||
             classId ||
             null,
           coach_name: data?.coach_name || null,
