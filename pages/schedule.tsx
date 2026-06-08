@@ -55,6 +55,7 @@ function ymdLocal(d: Date) {
 function formatDateTime(value: string | number | null) {
   const ms = toMillis(value);
   if (!ms) return "TBC";
+
   return new Date(ms).toLocaleString("en-GB", {
     weekday: "short",
     day: "numeric",
@@ -68,11 +69,16 @@ function formatDateTime(value: string | number | null) {
 function formatTime(value: string | number | null) {
   const ms = toMillis(value);
   if (!ms) return "";
+
   return new Date(ms).toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
+}
+
+function compareSessionStart(a: SessionItem, b: SessionItem) {
+  return toMillis(a.start_time) - toMillis(b.start_time);
 }
 
 export default function SchedulePage() {
@@ -197,14 +203,16 @@ export default function SchedulePage() {
   const sessionsByDay = useMemo(() => {
     const map: Record<string, SessionItem[]> = {};
 
-    for (const s of sessions) {
-      const ms = toMillis(s.start_time);
+    for (const session of sessions) {
+      const ms = toMillis(session.start_time);
       if (!ms) continue;
 
       const key = ymdLocal(new Date(ms));
-      const daySessions = map[key] ?? [];
-      daySessions.push(s);
-      daySessions.sort((a, b) => toMillis(a.start_time) - toMillis(b.start_time));
+      const daySessions: SessionItem[] = map[key] ? [...map[key]] : [];
+
+      daySessions.push(session);
+      daySessions.sort(compareSessionStart);
+
       map[key] = daySessions;
     }
 
@@ -288,8 +296,8 @@ export default function SchedulePage() {
   const [bookErr, setBookErr] = useState<string | null>(null);
   const [bookingBusy, setBookingBusy] = useState(false);
 
-  function openBookingModal(s: SessionItem) {
-    setActiveSession(s);
+  function openBookingModal(session: SessionItem) {
+    setActiveSession(session);
     setShowBookModal(true);
     setBookMsg(null);
     setBookErr(null);
@@ -399,7 +407,7 @@ export default function SchedulePage() {
               </div>
             </div>
 
-            <Link href="/iron-acre" className="ia-btn ia-btn-outline ia-btn-icon-left">
+            /iron-acre
               <i className="fas fa-chevron-left" />
               Back
             </Link>
@@ -506,31 +514,33 @@ export default function SchedulePage() {
               </div>
             ) : null}
 
-            {activeDaySessions.map((s) => {
-              const endMs = toMillis(s.end_time);
-              const full = s.max_attendance > 0 && s.current_attendance >= s.max_attendance;
-              const alreadyBooked = bookedSet.has(s.id);
+            {activeDaySessions.map((session) => {
+              const endMs = toMillis(session.end_time);
+              const full =
+                session.max_attendance > 0 &&
+                session.current_attendance >= session.max_attendance;
+              const alreadyBooked = bookedSet.has(session.id);
 
               return (
                 <div
-                  key={s.id}
+                  key={session.id}
                   className="ia-class-item"
                   style={{ opacity: full && !alreadyBooked ? 0.55 : 1 }}
                 >
                   <div className="d-flex justify-content-between align-items-start gap-2">
                     <div style={{ minWidth: 0 }}>
                       <div className="ia-class-item-title">
-                        {s.class_id} • {s.gym_name}
+                        {session.class_id} • {session.gym_name}
                       </div>
 
                       <div className="ia-class-item-meta mt-1">
-                        {formatDateTime(s.start_time)}
-                        {endMs ? ` — ${formatTime(s.end_time)}` : ""}
+                        {formatDateTime(session.start_time)}
+                        {endMs ? ` — ${formatTime(session.end_time)}` : ""}
                       </div>
 
                       <div className="ia-class-item-meta mt-1">
-                        {s.coach_name ? `Coach: ${s.coach_name}` : "Coach: TBC"} •{" "}
-                        {s.current_attendance}/{s.max_attendance || "∞"} booked
+                        {session.coach_name ? `Coach: ${session.coach_name}` : "Coach: TBC"} •{" "}
+                        {session.current_attendance}/{session.max_attendance || "∞"} booked
                       </div>
 
                       <div className="ia-class-item-meta mt-1">
@@ -551,8 +561,8 @@ export default function SchedulePage() {
                         <button
                           type="button"
                           className="ia-btn ia-btn-primary"
-                          onClick={() => openBookingModal(s)}
-                          disabled={full || pending === s.id}
+                          onClick={() => openBookingModal(session)}
+                          disabled={full || pending === session.id}
                         >
                           {full ? "Full" : "Book"}
                         </button>
@@ -561,8 +571,8 @@ export default function SchedulePage() {
                       <button
                         type="button"
                         className="ia-btn ia-btn-outline"
-                        onClick={() => shareWhatsApp(s.id)}
-                        disabled={pending === s.id}
+                        onClick={() => shareWhatsApp(session.id)}
+                        disabled={pending === session.id}
                       >
                         Share
                       </button>
