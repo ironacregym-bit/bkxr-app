@@ -8,79 +8,6 @@ import { useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 import { toMillis } from "../lib/time";
 
-type Gym = {
-  id: string;
-  name: string;
-  location: string;
-};
-
-type SessionItem = {
-  id: string;
-  class_id: string;
-  coach_name?: string;
-  start_time: string | number | null;
-  end_time: string | number | null;
-  price: number;
-  max_attendance: number;
-  current_attendance: number;
-  gym_name: string;
-  location: string;
-};
-
-type UserAccess = {
-  subscription_status?: string | null;
-  membership_status?: string | null;
-  payment_type?: string | null;
-};
-
-type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
-
-type BookingsMineResponse = {
-  sessionIds?: string[];
-};
-
-type Cell =
-  | { key: string; blank: true }
-  | { key: string; blank: false; day: number; ymd: string; count: number; isToday: boolean };
-
-function ymdLocal(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function formatDateTime(value: string | number | null) {
-  const ms = toMillis(value);
-  if (!ms) return "TBC";
-  return new Date(ms).toLocaleString("en-GB", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-Yep — that error is because TypeScript still doesn’t narrow `map[key]` strongly enough on the next line, even after the guard.
-
-The simplest clean fix is:
-- assign `map[key]` to a local variable after initialising it
-- sort that local variable
-- then continue
-
-Here is the **full updated file** for `pages/schedule.tsx` with that fixed properly.
-
-```tsx
-// pages/schedule.tsx
-"use client";
-
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import useSWR from "swr";
-import { useSession } from "next-auth/react";
-import BottomNav from "../components/BottomNav";
-import { toMillis } from "../lib/time";
-
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 type Gym = {
@@ -153,14 +80,19 @@ export default function SchedulePage() {
   const isAuthed = Boolean(authSession?.user?.email);
   const authedEmail = String(authSession?.user?.email || "").trim();
 
-  const profileKey = authedEmail ? `/api/profile?email=${encodeURIComponent(authedEmail)}` : null;
+  const profileKey = authedEmail
+    ? `/api/profile?email=${encodeURIComponent(authedEmail)}`
+    : null;
+
   const { data: profile } = useSWR<UserAccess>(profileKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
 
-  const isGymMember = String(profile?.membership_status || "").toLowerCase() === "gym_member";
-  const isCashPayer = String(profile?.payment_type || "").toLowerCase() === "cash";
+  const isGymMember =
+    String(profile?.membership_status || "").toLowerCase() === "gym_member";
+  const isCashPayer =
+    String(profile?.payment_type || "").toLowerCase() === "cash";
 
   const { data: gymsResp, error: gymsError } = useSWR("/api/gyms/list", fetcher, {
     revalidateOnFocus: false,
@@ -185,8 +117,15 @@ export default function SchedulePage() {
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
 
-  const monthStart = useMemo(() => new Date(year, month, 1, 0, 0, 0, 0), [year, month]);
-  const monthEnd = useMemo(() => new Date(year, month + 1, 0, 23, 59, 59, 999), [year, month]);
+  const monthStart = useMemo(
+    () => new Date(year, month, 1, 0, 0, 0, 0),
+    [year, month]
+  );
+
+  const monthEnd = useMemo(
+    () => new Date(year, month + 1, 0, 23, 59, 59, 999),
+    [year, month]
+  );
 
   const monthLabel = useMemo(
     () =>
@@ -222,9 +161,9 @@ export default function SchedulePage() {
     mutate: mutateSessions,
   } = useSWR(
     shouldLoadSessions
-      ? `/api/schedule/upcoming?location=${encodeURIComponent(selectedGym!.location)}&from=${encodeURIComponent(
-          fromISO
-        )}&to=${encodeURIComponent(toISO)}`
+      ? `/api/schedule/upcoming?location=${encodeURIComponent(
+          selectedGym?.location || ""
+        )}&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`
       : null,
     fetcher,
     {
@@ -233,11 +172,15 @@ export default function SchedulePage() {
     }
   );
 
-  const sessions: SessionItem[] = Array.isArray(sessionsResp?.sessions) ? sessionsResp.sessions : [];
+  const sessions: SessionItem[] = Array.isArray(sessionsResp?.sessions)
+    ? sessionsResp.sessions
+    : [];
 
   const bookingsKey =
     isAuthed && shouldLoadSessions
-      ? `/api/bookings/mine?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`
+      ? `/api/bookings/mine?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(
+          toISO
+        )}`
       : null;
 
   const { data: bookingsResp } = useSWR<BookingsMineResponse>(bookingsKey, fetcher, {
@@ -245,7 +188,10 @@ export default function SchedulePage() {
     dedupingInterval: 20_000,
   });
 
-  const bookedSessionIds = Array.isArray(bookingsResp?.sessionIds) ? bookingsResp.sessionIds : [];
+  const bookedSessionIds = Array.isArray(bookingsResp?.sessionIds)
+    ? bookingsResp.sessionIds
+    : [];
+
   const bookedSet = useMemo(() => new Set<string>(bookedSessionIds), [bookedSessionIds]);
 
   const sessionsByDay = useMemo(() => {
@@ -256,14 +202,10 @@ export default function SchedulePage() {
       if (!ms) continue;
 
       const key = ymdLocal(new Date(ms));
-
-      if (!map[key]) {
-        map[key] = [];
-      }
-
-      const daySessions = map[key];
+      const daySessions = map[key] ?? [];
       daySessions.push(s);
       daySessions.sort((a, b) => toMillis(a.start_time) - toMillis(b.start_time));
+      map[key] = daySessions;
     }
 
     return map;
@@ -520,9 +462,7 @@ export default function SchedulePage() {
 
             <div className="calendar-grid">
               {cells.map((cell) => {
-                if (cell.blank) {
-                  return <div key={cell.key} />;
-                }
+                if (cell.blank) return <div key={cell.key} />;
 
                 return (
                   <button
@@ -575,9 +515,7 @@ export default function SchedulePage() {
                 <div
                   key={s.id}
                   className="ia-class-item"
-                  style={{
-                    opacity: full && !alreadyBooked ? 0.55 : 1,
-                  }}
+                  style={{ opacity: full && !alreadyBooked ? 0.55 : 1 }}
                 >
                   <div className="d-flex justify-content-between align-items-start gap-2">
                     <div style={{ minWidth: 0 }}>
@@ -816,4 +754,3 @@ export default function SchedulePage() {
     </>
   );
 }
-
