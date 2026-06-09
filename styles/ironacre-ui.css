@@ -52,6 +52,21 @@
   --ia-btn-primary-shadow: 0 8px 18px rgba(24, 255, 154, 0.18);
 
   --ia-focus: 0 0 0 3px rgba(24, 255, 154, 0.18);
+
+   --ia-danger: #ff5f73;
+  --ia-danger-bg: rgba(255, 95, 115, 0.10);
+  --ia-danger-border: rgba(255, 95, 115, 0.26);
+  --ia-danger-text: #ffb8c1;
+
+  --ia-info: #59b8ff;
+  --ia-info-bg: rgba(89, 184, 255, 0.10);
+  --ia-info-border: rgba(89, 184, 255, 0.24);
+  --ia-info-text: #bfe3ff;
+
+  --ia-muted-btn-bg: rgba(255, 255, 255, 0.05);
+  --ia-muted-btn-bg-hover: rgba(255, 255, 255, 0.08);
+  --ia-muted-btn-border: rgba(255, 255, 255, 0.10);
+  --ia-muted-btn-text: #c8d3df;
 }
 
 /* ─────────────────────────
@@ -249,6 +264,62 @@ a {
 
 .ia-btn-icon-left i {
   margin-right: 6px;
+}
+.ia-btn-danger {
+  border-radius: var(--ia-r-pill) !important;
+  padding: 0 11px !important;
+  min-height: 34px;
+  border: 1px solid var(--ia-danger-border) !important;
+  background: var(--ia-danger-bg) !important;
+  color: var(--ia-danger-text) !important;
+  font-weight: var(--ia-fw-semi) !important;
+  font-size: 0.84rem !important;
+  box-shadow: 0 0 12px rgba(255, 95, 115, 0.10);
+}
+
+.ia-btn-danger:hover,
+.ia-btn-danger:focus {
+  background: rgba(255, 95, 115, 0.14) !important;
+  border-color: rgba(255, 95, 115, 0.34) !important;
+  color: #ffd5db !important;
+}
+
+.ia-btn-info {
+  border-radius: var(--ia-r-pill) !important;
+  padding: 0 11px !important;
+  min-height: 34px;
+  border: 1px solid var(--ia-info-border) !important;
+  background: var(--ia-info-bg) !important;
+  color: var(--ia-info-text) !important;
+  font-weight: var(--ia-fw-semi) !important;
+  font-size: 0.84rem !important;
+  box-shadow: 0 0 12px rgba(89, 184, 255, 0.10);
+}
+
+.ia-btn-info:hover,
+.ia-btn-info:focus {
+  background: rgba(89, 184, 255, 0.14) !important;
+  border-color: rgba(89, 184, 255, 0.32) !important;
+  color: #e3f3ff !important;
+}
+
+.ia-btn-muted {
+  border-radius: var(--ia-r-pill) !important;
+  padding: 0 11px !important;
+  min-height: 34px;
+  border: 1px solid var(--ia-muted-btn-border) !important;
+  background: var(--ia-muted-btn-bg) !important;
+  color: var(--ia-muted-btn-text) !important;
+  font-weight: var(--ia-fw-semi) !important;
+  font-size: 0.84rem !important;
+  box-shadow: none !important;
+}
+
+.ia-btn-muted:hover,
+.ia-btn-muted:focus {
+  background: var(--ia-muted-btn-bg-hover) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #eef4fb !important;
 }
 
 /* ─────────────────────────
