@@ -329,7 +329,7 @@ export default function AdminRecurringSessionsPage() {
       <main className="container py-3 text-white" style={{ paddingBottom: 90 }}>
         <div className="d-flex align-items-center justify-content-between mb-2">
           <div className="d-flex align-items-center gap-2">
-            /admin/sessions
+            <Link href="/admin/sessions">
               ← Sessions
             </Link>
 
