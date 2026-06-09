@@ -524,6 +524,7 @@ export default function SchedulePage() {
   }
 
   const activeDaySessions = activeDay ? sessionsByDay[activeDay] || [] : [];
+  const nowMs = Date.now();
 
   return (
     <>
@@ -541,7 +542,7 @@ export default function SchedulePage() {
               </div>
             </div>
 
-            <Link href="/iron-acre" className="ia-btn ia-btn-muted ia-btn-icon-left">
+            <Link href="/iron-acre" className="ia-btn ia-btn-outline ia-btn-icon-left">
               <i className="fas fa-chevron-left" />
               Back
             </Link>
@@ -649,7 +650,9 @@ export default function SchedulePage() {
             ) : null}
 
             {activeDaySessions.map((session) => {
+              const startMs = safeMillis(session.start_time);
               const endMs = safeMillis(session.end_time);
+              const isPast = !!startMs && startMs < nowMs;
               const full =
                 session.max_attendance > 0 &&
                 session.current_attendance >= session.max_attendance;
@@ -662,7 +665,9 @@ export default function SchedulePage() {
                 <div
                   key={session.id}
                   className="ia-class-item"
-                  style={{ opacity: full && !alreadyBooked ? 0.55 : 1 }}
+                  style={{
+                    opacity: isPast ? 0.45 : full && !alreadyBooked ? 0.55 : 1,
+                  }}
                 >
                   <div className="d-flex justify-content-between align-items-start gap-2">
                     <div style={{ minWidth: 0 }}>
@@ -681,7 +686,9 @@ export default function SchedulePage() {
                       </div>
 
                       <div className="ia-class-item-meta mt-1">
-                        {isIncludedMember
+                        {isPast
+                          ? "Session complete"
+                          : isIncludedMember
                           ? "Included with membership"
                           : isCashPayer
                           ? `Pay £${dropInPrice} on arrival`
@@ -696,23 +703,25 @@ export default function SchedulePage() {
                             Booked
                           </button>
 
-                          <button
-                            type="button"
-                            className="ia-btn ia-btn-danger"
-                            onClick={() => cancelBooking(session)}
-                            disabled={cancelling === session.id}
-                          >
-                            {cancelling === session.id ? "Cancelling…" : "Cancel"}
-                          </button>
+                          {!isPast ? (
+                            <button
+                              type="button"
+                              className="ia-btn ia-btn-danger"
+                              onClick={() => cancelBooking(session)}
+                              disabled={cancelling === session.id}
+                            >
+                              {cancelling === session.id ? "Cancelling…" : "Cancel"}
+                            </button>
+                          ) : null}
                         </>
                       ) : (
                         <button
                           type="button"
-                          className="ia-btn ia-btn-primary"
+                          className={isPast ? "ia-btn ia-btn-muted" : "ia-btn ia-btn-primary"}
                           onClick={() => openBookingModal(session)}
-                          disabled={full || pending === session.id}
+                          disabled={isPast || full || pending === session.id}
                         >
-                          {full ? "Full" : "Book"}
+                          {isPast ? "Done" : full ? "Full" : "Book"}
                         </button>
                       )}
 
@@ -720,7 +729,7 @@ export default function SchedulePage() {
                         type="button"
                         className="ia-btn ia-btn-info"
                         onClick={() => shareWhatsApp(session.id)}
-                        disabled={pending === session.id || cancelling === session.id}
+                        disabled={isPast || pending === session.id || cancelling === session.id}
                       >
                         Share
                       </button>
