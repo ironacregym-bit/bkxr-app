@@ -217,21 +217,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sessionRef = firestore.collection("session").doc(session_id);
     const bookingRef = firestore.collection("bookings").doc(bookingId);
 
-    const status =
-      method === "stripe"
-        ? "pending_payment"
-        : method === "pay_on_day"
-        ? "pay_on_day"
-        : "confirmed";
-
-    const amount_gbp =
-      method === "member_free"
-        ? 0
-        : method === "pay_on_day"
-        ? 12
-        : 9;
-
     let sessData: any = null;
+    let gymData: any = null;
 
     await firestore.runTransaction(async (tx) => {
       const sessSnap = await tx.get(sessionRef);
@@ -241,13 +228,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       sessData = sessSnap.data() as any;
 
+      const gymId = String(sessData?.gym_id || "").trim();
+      if (gymId) {
+        const gymRef = firestore.collection("gyms").doc(gymId);
+        const gymSnap = await tx.get(gymRef);
+        gymData = gymSnap.exists ? (gymSnap.data() as any) : null;
+      }
+
       const max = Number(sessData?.max_attendance) || 0;
-      const sessionStartTs = asTimestamp(sessData?.start_time);
-      const sessionStartDate = sessionStartTs?.toDate() || null;
-      const refundCutoffTs =
-        sessionStartDate
-          ? Timestamp.fromDate(new Date(sessionStartDate.getTime() - 24 * 60 * 60 * 1000))
-          : null;
 
       const reservedQuery = firestore
         .collection("bookings")
@@ -260,13 +248,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         throw new Error("Session is full");
       }
 
+      const sessionStartTs = asTimestamp(sessData?.start_time);
+      const sessionStartDate = sessionStartTs?.toDate() || null;
+      const refundCutoffTs =
+        sessionStartDate
+          ? Timestamp.fromDate(new Date(sessionStartDate.getTime() - 24 * 60 * 60 * 1000))
+          : null;
+
+      const prebookPrice = Number(sessData?.price || 9);
+      const dropInPrice = Number(sessData?.drop_in_price || 12);
+
+      const amount_gbp =
+        method === "member_free"
+          ? 0
+          : method === "pay_on_day"
+          ? dropInPrice
+          : prebookPrice;
+
+      const status =
+        method === "stripe"
+          ? "pending_payment"
+          : method === "pay_on_day"
+          ? "pay_on_day"
+          : "confirmed";
+
       const existing = await tx.get(bookingRef);
 
       if (existing.exists) {
         const ex = existing.data() as any;
         const existingStatus = String(ex?.status || "").trim().toLowerCase();
 
-        if (existingStatus === "confirmed" || existingStatus === "pay_on_day" || existingStatus === "member_free") {
+        if (
+          existingStatus === "confirmed" ||
+          existingStatus === "pay_on_day" ||
+          existingStatus === "member_free"
+        ) {
           return;
         }
 
@@ -277,10 +293,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             payment_method: method,
             amount_gbp,
             updated_at: now,
+            paid: method === "member_free",
             user_email: uidFromSession ? email : null,
             guest_name: uidFromSession ? null : guestName,
             guest_email: uidFromSession ? null : guestEmail,
-            paid: method === "member_free",
+            class_id: String(sessData?.class_id || "").trim() || null,
+            class_name: String(sessData?.class_name || "").trim() || null,
+            gym_id: String(sessData?.gym_id || "").trim() || null,
+            gym_name: String(gymData?.name || "").trim() || null,
             session_start_at: sessionStartTs,
             refund_cutoff_at: refundCutoffTs,
             refund_eligible: method === "stripe",
@@ -308,6 +328,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         stripe_refund_id: null,
         refund_status: "none",
         source: "schedule",
+        class_id: String(sessData?.class_id || "").trim() || null,
+        class_name: String(sessData?.class_name || "").trim() || null,
+        gym_id: String(sessData?.gym_id || "").trim() || null,
+        gym_name: String(gymData?.name || "").trim() || null,
         created_at: now,
         updated_at: now,
         cancelled_at: null,
@@ -323,31 +347,75 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const recipient = uidFromSession ? email : guestEmail;
 
-    if (recipient && status !== "pending_payment") {
-      await emitEmail(req, "class_booking_confirmed", recipient, {
-        booking_id: bookingId,
-        session_id,
-        payment_method: method,
-        amount_gbp,
-        class_id: sessData?.class_id || "",
-        class_name: sessData?.class_name || "",
-        gym_name: sessData?.gym_name || "",
-        start_time: sessData?.start_time || null,
-        note:
-          method === "member_free"
-            ? "Included with your membership"
-            : method === "pay_on_day"
-            ? "Pay £12 on arrival"
-            : "Prebooked at £9",
-      });
+    if (recipient) {
+      const currentMethod = userFlags?.isIncludedMember
+        ? "member_free"
+        : userFlags?.isCashPayer
+        ? "pay_on_day"
+        : requested;
+
+      const prebookPrice = Number(sessData?.price || 9);
+      const dropInPrice = Number(sessData?.drop_in_price || 12);
+      const amountGbp =
+        currentMethod === "member_free"
+          ? 0
+          : currentMethod === "pay_on_day"
+          ? dropInPrice
+          : prebookPrice;
+
+      const status =
+        currentMethod === "stripe"
+          ? "pending_payment"
+          : currentMethod === "pay_on_day"
+          ? "pay_on_day"
+          : "confirmed";
+
+      if (status !== "pending_payment") {
+        await emitEmail(req, "class_booking_confirmed", recipient, {
+          booking_id: bookingId,
+          session_id,
+          payment_method: currentMethod,
+          amount_gbp: amountGbp,
+          class_id: String(sessData?.class_id || "").trim(),
+          class_name: String(sessData?.class_name || "").trim(),
+          gym_name: String(gymData?.name || "").trim(),
+          start_time: sessData?.start_time || null,
+          note:
+            currentMethod === "member_free"
+              ? "Included with your membership"
+              : currentMethod === "pay_on_day"
+              ? `Pay £${dropInPrice} on arrival`
+              : `Prebooked at £${prebookPrice}`,
+        });
+      }
     }
+
+    const finalMethod = userFlags?.isIncludedMember
+      ? "member_free"
+      : userFlags?.isCashPayer
+      ? "pay_on_day"
+      : requested;
+
+    const finalAmount =
+      finalMethod === "member_free"
+        ? 0
+        : finalMethod === "pay_on_day"
+        ? Number(sessData?.drop_in_price || 12)
+        : Number(sessData?.price || 9);
+
+    const finalStatus =
+      finalMethod === "stripe"
+        ? "pending_payment"
+        : finalMethod === "pay_on_day"
+        ? "pay_on_day"
+        : "confirmed";
 
     return res.status(200).json({
       ok: true,
       booking_id: bookingId,
-      status,
-      payment_method: method,
-      amount_gbp,
+      status: finalStatus,
+      payment_method: finalMethod,
+      amount_gbp: finalAmount,
       is_member_free: Boolean(userFlags?.isIncludedMember),
       is_cash_payer: Boolean(userFlags?.isCashPayer),
       membership_scope: userFlags?.membershipScope || "none",
