@@ -14,13 +14,19 @@ type Body = {
   end_time_hhmm?: string;
   coach_name?: string;
   price?: number;
+  drop_in_price?: number;
   max_attendance?: number;
   notify_members?: boolean;
 };
 
 function parseDateTime(dateYMD: string, hhmm: string): Date | null {
-  const [year, month, day] = dateYMD.split("-").map((x) => Number(x));
-  const [hours, minutes] = hhmm.split(":").map((x) => Number(x));
+  const [year, month, day] = String(dateYMD || "")
+    .split("-")
+    .map((x) => Number(x));
+
+  const [hours, minutes] = String(hhmm || "")
+    .split(":")
+    .map((x) => Number(x));
 
   if (
     !Number.isFinite(year) ||
@@ -75,6 +81,20 @@ function shouldNotifyUserForGym(user: any, targetGymId: string): boolean {
   return Boolean(userGymId) && userGymId === targetGymId;
 }
 
+async function resolveClassDoc(classId: string) {
+  const primary = await firestore.collection("classes").doc(classId).get();
+  if (primary.exists) {
+    return primary.data() as any;
+  }
+
+  const legacy = await firestore.collection("gymClasses").doc(classId).get();
+  if (legacy.exists) {
+    return legacy.data() as any;
+  }
+
+  return null;
+}
+
 async function notifyUsersOfNewSession(params: {
   userEmails: string[];
   sessionId: string;
@@ -83,8 +103,20 @@ async function notifyUsersOfNewSession(params: {
   startDate: Date;
   endDate: Date;
   gymId: string;
+  prebookPrice: number;
+  dropInPrice: number;
 }) {
-  const { userEmails, sessionId, className, gymName, startDate, endDate, gymId } = params;
+  const {
+    userEmails,
+    sessionId,
+    className,
+    gymName,
+    startDate,
+    endDate,
+    gymId,
+    prebookPrice,
+    dropInPrice,
+  } = params;
 
   if (!userEmails.length) {
     return { attempted: 0, succeeded: 0, failed: 0 };
@@ -92,8 +124,8 @@ async function notifyUsersOfNewSession(params: {
 
   const whenText = formatSessionDateTime(startDate, endDate);
   const title = "New class added";
-  const message = `${className} has been added at ${gymName} on ${whenText}. Tap to view the latest schedule.`;
-  const href = "/iron-acre";
+  const message = `${className} has been added at ${gymName} on ${whenText}. Prebook £${prebookPrice} or drop in for £${dropInPrice}. Tap to view the latest schedule.`;
+  const href = "/schedule";
 
   let succeeded = 0;
   let failed = 0;
@@ -118,6 +150,8 @@ async function notifyUsersOfNewSession(params: {
               gym_id: gymId,
               start_time: startDate.toISOString(),
               end_time: endDate.toISOString(),
+              price: prebookPrice,
+              drop_in_price: dropInPrice,
             },
           },
           {
@@ -167,7 +201,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const startHHMM = String(body.start_time_hhmm || "").trim();
     const endHHMM = String(body.end_time_hhmm || "").trim();
     const coachName = String(body.coach_name || "").trim();
-    const price = Number(body.price || 0);
+    const price = Number(body.price ?? 9);
+    const dropInPrice = Number(body.drop_in_price ?? 12);
     const maxAttendance = Number(body.max_attendance || 0);
     const notifyMembers = Boolean(body.notify_members);
 
@@ -203,31 +238,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (!Number.isFinite(price) || price < 0) {
-      return res.status(400).json({ error: "Price must be 0 or greater" });
+      return res.status(400).json({ error: "Prebook price must be 0 or greater" });
+    }
+
+    if (!Number.isFinite(dropInPrice) || dropInPrice < 0) {
+      return res.status(400).json({ error: "Drop-in price must be 0 or greater" });
     }
 
     if (!Number.isFinite(maxAttendance) || maxAttendance < 1) {
       return res.status(400).json({ error: "Max attendance must be at least 1" });
     }
 
-    const [gymDoc, classDoc] = await Promise.all([
+    const [gymDoc, classData] = await Promise.all([
       firestore.collection("gyms").doc(gymId).get(),
-      firestore.collection("gymClasses").doc(classId).get(),
+      resolveClassDoc(classId),
     ]);
 
     if (!gymDoc.exists) {
       return res.status(400).json({ error: "Selected gym does not exist" });
     }
 
-    if (!classDoc.exists) {
+    if (!classData) {
       return res.status(400).json({ error: "Selected class does not exist" });
     }
 
     const gymData = gymDoc.data() as any;
-    const classData = classDoc.data() as any;
 
-    const gymName = String(gymData?.name || gymId);
-    const className = String(classData?.name || classData?.title || classId);
+    const gymName = String(gymData?.name || gymId).trim();
+    const className = String(
+      classData?.name || classData?.title || classData?.class_name || classId
+    ).trim();
 
     const now = Timestamp.now();
     const ref = firestore.collection("session").doc();
@@ -235,14 +275,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await ref.set({
       id: ref.id,
       class_id: classId,
+      class_name: className,
       gym_id: gymId,
+      gym_name: gymName,
       start_time: Timestamp.fromDate(startDate),
       end_time: Timestamp.fromDate(endDate),
       coach_name: coachName || null,
       price,
+      drop_in_price: dropInPrice,
       max_attendance: Math.floor(maxAttendance),
       current_attendance: 0,
       notify_members: notifyMembers,
+      cancelled: false,
+      cancelled_at: null,
+      cancelled_by: null,
       created_at: now,
       updated_at: now,
       created_by: String(authSession.user.email || "").toLowerCase(),
@@ -270,6 +316,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         startDate,
         endDate,
         gymId,
+        prebookPrice: price,
+        dropInPrice,
       });
     }
 
