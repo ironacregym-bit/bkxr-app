@@ -1,7 +1,7 @@
 // pages/api/billing/webhook.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { stripe } from "../../../lib/stripe";
 import type Stripe from "stripe";
+import { stripe } from "../../../lib/stripe";
 import firestore from "../../../lib/firestoreClient";
 import { FieldValue, Timestamp } from "@google-cloud/firestore";
 
@@ -101,6 +101,7 @@ function computeCommissionRate(activeCount: number): number {
 async function alreadyProcessed(eventId: string) {
   const ref = firestore.collection("stripe_events").doc(eventId);
   const snap = await ref.get();
+
   if (snap.exists) return true;
 
   await ref.set({ received_at: new Date().toISOString() });
@@ -569,16 +570,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const bSnap = await bookingRef.get();
             const booking = bSnap.exists ? (bSnap.data() as any) : null;
 
-            const sessionId = String(booking?.session_id || "").trim();
-            let sessionData: any = null;
-
-            if (sessionId) {
-              const sessionSnap = await firestore.collection("session").doc(sessionId).get();
-              if (sessionSnap.exists) {
-                sessionData = sessionSnap.data() as any;
-              }
-            }
-
             const recipient = String(
               booking?.guest_email || booking?.user_email || ""
             )
@@ -588,14 +579,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             if (recipient) {
               await emitEmail("class_booking_confirmed", recipient, {
                 booking_id: bookingId,
-                session_id: sessionId,
+                session_id: booking?.session_id || "",
                 payment_method: "stripe",
                 amount_gbp: Number(booking?.amount_gbp || 9),
-                class_id: sessionData?.class_id || booking?.class_id || "",
-                class_name: sessionData?.class_name || booking?.class_name || "",
-                gym_name: sessionData?.gym_name || booking?.gym_name || "",
-                start_time: sessionData?.start_time || booking?.session_start_at || null,
-                note: "Paid £9 via Stripe",
+                class_id: booking?.class_id || "",
+                class_name: booking?.class_name || "",
+                gym_name: booking?.gym_name || "",
+                start_time: booking?.session_start_at || null,
+                note: `Paid £${Number(booking?.amount_gbp || 9)} via Stripe`,
               });
             }
           } catch (e: any) {
