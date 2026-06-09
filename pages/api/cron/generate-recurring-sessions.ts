@@ -199,8 +199,12 @@ async function notifyGymMembersOfNewWeek(params: {
   const weekEnd = parseYmdUtc(targetWeekEnd) || new Date();
   const weekRangeText = formatWeekRangeText(weekStart, weekEnd);
 
-  const title = "Bookings now open for next week";
-  const message = `Next week’s ${gymName} classes (${weekRangeText}) are now available to book. Tap to view the timetable and reserve your spots.`;
+  const title = "Next week’s classes are live";
+  const message =
+    createdCount === 1
+      ? `${gymName} has opened bookings for next week (${weekRangeText}). Tap to view the schedule and secure your spot.`
+      : `${gymName} has opened bookings for next week (${weekRangeText}). ${createdCount} classes are now available to book. Tap to view the schedule and secure your spots.`;
+
   const href = "/schedule";
 
   let succeeded = 0;
@@ -230,7 +234,10 @@ async function notifyGymMembersOfNewWeek(params: {
           },
           {
             title,
-            body: "Next week’s classes are ready to book.",
+            body:
+              createdCount === 1
+                ? "A new class is now open to book."
+                : "Next week’s timetable is ready to book.",
             url: href,
           }
         )
@@ -272,6 +279,7 @@ export default async function handler(
   try {
     const now = new Date();
 
+    // Sunday run => generate the next full Monday-Sunday week
     const targetWeekStartDate = startOfUpcomingMondayUTC(now);
     const targetWeekEndDate = addDaysUTC(targetWeekStartDate, 6);
 
