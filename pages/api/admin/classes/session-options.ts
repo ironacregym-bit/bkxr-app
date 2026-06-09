@@ -29,9 +29,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const [gymsSnap, classesSnap] = await Promise.all([
+    const [gymsSnap, classesSnap, legacyClassesSnap] = await Promise.all([
       firestore.collection("gyms").get(),
-      firestore.collection("gymClasses").get(),
+      firestore.collection("classes").get(),        // ✅ new
+      firestore.collection("gymClasses").get(),     // ✅ fallback
     ]);
 
     const gyms: GymOption[] = gymsSnap.docs
@@ -45,16 +46,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    const classes: ClassOption[] = classesSnap.docs
-      .map((doc) => {
-        const data = doc.data() as any;
-        const name = String(data?.name || data?.title || doc.id);
-        return {
-          id: doc.id,
-          name,
-        };
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
+    // ✅ combine and dedupe classes
+    const classMap = new Map<string, ClassOption>();
+
+    for (const doc of classesSnap.docs) {
+      const data = doc.data() as any;
+      classMap.set(doc.id, {
+        id: doc.id,
+        name: String(data?.name || data?.title || data?.class_name || doc.id),
+      });
+    }
+
+    for (const doc of legacyClassesSnap.docs) {
+      if (classMap.has(doc.id)) continue;
+      const data = doc.data() as any;
+      classMap.set(doc.id, {
+        id: doc.id,
+        name: String(data?.name || data?.title || data?.class_name || doc.id),
+      });
+    }
+
+    const classes: ClassOption[] = Array.from(classMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
 
     return res.status(200).json({ gyms, classes });
   } catch (err: any) {
