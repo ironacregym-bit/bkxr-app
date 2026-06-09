@@ -8,6 +8,7 @@ import { hasRole } from "../../../lib/rbac";
 import { stripe } from "../../../lib/stripe";
 
 type ActiveBookingStatus = "confirmed" | "pending_payment" | "pay_on_day" | "member_free";
+
 type CancelledBookingStatus =
   | "cancelled_refunded"
   | "cancelled_no_refund"
@@ -27,7 +28,9 @@ type CancelResponse =
       was_late_cancel: boolean;
       refund_cutoff_passed: boolean;
     }
-  | { error: string };
+  | {
+      error: string;
+    };
 
 function originEmail(session: any): string {
   return String(session?.user?.email || "").trim().toLowerCase();
@@ -60,10 +63,10 @@ async function emitEmail(
   context: Record<string, any> = {},
   force = false
 ) {
-  const BASE = baseFromReq(req);
-  if (!BASE || !email) return;
+  const base = baseFromReq(req);
+  if (!base || !email) return;
 
-  await fetch(`${BASE}/api/notify/emit`, {
+  await fetch(`${base}/api/notify/emit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ event, email, context, force }),
@@ -86,12 +89,76 @@ function asDate(value: any): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+function asTimestamp(value: any): Timestamp | null {
+  const d = asDate(value);
+  return d ? Timestamp.fromDate(d) : null;
+}
+
 function subtract24Hours(d: Date) {
   return new Date(d.getTime() - 24 * 60 * 60 * 1000);
 }
 
 function isActiveStatus(status: string): status is ActiveBookingStatus {
   return ["confirmed", "pending_payment", "pay_on_day", "member_free"].includes(status);
+}
+
+async function resolveSessionSnapshotData(booking: any) {
+  const storedStart = asDate(booking?.session_start_at) || asDate(booking?.start_time);
+  const storedCutoff = asDate(booking?.refund_cutoff_at);
+
+  if (storedStart) {
+    return {
+      sessionStart: storedStart,
+      refundCutoff: storedCutoff || subtract24Hours(storedStart),
+      classId: String(booking?.class_id || "").trim() || null,
+      className: String(booking?.class_name || "").trim() || null,
+      gymName: String(booking?.gym_name || "").trim() || null,
+    };
+  }
+
+  const sessionId = String(booking?.session_id || "").trim();
+  if (!sessionId) {
+    return {
+      sessionStart: null,
+      refundCutoff: null,
+      classId: String(booking?.class_id || "").trim() || null,
+      className: String(booking?.class_name || "").trim() || null,
+      gymName: String(booking?.gym_name || "").trim() || null,
+    };
+  }
+
+  const sessionSnap = await firestore.collection("session").doc(sessionId).get();
+  if (!sessionSnap.exists) {
+    return {
+      sessionStart: null,
+      refundCutoff: null,
+      classId: String(booking?.class_id || "").trim() || null,
+      className: String(booking?.class_name || "").trim() || null,
+      gymName: String(booking?.gym_name || "").trim() || null,
+    };
+  }
+
+  const sessionData = sessionSnap.data() as any;
+  const sessionStart = asDate(sessionData?.start_time);
+  const refundCutoff = sessionStart ? subtract24Hours(sessionStart) : null;
+
+  return {
+    sessionStart,
+    refundCutoff,
+    classId:
+      String(booking?.class_id || "").trim() ||
+      String(sessionData?.class_id || "").trim() ||
+      null,
+    className:
+      String(booking?.class_name || "").trim() ||
+      String(sessionData?.class_name || "").trim() ||
+      String(sessionData?.class_id || "").trim() ||
+      null,
+    gymName:
+      String(booking?.gym_name || "").trim() ||
+      String(sessionData?.gym_name || "").trim() ||
+      null,
+  };
 }
 
 export default async function handler(
@@ -141,7 +208,6 @@ export default async function handler(
     const paymentMethod = String(booking?.payment_method || "").trim().toLowerCase() as CancelPaymentMethod;
 
     const isAdminOrGym = hasRole(session, ["admin", "gym"]);
-
     const bookingUserEmail = String(booking?.user_email || "").trim().toLowerCase();
     const bookingUserId = String(booking?.user_id || "").trim().toLowerCase();
     const callerUid = String(authUid || "").trim().toLowerCase();
@@ -158,17 +224,14 @@ export default async function handler(
       return res.status(409).json({ error: "Booking is not cancellable" });
     }
 
-    const sessionStart =
-      asDate(booking?.session_start_at) ||
-      asDate(booking?.start_time) ||
-      null;
+    const resolved = await resolveSessionSnapshotData(booking);
 
-    if (!sessionStart) {
+    if (!resolved.sessionStart) {
       return res.status(400).json({ error: "Booking is missing session start time" });
     }
 
     const nowDate = new Date();
-    const refundCutoff = asDate(booking?.refund_cutoff_at) || subtract24Hours(sessionStart);
+    const refundCutoff = resolved.refundCutoff || subtract24Hours(resolved.sessionStart);
     const refundCutoffPassed = nowDate >= refundCutoff;
     const wasLateCancel = refundCutoffPassed;
 
@@ -183,11 +246,10 @@ export default async function handler(
     } else if (paymentMethod === "pay_on_day") {
       nextStatus = "cancelled_pay_on_day";
     } else {
-      const isStripePaidBooking =
-        paymentMethod === "stripe" &&
-        (bookingStatus === "confirmed" || bookingStatus === "pending_payment" || Boolean(booking?.paid));
+      const isStripeBooking = paymentMethod === "stripe";
+      const isPaidBooking = bookingStatus === "confirmed" && Boolean(booking?.paid);
 
-      if (isStripePaidBooking && !refundCutoffPassed && bookingStatus === "confirmed") {
+      if (isStripeBooking && isPaidBooking && !refundCutoffPassed) {
         const chargeId = String(booking?.stripe_charge_id || "").trim();
         const paymentIntentId = String(booking?.stripe_payment_intent_id || "").trim();
 
@@ -223,6 +285,11 @@ export default async function handler(
           cancelled_by: authEmail || callerUid || "unknown",
           cancel_reason: cancelReason,
           updated_at: nowTs,
+          class_id: resolved.classId,
+          class_name: resolved.className,
+          gym_name: resolved.gymName,
+          session_start_at: asTimestamp(booking?.session_start_at) || Timestamp.fromDate(resolved.sessionStart as Date),
+          refund_cutoff_at: asTimestamp(booking?.refund_cutoff_at) || Timestamp.fromDate(refundCutoff),
           was_late_cancel: wasLateCancel,
           refund_eligible: paymentMethod === "stripe" && !refundCutoffPassed,
           refund_status: refundStatus,
@@ -257,7 +324,10 @@ export default async function handler(
         tx.set(userRef, userUpdate, { merge: true });
       }
 
-      const auditRef = firestore.collection("booking_cancellations").doc(`${bookingId}_${nowDate.getTime()}`);
+      const auditRef = firestore
+        .collection("booking_cancellations")
+        .doc(`${bookingId}_${nowDate.getTime()}`);
+
       tx.set(auditRef, {
         booking_id: bookingId,
         session_id: String(booking?.session_id || ""),
@@ -270,8 +340,13 @@ export default async function handler(
         cancelled_at: nowTs,
         cancelled_by: authEmail || callerUid || "unknown",
         cancel_reason: cancelReason,
-        session_start_at: booking?.session_start_at || null,
-        refund_cutoff_at: booking?.refund_cutoff_at || null,
+        class_id: resolved.classId,
+        class_name: resolved.className,
+        gym_name: resolved.gymName,
+        session_start_at:
+          asTimestamp(booking?.session_start_at) || Timestamp.fromDate(resolved.sessionStart as Date),
+        refund_cutoff_at:
+          asTimestamp(booking?.refund_cutoff_at) || Timestamp.fromDate(refundCutoff),
         refund_cutoff_passed: refundCutoffPassed,
         was_late_cancel: wasLateCancel,
         refunded,
@@ -284,15 +359,19 @@ export default async function handler(
       await emitEmail(req, "class_booking_cancelled", recipient, {
         booking_id: bookingId,
         session_id: booking?.session_id || "",
+        class_id: resolved.classId || "",
+        class_name: resolved.className || "",
+        gym_name: resolved.gymName || "",
         payment_method: paymentMethod,
         cancelled_status: nextStatus,
         refunded,
         refund_amount_gbp: refundAmountGbp,
         was_late_cancel: wasLateCancel,
-        session_start_at: booking?.session_start_at || null,
+        session_start_at:
+          booking?.session_start_at || Timestamp.fromDate(resolved.sessionStart as Date),
         note:
           nextStatus === "cancelled_refunded"
-            ? "Your £9 prebook has been refunded."
+            ? `Your £${Number(booking?.amount_gbp || 9)} prebook has been refunded.`
             : nextStatus === "cancelled_no_refund"
             ? "This cancellation was within 24 hours, so no refund was issued."
             : nextStatus === "cancelled_pay_on_day"
@@ -316,4 +395,3 @@ export default async function handler(
     return res.status(500).json({ error: err?.message || "Failed to cancel booking" });
   }
 }
-``
