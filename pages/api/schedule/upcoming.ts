@@ -26,14 +26,10 @@ async function getClassData(classId: string) {
   if (!classId) return null;
 
   const classesDoc = await firestore.collection("classes").doc(classId).get();
-  if (classesDoc.exists) {
-    return classesDoc.data() as any;
-  }
+  if (classesDoc.exists) return classesDoc.data() as any;
 
   const classDoc = await firestore.collection("class").doc(classId).get();
-  if (classDoc.exists) {
-    return classDoc.data() as any;
-  }
+  if (classDoc.exists) return classDoc.data() as any;
 
   return null;
 }
@@ -73,7 +69,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         const classId = String(data?.class_id || "").trim();
-        const classData = await getClassData(classId);
+        const classData =
+          String(data?.class_name || "").trim()
+            ? null
+            : await getClassData(classId);
 
         const bookingsSnap = await firestore
           .collection("bookings")
@@ -90,6 +89,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           id: doc.id,
           class_id: classId || null,
           class_name:
+            String(data?.class_name || "").trim() ||
             String(classData?.name || "").trim() ||
             String(classData?.title || "").trim() ||
             String(classData?.class_name || "").trim() ||
@@ -98,9 +98,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           coach_name: data?.coach_name || null,
           start_time: toIsoOrNull(data?.start_time),
           end_time: toIsoOrNull(data?.end_time),
-          price: Number(data?.price || 0),
+          price: Number(data?.price || 9),
+          drop_in_price: Number(data?.drop_in_price || 12),
           max_attendance: Number(data?.max_attendance || 0),
           current_attendance: activeBookingCount,
+          gym_id: gymId || null,
           gym_name: gymData?.name || null,
           location: gymData?.location || null,
         };
