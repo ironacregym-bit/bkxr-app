@@ -18,6 +18,7 @@ type SessionRow = {
   start_time: string | null;
   end_time: string | null;
   price: number;
+  drop_in_price?: number | null;
   max_attendance: number;
   current_attendance: number;
 };
@@ -36,6 +37,7 @@ type SessionDetail = {
   start_time: string | null;
   end_time: string | null;
   price: number;
+  drop_in_price?: number | null;
   max_attendance: number;
   current_attendance: number;
   created_at?: string | null;
@@ -97,6 +99,16 @@ function isPastSession(value?: string | null) {
   return d.getTime() < Date.now();
 }
 
+function money(value?: number | null) {
+  return Number.isFinite(Number(value)) ? Number(value).toFixed(2).replace(/\.00$/, "") : "0";
+}
+
+function priceSummary(prebook?: number | null, dropIn?: number | null) {
+  const pre = money(prebook);
+  const drop = money(dropIn ?? 12);
+  return `£${pre} prebook • £${drop} drop-in`;
+}
+
 export default function AdminSessionsPage() {
   const { data: authSession, status } = useSession();
   const role = (authSession?.user as any)?.role || "user";
@@ -119,7 +131,8 @@ export default function AdminSessionsPage() {
   const [formStartTime, setFormStartTime] = useState("");
   const [formEndTime, setFormEndTime] = useState("");
   const [formCoachName, setFormCoachName] = useState("");
-  const [formPrice, setFormPrice] = useState("0");
+  const [formPrice, setFormPrice] = useState("9");
+  const [formDropInPrice, setFormDropInPrice] = useState("12");
   const [formMaxAttendance, setFormMaxAttendance] = useState("1");
   const [formNotifyMembers, setFormNotifyMembers] = useState(false);
 
@@ -183,7 +196,8 @@ export default function AdminSessionsPage() {
     setFormStartTime(toTimeInput(selected.start_time));
     setFormEndTime(toTimeInput(selected.end_time));
     setFormCoachName(selected.coach_name || "");
-    setFormPrice(String(selected.price ?? 0));
+    setFormPrice(String(selected.price ?? 9));
+    setFormDropInPrice(String(selected.drop_in_price ?? 12));
     setFormMaxAttendance(String(selected.max_attendance ?? 1));
     setFormNotifyMembers(Boolean(selected.notify_members));
     setSaveMsg(null);
@@ -200,7 +214,8 @@ export default function AdminSessionsPage() {
     setFormStartTime(toTimeInput(selected.start_time));
     setFormEndTime(toTimeInput(selected.end_time));
     setFormCoachName(selected.coach_name || "");
-    setFormPrice(String(selected.price ?? 0));
+    setFormPrice(String(selected.price ?? 9));
+    setFormDropInPrice(String(selected.drop_in_price ?? 12));
     setFormMaxAttendance(String(selected.max_attendance ?? 1));
     setFormNotifyMembers(Boolean(selected.notify_members));
     setSaveErr(null);
@@ -226,6 +241,7 @@ export default function AdminSessionsPage() {
           end_time_hhmm: formEndTime,
           coach_name: formCoachName,
           price: Number(formPrice || 0),
+          drop_in_price: Number(formDropInPrice || 0),
           max_attendance: Number(formMaxAttendance || 0),
           notify_members: formNotifyMembers,
         }),
@@ -278,6 +294,7 @@ export default function AdminSessionsPage() {
       setEditMode(false);
       setSelectedId(null);
       setMobileViewing(false);
+
       await Promise.all([
         mutateSelected(undefined, { revalidate: false }),
         mutateList(),
@@ -346,7 +363,9 @@ export default function AdminSessionsPage() {
               <div className="ia-page-title" style={{ marginBottom: 0 }}>
                 Sessions
               </div>
-              <div className="ia-page-subtitle">Manage one-off and future recurring timetable sessions.</div>
+              <div className="ia-page-subtitle">
+                Manage one-off and future recurring timetable sessions.
+              </div>
             </div>
           </div>
 
@@ -454,7 +473,8 @@ export default function AdminSessionsPage() {
                             <div className="small text-dim">{formatDateTime(item.start_time)}</div>
 
                             <div className="small text-dim mt-1">
-                              Seats: {item.current_attendance}/{item.max_attendance || "∞"} • £{item.price}
+                              Seats: {item.current_attendance}/{item.max_attendance || "∞"} •{" "}
+                              {priceSummary(item.price, item.drop_in_price)}
                             </div>
                           </button>
                         </li>
@@ -474,7 +494,7 @@ export default function AdminSessionsPage() {
                 </div>
 
                 <div className="d-flex align-items-center gap-2">
-                  {selected && !editMode && (
+                  {selected && !editMode ? (
                     <button
                       type="button"
                       className="ia-btn ia-btn-outline"
@@ -485,7 +505,7 @@ export default function AdminSessionsPage() {
                     >
                       Edit
                     </button>
-                  )}
+                  ) : null}
 
                   <div className="d-md-none">
                     <button
@@ -580,7 +600,7 @@ export default function AdminSessionsPage() {
                     </div>
 
                     <div className="col-6 col-md-3">
-                      <label className="form-label">Price (£)</label>
+                      <label className="form-label">Prebook price (£)</label>
                       <input
                         type="number"
                         min="0"
@@ -588,6 +608,18 @@ export default function AdminSessionsPage() {
                         className="form-control"
                         value={formPrice}
                         onChange={(e) => setFormPrice(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="col-6 col-md-3">
+                      <label className="form-label">Drop-in price (£)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="form-control"
+                        value={formDropInPrice}
+                        onChange={(e) => setFormDropInPrice(e.target.value)}
                       />
                     </div>
 
@@ -687,8 +719,13 @@ export default function AdminSessionsPage() {
                     </div>
 
                     <div className="col-6 col-md-4">
-                      <div className="text-dim small">Price</div>
-                      <div className="fw-semibold">£{selected.price}</div>
+                      <div className="text-dim small">Prebook price</div>
+                      <div className="fw-semibold">£{money(selected.price)}</div>
+                    </div>
+
+                    <div className="col-6 col-md-4">
+                      <div className="text-dim small">Drop-in price</div>
+                      <div className="fw-semibold">£{money(selected.drop_in_price ?? 12)}</div>
                     </div>
 
                     <div className="col-6 col-md-4">
