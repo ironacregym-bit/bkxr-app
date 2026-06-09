@@ -14,13 +14,25 @@ type SessionRow = {
   start_time: string | null;
   end_time: string | null;
   price: number;
+  drop_in_price: number;
   max_attendance: number;
   current_attendance: number;
+  cancelled?: boolean;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
 };
 
 type Resp = {
   items: SessionRow[];
 };
+
+const ACTIVE_BOOKING_STATUSES = new Set([
+  "confirmed",
+  "pending_payment",
+  "pay_on_day",
+  "member_free",
+  "bank_pending",
+]);
 
 function toIso(value: any): string | null {
   if (!value) return null;
@@ -32,6 +44,55 @@ function toIso(value: any): string | null {
 
   const d = new Date(value);
   return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+async function getGymNameMap(gymIds: string[]) {
+  if (!gymIds.length) return new Map<string, string>();
+
+  const docs = await firestore.getAll(
+    ...gymIds.map((id) => firestore.collection("gyms").doc(id))
+  );
+
+  const map = new Map<string, string>();
+
+  for (const doc of docs as any[]) {
+    if (!doc?.exists) continue;
+    const data = doc.data() as any;
+    map.set(doc.id, String(data?.name || doc.id));
+  }
+
+  return map;
+}
+
+async function getFallbackClassNameMap(classIds: string[]) {
+  if (!classIds.length) return new Map<string, string>();
+
+  const out = new Map<string, string>();
+
+  const classDocs = await firestore.getAll(
+    ...classIds.map((id) => firestore.collection("classes").doc(id))
+  );
+
+  for (const doc of classDocs as any[]) {
+    if (!doc?.exists) continue;
+    const data = doc.data() as any;
+    out.set(doc.id, String(data?.name || data?.title || data?.class_name || doc.id));
+  }
+
+  const missing = classIds.filter((id) => !out.has(id));
+  if (!missing.length) return out;
+
+  const legacyDocs = await firestore.getAll(
+    ...missing.map((id) => firestore.collection("gymClasses").doc(id))
+  );
+
+  for (const doc of legacyDocs as any[]) {
+    if (!doc?.exists) continue;
+    const data = doc.data() as any;
+    out.set(doc.id, String(data?.name || data?.title || data?.class_name || doc.id));
+  }
+
+  return out;
 }
 
 export default async function handler(
@@ -62,67 +123,66 @@ export default async function handler(
       .limit(limit)
       .get();
 
-    const classIds = Array.from(
-      new Set(
-        snap.docs
-          .map((doc) => String((doc.data() as any)?.class_id || "").trim())
-          .filter(Boolean)
-      )
-    );
+    const raw = snap.docs.map((doc) => {
+      const data = doc.data() as any;
+      return {
+        id: doc.id,
+        data,
+        classId: String(data?.class_id || "").trim(),
+        className: String(data?.class_name || "").trim(),
+        gymId: String(data?.gym_id || "").trim(),
+      };
+    });
 
-    const gymIds = Array.from(
-      new Set(
-        snap.docs
-          .map((doc) => String((doc.data() as any)?.gym_id || "").trim())
-          .filter(Boolean)
-      )
-    );
+    const classIds = Array.from(new Set(raw.map((x) => x.classId).filter(Boolean)));
+    const gymIds = Array.from(new Set(raw.map((x) => x.gymId).filter(Boolean)));
 
-    const [classDocs, gymDocs] = await Promise.all([
-      classIds.length
-        ? firestore.getAll(...classIds.map((id) => firestore.collection("gymClasses").doc(id)))
-        : Promise.resolve([]),
-      gymIds.length
-        ? firestore.getAll(...gymIds.map((id) => firestore.collection("gyms").doc(id)))
-        : Promise.resolve([]),
+    const [classMap, gymMap] = await Promise.all([
+      getFallbackClassNameMap(classIds),
+      getGymNameMap(gymIds),
     ]);
 
-    const classMap = new Map<string, string>();
-    const gymMap = new Map<string, string>();
+    const sessionIds = raw.map((x) => x.id);
+    const bookingCounts = new Map<string, number>();
 
-    for (const doc of classDocs as any[]) {
-      if (!doc?.exists) continue;
-      const data = doc.data() as any;
-      classMap.set(doc.id, String(data?.name || data?.title || doc.id));
-    }
+    if (sessionIds.length) {
+      const bookingSnaps = await Promise.all(
+        sessionIds.map((sessionId) =>
+          firestore.collection("bookings").where("session_id", "==", sessionId).get()
+        )
+      );
 
-    for (const doc of gymDocs as any[]) {
-      if (!doc?.exists) continue;
-      const data = doc.data() as any;
-      gymMap.set(doc.id, String(data?.name || doc.id));
+      bookingSnaps.forEach((bookingSnap, index) => {
+        const sessionId = sessionIds[index];
+        const count = bookingSnap.docs.filter((doc) => {
+          const booking = doc.data() as any;
+          const status = String(booking?.status || "").trim().toLowerCase();
+          return ACTIVE_BOOKING_STATUSES.has(status);
+        }).length;
+
+        bookingCounts.set(sessionId, count);
+      });
     }
 
     const now = Date.now();
 
-    let items: SessionRow[] = snap.docs.map((doc) => {
-      const data = doc.data() as any;
-      const classId = String(data?.class_id || "").trim() || null;
-      const gymId = String(data?.gym_id || "").trim() || null;
-
-      return {
-        id: doc.id,
-        class_id: classId,
-        class_name: classId ? classMap.get(classId) || classId : "Class",
-        gym_id: gymId,
-        gym_name: gymId ? gymMap.get(gymId) || gymId : "Gym",
-        coach_name: data?.coach_name ? String(data.coach_name) : null,
-        start_time: toIso(data?.start_time),
-        end_time: toIso(data?.end_time),
-        price: Number(data?.price || 0),
-        max_attendance: Number(data?.max_attendance || 0),
-        current_attendance: Number(data?.current_attendance || 0),
-      };
-    });
+    let items: SessionRow[] = raw.map(({ id, data, classId, className, gymId }) => ({
+      id,
+      class_id: classId || null,
+      class_name: className || classMap.get(classId) || classId || "Class",
+      gym_id: gymId || null,
+      gym_name: gymMap.get(gymId) || gymId || "Gym",
+      coach_name: data?.coach_name ? String(data.coach_name) : null,
+      start_time: toIso(data?.start_time),
+      end_time: toIso(data?.end_time),
+      price: Number(data?.price || 9),
+      drop_in_price: Number(data?.drop_in_price || 12),
+      max_attendance: Number(data?.max_attendance || 0),
+      current_attendance: bookingCounts.get(id) ?? Number(data?.current_attendance || 0),
+      cancelled: Boolean(data?.cancelled),
+      cancelled_at: toIso(data?.cancelled_at),
+      cancelled_by: data?.cancelled_by ? String(data.cancelled_by) : null,
+    }));
 
     if (timing === "upcoming") {
       items = items.filter((item) => {
@@ -142,9 +202,11 @@ export default async function handler(
       items = items.filter((item) => {
         const haystack = [
           item.class_name,
+          item.class_id || "",
           item.gym_name,
           item.coach_name || "",
           item.id,
+          item.cancelled ? "cancelled" : "",
         ]
           .join(" ")
           .toLowerCase();
