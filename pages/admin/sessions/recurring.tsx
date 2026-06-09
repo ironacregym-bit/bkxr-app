@@ -3,206 +3,304 @@
 
 import Head from "next/head";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
+import { useSession } from "next-auth/react";
 import BottomNav from "../../../components/BottomNav";
 
-const fetcher = (u: string) => fetch(u).then((r) => r.json());
-
-type GymOption = {
+type RecurringTimetableItem = {
   id: string;
-  name: string;
-  location?: string | null;
+  active: boolean;
+  class_id: string | null;
+  class_name: string;
+  gym_id: string | null;
+  gym_name: string;
+  coach_name?: string | null;
+  weekdays: number[];
+  start_time_hhmm: string;
+  end_time_hhmm: string;
+  price: number;
+  drop_in_price: number;
+  max_attendance: number;
+  notify_members: boolean;
+  effective_from: string | null;
+  effective_to: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
 };
 
-type ClassOption = {
-  id: string;
-  name: string;
+type RecurringListResponse = {
+  items: RecurringTimetableItem[];
 };
 
 type SessionOptionsResponse = {
-  gyms: GymOption[];
-  classes: ClassOption[];
+  gyms: { id: string; name: string; location?: string | null }[];
+  classes: { id: string; name: string }[];
 };
 
+const fetcher = (u: string) => fetch(u).then((r) => r.json());
+
 const WEEKDAY_OPTIONS = [
-  { value: 1, label: "Monday" },
-  { value: 2, label: "Tuesday" },
-  { value: 3, label: "Wednesday" },
-  { value: 4, label: "Thursday" },
-  { value: 5, label: "Friday" },
-  { value: 6, label: "Saturday" },
-  { value: 0, label: "Sunday" },
+  { value: 1, label: "Mon" },
+  { value: 2, label: "Tue" },
+  { value: 3, label: "Wed" },
+  { value: 4, label: "Thu" },
+  { value: 5, label: "Fri" },
+  { value: 6, label: "Sat" },
+  { value: 0, label: "Sun" },
 ];
 
-function toMoneyInput(value: string) {
-  return value.replace(/[^\d.]/g, "");
+function weekdayLabel(days: number[]) {
+  if (!days.length) return "—";
+  const map = new Map(WEEKDAY_OPTIONS.map((x) => [x.value, x.label]));
+  return [...days]
+    .sort((a, b) => {
+      const normA = a === 0 ? 7 : a;
+      const normB = b === 0 ? 7 : b;
+      return normA - normB;
+    })
+    .map((d) => map.get(d) || String(d))
+    .join(", ");
 }
 
-function toIntInput(value: string) {
-  return value.replace(/[^\d]/g, "");
+function priceSummary(item: RecurringTimetableItem) {
+  const pre = Number(item.price || 0);
+  const drop = Number(item.drop_in_price || 0);
+  return `£${pre} prebook • £${drop} drop-in`;
 }
 
-function formatDateRange(start: string, end: string) {
-  if (!start || !end) return "";
-  return `${start} → ${end}`;
-}
-
-function countOccurrences(startDate: string, endDate: string, weekdays: number[]) {
-  if (!startDate || !endDate || weekdays.length === 0) return 0;
-
-  const start = new Date(`${startDate}T00:00:00`);
-  const end = new Date(`${endDate}T23:59:59`);
-
-  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return 0;
-
-  let count = 0;
-  const d = new Date(start);
-
-  while (d <= end) {
-    if (weekdays.includes(d.getDay())) {
-      count++;
-    }
-    d.setDate(d.getDate() + 1);
+function effectiveSummary(item: RecurringTimetableItem) {
+  if (item.effective_from && item.effective_to) {
+    return `${item.effective_from} → ${item.effective_to}`;
   }
-
-  return count;
+  if (item.effective_from) {
+    return `From ${item.effective_from}`;
+  }
+  if (item.effective_to) {
+    return `Until ${item.effective_to}`;
+  }
+  return "Always active";
 }
 
-export default function RecurringSessionsAdminPage() {
-  const { data: session, status } = useSession();
-  const role = (session?.user as any)?.role || "user";
+export default function AdminRecurringSessionsPage() {
+  const { data: authSession, status } = useSession();
+  const role = (authSession?.user as any)?.role || "user";
 
-  const { data, error: optionsError } = useSWR<SessionOptionsResponse>(
-    "/api/admin/classes/session-options",
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  const [mounted, setMounted] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mobileViewing, setMobileViewing] = useState(false);
+
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+
+  const [formActive, setFormActive] = useState(true);
+  const [formClassId, setFormClassId] = useState("");
+  const [formGymId, setFormGymId] = useState("");
+  const [formCoachName, setFormCoachName] = useState("");
+  const [formWeekdays, setFormWeekdays] = useState<number[]>([]);
+  const [formStartTime, setFormStartTime] = useState("09:00");
+  const [formEndTime, setFormEndTime] = useState("10:00");
+  const [formPrice, setFormPrice] = useState("9");
+  const [formDropInPrice, setFormDropInPrice] = useState("12");
+  const [formMaxAttendance, setFormMaxAttendance] = useState("12");
+  const [formNotifyMembers, setFormNotifyMembers] = useState(false);
+  const [formEffectiveFrom, setFormEffectiveFrom] = useState("");
+  const [formEffectiveTo, setFormEffectiveTo] = useState("");
+
+  useEffect(() => setMounted(true), []);
+
+  const isAllowed = !!authSession && (role === "admin" || role === "gym");
+
+  const listKey = useMemo(() => {
+    if (!mounted || status === "loading" || !isAllowed) return null;
+    return "/api/admin/sessions/recurring-timetables";
+  }, [mounted, status, isAllowed]);
+
+  const { data: listData, mutate: mutateList } = useSWR<RecurringListResponse>(listKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30_000,
+  });
+
+  const items = Array.isArray(listData?.items) ? listData.items : [];
+
+  const selected = useMemo(
+    () => items.find((item) => item.id === selectedId) || null,
+    [items, selectedId]
   );
 
-  const gyms = useMemo(() => (Array.isArray(data?.gyms) ? data!.gyms : []), [data?.gyms]);
-  const classes = useMemo(() => (Array.isArray(data?.classes) ? data!.classes : []), [data?.classes]);
+  const optionsKey = useMemo(() => {
+    if (!mounted || status === "loading" || !isAllowed) return null;
+    return "/api/admin/classes/session-options";
+  }, [mounted, status, isAllowed]);
 
-  const [classId, setClassId] = useState("");
-  const [gymId, setGymId] = useState("");
-  const [coachName, setCoachName] = useState("");
-  const [weekdays, setWeekdays] = useState<number[]>([]);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [price, setPrice] = useState("8");
-  const [maxAttendance, setMaxAttendance] = useState("12");
-  const [notifyMembers, setNotifyMembers] = useState(false);
+  const { data: optionsData } = useSWR<SessionOptionsResponse>(optionsKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60_000,
+  });
 
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitMsg, setSubmitMsg] = useState<string | null>(null);
+  const gymOptions = Array.isArray(optionsData?.gyms) ? optionsData.gyms : [];
+  const classOptions = Array.isArray(optionsData?.classes) ? optionsData.classes : [];
 
-  const selectedGym = useMemo(() => gyms.find((g) => g.id === gymId) || null, [gyms, gymId]);
-  const selectedClass = useMemo(() => classes.find((c) => c.id === classId) || null, [classes, classId]);
+  useEffect(() => {
+    if (selected) {
+      setFormActive(selected.active);
+      setFormClassId(selected.class_id || "");
+      setFormGymId(selected.gym_id || "");
+      setFormCoachName(selected.coach_name || "");
+      setFormWeekdays(Array.isArray(selected.weekdays) ? selected.weekdays : []);
+      setFormStartTime(selected.start_time_hhmm || "09:00");
+      setFormEndTime(selected.end_time_hhmm || "10:00");
+      setFormPrice(String(selected.price ?? 9));
+      setFormDropInPrice(String(selected.drop_in_price ?? 12));
+      setFormMaxAttendance(String(selected.max_attendance ?? 12));
+      setFormNotifyMembers(Boolean(selected.notify_members));
+      setFormEffectiveFrom(selected.effective_from || "");
+      setFormEffectiveTo(selected.effective_to || "");
+    } else {
+      setFormActive(true);
+      setFormClassId("");
+      setFormGymId("");
+      setFormCoachName("");
+      setFormWeekdays([]);
+      setFormStartTime("09:00");
+      setFormEndTime("10:00");
+      setFormPrice("9");
+      setFormDropInPrice("12");
+      setFormMaxAttendance("12");
+      setFormNotifyMembers(false);
+      setFormEffectiveFrom("");
+      setFormEffectiveTo("");
+    }
 
-  const totalOccurrences = useMemo(
-    () => countOccurrences(startDate, endDate, weekdays),
-    [startDate, endDate, weekdays]
-  );
-
-  const weekdayLabel = useMemo(() => {
-    if (!weekdays.length) return "No days selected";
-    return WEEKDAY_OPTIONS.filter((d) => weekdays.includes(d.value))
-      .map((d) => d.label)
-      .join(", ");
-  }, [weekdays]);
+    setSaveMsg(null);
+    setSaveErr(null);
+  }, [selectedId, selected]);
 
   function toggleWeekday(day: number) {
-    setWeekdays((prev) =>
-      prev.includes(day) ? prev.filter((x) => x !== day) : [...prev, day].sort((a, b) => a - b)
+    setFormWeekdays((prev) =>
+      prev.includes(day)
+        ? prev.filter((x) => x !== day)
+        : [...prev, day].sort((a, b) => {
+            const normA = a === 0 ? 7 : a;
+            const normB = b === 0 ? 7 : b;
+            return normA - normB;
+          })
     );
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setSubmitError(null);
-    setSubmitMsg(null);
-
-    if (!classId) {
-      setSubmitError("Please select a class.");
-      return;
-    }
-
-    if (!gymId) {
-      setSubmitError("Please select a gym.");
-      return;
-    }
-
-    if (!startDate || !endDate) {
-      setSubmitError("Please set a start and end date.");
-      return;
-    }
-
-    if (!startTime || !endTime) {
-      setSubmitError("Please set a start and end time.");
-      return;
-    }
-
-    if (weekdays.length === 0) {
-      setSubmitError("Please choose at least one weekday.");
-      return;
-    }
-
-    if (totalOccurrences < 1) {
-      setSubmitError("No sessions would be created with the current date range and weekday selection.");
-      return;
-    }
+  async function handleSave() {
+    setSaving(true);
+    setSaveErr(null);
+    setSaveMsg(null);
 
     try {
-      setSubmitting(true);
+      const payload = {
+        active: formActive,
+        class_id: formClassId,
+        gym_id: formGymId,
+        coach_name: formCoachName,
+        weekdays: formWeekdays,
+        start_time_hhmm: formStartTime,
+        end_time_hhmm: formEndTime,
+        price: Number(formPrice || 0),
+        drop_in_price: Number(formDropInPrice || 0),
+        max_attendance: Number(formMaxAttendance || 0),
+        notify_members: formNotifyMembers,
+        effective_from: formEffectiveFrom || null,
+        effective_to: formEffectiveTo || null,
+      };
 
-      const res = await fetch("/api/admin/sessions/recurring-create", {
-        method: "POST",
+      const isEdit = Boolean(selectedId);
+      const url = isEdit
+        ? `/api/admin/sessions/recurring-timetables/${encodeURIComponent(selectedId as string)}`
+        : "/api/admin/sessions/recurring-timetables";
+
+      const method = isEdit ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          class_id: classId,
-          gym_id: gymId,
-          coach_name: coachName.trim(),
-          weekdays,
-          start_date: startDate,
-          end_date: endDate,
-          start_time_hhmm: startTime,
-          end_time_hhmm: endTime,
-          price: Number(price || 0),
-          max_attendance: Number(maxAttendance || 0),
-          notify_members: notifyMembers,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(String(json?.error || "Failed to create recurring sessions"));
+        throw new Error(String(json?.error || "Failed to save recurring timetable"));
       }
 
-      setSubmitMsg(`Created ${Number(json?.created || 0)} sessions ✅`);
+      await mutateList();
+
+      if (!isEdit && json?.id) {
+        setSelectedId(String(json.id));
+      }
+
+      setSaveMsg(isEdit ? "Recurring timetable updated ✅" : "Recurring timetable created ✅");
     } catch (err: any) {
-      setSubmitError(String(err?.message || err || "Failed to create recurring sessions"));
+      setSaveErr(String(err?.message || err || "Failed to save recurring timetable"));
     } finally {
-      setSubmitting(false);
+      setSaving(false);
     }
   }
 
-  if (status === "loading") {
-    return (
-      <main className="container py-3 text-white" style={{ paddingBottom: 90 }}>
-        Checking access…
-      </main>
-    );
+  async function handleDelete() {
+    if (!selectedId) return;
+
+    const ok = window.confirm("Delete this recurring timetable entry?");
+    if (!ok) return;
+
+    setDeleting(true);
+    setSaveErr(null);
+    setSaveMsg(null);
+
+    try {
+      const res = await fetch(
+        `/api/admin/sessions/recurring-timetables/${encodeURIComponent(selectedId)}`,
+        { method: "DELETE" }
+      );
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(String(json?.error || "Failed to delete recurring timetable"));
+      }
+
+      setSelectedId(null);
+      setMobileViewing(false);
+      await mutateList();
+      setSaveMsg("Recurring timetable deleted ✅");
+    } catch (err: any) {
+      setSaveErr(String(err?.message || err || "Failed to delete recurring timetable"));
+    } finally {
+      setDeleting(false);
+    }
   }
 
-  if (!session || (role !== "admin" && role !== "gym")) {
+  if (!mounted || status === "loading") {
     return (
       <>
         <Head>
-          <title>Recurring Sessions • Admin</title>
+          <title>Recurring timetable • Admin</title>
+        </Head>
+
+        <main className="container py-3 text-white" style={{ paddingBottom: 90 }}>
+          Checking access…
+        </main>
+
+        <BottomNav />
+      </>
+    );
+  }
+
+  if (!isAllowed) {
+    return (
+      <>
+        <Head>
+          <title>Recurring timetable • Admin</title>
         </Head>
 
         <main className="container py-3 text-white" style={{ paddingBottom: 90 }}>
@@ -210,7 +308,7 @@ export default function RecurringSessionsAdminPage() {
             <div className="ia-page-title">Access denied</div>
             <div className="ia-page-subtitle">You do not have permission to view this page.</div>
             <div className="mt-3">
-              <Link href="/admin" className="ia-btn ia-btn-outline">
+              /admin
                 Back to admin
               </Link>
             </div>
@@ -225,41 +323,189 @@ export default function RecurringSessionsAdminPage() {
   return (
     <>
       <Head>
-        <title>Recurring Sessions • Admin</title>
+        <title>Recurring timetable • Admin</title>
       </Head>
 
       <main className="container py-3 text-white" style={{ paddingBottom: 90 }}>
-        <div className="mb-3 d-flex flex-wrap gap-2">
-          <Link href="/admin/sessions" className="ia-btn ia-btn-outline">
-            ← Back to sessions
-          </Link>
+        <div className="d-flex align-items-center justify-content-between mb-2">
+          <div className="d-flex align-items-center gap-2">
+            /admin/sessions
+              ← Sessions
+            </Link>
 
-          <Link href="/admin/classes/create-session" className="ia-btn ia-btn-outline">
-            Single session
-          </Link>
+            <div>
+              <div className="ia-page-title" style={{ marginBottom: 0 }}>
+                Recurring timetable
+              </div>
+              <div className="ia-page-subtitle">
+                Build the weekly timetable template that will generate future sessions.
+              </div>
+            </div>
+          </div>
+
+          <div className="d-none d-md-flex gap-2">
+            <button
+              type="button"
+              className="ia-btn"
+              onClick={() => {
+                setSelectedId(null);
+                setMobileViewing(true);
+              }}
+            >
+              + New timetable row
+            </button>
+          </div>
         </div>
 
-        <div className="ia-page-title">Recurring sessions</div>
-        <div className="ia-page-subtitle">
-          Build your weekly timetable in bulk by choosing the weekday pattern, date range and class details.
+        <div className="d-flex d-md-none gap-2 mb-3">
+          <button
+            type="button"
+            className="ia-btn"
+            onClick={() => {
+              setSelectedId(null);
+              setMobileViewing(true);
+            }}
+          >
+            + New row
+          </button>
         </div>
 
-        <div className="mt-3 ia-tile ia-tile-pad">
-          {optionsError ? (
-            <div className="text-danger">Failed to load gyms/classes.</div>
-          ) : (
-            <form onSubmit={handleSubmit}>
+        {(saveMsg || saveErr) ? (
+          <div className={`mb-3 alert ${saveErr ? "alert-danger" : "alert-success"}`} role="alert">
+            {saveErr || saveMsg}
+          </div>
+        ) : null}
+
+        <div className="row gx-3">
+          <div className={`col-12 col-md-5 ${mobileViewing ? "d-none d-md-block" : ""}`}>
+            <div className="ia-tile ia-tile-pad">
+              <div className="d-flex align-items-center justify-content-between mb-3">
+                <div className="fw-semibold">Timetable rows</div>
+
+                <button
+                  type="button"
+                  className="ia-btn ia-btn-outline"
+                  onClick={() => {
+                    setSelectedId(null);
+                    setMobileViewing(true);
+                  }}
+                >
+                  New
+                </button>
+              </div>
+
+              <div style={{ maxHeight: 620, overflowY: "auto", paddingRight: 4 }}>
+                {!items.length ? (
+                  <div className="text-dim">No recurring timetable rows yet.</div>
+                ) : (
+                  <ul style={{ listStyle: "none", paddingLeft: 0, margin: 0 }}>
+                    {items.map((item) => {
+                      const active = selectedId === item.id;
+
+                      return (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            className="w-100 text-start"
+                            onClick={() => {
+                              setSelectedId(item.id);
+                              setMobileViewing(true);
+                            }}
+                            style={{
+                              border: "1px solid rgba(255,255,255,0.12)",
+                              background: active ? "rgba(36,255,160,0.10)" : "rgba(255,255,255,0.04)",
+                              color: "#fff",
+                              borderRadius: 12,
+                              padding: "12px 12px",
+                              marginBottom: 8,
+                            }}
+                          >
+                            <div className="d-flex align-items-center justify-content-between gap-2">
+                              <div className="fw-semibold text-truncate">
+                                {item.class_name}
+                              </div>
+
+                              <span
+                                className="badge"
+                                style={{
+                                  background: item.active ? "#24FFA0" : "rgba(255,255,255,0.14)",
+                                  color: item.active ? "#08120d" : "#fff",
+                                  border: "none",
+                                }}
+                              >
+                                {item.active ? "Active" : "Inactive"}
+                              </span>
+                            </div>
+
+                            <div className="small text-dim mt-1">
+                              {item.gym_name}
+                              {item.coach_name ? ` • Coach: ${item.coach_name}` : ""}
+                            </div>
+
+                            <div className="small text-dim">
+                              {weekdayLabel(item.weekdays)} • {item.start_time_hhmm}-{item.end_time_hhmm}
+                            </div>
+
+                            <div className="small text-dim mt-1">
+                              {priceSummary(item)}
+                            </div>
+
+                            <div className="small text-dim">
+                              {effectiveSummary(item)}
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className={`col-12 col-md-7 ${mobileViewing ? "" : "d-none d-md-block"}`}>
+            <div className="ia-tile ia-tile-pad">
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <div className="fw-semibold" style={{ fontSize: "1.05rem" }}>
+                  {selected ? selected.class_name : "New recurring timetable row"}
+                </div>
+
+                <div className="d-md-none">
+                  <button
+                    type="button"
+                    className="btn btn-outline-light btn-sm"
+                    onClick={() => setMobileViewing(false)}
+                  >
+                    <i className="fas fa-chevron-left me-2" />
+                    Back to list
+                  </button>
+                </div>
+              </div>
+
               <div className="row g-3">
+                <div className="col-12">
+                  <label
+                    className="d-flex align-items-center gap-2"
+                    style={{ cursor: "pointer", userSelect: "none" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={formActive}
+                      onChange={(e) => setFormActive(e.target.checked)}
+                    />
+                    <span>Active</span>
+                  </label>
+                </div>
+
                 <div className="col-12 col-md-6">
                   <label className="form-label">Class</label>
                   <select
                     className="form-select"
-                    value={classId}
-                    onChange={(e) => setClassId(e.target.value)}
-                    required
+                    value={formClassId}
+                    onChange={(e) => setFormClassId(e.target.value)}
                   >
-                    <option value="">Select a class</option>
-                    {classes.map((item) => (
+                    <option value="">Select class</option>
+                    {classOptions.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name}
                       </option>
@@ -271,12 +517,11 @@ export default function RecurringSessionsAdminPage() {
                   <label className="form-label">Gym</label>
                   <select
                     className="form-select"
-                    value={gymId}
-                    onChange={(e) => setGymId(e.target.value)}
-                    required
+                    value={formGymId}
+                    onChange={(e) => setFormGymId(e.target.value)}
                   >
-                    <option value="">Select a gym</option>
-                    {gyms.map((item) => (
+                    <option value="">Select gym</option>
+                    {gymOptions.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name}
                         {item.location ? ` • ${item.location}` : ""}
@@ -285,53 +530,18 @@ export default function RecurringSessionsAdminPage() {
                   </select>
                 </div>
 
-                <div className="col-12 col-md-6">
-                  <label className="form-label">Coach name</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={coachName}
-                    onChange={(e) => setCoachName(e.target.value)}
-                    placeholder="Optional coach name"
-                  />
-                </div>
-
-                <div className="col-6 col-md-3">
-                  <label className="form-label">Price (£)</label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="form-control"
-                    value={price}
-                    onChange={(e) => setPrice(toMoneyInput(e.target.value))}
-                    required
-                  />
-                </div>
-
-                <div className="col-6 col-md-3">
-                  <label className="form-label">Max attendance</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    className="form-control"
-                    value={maxAttendance}
-                    onChange={(e) => setMaxAttendance(toIntInput(e.target.value))}
-                    required
-                  />
-                </div>
-
                 <div className="col-12">
-                  <label className="form-label">Weekdays</label>
+                  <label className="form-label d-block">Weekdays</label>
                   <div className="d-flex flex-wrap gap-2">
                     {WEEKDAY_OPTIONS.map((day) => {
-                      const active = weekdays.includes(day.value);
+                      const selectedDay = formWeekdays.includes(day.value);
 
                       return (
                         <button
                           key={day.value}
                           type="button"
+                          className={selectedDay ? "ia-btn" : "ia-btn ia-btn-outline"}
                           onClick={() => toggleWeekday(day.value)}
-                          className={active ? "ia-btn" : "ia-btn ia-btn-outline"}
                         >
                           {day.label}
                         </button>
@@ -340,36 +550,13 @@ export default function RecurringSessionsAdminPage() {
                   </div>
                 </div>
 
-                <div className="col-12 col-md-6">
-                  <label className="form-label">Start date</label>
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="col-12 col-md-6">
-                  <label className="form-label">End date</label>
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    required
-                  />
-                </div>
-
                 <div className="col-6 col-md-6">
                   <label className="form-label">Start time</label>
                   <input
                     type="time"
                     className="form-control"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    required
+                    value={formStartTime}
+                    onChange={(e) => setFormStartTime(e.target.value)}
                   />
                 </div>
 
@@ -378,9 +565,75 @@ export default function RecurringSessionsAdminPage() {
                   <input
                     type="time"
                     className="form-control"
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    required
+                    value={formEndTime}
+                    onChange={(e) => setFormEndTime(e.target.value)}
+                  />
+                </div>
+
+                <div className="col-12 col-md-6">
+                  <label className="form-label">Coach name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={formCoachName}
+                    onChange={(e) => setFormCoachName(e.target.value)}
+                    placeholder="Optional coach name"
+                  />
+                </div>
+
+                <div className="col-6 col-md-3">
+                  <label className="form-label">Prebook price (£)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="form-control"
+                    value={formPrice}
+                    onChange={(e) => setFormPrice(e.target.value)}
+                  />
+                </div>
+
+                <div className="col-6 col-md-3">
+                  <label className="form-label">Drop-in price (£)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="form-control"
+                    value={formDropInPrice}
+                    onChange={(e) => setFormDropInPrice(e.target.value)}
+                  />
+                </div>
+
+                <div className="col-6 col-md-4">
+                  <label className="form-label">Max attendance</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    className="form-control"
+                    value={formMaxAttendance}
+                    onChange={(e) => setFormMaxAttendance(e.target.value)}
+                  />
+                </div>
+
+                <div className="col-6 col-md-4">
+                  <label className="form-label">Effective from</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={formEffectiveFrom}
+                    onChange={(e) => setFormEffectiveFrom(e.target.value)}
+                  />
+                </div>
+
+                <div className="col-6 col-md-4">
+                  <label className="form-label">Effective to</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={formEffectiveTo}
+                    onChange={(e) => setFormEffectiveTo(e.target.value)}
                   />
                 </div>
 
@@ -391,68 +644,51 @@ export default function RecurringSessionsAdminPage() {
                   >
                     <input
                       type="checkbox"
-                      checked={notifyMembers}
-                      onChange={(e) => setNotifyMembers(e.target.checked)}
+                      checked={formNotifyMembers}
+                      onChange={(e) => setFormNotifyMembers(e.target.checked)}
                     />
-                    <span>Notify gym members after creating these sessions</span>
+                    <span>Notify members when generated</span>
                   </label>
                 </div>
               </div>
 
-              <div
-                className="mt-4"
-                style={{
-                  borderRadius: 18,
-                  padding: 16,
-                  background: "rgba(255,255,255,0.03)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                }}
-              >
-                <div
-                  className="text-dim small mb-2"
-                  style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}
-                >
-                  Preview
-                </div>
-
-                <div style={{ fontWeight: 700, fontSize: "1.05rem" }}>
-                  {selectedClass?.name || "Class not selected"}
-                </div>
-
-                <div className="text-dim mt-1">
-                  {selectedGym?.name || "Gym not selected"}
-                  {selectedGym?.location ? ` • ${selectedGym.location}` : ""}
-                </div>
-
-                <div className="text-dim mt-1">{weekdayLabel}</div>
-                <div className="text-dim mt-1">{formatDateRange(startDate, endDate) || "No date range set"}</div>
-                <div className="text-dim mt-1">
-                  {startTime || "--:--"} to {endTime || "--:--"}
-                </div>
-                <div className="text-dim mt-1">
-                  £{price || "0"} • Max {maxAttendance || "0"} attendees
-                </div>
-                {coachName.trim() ? <div className="text-dim mt-1">Coach: {coachName.trim()}</div> : null}
-
-                <div className="mt-3">
-                  <span className="ia-badge ia-badge-neon">{totalOccurrences} sessions will be created</span>
-                </div>
-              </div>
-
-              {submitError ? <div className="mt-3 text-danger">{submitError}</div> : null}
-              {submitMsg ? <div className="mt-3 text-success">{submitMsg}</div> : null}
-
-              <div className="mt-4 d-flex gap-2 flex-wrap">
-                <button type="submit" className="ia-btn" disabled={submitting}>
-                  {submitting ? "Creating…" : "Create recurring sessions"}
+              <div className="d-flex flex-wrap gap-2 mt-4">
+                <button type="button" className="ia-btn" onClick={handleSave} disabled={saving}>
+                  {saving ? "Saving..." : selectedId ? "Save changes" : "Create row"}
                 </button>
 
-                <Link href="/admin/sessions" className="ia-btn ia-btn-outline">
-                  Cancel
-                </Link>
+                {selectedId ? (
+                  <button
+                    type="button"
+                    className="ia-btn ia-btn-outline"
+                    onClick={handleDelete}
+                    disabled={deleting}
+                  >
+                    {deleting ? "Deleting..." : "Delete"}
+                  </button>
+                ) : null}
+
+                {!selectedId ? (
+                  <button
+                    type="button"
+                    className="ia-btn ia-btn-outline"
+                    onClick={() => {
+                      setSelectedId(null);
+                      setMobileViewing(false);
+                    }}
+                  >
+                    Back to list
+                  </button>
+                ) : null}
               </div>
-            </form>
-          )}
+
+              <div className="small text-dim mt-3">
+                {selected
+                  ? `Repeats on ${weekdayLabel(selected.weekdays)} • ${selected.start_time_hhmm}-${selected.end_time_hhmm}`
+                  : "Create reusable timetable rows here, then we will wire the weekly session generator next."}
+              </div>
+            </div>
+          </div>
         </div>
       </main>
 
