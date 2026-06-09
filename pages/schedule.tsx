@@ -20,10 +20,11 @@ type SessionItem = {
   id: string;
   class_id: string;
   class_name?: string | null;
-  coach_name?: string;
+  coach_name?: string | null;
   start_time: string | number | null;
   end_time: string | number | null;
   price: number;
+  drop_in_price?: number | null;
   max_attendance: number;
   current_attendance: number;
   gym_name: string;
@@ -58,11 +59,23 @@ type CancelBookingResponse =
       was_late_cancel: boolean;
       refund_cutoff_passed: boolean;
     }
-  | { error: string };
+  | {
+      error: string;
+    };
 
 type Cell =
-  | { key: string; blank: true }
-  | { key: string; blank: false; day: number; ymd: string; count: number; isToday: boolean };
+  | {
+      key: string;
+      blank: true;
+    }
+  | {
+      key: string;
+      blank: false;
+      day: number;
+      ymd: string;
+      count: number;
+      isToday: boolean;
+    };
 
 function safeMillis(value: string | number | null | undefined): number {
   const ms = toMillis(value);
@@ -131,13 +144,16 @@ export default function SchedulePage() {
     dedupingInterval: 60_000,
   });
 
-  const isGymMember =
-    String(profile?.membership_status || "").toLowerCase() === "gym_member" ||
-    (["active", "trialing"].includes(String(profile?.subscription_status || "").toLowerCase()) &&
-      ["gym", "hybrid"].includes(String(profile?.membership_scope || "").toLowerCase()));
+  const subscriptionStatus = String(profile?.subscription_status || "").toLowerCase();
+  const membershipStatus = String(profile?.membership_status || "").toLowerCase();
+  const membershipScope = String(profile?.membership_scope || "").toLowerCase();
 
-  const isCashPayer =
-    String(profile?.payment_type || "").toLowerCase() === "cash";
+  const isIncludedMember =
+    membershipStatus === "gym_member" ||
+    (["active", "trialing"].includes(subscriptionStatus) &&
+      ["gym", "hybrid"].includes(membershipScope));
+
+  const isCashPayer = String(profile?.payment_type || "").toLowerCase() === "cash";
 
   const { data: gymsResp, error: gymsError } = useSWR("/api/gyms/list", fetcher, {
     revalidateOnFocus: false,
@@ -228,13 +244,14 @@ export default function SchedulePage() {
         )}`
       : null;
 
-  const {
-    data: bookingsResp,
-    mutate: mutateBookings,
-  } = useSWR<BookingsMineResponse>(bookingsKey, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 20_000,
-  });
+  const { data: bookingsResp, mutate: mutateBookings } = useSWR<BookingsMineResponse>(
+    bookingsKey,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 20_000,
+    }
+  );
 
   const bookedSessionIds = Array.isArray(bookingsResp?.sessionIds)
     ? bookingsResp.sessionIds
@@ -251,10 +268,8 @@ export default function SchedulePage() {
 
       const key = ymdLocal(new Date(ms));
       const daySessions: SessionItem[] = map[key] ? [...map[key]] : [];
-
       daySessions.push(session);
       daySessions.sort(compareSessionStart);
-
       map[key] = daySessions;
     }
 
@@ -427,7 +442,7 @@ export default function SchedulePage() {
 
       let method: PaymentMethod;
 
-      if (isGymMember && isAuthed) {
+      if (isIncludedMember && isAuthed) {
         method = "member_free";
       } else if (isCashPayer && isAuthed) {
         method = "pay_on_day";
@@ -471,7 +486,7 @@ export default function SchedulePage() {
       if (method === "member_free") {
         setBookMsg("Booked. Included with your membership.");
       } else if (method === "pay_on_day") {
-        setBookMsg("Booked. Pay £12 on arrival.");
+        setBookMsg(`Booked. Pay £${Number(activeSession.drop_in_price || 12)} on arrival.`);
       } else {
         setBookMsg("Booked.");
       }
@@ -616,6 +631,8 @@ export default function SchedulePage() {
                 session.current_attendance >= session.max_attendance;
               const alreadyBooked = bookedSet.has(session.id);
               const displayName = classLabel(session);
+              const prebookPrice = Number(session.price || 9);
+              const dropInPrice = Number(session.drop_in_price || 12);
 
               return (
                 <div
@@ -640,11 +657,11 @@ export default function SchedulePage() {
                       </div>
 
                       <div className="ia-class-item-meta mt-1">
-                        {isGymMember
+                        {isIncludedMember
                           ? "Included with membership"
                           : isCashPayer
-                          ? "Pay £12 on arrival"
-                          : "£9 prebook / £12 pay on day"}
+                          ? `Pay £${dropInPrice} on arrival`
+                          : `£${prebookPrice} prebook / £${dropInPrice} pay on day`}
                       </div>
                     </div>
 
@@ -822,7 +839,7 @@ export default function SchedulePage() {
               </>
             ) : null}
 
-            {!isGymMember ? (
+            {!isIncludedMember ? (
               <div className="form-check mt-2">
                 <input
                   className="form-check-input"
@@ -833,7 +850,7 @@ export default function SchedulePage() {
                   disabled={bookingBusy}
                 />
                 <label className="form-check-label" htmlFor="payOnDay">
-                  Pay on the day (£12)
+                  Pay on the day (£{Number(activeSession.drop_in_price || 12)})
                 </label>
               </div>
             ) : (
@@ -854,19 +871,19 @@ export default function SchedulePage() {
               >
                 {bookingBusy
                   ? "Processing…"
-                  : isGymMember
+                  : isIncludedMember
                   ? "Book free"
                   : payOnDay
                   ? "Confirm booking"
-                  : "Pay £9 now"}
+                  : `Pay £${Number(activeSession.price || 9)} now`}
               </button>
             </div>
 
             <div className="text-dim small mt-2">
-              {!isGymMember
+              {!isIncludedMember
                 ? payOnDay
-                  ? "You’ll pay £12 at the gym."
-                  : "You’ll be redirected to Stripe to pay £9."
+                  ? `You’ll pay £${Number(activeSession.drop_in_price || 12)} at the gym.`
+                  : `You’ll be redirected to Stripe to pay £${Number(activeSession.price || 9)}.`
                 : null}
             </div>
           </div>
