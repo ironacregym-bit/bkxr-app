@@ -57,6 +57,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Invalid booking amount" });
     }
 
+    const className = String(booking?.class_name || booking?.class_id || "Iron Acre Session").trim();
+    const gymName = String(booking?.gym_name || "Iron Acre Gym").trim();
+    const productName = `${className} – ${gymName}`;
+
     const baseUrl = baseFromReq(req);
 
     if (!baseUrl) {
@@ -72,7 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             currency: "gbp",
             unit_amount: unitAmountPence,
             product_data: {
-              name: "Iron Acre Session Prebook",
+              name: productName,
             },
           },
           quantity: 1,
@@ -81,6 +85,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       metadata: {
         booking_id,
         session_id: String(booking?.session_id || ""),
+        class_id: String(booking?.class_id || ""),
+        class_name: className,
+        gym_name: gymName,
         booking_type: "class_prebook",
       },
       success_url: `${baseUrl}/book/success?booking_id=${encodeURIComponent(booking_id)}`,
