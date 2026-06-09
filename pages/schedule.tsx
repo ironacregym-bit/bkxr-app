@@ -307,15 +307,39 @@ export default function SchedulePage() {
 
   const [activeDay, setActiveDay] = useState<string | null>(null);
 
-  useEffect(() => {
-    setActiveDay(null);
-  }, [year, month, selectedGymId]);
-
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [sharing, setSharing] = useState<{ message: string; link: string } | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActiveDay(null);
+    setActionMsg(null);
+    setActionErr(null);
+    setSharing(null);
+    setPending(null);
+    setCancelling(null);
+  }, [year, month, selectedGymId]);
+
+  useEffect(() => {
+    setActionMsg(null);
+    setActionErr(null);
+    setSharing(null);
+    setPending(null);
+    setCancelling(null);
+  }, [activeDay]);
+
+  useEffect(() => {
+    if (!actionMsg && !actionErr) return;
+
+    const t = window.setTimeout(() => {
+      setActionMsg(null);
+      setActionErr(null);
+    }, 3500);
+
+    return () => window.clearTimeout(t);
+  }, [actionMsg, actionErr]);
 
   async function shareWhatsApp(sessionId: string) {
     try {
@@ -359,7 +383,7 @@ export default function SchedulePage() {
     }
 
     const proceed = window.confirm(
-      "Cancel this booking?\n\nIf this was a £9 prebook and you are more than 24 hours before the session start, you will be refunded.\nIf it is within 24 hours, no refund will be issued.\nPay-on-day and included member bookings can be cancelled without a refund calculation."
+      "Cancel this booking?\n\nIf this was a prebook and you are more than 24 hours before the session start, you will be refunded.\nIf it is within 24 hours, no refund will be issued.\nPay-on-day and included member bookings can be cancelled without a refund calculation."
     );
 
     if (!proceed) return;
@@ -425,7 +449,7 @@ export default function SchedulePage() {
 
     if (e) setGuestEmail(e);
     if (n) setGuestName(n);
-  }, [authSession?.user]);
+  }, [authSession]);
 
   async function confirmBooking() {
     if (!activeSession) return;
@@ -517,7 +541,7 @@ export default function SchedulePage() {
               </div>
             </div>
 
-            <Link href="/iron-acre" className="ia-btn ia-btn-outline ia-btn-icon-left">
+            <Link href="/iron-acre" className="ia-btn ia-btn-muted ia-btn-icon-left">
               <i className="fas fa-chevron-left" />
               Back
             </Link>
@@ -528,7 +552,7 @@ export default function SchedulePage() {
           <div className="d-flex justify-content-between align-items-center gap-2 mb-2">
             <button
               type="button"
-              className="ia-btn ia-btn-outline ia-btn-icon-left"
+              className="ia-btn ia-btn-muted ia-btn-icon-left"
               onClick={prevMonth}
               aria-label="Previous month"
             >
@@ -540,7 +564,7 @@ export default function SchedulePage() {
 
             <button
               type="button"
-              className="ia-btn ia-btn-outline ia-btn-icon-right"
+              className="ia-btn ia-btn-muted ia-btn-icon-right"
               onClick={nextMonth}
               aria-label="Next month"
             >
@@ -610,7 +634,7 @@ export default function SchedulePage() {
                 <div className="ia-card-title-compact">{activeDay}</div>
               </div>
 
-              <button type="button" className="ia-btn ia-btn-outline" onClick={() => setActiveDay(null)}>
+              <button type="button" className="ia-btn ia-btn-muted" onClick={() => setActiveDay(null)}>
                 Close
               </button>
             </div>
@@ -668,12 +692,13 @@ export default function SchedulePage() {
                     <div className="d-flex flex-column gap-2" style={{ flex: "0 0 auto" }}>
                       {alreadyBooked ? (
                         <>
-                          <button type="button" className="ia-btn ia-btn-outline" disabled>
+                          <button type="button" className="ia-btn ia-btn-muted" disabled>
                             Booked
                           </button>
+
                           <button
                             type="button"
-                            className="ia-btn ia-btn-outline"
+                            className="ia-btn ia-btn-danger"
                             onClick={() => cancelBooking(session)}
                             disabled={cancelling === session.id}
                           >
@@ -693,7 +718,7 @@ export default function SchedulePage() {
 
                       <button
                         type="button"
-                        className="ia-btn ia-btn-outline"
+                        className="ia-btn ia-btn-info"
                         onClick={() => shareWhatsApp(session.id)}
                         disabled={pending === session.id || cancelling === session.id}
                       >
@@ -729,7 +754,7 @@ export default function SchedulePage() {
                     <div className="d-flex gap-2 flex-wrap">
                       <button
                         type="button"
-                        className="ia-btn ia-btn-primary"
+                        className="ia-btn ia-btn-info"
                         onClick={() =>
                           window.open(
                             `https://wa.me/?text=${encodeURIComponent(sharing.message)}`,
@@ -743,7 +768,7 @@ export default function SchedulePage() {
 
                       <button
                         type="button"
-                        className="ia-btn ia-btn-outline"
+                        className="ia-btn ia-btn-muted"
                         onClick={() => navigator.clipboard?.writeText(sharing.message)}
                       >
                         Copy message
@@ -801,7 +826,7 @@ export default function SchedulePage() {
 
               <button
                 type="button"
-                className="ia-btn ia-btn-outline"
+                className="ia-btn ia-btn-muted"
                 onClick={() => setShowBookModal(false)}
                 disabled={bookingBusy}
               >
