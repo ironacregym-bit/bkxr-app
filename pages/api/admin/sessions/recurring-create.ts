@@ -16,6 +16,7 @@ type Body = {
   start_time_hhmm?: string;
   end_time_hhmm?: string;
   price?: number;
+  drop_in_price?: number;
   max_attendance?: number;
   notify_members?: boolean;
 };
@@ -31,7 +32,9 @@ type Resp =
   | { error: string };
 
 function parseYMD(value: string): Date | null {
-  const [year, month, day] = value.split("-").map((x) => Number(x));
+  const [year, month, day] = String(value || "")
+    .split("-")
+    .map((x) => Number(x));
 
   if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
     return null;
@@ -109,6 +112,25 @@ function isValidWeekday(n: unknown): n is number {
   return Number.isInteger(n) && Number(n) >= 0 && Number(n) <= 6;
 }
 
+function shouldNotifyUserForGym(user: any, targetGymId: string): boolean {
+  const userGymId = String(user?.gym_id || "").trim();
+  return Boolean(userGymId) && userGymId === targetGymId;
+}
+
+async function resolveClassDoc(classId: string) {
+  const primary = await firestore.collection("classes").doc(classId).get();
+  if (primary.exists) {
+    return primary.data() as any;
+  }
+
+  const legacy = await firestore.collection("gymClasses").doc(classId).get();
+  if (legacy.exists) {
+    return legacy.data() as any;
+  }
+
+  return null;
+}
+
 async function notifyGymMembersOfRecurringSessions(params: {
   gymId: string;
   gymName: string;
@@ -117,15 +139,27 @@ async function notifyGymMembersOfRecurringSessions(params: {
   endDate: Date;
   createdCount: number;
   sessionIds: string[];
+  prebookPrice: number;
+  dropInPrice: number;
 }) {
-  const { gymId, gymName, className, startDate, endDate, createdCount, sessionIds } = params;
+  const {
+    gymId,
+    gymName,
+    className,
+    startDate,
+    endDate,
+    createdCount,
+    sessionIds,
+    prebookPrice,
+    dropInPrice,
+  } = params;
 
   const usersSnap = await firestore.collection("users").get();
 
   const targetEmails = usersSnap.docs
     .filter((doc) => {
       const data = doc.data() as any;
-      return String(data?.gym_id || "").trim() === gymId;
+      return shouldNotifyUserForGym(data, gymId);
     })
     .map((doc) => String(doc.id || "").trim().toLowerCase())
     .filter(Boolean);
@@ -139,10 +173,10 @@ async function notifyGymMembersOfRecurringSessions(params: {
 
   const message =
     createdCount === 1
-      ? `${className} has been added to the ${gymName} timetable. Tap to view the updated schedule.`
-      : `${createdCount} ${className} sessions have been added to the ${gymName} timetable for ${rangeText}. Tap to view the updated schedule.`;
+      ? `${className} has been added to the ${gymName} timetable. Prebook £${prebookPrice} or drop in for £${dropInPrice}. Tap to view the updated schedule.`
+      : `${createdCount} ${className} sessions have been added to the ${gymName} timetable for ${rangeText}. Prebook £${prebookPrice} or drop in for £${dropInPrice}. Tap to view the updated schedule.`;
 
-  const href = "/iron-acre";
+  const href = "/schedule";
 
   let succeeded = 0;
   let failed = 0;
@@ -168,6 +202,8 @@ async function notifyGymMembersOfRecurringSessions(params: {
               session_ids: sessionIds,
               start_date: startDate.toISOString(),
               end_date: endDate.toISOString(),
+              price: prebookPrice,
+              drop_in_price: dropInPrice,
             },
           },
           {
@@ -225,7 +261,8 @@ export default async function handler(
     const endDateRaw = String(body.end_date || "").trim();
     const startHHMM = String(body.start_time_hhmm || "").trim();
     const endHHMM = String(body.end_time_hhmm || "").trim();
-    const price = Number(body.price || 0);
+    const price = Number(body.price ?? 9);
+    const dropInPrice = Number(body.drop_in_price ?? 12);
     const maxAttendance = Number(body.max_attendance || 0);
     const notifyMembers = Boolean(body.notify_members);
 
@@ -258,7 +295,11 @@ export default async function handler(
     }
 
     if (!Number.isFinite(price) || price < 0) {
-      return res.status(400).json({ error: "Price must be 0 or greater" });
+      return res.status(400).json({ error: "Prebook price must be 0 or greater" });
+    }
+
+    if (!Number.isFinite(dropInPrice) || dropInPrice < 0) {
+      return res.status(400).json({ error: "Drop-in price must be 0 or greater" });
     }
 
     if (!Number.isFinite(maxAttendance) || maxAttendance < 1) {
@@ -290,24 +331,24 @@ export default async function handler(
       });
     }
 
-    const [gymDoc, classDoc] = await Promise.all([
+    const [gymDoc, classData] = await Promise.all([
       firestore.collection("gyms").doc(gymId).get(),
-      firestore.collection("gymClasses").doc(classId).get(),
+      resolveClassDoc(classId),
     ]);
 
     if (!gymDoc.exists) {
       return res.status(400).json({ error: "Selected gym does not exist" });
     }
 
-    if (!classDoc.exists) {
+    if (!classData) {
       return res.status(400).json({ error: "Selected class does not exist" });
     }
 
     const gymData = gymDoc.data() as any;
-    const classData = classDoc.data() as any;
-
-    const gymName = String(gymData?.name || gymId);
-    const className = String(classData?.name || classData?.title || classId);
+    const gymName = String(gymData?.name || gymId).trim();
+    const className = String(
+      classData?.name || classData?.title || classData?.class_name || classId
+    ).trim();
 
     const docsToCreate = dates.map((dateOnly) => {
       const y = dateOnly.getFullYear();
@@ -349,11 +390,14 @@ export default async function handler(
         batch.set(ref, {
           id: ref.id,
           class_id: classId,
+          class_name: className,
           gym_id: gymId,
+          gym_name: gymName,
           start_time: Timestamp.fromDate(item.startDateTime as Date),
           end_time: Timestamp.fromDate(item.endDateTime as Date),
           coach_name: coachName || null,
           price,
+          drop_in_price: dropInPrice,
           max_attendance: Math.floor(maxAttendance),
           current_attendance: 0,
           notify_members: notifyMembers,
@@ -365,6 +409,9 @@ export default async function handler(
             start_time_hhmm: startHHMM,
             end_time_hhmm: endHHMM,
           },
+          cancelled: false,
+          cancelled_at: null,
+          cancelled_by: null,
           created_at: now,
           updated_at: now,
           created_by: createdBy,
@@ -389,6 +436,8 @@ export default async function handler(
         endDate,
         createdCount: sessionIds.length,
         sessionIds,
+        prebookPrice: price,
+        dropInPrice,
       });
     }
 
