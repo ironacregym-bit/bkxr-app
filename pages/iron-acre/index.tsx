@@ -65,6 +65,7 @@ type DayOverview = {
   hasWorkout: boolean;
   workoutDone: boolean;
   workoutIds: string[];
+  programmedWorkouts?: SimpleWorkoutRef[];
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
   hasRecurringToday: boolean;
   recurringWorkouts: SimpleWorkoutRef[];
@@ -116,10 +117,12 @@ type Gym = {
 type SessionItem = {
   id: string;
   class_id: string | null;
+  class_name?: string | null;
   coach_name?: string | null;
   start_time: string | null;
   end_time: string | null;
   price: number;
+  drop_in_price?: number | null;
   max_attendance: number;
   current_attendance: number;
   gym_name: string | null;
@@ -137,6 +140,40 @@ type BookingsMineResponse = {
 };
 
 type PaymentMethod = "stripe" | "pay_on_day" | "member_free";
+
+type WorkoutItem =
+  | {
+      type: "Single";
+      exercise_id: string;
+      exercise_name?: string;
+      sets?: number | null;
+      reps?: string | null;
+    }
+  | {
+      type: "Superset";
+      items: {
+        exercise_id: string;
+        exercise_name?: string;
+        reps?: string | null;
+      }[];
+      sets?: number | null;
+    };
+
+type Round = {
+  name: string;
+  order: number;
+  items: WorkoutItem[];
+};
+
+type Workout = {
+  workout_id: string;
+  workout_name: string;
+  focus?: string | null;
+  notes?: string | null;
+  warmup?: Round | null;
+  main: Round;
+  finisher?: Round | null;
+};
 
 function HomeLoadingScreen() {
   return (
@@ -178,6 +215,9 @@ function firstWorkoutRefForDay(day?: DayOverview): SimpleWorkoutRef | null {
 
   const recurring = Array.isArray(day.recurringWorkouts) ? day.recurringWorkouts : [];
   if (recurring.length) return recurring[0] || null;
+
+  const programmed = Array.isArray(day.programmedWorkouts) ? day.programmedWorkouts : [];
+  if (programmed.length) return programmed[0] || null;
 
   const optional = Array.isArray(day.optionalWorkouts) ? day.optionalWorkouts : [];
   if (optional.length) return optional[0] || null;
@@ -255,7 +295,9 @@ function TasksCard({
           onClick={() => setOpen((v) => !v)}
         >
           <i className={`fas fa-chevron-${open ? "up" : "down"}`} />
-          <span>{taskCount} task{taskCount === 1 ? "" : "s"}</span>
+          <span>
+            {taskCount} task{taskCount === 1 ? "" : "s"}
+          </span>
         </button>
       </div>
 
@@ -277,11 +319,7 @@ function TasksCard({
             <div className="ia-task-divider">
               <CompactTaskRow
                 title="Weekly check-in"
-                subtitle={
-                  checkinDone
-                    ? "Completed this week."
-                    : `Open for ${fridayYMD}.`
-                }
+                subtitle={checkinDone ? "Completed this week." : `Open for ${fridayYMD}.`}
                 href="/checkin"
                 buttonLabel={checkinDone ? "View" : "Open"}
               />
@@ -358,14 +396,34 @@ export default function IronAcreHome() {
   const workoutRef = useMemo(() => firstWorkoutRefForDay(todayData), [todayData]);
   const workoutId = String(workoutRef?.id || "");
   const workoutTitle = workoutRef?.name || "Today’s session";
+
   const hasWorkoutToday =
     Boolean(todayData?.hasWorkout) ||
     Boolean(todayData?.hasRecurringToday) ||
     Boolean(workoutRef);
+
   const workoutDone = todayData?.hasRecurringToday
     ? Boolean(todayData?.recurringDone)
     : Boolean(todayData?.workoutDone);
+
   const durationMinutes = Number(todayData?.workoutSummary?.duration || 0) || null;
+
+  const {
+    data: workoutData,
+    error: workoutError,
+  } = useSWR<Workout>(
+    mounted && workoutId ? `/api/workouts/${encodeURIComponent(workoutId)}` : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60_000,
+    }
+  );
+
+  const resolvedWorkout = useMemo(() => {
+    if (!workoutData) return null;
+    return String(workoutData?.workout_id || "") === workoutId ? workoutData : null;
+  }, [workoutData, workoutId]);
 
   const { data: strengthProfile, error: strengthError } = useSWR(
     mounted ? "/api/strength/profile/get" : null,
@@ -479,10 +537,10 @@ export default function IronAcreHome() {
     }
 
     if (json.status === "pending_payment") {
-      const checkoutRes = await fetch("/api/billing/create-checkout-session", {
+      const checkoutRes = await fetch("/api/bookings/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ purpose: "class_booking", booking_id: json.booking_id }),
+        body: JSON.stringify({ booking_id: json.booking_id }),
       });
 
       const checkoutJson = await checkoutRes.json().catch(() => ({}));
@@ -502,7 +560,10 @@ export default function IronAcreHome() {
     await Promise.allSettled([mutateSessions?.(), mutateBookings?.()]);
   }
 
-  const coreReady = mounted && status !== "loading" && (!session || !!homeOverview || !!homeOverviewError);
+  const coreReady =
+    mounted &&
+    status !== "loading" &&
+    (!session || !!homeOverview || !!homeOverviewError);
 
   if (!mounted || !coreReady) {
     return (
@@ -552,6 +613,7 @@ export default function IronAcreHome() {
       (bookingsKey && !bookingsResp));
 
   const strengthLoading = !strengthProfile && !strengthError;
+  const workoutLoading = Boolean(workoutId) && !resolvedWorkout && !workoutError;
 
   return (
     <>
@@ -589,19 +651,23 @@ export default function IronAcreHome() {
           />
         )}
 
-        <IronAcreWorkoutCard
-          title={workoutTitle}
-          workout={null}
-          workoutId={workoutId}
-          done={workoutDone}
-          durationMinutes={durationMinutes}
-          dateKey={effectiveTodayKey}
-          weekDays={homeOverview?.days || []}
-          weekStartYMD={homeOverview?.weekStartYMD || ""}
-          weekEndYMD={homeOverview?.weekEndYMD || ""}
-          weeklyTotals={homeOverview?.weeklyTotals}
-          hasWorkoutToday={hasWorkoutToday}
-        />
+        {workoutLoading ? (
+          <SectionLoadingCard title="Workout" icon="fa-dumbbell" />
+        ) : (
+          <IronAcreWorkoutCard
+            title={workoutTitle}
+            workout={resolvedWorkout}
+            workoutId={workoutId}
+            done={workoutDone}
+            durationMinutes={durationMinutes}
+            dateKey={effectiveTodayKey}
+            weekDays={homeOverview?.days || []}
+            weekStartYMD={homeOverview?.weekStartYMD || ""}
+            weekEndYMD={homeOverview?.weekEndYMD || ""}
+            weeklyTotals={homeOverview?.weeklyTotals}
+            hasWorkoutToday={hasWorkoutToday}
+          />
+        )}
 
         <IronAcreNutritionCard
           nutritionToday={
