@@ -245,17 +245,24 @@ export default function IronAcreWorkoutCard({
     if (todaysRefs.length > 0) {
       return String(todaysRefs[0]?.id || "");
     }
-    return workoutId;
+    return String(workoutId || "");
   }, [todaysRefs, workoutId]);
+
+  const resolvedWorkout = useMemo(() => {
+    if (!workout) return null;
+    if (!resolvedWorkoutId) return null;
+
+    return String(workout.workout_id || "") === String(resolvedWorkoutId) ? workout : null;
+  }, [workout, resolvedWorkoutId]);
 
   const resolvedHasWorkoutToday = useMemo(() => {
     if (todaysRefs.length > 0) return true;
     return hasWorkoutToday;
   }, [todaysRefs, hasWorkoutToday]);
 
-  const flat = useMemo(() => flattenExercisesWithReps(workout), [workout]);
+  const flat = useMemo(() => flattenExercisesWithReps(resolvedWorkout), [resolvedWorkout]);
   const exCount = flat.length;
-  const setCount = useMemo(() => estimateSets(workout), [workout]);
+  const setCount = useMemo(() => estimateSets(resolvedWorkout), [resolvedWorkout]);
 
   const [showWeek, setShowWeek] = useState(false);
   const [showExercises, setShowExercises] = useState(false);
@@ -268,11 +275,15 @@ export default function IronAcreWorkoutCard({
     ? `/gymworkout/${encodeURIComponent(resolvedWorkoutId)}?date=${encodeURIComponent(dateKey)}`
     : "#";
 
-  const titleText = workout?.workout_name || todaysRefs?.[0]?.name || title || "Gym session";
+  const titleText =
+    todaysRefs?.[0]?.name ||
+    resolvedWorkout?.workout_name ||
+    title ||
+    "Gym session";
 
   const subtitleText = (
-    workout?.focus ||
-    workout?.notes ||
+    resolvedWorkout?.focus ||
+    resolvedWorkout?.notes ||
     "Get today’s session done and keep the week moving."
   ).toString();
 
