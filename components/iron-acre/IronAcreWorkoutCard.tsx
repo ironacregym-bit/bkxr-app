@@ -265,7 +265,6 @@ export default function IronAcreWorkoutCard({
   const setCount = useMemo(() => estimateSets(resolvedWorkout), [resolvedWorkout]);
 
   const [showWeek, setShowWeek] = useState(false);
-  const [showExercises, setShowExercises] = useState(false);
 
   const weekRows = useMemo(() => {
     return buildWeekRows(weekDays, dateKey, resolvedWorkoutId, done);
@@ -289,35 +288,28 @@ export default function IronAcreWorkoutCard({
 
   return (
     <section className="ia-tile ia-tile-pad mb-3">
-      <div className="d-flex justify-content-between align-items-center mb-2">
-        <div className="ia-kicker">
+      <div className="d-flex justify-content-between align-items-center mb-2 gap-2">
+        <div
+          className="ia-kicker"
+          style={{
+            whiteSpace: "nowrap",
+            flex: "0 1 auto",
+            minWidth: 0,
+          }}
+        >
           <i className="fas fa-dumbbell" />
           TODAY’S WORKOUT
         </div>
 
-        <div className="d-flex align-items-center gap-2 flex-wrap justify-content-end">
-          {flat.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setShowExercises((v) => !v)}
-              className="ia-btn ia-btn-outline"
-              title="Toggle workout exercises"
-            >
-              <i className={`fas fa-chevron-${showExercises ? "up" : "down"}`} />
-              Exercises
-            </button>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={() => setShowWeek((v) => !v)}
-            className="ia-btn ia-btn-outline"
-            title="Toggle this week"
-          >
-            <i className={`fas fa-chevron-${showWeek ? "up" : "down"}`} />
-            This week
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowWeek((v) => !v)}
+          className="ia-btn ia-btn-outline ia-btn-sm"
+          title="Toggle this week"
+        >
+          <i className={`fas fa-chevron-${showWeek ? "up" : "down"}`} />
+          This week
+        </button>
       </div>
 
       {!resolvedHasWorkoutToday ? (
@@ -379,38 +371,6 @@ export default function IronAcreWorkoutCard({
               </div>
             </div>
           </div>
-
-          {showExercises && flat.length > 0 ? (
-            <div className="mt-3">
-              <div className="text-dim small mb-2">Today’s exercise list</div>
-
-              <div className="d-flex flex-column" style={{ gap: 8 }}>
-                {flat.map((exercise, i) => (
-                  <div
-                    key={`${exercise.name}-${i}`}
-                    className="d-flex justify-content-between align-items-center gap-2"
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: 14,
-                      background: "rgba(255,255,255,0.05)",
-                      boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.04)",
-                    }}
-                  >
-                    <div className="text-truncate" style={{ minWidth: 0 }}>
-                      <span className="text-dim" style={{ marginRight: 8 }}>
-                        {i + 1}
-                      </span>
-                      <span className="fw-semibold">{exercise.name}</span>
-                    </div>
-
-                    <div className="text-dim small" style={{ whiteSpace: "nowrap" }}>
-                      {exercise.reps ? exercise.reps : ""}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
 
           <div className="mt-3">
             <Link
