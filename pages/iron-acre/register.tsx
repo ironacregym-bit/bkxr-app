@@ -166,6 +166,7 @@ function getDeviceType() {
   if (ua.includes("ipad")) return "ipad";
   if (ua.includes("tablet")) return "tablet";
   if (ua.includes("iphone") || ua.includes("android")) return "mobile";
+
   return "desktop";
 }
 
@@ -175,6 +176,21 @@ function answerToBool(value: Answer) {
 
 function stepIndex(key: StepKey) {
   return STEPS.findIndex((s) => s.key === key);
+}
+
+function canvasHasInk(canvas: HTMLCanvasElement | null) {
+  if (!canvas) return false;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return false;
+
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] > 0) return true;
+  }
+
+  return false;
 }
 
 export default function IronAcreRegisterPage() {
@@ -253,36 +269,34 @@ export default function IronAcreRegisterPage() {
 
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.strokeStyle = "#ffffff";
 
-    const getPos = (evt: MouseEvent | TouchEvent) => {
+    const getPos = (evt: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
 
-      if ("touches" in evt && evt.touches.length) {
-        const t = evt.touches[0];
-        return {
-          x: (t.clientX - rect.left) * (canvas.width / rect.width),
-          y: (t.clientY - rect.top) * (canvas.height / rect.height),
-        };
-      }
-
-      const m = evt as MouseEvent;
       return {
-        x: (m.clientX - rect.left) * (canvas.width / rect.width),
-        y: (m.clientY - rect.top) * (canvas.height / rect.height),
+        x: (evt.clientX - rect.left) * (canvas.width / rect.width),
+        y: (evt.clientY - rect.top) * (canvas.height / rect.height),
       };
     };
 
-    const onDown = (evt: MouseEvent | TouchEvent) => {
+    const onPointerDown = (evt: PointerEvent) => {
       evt.preventDefault();
       drawingRef.current = true;
 
       const { x, y } = getPos(evt);
       ctx.beginPath();
       ctx.moveTo(x, y);
+
+      try {
+        canvas.setPointerCapture(evt.pointerId);
+      } catch {
+        // ignore capture failures
+      }
     };
 
-    const onMove = (evt: MouseEvent | TouchEvent) => {
+    const onPointerMove = (evt: PointerEvent) => {
       if (!drawingRef.current) return;
 
       evt.preventDefault();
@@ -296,29 +310,33 @@ export default function IronAcreRegisterPage() {
       }
     };
 
-    const onUp = (evt: MouseEvent | TouchEvent) => {
+    const onPointerUp = (evt: PointerEvent) => {
       if (!drawingRef.current) return;
 
       evt.preventDefault();
       drawingRef.current = false;
+
+      try {
+        canvas.releasePointerCapture(evt.pointerId);
+      } catch {
+        // ignore release failures
+      }
+
+      setHasSignature(canvasHasInk(canvas));
     };
 
-    canvas.addEventListener("mousedown", onDown);
-    canvas.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-
-    canvas.addEventListener("touchstart", onDown, { passive: false });
-    canvas.addEventListener("touchmove", onMove, { passive: false });
-    window.addEventListener("touchend", onUp);
+    canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointermove", onPointerMove);
+    canvas.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("pointercancel", onPointerUp);
+    canvas.addEventListener("pointerleave", onPointerUp);
 
     return () => {
-      canvas.removeEventListener("mousedown", onDown);
-      canvas.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-
-      canvas.removeEventListener("touchstart", onDown);
-      canvas.removeEventListener("touchmove", onMove);
-      window.removeEventListener("touchend", onUp);
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerUp);
+      canvas.removeEventListener("pointerleave", onPointerUp);
     };
   }, [mounted, hasSignature]);
 
@@ -384,7 +402,9 @@ export default function IronAcreRegisterPage() {
 
     if (targetStep === "signature") {
       if (!signedName.trim()) return "Please enter the printed name.";
-      if (!hasSignature) return "Please provide a signature before submitting.";
+      if (!canvasHasInk(canvasRef.current)) {
+        return "Please provide a signature before submitting.";
+      }
     }
 
     return null;
@@ -441,6 +461,11 @@ export default function IronAcreRegisterPage() {
     const validationError = validateAllSteps();
     if (validationError) {
       setError(validationError);
+      return;
+    }
+
+    if (!canvasHasInk(canvas)) {
+      setError("Please provide a signature before submitting.");
       return;
     }
 
@@ -503,41 +528,42 @@ export default function IronAcreRegisterPage() {
   }
 
   function resetForm() {
-  const sessionName = String((session?.user as any)?.name || "").trim();
-  const sessionEmail = String(session?.user?.email || "").trim();
+    const sessionName = String((session?.user as any)?.name || "").trim();
+    const sessionEmail = String(session?.user?.email || "").trim();
 
-  setStep("personal");
-  setBusy(false);
-  setError(null);
-  setSuccessMemberId(null);
+    setStep("personal");
+    setBusy(false);
+    setError(null);
+    setSuccessMemberId(null);
 
-  setFullName(sessionName || "");
-  setEmail(sessionEmail || "");
-  setPhone("");
-  setDateOfBirth("");
-  setAddress("");
+    setFullName(sessionName || "");
+    setEmail(sessionEmail || "");
+    setPhone("");
+    setDateOfBirth("");
+    setAddress("");
 
-  setEmergencyName("");
-  setEmergencyPhone("");
+    setEmergencyName("");
+    setEmergencyPhone("");
 
-  setAnswers({
-    q1: "",
-    q2: "",
-    q3: "",
-    q4: "",
-    q5: "",
-    q6: "",
-    q7: "",
-  });
-  setMedicalNotes("");
+    setAnswers({
+      q1: "",
+      q2: "",
+      q3: "",
+      q4: "",
+      q5: "",
+      q6: "",
+      q7: "",
+    });
+    setMedicalNotes("");
 
-  setMediaConsent(false);
-  setTermsAccepted(false);
-  setWaiverAccepted(false);
+    setMediaConsent(false);
+    setTermsAccepted(false);
+    setWaiverAccepted(false);
 
-  setSignedName(sessionName || "");
-  clearSignature();
-}
+    setSignedName(sessionName || "");
+    clearSignature();
+  }
+
   const currentStepMeta = STEPS[stepIndex(step)];
   const progressPct = ((stepIndex(step) + 1) / STEPS.length) * 100;
 
@@ -559,9 +585,15 @@ export default function IronAcreRegisterPage() {
       >
         <div className="d-flex justify-content-between align-items-center mb-3">
           <div className="d-flex align-items-center gap-2">
-            /IronAcreLogoNoBG.png
+            <img
+              src="/IronAcreLogoNoBG.png"
+              alt="Iron Acre Gym"
+              height={42}
+              style={{ display: "block", borderRadius: 8 }}
+            />
           </div>
-          <Link href="/">
+
+          <Link href="/" className="ia-btn ia-btn-muted">
             Back
           </Link>
         </div>
@@ -605,7 +637,7 @@ export default function IronAcreRegisterPage() {
                 Start another registration
               </button>
 
-              <Link href="/">
+              <Link href="/" className="ia-btn ia-btn-muted">
                 Return home
               </Link>
             </div>
@@ -947,18 +979,7 @@ export default function IronAcreRegisterPage() {
         )}
 
         <footer className="text-center small text-dim mt-4">
-          © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacy"> Privacy </Link> · 
-          <Link href="/terms"> Terms </Link>
-        </footer>
-
-        <style jsx>{`
-          .text-dim {
-            color: var(--ia-muted);
-          }
-
-          .ia-label {
-            color: rgba(255, 255, 255, 0.88);
-            font-weight: var(--ia-fw-semi);
+          © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacyi);
             margin-bottom: 6px;
           }
 
