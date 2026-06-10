@@ -38,6 +38,7 @@ type DayOverview = {
   hasWorkout: boolean;
   workoutDone: boolean;
   workoutIds: string[];
+  programmedWorkouts: SimpleWorkoutRef[];
   workoutSummary?: { calories: number; duration: number; weightUsed?: string };
 
   hasRecurringToday: boolean;
@@ -239,7 +240,10 @@ export default async function handler(
     }
 
     const userEmailRaw: string | undefined = (session.user as any)?.email;
-    if (!userEmailRaw) return res.status(400).json({ error: "Unable to resolve user email" });
+    if (!userEmailRaw) {
+      return res.status(400).json({ error: "Unable to resolve user email" });
+    }
+
     const userEmail = userEmailRaw.toLowerCase();
 
     const weekQ = String(req.query.week || formatYMD(new Date()));
@@ -316,10 +320,16 @@ export default async function handler(
     });
 
     /** ===== CHECK-INS ===== */
-    const checkinSnap = await firestore.collection(CHECKINS_COLLECTION).doc(`${userEmail}__${fridayYMD}`).get();
+    const checkinSnap = await firestore
+      .collection(CHECKINS_COLLECTION)
+      .doc(`${userEmail}__${fridayYMD}`)
+      .get();
     const currentCheckin = checkinSnap.exists ? checkinSnap.data() : null;
 
-    const lastCheckinSnap = await firestore.collection(CHECKINS_COLLECTION).doc(`${userEmail}__${lastFridayYMD}`).get();
+    const lastCheckinSnap = await firestore
+      .collection(CHECKINS_COLLECTION)
+      .doc(`${userEmail}__${lastFridayYMD}`)
+      .get();
     const lastCheckin = lastCheckinSnap.exists ? lastCheckinSnap.data() : null;
 
     const currentWeight = numOrUndefined(currentCheckin?.weight);
@@ -328,7 +338,11 @@ export default async function handler(
     const lastBodyFat = numOrUndefined(lastCheckin?.body_fat_pct);
 
     /** ===== NUTRITION FOR WEEK ===== */
-    const nutritionMap: Record<string, { logged: boolean; calories: number; protein: number; carbs: number; fat: number }> = {};
+    const nutritionMap: Record<
+      string,
+      { logged: boolean; calories: number; protein: number; carbs: number; fat: number }
+    > = {};
+
     for (const d of weekDays) {
       const ymd = formatYMD(d);
       const snap = await firestore.collection(NUTRITION_COLLECTION).doc(userEmail).collection(ymd).get();
@@ -491,7 +505,11 @@ export default async function handler(
       const snap = await q.get();
       assignments = snap.docs.map((d: any) => ({ assignment_id: d.id, ...(d.data() || {}) }));
     } catch {
-      const alt = await firestore.collection(ASSIGNMENTS_COLLECTION).where("user_email", "==", userEmail).get();
+      const alt = await firestore
+        .collection(ASSIGNMENTS_COLLECTION)
+        .where("user_email", "==", userEmail)
+        .get();
+
       assignments = alt.docs
         .map((d: any) => ({ assignment_id: d.id, ...(d.data() || {}) }))
         .filter((a) => String(a?.status || "").toLowerCase() === "active");
@@ -549,9 +567,14 @@ export default async function handler(
     }
 
     /** ===== WORKOUT NAME LOOKUP ===== */
+    const workoutNameById = new Map<string, string | undefined>();
+
     if (workoutIds.size) {
       const ids = Array.from(workoutIds);
-      const snaps = await Promise.all(ids.map((id) => firestore.collection(WORKOUTS_COLLECTION).doc(id).get()));
+      const snaps = await Promise.all(
+        ids.map((id) => firestore.collection(WORKOUTS_COLLECTION).doc(id).get())
+      );
+
       snaps.forEach((snap) => {
         if (!snap.exists) return;
         const w = snap.data() as any;
@@ -561,20 +584,9 @@ export default async function handler(
             : typeof w?.name === "string"
             ? w.name
             : undefined;
-
-        const existing = programmedByDay.get("__nameMap__") || [];
-        programmedByDay.set(
-          "__nameMap__",
-          [...existing, { id: snap.id, name }]
-        );
+        workoutNameById.set(snap.id, name);
       });
     }
-
-    const workoutNameById = new Map<string, string | undefined>();
-    (programmedByDay.get("__nameMap__") || []).forEach((w) => {
-      workoutNameById.set(w.id, w.name);
-    });
-    programmedByDay.delete("__nameMap__");
 
     /** ===== APPLY PROGRAMMED PLACEMENTS TO DAYS ===== */
     const perDay = new Map<string, Map<string, number>>();
@@ -633,14 +645,22 @@ export default async function handler(
         completionsWeek = c1b.docs.map((d: any) => ({ id: d.id, ...(d.data() || {}) }));
       }
     } catch {
-      const allByUser = await firestore.collection(COMPLETIONS_COLLECTION).where("user_email", "==", userEmail).get();
+      const allByUser = await firestore
+        .collection(COMPLETIONS_COLLECTION)
+        .where("user_email", "==", userEmail)
+        .get();
+
       completionsWeek = allByUser.docs
         .map((d: any) => ({ id: d.id, ...(d.data() || {}) }))
         .filter((c: any) => {
           const dt =
             c.completed_date?.toDate?.() ||
             c.date_completed?.toDate?.() ||
-            (c.completed_date ? new Date(c.completed_date) : c.date_completed ? new Date(c.date_completed) : null);
+            (c.completed_date
+              ? new Date(c.completed_date)
+              : c.date_completed
+              ? new Date(c.date_completed)
+              : null);
           return dt ? inRange(dt, weekStart, weekEnd) : false;
         });
     }
@@ -703,7 +723,13 @@ export default async function handler(
       const isFriday = d.getDay() === 5;
 
       const habitInfo = habitMap[ymd] || { allDone: false, completed: 0, total: 5 };
-      const nutritionInfo = nutritionMap[ymd] || { logged: false, calories: 0, protein: 0, carbs: 0, fat: 0 };
+      const nutritionInfo = nutritionMap[ymd] || {
+        logged: false,
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+      };
 
       const todaysRecurring = recurringByDay.get(ymd) || [];
       const todaysProgrammed = programmedByDay.get(ymd) || [];
@@ -711,6 +737,7 @@ export default async function handler(
 
       const mandatorySet = hasRecurringToday ? todaysRecurring : todaysProgrammed;
       const optionalSet = hasRecurringToday ? todaysProgrammed : [];
+      const programmedWorkouts = todaysProgrammed;
 
       const workoutIds = mandatorySet.map((w) => w.id);
       const hasWorkout = mandatorySet.length > 0;
@@ -799,6 +826,7 @@ export default async function handler(
         hasWorkout,
         workoutDone,
         workoutIds,
+        programmedWorkouts,
         workoutSummary: workoutDone
           ? { calories: workoutCalories, duration: workoutDuration, weightUsed }
           : undefined,
@@ -813,7 +841,7 @@ export default async function handler(
     const todaysDay = days.find((d) => d.dateKey === todayYMD);
     const todaysWorkouts = todaysDay?.hasRecurringToday
       ? todaysDay.recurringWorkouts || []
-      : (programmedByDay.get(todayYMD) || []);
+      : todaysDay?.programmedWorkouts || [];
 
     res.setHeader("Cache-Control", "private, max-age=20, stale-while-revalidate=40");
 
