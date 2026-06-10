@@ -1,5 +1,6 @@
-// pages/iron-acre/register.tsx//
-"use client"
+// pages/iron-acre/register.tsx
+"use client";
+
 import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -502,7 +503,7 @@ export default function IronAcreRegisterPage() {
   }
 
   function resetForm() {
-    const sessionName = String((session?.user as any)?.name || "").trim();
+   sessionName = String((session?.user as any)?.name || "").trim();
     const sessionEmail = String(session?.user?.email || "").trim();
 
     setStep("personal");
@@ -559,15 +560,10 @@ export default function IronAcreRegisterPage() {
       >
         <div className="d-flex justify-content-between align-items-center mb-3">
           <div className="d-flex align-items-center gap-2">
-            <img
-              src="/IronAcreLogoNoBG.png"
-              alt="Iron Acre Gym"
-              height={42}
-              style={{ display: "block", borderRadius: 8 }}
-            />
+            /IronAcreLogoNoBG.png
           </div>
 
-          <Link href="/" className="ia-btn ia-btn-muted">
+          /
             Back
           </Link>
         </div>
@@ -611,7 +607,7 @@ export default function IronAcreRegisterPage() {
                 Start another registration
               </button>
 
-              <Link href="/" className="ia-btn ia-btn-muted">
+              /
                 Return home
               </Link>
             </div>
@@ -953,7 +949,18 @@ export default function IronAcreRegisterPage() {
         )}
 
         <footer className="text-center small text-dim mt-4">
-          © {new Date().getFullYear()} Iron    font-weight: var(--ia-fw-semi);
+          © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacyk> ·{" "}
+          <Link href="/terms
+        </footer>
+
+        <style jsx>{`
+          .text-dim {
+            color: var(--ia-muted);
+          }
+
+          .ia-label {
+            color: rgba(255, 255, 255, 0.88);
+            font-weight: var(--ia-fw-semi);
             margin-bottom: 6px;
           }
 
