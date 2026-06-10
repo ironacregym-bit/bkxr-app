@@ -166,7 +166,6 @@ function getDeviceType() {
   if (ua.includes("ipad")) return "ipad";
   if (ua.includes("tablet")) return "tablet";
   if (ua.includes("iphone") || ua.includes("android")) return "mobile";
-
   return "desktop";
 }
 
@@ -292,7 +291,7 @@ export default function IronAcreRegisterPage() {
       try {
         canvas.setPointerCapture(evt.pointerId);
       } catch {
-        // ignore capture failures
+        // ignore
       }
     };
 
@@ -319,7 +318,7 @@ export default function IronAcreRegisterPage() {
       try {
         canvas.releasePointerCapture(evt.pointerId);
       } catch {
-        // ignore release failures
+        // ignore
       }
 
       setHasSignature(canvasHasInk(canvas));
@@ -979,9 +978,8 @@ export default function IronAcreRegisterPage() {
         )}
 
         <footer className="text-center small text-dim mt-4">
-          © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacyi);
-            margin-bottom: 6px;
-          }
+          © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacy">Privacy</Link>;
+        </footer>
 
           .ia-form-input {
             min-height: 48px;
