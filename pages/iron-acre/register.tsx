@@ -503,42 +503,41 @@ export default function IronAcreRegisterPage() {
   }
 
   function resetForm() {
-   sessionName = String((session?.user as any)?.name || "").trim();
-    const sessionEmail = String(session?.user?.email || "").trim();
+  const sessionName = String((session?.user as any)?.name || "").trim();
+  const sessionEmail = String(session?.user?.email || "").trim();
 
-    setStep("personal");
-    setBusy(false);
-    setError(null);
-    setSuccessMemberId(null);
+  setStep("personal");
+  setBusy(false);
+  setError(null);
+  setSuccessMemberId(null);
 
-    setFullName(sessionName || "");
-    setEmail(sessionEmail || "");
-    setPhone("");
-    setDateOfBirth("");
-    setAddress("");
+  setFullName(sessionName || "");
+  setEmail(sessionEmail || "");
+  setPhone("");
+  setDateOfBirth("");
+  setAddress("");
 
-    setEmergencyName("");
-    setEmergencyPhone("");
+  setEmergencyName("");
+  setEmergencyPhone("");
 
-    setAnswers({
-      q1: "",
-      q2: "",
-      q3: "",
-      q4: "",
-      q5: "",
-      q6: "",
-      q7: "",
-    });
-    setMedicalNotes("");
+  setAnswers({
+    q1: "",
+    q2: "",
+    q3: "",
+    q4: "",
+    q5: "",
+    q6: "",
+    q7: "",
+  });
+  setMedicalNotes("");
 
-    setMediaConsent(false);
-    setTermsAccepted(false);
-    setWaiverAccepted(false);
+  setMediaConsent(false);
+  setTermsAccepted(false);
+  setWaiverAccepted(false);
 
-    setSignedName(sessionName || "");
-    clearSignature();
-  }
-
+  setSignedName(sessionName || "");
+  clearSignature();
+}
   const currentStepMeta = STEPS[stepIndex(step)];
   const progressPct = ((stepIndex(step) + 1) / STEPS.length) * 100;
 
