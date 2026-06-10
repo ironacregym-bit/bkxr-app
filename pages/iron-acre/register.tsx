@@ -1,5 +1,5 @@
-// pages/iron-acre/register.tsx
-"use client";
+// pages/iron-acre/register.tsx//
+"use client"
 import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -56,13 +56,34 @@ type RegistrationPayload = {
 };
 
 const PARQ_QUESTIONS: Array<{ key: keyof ParqAnswers; label: string }> = [
-  { key: "q1", label: "Has your doctor ever said that you have a heart condition or high blood pressure?" },
-  { key: "q2", label: "Do you feel pain in your chest when you perform physical activity?" },
-  { key: "q3", label: "In the past month, have you had chest pain when you were not doing physical activity?" },
-  { key: "q4", label: "Do you lose balance because of dizziness or do you ever lose consciousness?" },
-  { key: "q5", label: "Do you have a bone or joint problem that could be made worse by a change in your physical activity?" },
-  { key: "q6", label: "Is your doctor currently prescribing drugs for blood pressure or heart conditions?" },
-  { key: "q7", label: "Do you know of any other reason why you should not do physical activity?" },
+  {
+    key: "q1",
+    label: "Has your doctor ever said that you have a heart condition or high blood pressure?",
+  },
+  {
+    key: "q2",
+    label: "Do you feel pain in your chest when you perform physical activity?",
+  },
+  {
+    key: "q3",
+    label: "In the past month, have you had chest pain when you were not doing physical activity?",
+  },
+  {
+    key: "q4",
+    label: "Do you lose balance because of dizziness or do you ever lose consciousness?",
+  },
+  {
+    key: "q5",
+    label: "Do you have a bone or joint problem that could be made worse by a change in your physical activity?",
+  },
+  {
+    key: "q6",
+    label: "Is your doctor currently prescribing drugs for blood pressure or heart conditions?",
+  },
+  {
+    key: "q7",
+    label: "Do you know of any other reason why you should not do physical activity?",
+  },
 ];
 
 type StepKey =
@@ -123,6 +144,7 @@ function isValidPhone(value: string) {
 
 function isValidDob(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
   const d = new Date(`${value}T00:00:00`);
   if (isNaN(d.getTime())) return false;
 
@@ -131,6 +153,7 @@ function isValidDob(value: string) {
 
   const ageMs = now.getTime() - d.getTime();
   const ageYears = ageMs / (365.25 * 24 * 60 * 60 * 1000);
+
   return ageYears >= 12;
 }
 
@@ -198,16 +221,17 @@ export default function IronAcreRegisterPage() {
   }, []);
 
   useEffect(() => {
-    if (status === "authenticated") {
-      const sessionName = String((session?.user as any)?.name || "").trim();
-      const sessionEmail = String(session?.user?.email || "").trim();
+    if (status !== "authenticated") return;
 
-      if (sessionName && !fullName) {
-        setFullName(sessionName);
-      }
-      if (sessionEmail && !email) {
-        setEmail(sessionEmail);
-      }
+    const sessionName = String((session?.user as any)?.name || "").trim();
+    const sessionEmail = String(session?.user?.email || "").trim();
+
+    if (sessionName && !fullName) {
+      setFullName(sessionName);
+    }
+
+    if (sessionEmail && !email) {
+      setEmail(sessionEmail);
     }
   }, [status, session, fullName, email]);
 
@@ -259,6 +283,7 @@ export default function IronAcreRegisterPage() {
 
     const onMove = (evt: MouseEvent | TouchEvent) => {
       if (!drawingRef.current) return;
+
       evt.preventDefault();
 
       const { x, y } = getPos(evt);
@@ -272,6 +297,7 @@ export default function IronAcreRegisterPage() {
 
     const onUp = (evt: MouseEvent | TouchEvent) => {
       if (!drawingRef.current) return;
+
       evt.preventDefault();
       drawingRef.current = false;
     };
@@ -321,7 +347,7 @@ export default function IronAcreRegisterPage() {
     setHasSignature(false);
   }
 
-  function validateCurrentStep(targetStep: StepKey) {
+  function validateStep(targetStep: StepKey) {
     if (targetStep === "personal") {
       if (!fullName.trim()) return "Please enter the member’s full name.";
       if (!email.trim()) return "Please enter the member’s email address.";
@@ -335,7 +361,9 @@ export default function IronAcreRegisterPage() {
     if (targetStep === "emergency") {
       if (!emergencyName.trim()) return "Please enter the emergency contact name.";
       if (!emergencyPhone.trim()) return "Please enter the emergency contact phone number.";
-      if (!isValidPhone(emergencyPhone.trim())) return "Please enter a valid emergency contact phone number.";
+      if (!isValidPhone(emergencyPhone.trim())) {
+        return "Please enter a valid emergency contact phone number.";
+      }
     }
 
     if (targetStep === "parq") {
@@ -361,12 +389,22 @@ export default function IronAcreRegisterPage() {
     return null;
   }
 
+  function validateAllSteps() {
+    for (const stepMeta of STEPS) {
+      const validationError = validateStep(stepMeta.key);
+      if (validationError) {
+        setStep(stepMeta.key);
+        return validationError;
+      }
+    }
+
+    return null;
+  }
+
   function handleNext() {
     setError(null);
 
-    const currentStepMeta = STEPS[stepIndex(step)];
-    const validationError = validateCurrentStep(currentStepMeta.key);
-
+    const validationError = validateStep(step);
     if (validationError) {
       setError(validationError);
       return;
@@ -381,6 +419,7 @@ export default function IronAcreRegisterPage() {
 
   function handleBack() {
     setError(null);
+
     const currentIndex = stepIndex(step);
     const prev = STEPS[currentIndex - 1];
     if (prev) {
@@ -392,15 +431,15 @@ export default function IronAcreRegisterPage() {
     e.preventDefault();
     setError(null);
 
-    const validationError = validateCurrentStep("signature");
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
     const canvas = canvasRef.current;
     if (!canvas) {
       setError("Signature canvas is unavailable.");
+      return;
+    }
+
+    const validationError = validateAllSteps();
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -463,13 +502,16 @@ export default function IronAcreRegisterPage() {
   }
 
   function resetForm() {
+    const sessionName = String((session?.user as any)?.name || "").trim();
+    const sessionEmail = String(session?.user?.email || "").trim();
+
     setStep("personal");
     setBusy(false);
     setError(null);
     setSuccessMemberId(null);
 
-    setFullName("");
-    setEmail("");
+    setFullName(sessionName || "");
+    setEmail(sessionEmail || "");
     setPhone("");
     setDateOfBirth("");
     setAddress("");
@@ -492,7 +534,7 @@ export default function IronAcreRegisterPage() {
     setTermsAccepted(false);
     setWaiverAccepted(false);
 
-    setSignedName("");
+    setSignedName(sessionName || "");
     clearSignature();
   }
 
@@ -724,9 +766,7 @@ export default function IronAcreRegisterPage() {
                     </div>
                   ) : (
                     <div>
-                      <label className="form-label ia-label">
-                        Medical notes (optional)
-                      </label>
+                      <label className="form-label ia-label">Medical notes (optional)</label>
                       <textarea
                         className="form-control ia-form-input"
                         rows={4}
@@ -763,7 +803,9 @@ export default function IronAcreRegisterPage() {
 
               {step === "terms" ? (
                 <div className="d-grid gap-3">
-                  <div className="ia-inline-note-success">Terms version {IRON_ACRE_TERMS_VERSION}</div>
+                  <div className="ia-inline-note-success">
+                    Terms version {IRON_ACRE_TERMS_VERSION}
+                  </div>
 
                   <div className="ia-scroll-panel">
                     {IRON_ACRE_MEMBERSHIP_TERMS.map((line, idx) => (
@@ -791,7 +833,9 @@ export default function IronAcreRegisterPage() {
 
               {step === "waiver" ? (
                 <div className="d-grid gap-3">
-                  <div className="ia-inline-note-success">Waiver version {IRON_ACRE_WAIVER_VERSION}</div>
+                  <div className="ia-inline-note-success">
+                    Waiver version {IRON_ACRE_WAIVER_VERSION}
+                  </div>
 
                   <div className="ia-scroll-panel">
                     {IRON_ACRE_LIABILITY_WAIVER.map((line, idx) => (
@@ -857,7 +901,11 @@ export default function IronAcreRegisterPage() {
                         Sign with a finger on the iPad or mouse on desktop.
                       </div>
 
-                      <button type="button" className="ia-btn ia-btn-muted" onClick={clearSignature}>
+                      <button
+                        type="button"
+                        className="ia-btn ia-btn-muted"
+                        onClick={clearSignature}
+                      >
                         Clear
                       </button>
                     </div>
@@ -886,7 +934,12 @@ export default function IronAcreRegisterPage() {
                 </button>
 
                 {step !== "signature" ? (
-                  <button type="button" className="ia-btn ia-btn-primary" onClick={handleNext} disabled={busy}>
+                  <button
+                    type="button"
+                    className="ia-btn ia-btn-primary"
+                    onClick={handleNext}
+                    disabled={busy}
+                  >
                     Next
                   </button>
                 ) : (
@@ -900,27 +953,27 @@ export default function IronAcreRegisterPage() {
         )}
 
         <footer className="text-center small text-dim mt-4">
-          © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacy
+          © {new Date().getFullYear()} Iron    font-weight: var(--ia-fw-semi);
             margin-bottom: 6px;
           }
 
           .ia-form-input {
             min-height: 48px;
             border-radius: 12px;
-            border: 1px solid rgba(255,255,255,0.10);
-            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.03);
             color: #fff;
           }
 
           .ia-form-input:focus {
-            border-color: rgba(24,255,154,0.42);
-            box-shadow: 0 0 0 3px rgba(24,255,154,0.12);
-            background: rgba(255,255,255,0.04);
+            border-color: rgba(24, 255, 154, 0.42);
+            box-shadow: 0 0 0 3px rgba(24, 255, 154, 0.12);
+            background: rgba(255, 255, 255, 0.04);
             color: #fff;
           }
 
           .ia-form-input::placeholder {
-            color: rgba(255,255,255,0.38);
+            color: rgba(255, 255, 255, 0.38);
           }
 
           .ia-checkbox:checked {
@@ -929,8 +982,8 @@ export default function IronAcreRegisterPage() {
           }
 
           .ia-checkbox:focus {
-            box-shadow: 0 0 0 3px rgba(24,255,154,0.14);
-            border-color: rgba(24,255,154,0.5);
+            box-shadow: 0 0 0 3px rgba(24, 255, 154, 0.14);
+            border-color: rgba(24, 255, 154, 0.5);
           }
 
           .ia-alert {
@@ -940,19 +993,19 @@ export default function IronAcreRegisterPage() {
           }
 
           .ia-alert-green {
-            background: rgba(24,255,154,0.12);
-            border: 1px solid rgba(24,255,154,0.28);
+            background: rgba(24, 255, 154, 0.12);
+            border: 1px solid rgba(24, 255, 154, 0.28);
           }
 
           .ia-alert-red {
-            background: rgba(255,107,107,0.14);
-            border: 1px solid rgba(255,107,107,0.32);
+            background: rgba(255, 107, 107, 0.14);
+            border: 1px solid rgba(255, 107, 107, 0.32);
           }
 
           .ia-signature-wrap {
             border-radius: 14px;
-            border: 1px dashed rgba(255,255,255,0.28);
-            background: rgba(255,255,255,0.03);
+            border: 1px dashed rgba(255, 255, 255, 0.28);
+            background: rgba(255, 255, 255, 0.03);
             overflow: hidden;
           }
 
@@ -960,13 +1013,13 @@ export default function IronAcreRegisterPage() {
             max-height: 300px;
             overflow-y: auto;
             border-radius: 14px;
-            border: 1px solid rgba(255,255,255,0.08);
-            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.04);
             padding: 14px;
           }
 
           .ia-copy {
-            color: rgba(255,255,255,0.86);
+            color: rgba(255, 255, 255, 0.86);
             line-height: 1.6;
             margin: 0 0 12px;
           }
@@ -1029,11 +1082,10 @@ function ParqQuestion(props: {
         }
 
         .ia-checkbox:focus {
-          box-shadow: 0 0 0 3px rgba(24,255,154,0.14);
-          border-color: rgba(24,255,154,0.5);
+          box-shadow: 0 0 0 3px rgba(24, 255, 154, 0.14);
+          border-color: rgba(24, 255, 154, 0.5);
         }
       `}</style>
     </div>
   );
 }
-
