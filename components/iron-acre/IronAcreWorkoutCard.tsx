@@ -50,6 +50,7 @@ type DayOverview = {
   hasWorkout?: boolean;
   workoutDone?: boolean;
   workoutIds?: string[];
+  programmedWorkouts?: SimpleWorkoutRef[];
   hasRecurringToday?: boolean;
   recurringWorkouts: SimpleWorkoutRef[];
   recurringDone: boolean;
@@ -157,6 +158,9 @@ function workoutsForWeekDay(day: DayOverview): SimpleWorkoutRef[] {
   const recurring = day.recurringWorkouts || [];
   if (recurring.length) return recurring;
 
+  const programmed = day.programmedWorkouts || [];
+  if (programmed.length) return programmed;
+
   const optional = day.optionalWorkouts || [];
   if (optional.length) return optional;
 
@@ -169,6 +173,9 @@ function workoutsForWeekDay(day: DayOverview): SimpleWorkoutRef[] {
 function doneForWeekDay(day: DayOverview): boolean {
   const recurring = day.recurringWorkouts || [];
   if (recurring.length) return Boolean(day.recurringDone);
+
+  const programmed = day.programmedWorkouts || [];
+  if (programmed.length) return Boolean(day.workoutDone);
 
   const ids = day.workoutIds || [];
   if (ids.length) return Boolean(day.workoutDone);
@@ -305,7 +312,9 @@ export default function IronAcreWorkoutCard({
       {!resolvedHasWorkoutToday ? (
         <>
           <div className="ia-page-title">No workout scheduled today</div>
-          <div className="text-dim small mt-1">Check the “This week” section for upcoming sessions.</div>
+          <div className="text-dim small mt-1">
+            Check the “This week” section for upcoming sessions.
+          </div>
         </>
       ) : (
         <>
@@ -415,7 +424,10 @@ export default function IronAcreWorkoutCard({
       )}
 
       {showWeek ? (
-        <div className="mt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
+        <div
+          className="mt-3"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}
+        >
           {weekRows.pending.length > 0 ? (
             <>
               <div className="text-dim small mb-2">Pending</div>
@@ -468,7 +480,10 @@ export default function IronAcreWorkoutCard({
 
           {weekRows.completed.length > 0 ? (
             <>
-              <div className="text-dim small mb-2" style={{ marginTop: weekRows.pending.length ? 6 : 0 }}>
+              <div
+                className="text-dim small mb-2"
+                style={{ marginTop: weekRows.pending.length ? 6 : 0 }}
+              >
                 Completed
               </div>
 
