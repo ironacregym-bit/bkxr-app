@@ -313,10 +313,13 @@ export default async function handler(
       .where("active", "==", true)
       .get();
 
-    const recurringItems = recurringSnap.docs.map((doc) => ({
-      id: doc.id,
-      ...(doc.data() as RecurringTimetableItem),
-    }));
+      const recurringItems = recurringSnap.docs.map((doc) => {
+        const data = doc.data() as RecurringTimetableItem;
+        return {
+          ...data,
+          id: doc.id,
+        };
+      });
 
     const targetDates = Array.from({ length: 7 }, (_, i) =>
       ymdUTC(addDaysUTC(targetWeekStartDate, i))
