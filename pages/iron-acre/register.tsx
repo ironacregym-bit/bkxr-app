@@ -257,88 +257,6 @@ export default function IronAcreRegisterPage() {
     }
   }, [fullName, signedName]);
 
-useEffect(() => {
-  if (!mounted) return;
-
-  const canvas = canvasRef.current;
-  if (!canvas) return;
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-
-  ctx.lineWidth = 2.5;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.strokeStyle = "#ffffff";
-
-  const getPos = (evt: PointerEvent) => {
-    const rect = canvas.getBoundingClientRect();
-
-    return {
-      x: (evt.clientX - rect.left) * (canvas.width / rect.width),
-      y: (evt.clientY - rect.top) * (canvas.height / rect.height),
-    };
-  };
-
-  const onPointerDown = (evt: PointerEvent) => {
-    evt.preventDefault();
-    drawingRef.current = true;
-
-    const { x, y } = getPos(evt);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-
-    try {
-      canvas.setPointerCapture(evt.pointerId);
-    } catch {
-      // ignore
-    }
-  };
-
-  const onPointerMove = (evt: PointerEvent) => {
-    if (!drawingRef.current) return;
-
-    evt.preventDefault();
-
-    const { x, y } = getPos(evt);
-    ctx.lineTo(x, y);
-    ctx.stroke();
-
-    if (!hasSignature) {
-      setHasSignature(true);
-    }
-  };
-
-  const onPointerUp = (evt: PointerEvent) => {
-    if (!drawingRef.current) return;
-
-    evt.preventDefault();
-    drawingRef.current = false;
-
-    try {
-      canvas.releasePointerCapture(evt.pointerId);
-    } catch {
-      // ignore
-    }
-
-    setHasSignature(canvasHasInk(canvas));
-  };
-
-  canvas.addEventListener("pointerdown", onPointerDown);
-  canvas.addEventListener("pointermove", onPointerMove);
-  canvas.addEventListener("pointerup", onPointerUp);
-  canvas.addEventListener("pointercancel", onPointerUp);
-  canvas.addEventListener("pointerleave", onPointerUp);
-
-  return () => {
-    canvas.removeEventListener("pointerdown", onPointerDown);
-    canvas.removeEventListener("pointermove", onPointerMove);
-    canvas.removeEventListener("pointerup", onPointerUp);
-    canvas.removeEventListener("pointercancel", onPointerUp);
-    canvas.removeEventListener("pointerleave", onPointerUp);
-  };
-}, [mounted]);
-
   const requiresMedicalReview = useMemo(() => {
     return Object.values(answers).includes("yes");
   }, [answers]);
@@ -364,50 +282,130 @@ useEffect(() => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setHasSignature(false);
   }
-
-  function validateStep(targetStep: StepKey) {
-    if (targetStep === "personal") {
-      if (!fullName.trim()) return "Please enter the member’s full name.";
-      if (!email.trim()) return "Please enter the member’s email address.";
-      if (!isValidEmail(email.trim())) return "Please enter a valid email address.";
-      if (!phone.trim()) return "Please enter the member’s phone number.";
-      if (!isValidPhone(phone.trim())) return "Please enter a valid phone number.";
-      if (!dateOfBirth.trim()) return "Please enter the member’s date of birth.";
-      if (!isValidDob(dateOfBirth.trim())) return "Please enter a valid date of birth.";
-    }
-
-    if (targetStep === "emergency") {
-      if (!emergencyName.trim()) return "Please enter the emergency contact name.";
-      if (!emergencyPhone.trim()) return "Please enter the emergency contact phone number.";
-      if (!isValidPhone(emergencyPhone.trim())) {
-        return "Please enter a valid emergency contact phone number.";
-      }
-    }
-
-    if (targetStep === "parq") {
-      if (!allParqAnswered) return "Please answer all PAR-Q questions.";
-      if (requiresMedicalReview && !medicalNotes.trim()) {
-        return "Please provide additional information for the medical review.";
-      }
-    }
-
-    if (targetStep === "terms") {
-      if (!termsAccepted) return "Please accept the Membership Terms to continue.";
-    }
-
-    if (targetStep === "waiver") {
-      if (!waiverAccepted) return "Please accept the Liability Waiver to continue.";
-    }
-
-    if (targetStep === "signature") {
-      if (!signedName.trim()) return "Please enter the printed name.";
-      if (!canvasHasInk(canvasRef.current)) {
-        return "Please provide a signature before submitting.";
-      }
-    }
-
-    return null;
+  function getCanvasPoint(evt: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+  
+    const rect = canvas.getBoundingClientRect();
+  
+    return {
+      x: (evt.clientX - rect.left) * (canvas.width / rect.width),
+      y: (evt.clientY - rect.top) * (canvas.height / rect.height),
+    };
   }
+  
+  function handleSignaturePointerDown(evt: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+  
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+  
+    const point = getCanvasPoint(evt);
+    if (!point) return;
+  
+    evt.preventDefault();
+    drawingRef.current = true;
+  
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#ffffff";
+  
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
+  
+    try {
+      canvas.setPointerCapture(evt.pointerId);
+    } catch {
+      // ignore
+    }
+  }
+  
+  function handleSignaturePointerMove(evt: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current) return;
+  
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+  
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+  
+    const point = getCanvasPoint(evt);
+    if (!point) return;
+  
+    evt.preventDefault();
+  
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+  
+    if (!hasSignature) {
+      setHasSignature(true);
+    }
+  }
+  
+  function finishSignatureStroke(evt?: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+  
+    drawingRef.current = false;
+  
+    if (evt) {
+      evt.preventDefault();
+  
+      try {
+        canvas.releasePointerCapture(evt.pointerId);
+      } catch {
+        // ignore
+      }
+    }
+  
+    setHasSignature(canvasHasInk(canvas));
+  }
+  
+    function validateStep(targetStep: StepKey) {
+      if (targetStep === "personal") {
+        if (!fullName.trim()) return "Please enter the member’s full name.";
+        if (!email.trim()) return "Please enter the member’s email address.";
+        if (!isValidEmail(email.trim())) return "Please enter a valid email address.";
+        if (!phone.trim()) return "Please enter the member’s phone number.";
+        if (!isValidPhone(phone.trim())) return "Please enter a valid phone number.";
+        if (!dateOfBirth.trim()) return "Please enter the member’s date of birth.";
+        if (!isValidDob(dateOfBirth.trim())) return "Please enter a valid date of birth.";
+      }
+  
+      if (targetStep === "emergency") {
+        if (!emergencyName.trim()) return "Please enter the emergency contact name.";
+        if (!emergencyPhone.trim()) return "Please enter the emergency contact phone number.";
+        if (!isValidPhone(emergencyPhone.trim())) {
+          return "Please enter a valid emergency contact phone number.";
+        }
+      }
+  
+      if (targetStep === "parq") {
+        if (!allParqAnswered) return "Please answer all PAR-Q questions.";
+        if (requiresMedicalReview && !medicalNotes.trim()) {
+          return "Please provide additional information for the medical review.";
+        }
+      }
+  
+      if (targetStep === "terms") {
+        if (!termsAccepted) return "Please accept the Membership Terms to continue.";
+      }
+  
+      if (targetStep === "waiver") {
+        if (!waiverAccepted) return "Please accept the Liability Waiver to continue.";
+      }
+  
+      if (targetStep === "signature") {
+        if (!signedName.trim()) return "Please enter the printed name.";
+        if (!canvasHasInk(canvasRef.current)) {
+          return "Please provide a signature before submitting.";
+        }
+      }
+  
+      return null;
+    }
 
   function validateAllSteps() {
     for (const stepMeta of STEPS) {
@@ -907,11 +905,19 @@ useEffect(() => {
                         ref={canvasRef}
                         width={900}
                         height={220}
+                        onPointerDown={handleSignaturePointerDown}
+                        onPointerMove={handleSignaturePointerMove}
+                        onPointerUp={finishSignatureStroke}
+                        onPointerLeave={finishSignatureStroke}
+                        onPointerCancel={finishSignatureStroke}
                         style={{
                           width: "100%",
                           height: 220,
                           touchAction: "none",
                           display: "block",
+                          cursor: "crosshair",
+                          WebkitUserSelect: "none",
+                          userSelect: "none",
                         }}
                       />
                     </div>
