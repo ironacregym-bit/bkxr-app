@@ -1,6 +1,7 @@
 // pages/iron-acre/index.tsx
 import Head from "next/head";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
@@ -133,6 +134,19 @@ type UserAccess = {
   membership_status?: string | null;
   payment_type?: string | null;
   gym_id?: string | null;
+
+  sex?: "male" | "female" | "other" | null;
+  DOB?: string | null;
+  height_cm?: number | null;
+  weight_kg?: number | null;
+  bodyfat_pct?: number | null;
+  goal_primary?: "lose" | "tone" | "gain" | null;
+  activity_factor?: number | null;
+  job_type?: "desk" | "mixed" | "manual" | "athlete" | null;
+
+  onboarding_complete?: boolean | null;
+  onboarding_started_at?: string | null;
+  onboarding_completed_at?: string | null;
 };
 
 type BookingsMineResponse = {
@@ -174,6 +188,20 @@ type Workout = {
   main: Round;
   finisher?: Round | null;
 };
+
+function isIronAcreOnboardingComplete(profile?: UserAccess | null) {
+  if (!profile) return false;
+
+  const hasSex = !!String(profile.sex || "").trim();
+  const hasDob = !!String(profile.DOB || "").trim();
+  const hasHeight = Number(profile.height_cm || 0) > 0;
+  const hasWeight = Number(profile.weight_kg || 0) > 0;
+  const hasGoal = !!String(profile.goal_primary || "").trim();
+  const hasActivity = Number(profile.activity_factor || 0) > 0;
+  const markedComplete = profile.onboarding_complete === true;
+
+  return markedComplete && hasSex && hasDob && hasHeight && hasWeight && hasGoal && hasActivity;
+}
 
 function HomeLoadingScreen() {
   return (
@@ -339,6 +367,7 @@ function TasksCard({
 
 export default function IronAcreHome() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -454,6 +483,23 @@ export default function IronAcreHome() {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
+
+  const profileLoaded = !profileKey || !!profile || !!profileError;
+
+  const onboardingComplete = useMemo(() => {
+    return isIronAcreOnboardingComplete(profile || null);
+  }, [profile]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    if (status === "loading") return;
+    if (!session) return;
+    if (!profileLoaded) return;
+
+    if (!onboardingComplete) {
+      router.replace(`/onboarding?returnTo=${encodeURIComponent("/iron-acre")}`);
+    }
+  }, [mounted, status, session, profileLoaded, onboardingComplete, router]);
 
   const selectedGym = useMemo(() => {
     const userGymId = String(profile?.gym_id || "").trim();
@@ -592,13 +638,43 @@ export default function IronAcreHome() {
             <h2 className="m-0">Iron Acre Gym</h2>
             <div className="text-dim mt-2">Please sign in to view your performance dashboard.</div>
             <div className="mt-3">
-              <Link href={`/register?callbackUrl=${cb}`} className="btn btn-outline-light" style={{ borderRadius: 24 }}>
+              <Link
+                href={`/register?callbackUrl=${cb}`}
+                className="btn btn-outline-light"
+                style={{ borderRadius: 24 }}
+              >
                 Sign in
               </Link>
             </div>
           </section>
         </main>
 
+        <BottomNav />
+      </>
+    );
+  }
+
+  if (session && !profileLoaded) {
+    return (
+      <>
+        <Head>
+          <title>Iron Acre Gym</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        </Head>
+        <HomeLoadingScreen />
+        <BottomNav />
+      </>
+    );
+  }
+
+  if (session && profileLoaded && !onboardingComplete) {
+    return (
+      <>
+        <Head>
+          <title>Iron Acre Gym</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        </Head>
+        <HomeLoadingScreen />
         <BottomNav />
       </>
     );
@@ -699,3 +775,4 @@ export default function IronAcreHome() {
     </>
   );
 }
+
