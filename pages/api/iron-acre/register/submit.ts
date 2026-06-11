@@ -1,7 +1,7 @@
 // pages/api/iron-acre/register/submit.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
-import { Timestamp } from "@google-cloud/firestore";
+import admin from "firebase-admin";
 import { authOptions } from "../../auth/[...nextauth]";
 import { adminDb as db } from "../../../../lib/firebaseAdmin";
 import {
@@ -203,7 +203,7 @@ export default async function handler(
 
     const memberRef = db.collection("ironAcreMembers").doc();
     const memberId = memberRef.id;
-    const now = Timestamp.now();
+    const now = admin.firestore.Timestamp.now();
 
     const sessionEmail =
       String((session?.user as any)?.email || "").trim().toLowerCase() || null;
