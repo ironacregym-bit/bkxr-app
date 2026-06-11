@@ -257,87 +257,87 @@ export default function IronAcreRegisterPage() {
     }
   }, [fullName, signedName]);
 
-  useEffect(() => {
-    if (!mounted) return;
+useEffect(() => {
+  if (!mounted) return;
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  const canvas = canvasRef.current;
+  if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
 
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "#ffffff";
 
-    const getPos = (evt: PointerEvent) => {
-      const rect = canvas.getBoundingClientRect();
+  const getPos = (evt: PointerEvent) => {
+    const rect = canvas.getBoundingClientRect();
 
-      return {
-        x: (evt.clientX - rect.left) * (canvas.width / rect.width),
-        y: (evt.clientY - rect.top) * (canvas.height / rect.height),
-      };
+    return {
+      x: (evt.clientX - rect.left) * (canvas.width / rect.width),
+      y: (evt.clientY - rect.top) * (canvas.height / rect.height),
     };
+  };
 
-    const onPointerDown = (evt: PointerEvent) => {
-      evt.preventDefault();
-      drawingRef.current = true;
+  const onPointerDown = (evt: PointerEvent) => {
+    evt.preventDefault();
+    drawingRef.current = true;
 
-      const { x, y } = getPos(evt);
-      ctx.beginPath();
-      ctx.moveTo(x, y);
+    const { x, y } = getPos(evt);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
 
-      try {
-        canvas.setPointerCapture(evt.pointerId);
-      } catch {
-        // ignore
-      }
-    };
+    try {
+      canvas.setPointerCapture(evt.pointerId);
+    } catch {
+      // ignore
+    }
+  };
 
-    const onPointerMove = (evt: PointerEvent) => {
-      if (!drawingRef.current) return;
+  const onPointerMove = (evt: PointerEvent) => {
+    if (!drawingRef.current) return;
 
-      evt.preventDefault();
+    evt.preventDefault();
 
-      const { x, y } = getPos(evt);
-      ctx.lineTo(x, y);
-      ctx.stroke();
+    const { x, y } = getPos(evt);
+    ctx.lineTo(x, y);
+    ctx.stroke();
 
-      if (!hasSignature) {
-        setHasSignature(true);
-      }
-    };
+    if (!hasSignature) {
+      setHasSignature(true);
+    }
+  };
 
-    const onPointerUp = (evt: PointerEvent) => {
-      if (!drawingRef.current) return;
+  const onPointerUp = (evt: PointerEvent) => {
+    if (!drawingRef.current) return;
 
-      evt.preventDefault();
-      drawingRef.current = false;
+    evt.preventDefault();
+    drawingRef.current = false;
 
-      try {
-        canvas.releasePointerCapture(evt.pointerId);
-      } catch {
-        // ignore
-      }
+    try {
+      canvas.releasePointerCapture(evt.pointerId);
+    } catch {
+      // ignore
+    }
 
-      setHasSignature(canvasHasInk(canvas));
-    };
+    setHasSignature(canvasHasInk(canvas));
+  };
 
-    canvas.addEventListener("pointerdown", onPointerDown);
-    canvas.addEventListener("pointermove", onPointerMove);
-    canvas.addEventListener("pointerup", onPointerUp);
-    canvas.addEventListener("pointercancel", onPointerUp);
-    canvas.addEventListener("pointerleave", onPointerUp);
+  canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointermove", onPointerMove);
+  canvas.addEventListener("pointerup", onPointerUp);
+  canvas.addEventListener("pointercancel", onPointerUp);
+  canvas.addEventListener("pointerleave", onPointerUp);
 
-    return () => {
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointermove", onPointerMove);
-      canvas.removeEventListener("pointerup", onPointerUp);
-      canvas.removeEventListener("pointercancel", onPointerUp);
-      canvas.removeEventListener("pointerleave", onPointerUp);
-    };
-  }, [mounted, hasSignature]);
+  return () => {
+    canvas.removeEventListener("pointerdown", onPointerDown);
+    canvas.removeEventListener("pointermove", onPointerMove);
+    canvas.removeEventListener("pointerup", onPointerUp);
+    canvas.removeEventListener("pointercancel", onPointerUp);
+    canvas.removeEventListener("pointerleave", onPointerUp);
+  };
+}, [mounted]);
 
   const requiresMedicalReview = useMemo(() => {
     return Object.values(answers).includes("yes");
