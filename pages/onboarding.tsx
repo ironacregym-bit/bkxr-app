@@ -104,6 +104,7 @@ function isValidDob(value: string | null | undefined) {
 
   const now = new Date();
   if (d > now) return false;
+
   return true;
 }
 
@@ -129,6 +130,17 @@ function formatNumber(value: number | null | undefined) {
   return String(Math.round(value));
 }
 
+function LoadingState() {
+  return (
+    <main className="container py-3" style={{ paddingBottom: 90, color: "#fff" }}>
+      <section className="ia-tile ia-tile-pad">
+        <div className="ia-page-title">Loading onboarding…</div>
+        <div className="text-dim small mt-1">Pulling in your profile and setup.</div>
+      </section>
+    </main>
+  );
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -141,10 +153,11 @@ export default function OnboardingPage() {
   const [dirty, setDirty] = useState(false);
 
   const email = String(session?.user?.email || "").trim().toLowerCase();
-  const returnTo =
-    typeof router.query.returnTo === "string" && router.query.returnTo.trim()
-      ? router.query.returnTo
-      : "/iron-acre";
+  const returnTo = useMemo(() => {
+    const q = router.query.returnTo;
+    if (typeof q === "string" && q.trim()) return q;
+    return "/iron-acre";
+  }, [router.query.returnTo]);
 
   const [profile, setProfileState] = useState<UsersDoc>({
     email: email || undefined,
@@ -439,9 +452,7 @@ export default function OnboardingPage() {
         <Head>
           <title>Complete your setup</title>
         </Head>
-        <main className="container py-3" style={{ paddingBottom: 90, color: "#fff" }}>
-          <HomeLoadingScreen />
-        </main>
+        <LoadingState />
         <BottomNav />
       </>
     );
