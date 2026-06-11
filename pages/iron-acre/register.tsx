@@ -350,7 +350,7 @@ export default function IronAcreRegisterPage() {
   function setAnswer(key: keyof ParqAnswers, value: Answer) {
     setAnswers((prev) => ({
       ...prev,
-      value,
+      [key]: value,
     }));
   }
 
