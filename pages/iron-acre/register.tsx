@@ -587,7 +587,7 @@ export default function IronAcreRegisterPage() {
             /IronAcreLogoNoBG.png
           </div>
 
-          /
+          <Link href="/">
             Back
           </Link>
         </div>
@@ -631,7 +631,7 @@ export default function IronAcreRegisterPage() {
                 Start another registration
               </button>
 
-              /
+              <Link href="/">
                 Return home
               </Link>
             </div>
@@ -973,8 +973,8 @@ export default function IronAcreRegisterPage() {
         )}
 
         <footer className="text-center small text-dim mt-4">
-          © {new Date().getFullYear()} Iron Acre Gym · /privacyPrivacy</Link> ·{" "}
-          /termsTerms</Link>
+          © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacy">Privacy</Link> ·{" "}
+          <Link href="/terms">Terms</Link>
         </footer>
 
         <style jsx>{`
