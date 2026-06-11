@@ -198,9 +198,8 @@ function isIronAcreOnboardingComplete(profile?: UserAccess | null) {
   const hasWeight = Number(profile.weight_kg || 0) > 0;
   const hasGoal = !!String(profile.goal_primary || "").trim();
   const hasActivity = Number(profile.activity_factor || 0) > 0;
-  const markedComplete = profile.onboarding_complete === true;
 
-  return markedComplete && hasSex && hasDob && hasHeight && hasWeight && hasGoal && hasActivity;
+  return hasSex && hasDob && hasHeight && hasWeight && hasGoal && hasActivity;
 }
 
 function HomeLoadingScreen() {
