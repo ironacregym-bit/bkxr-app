@@ -2,10 +2,10 @@
 "use client";
 
 import Head from "next/head";
-import Link from "next/link";
+import { useRouter } from "next/router";
+import { signIn, useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { signIn, useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
@@ -13,6 +13,7 @@ const fetcher = (u: string) => fetch(u).then((r) => r.json());
 type Sex = "male" | "female" | "other" | null;
 type GoalPrimary = "lose" | "tone" | "gain" | null;
 type JobType = "desk" | "mixed" | "manual" | "athlete" | null;
+type StepKey = "metrics" | "goal" | "finish";
 
 type UsersDoc = {
   email?: string;
@@ -23,6 +24,7 @@ type UsersDoc = {
   sex?: Sex;
   job_type?: JobType;
   activity_factor?: number | null;
+  caloric_target?: number | null;
   calorie_target?: number | null;
   protein_target?: number | null;
   carb_target?: number | null;
@@ -39,23 +41,21 @@ type UsersDoc = {
   onboarding_completed_at?: string | null;
 };
 
-type StepKey = "metrics" | "goal" | "finish";
-
 const STEPS: Array<{ key: StepKey; title: string; subtitle: string }> = [
   {
     key: "metrics",
     title: "Your metrics",
-    subtitle: "We’ll use these to personalise your nutrition and training guidance.",
+    subtitle: "We use these to personalise your calories and macros.",
   },
   {
     key: "goal",
     title: "Goal and activity",
-    subtitle: "Tell us what you’re aiming for and how active you are day to day.",
+    subtitle: "Tell us what you want to achieve and how active you are day to day.",
   },
   {
     key: "finish",
     title: "Review and finish",
-    subtitle: "Check your targets, save your setup and continue into the app.",
+    subtitle: "Check your setup, save it and continue into Iron Acre.",
   },
 ];
 
@@ -130,8 +130,8 @@ function formatNumber(value: number | null | undefined) {
 }
 
 export default function OnboardingPage() {
+  const router = useRouter();
   const { data: session, status } = useSession();
-  const email = String(session?.user?.email || "").trim().toLowerCase();
 
   const [mounted, setMounted] = useState(false);
   const [step, setStep] = useState<StepKey>("metrics");
@@ -139,6 +139,12 @@ export default function OnboardingPage() {
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+
+  const email = String(session?.user?.email || "").trim().toLowerCase();
+  const returnTo =
+    typeof router.query.returnTo === "string" && router.query.returnTo.trim()
+      ? router.query.returnTo
+      : "/iron-acre";
 
   const [profile, setProfileState] = useState<UsersDoc>({
     email: email || undefined,
@@ -149,6 +155,7 @@ export default function OnboardingPage() {
     sex: null,
     job_type: null,
     activity_factor: 1.2,
+    caloric_target: null,
     calorie_target: null,
     protein_target: null,
     carb_target: null,
@@ -169,7 +176,7 @@ export default function OnboardingPage() {
     setMounted(true);
   }, []);
 
-  const profileKey = email ? `/api/profile?email=${encodeURIComponent(email)}` : null;
+  const profileKey = mounted && email ? `/api/profile?email=${encodeURIComponent(email)}` : null;
   const { data, error } = useSWR<UsersDoc>(profileKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
@@ -199,14 +206,17 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     if (!email) return;
-
-    const started = String(profile.onboarding_started_at || "").trim();
-    if (started) return;
+    if (profile.onboarding_started_at) return;
 
     fetch("/api/onboarding/save", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, onboarding_started_at: new Date().toISOString() }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        onboarding_started_at: new Date().toISOString(),
+      }),
     }).catch(() => null);
   }, [email, profile.onboarding_started_at]);
 
@@ -229,7 +239,7 @@ export default function OnboardingPage() {
 
     if (!(weight > 0 && height > 0 && af > 0) || !goal) {
       return {
-        calorie_target: null,
+        caloric_target: null,
         protein_target: null,
         carb_target: null,
         fat_target: null,
@@ -264,12 +274,20 @@ export default function OnboardingPage() {
     const carbsG = Math.max(0, Math.round(kcalAfterProteinAndFat / 4));
 
     return {
-      calorie_target: Math.round(tdee),
+      caloric_target: Math.round(tdee),
       protein_target: proteinG,
       carb_target: carbsG,
       fat_target: fatG,
     };
-  }, [profile.weight_kg, profile.height_cm, profile.bodyfat_pct, profile.activity_factor, profile.sex, profile.goal_primary, age]);
+  }, [
+    profile.weight_kg,
+    profile.height_cm,
+    profile.bodyfat_pct,
+    profile.activity_factor,
+    profile.sex,
+    profile.goal_primary,
+    age,
+  ]);
 
   const canShowTargets =
     Number(profile.height_cm ?? 0) > 0 &&
@@ -285,8 +303,8 @@ export default function OnboardingPage() {
   const setProfile = (updater: (prev: UsersDoc) => UsersDoc) => {
     setProfileState((prev) => updater(prev));
     setDirty(true);
-    setErrorMsg(null);
     setSavedMsg(null);
+    setErrorMsg(null);
   };
 
   function validateStep(targetStep: StepKey) {
@@ -316,6 +334,8 @@ export default function OnboardingPage() {
     setErrorMsg(null);
 
     try {
+      const completedAt = complete === true ? new Date().toISOString() : undefined;
+
       const res = await fetch("/api/onboarding/save", {
         method: "POST",
         headers: {
@@ -331,15 +351,16 @@ export default function OnboardingPage() {
           job_type: profile.job_type ?? null,
           activity_factor: profile.activity_factor ?? 1.2,
           goal_primary: profile.goal_primary ?? null,
-          calorie_target: targets.calorie_target,
+          caloric_target: targets.caloric_target,
+          calorie_target: targets.caloric_target,
           protein_target: targets.protein_target,
           carb_target: targets.carb_target,
           fat_target: targets.fat_target,
           gym_id: profile.gym_id ?? null,
           location: profile.location ?? null,
           role: profile.role ?? null,
-          onboarding_complete: complete === true ? true : profile.onboarding_complete ?? false,
-          onboarding_completed_at: complete === true ? new Date().toISOString() : null,
+          onboarding_complete: complete === true ? true : undefined,
+          onboarding_completed_at: completedAt,
         }),
       });
 
@@ -351,13 +372,14 @@ export default function OnboardingPage() {
 
       setProfileState((prev) => ({
         ...prev,
-        calorie_target: targets.calorie_target,
+        caloric_target: targets.caloric_target,
+        calorie_target: targets.caloric_target,
         protein_target: targets.protein_target,
         carb_target: targets.carb_target,
         fat_target: targets.fat_target,
         onboarding_complete: complete === true ? true : prev.onboarding_complete,
         onboarding_completed_at:
-          complete === true ? new Date().toISOString() : prev.onboarding_completed_at ?? null,
+          complete === true ? completedAt || prev.onboarding_completed_at : prev.onboarding_completed_at,
       }));
 
       setDirty(false);
@@ -372,7 +394,7 @@ export default function OnboardingPage() {
       }
 
       if (complete === true) {
-        window.location.href = "/";
+        window.location.href = returnTo;
       }
     } catch (err: any) {
       setErrorMsg(err?.message || "Failed to save onboarding");
@@ -411,128 +433,14 @@ export default function OnboardingPage() {
     }
   }
 
-  const dashboardReadyCard = (
-    <section className="ia-tile ia-tile-pad">
-      <div className="ia-kicker">
-        <i className="fas fa-flag-checkered" />
-        finish
-      </div>
-
-      <div className="ia-card-title-compact mt-2">Your setup is nearly done</div>
-      <div className="text-dim small mt-1">
-        Review the details below and save your onboarding to continue into the app.
-      </div>
-
-      <div className="row g-2 mt-2">
-        <div className="col-12 col-md-6">
-          <div className="ia-summary-card">
-            <div className="ia-summary-label">Sex</div>
-            <div className="ia-summary-value">{profile.sex || "—"}</div>
-          </div>
-        </div>
-
-        <div className="col-12 col-md-6">
-          <div className="ia-summary-card">
-            <div className="ia-summary-label">Age</div>
-            <div className="ia-summary-value">{profile.DOB ? age : "—"}</div>
-          </div>
-        </div>
-
-        <div className="col-12 col-md-6">
-          <div className="ia-summary-card">
-            <div className="ia-summary-label">Height</div>
-            <div className="ia-summary-value">
-              {profile.height_cm ? `${formatNumber(profile.height_cm)} cm` : "—"}
-            </div>
-          </div>
-        </div>
-
-        <div className="col-12 col-md-6">
-          <div className="ia-summary-card">
-            <div className="ia-summary-label">Weight</div>
-            <div className="ia-summary-value">
-              {profile.weight_kg ? `${formatNumber(profile.weight_kg)} kg` : "—"}
-            </div>
-          </div>
-        </div>
-
-        <div className="col-12 col-md-6">
-          <div className="ia-summary-card">
-            <div className="ia-summary-label">Goal</div>
-            <div className="ia-summary-value">
-              {profile.goal_primary === "lose"
-                ? "Lose weight"
-                : profile.goal_primary === "tone"
-                ? "Maintain / tone"
-                : profile.goal_primary === "gain"
-                ? "Gain muscle"
-                : "—"}
-            </div>
-          </div>
-        </div>
-
-        <div className="col-12 col-md-6">
-          <div className="ia-summary-card">
-            <div className="ia-summary-label">Activity</div>
-            <div className="ia-summary-value">
-              {ACTIVITY_OPTIONS.find((x) => x.job_type === profile.job_type)?.title || "—"}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="ia-tile ia-tile-pad mt-3">
-        <div className="ia-kicker">
-          <i className="fas fa-bullseye" />
-          nutrition targets
-        </div>
-
-        {!canShowTargets ? (
-          <div className="text-dim small mt-2">
-            Complete the previous steps to calculate your daily targets.
-          </div>
-        ) : (
-          <div className="row g-2 mt-2">
-            <div className="col-6 col-md-3">
-              <div className="ia-summary-card">
-                <div className="ia-summary-label">Calories</div>
-                <div className="ia-summary-value">{formatNumber(targets.calorie_target)}</div>
-              </div>
-            </div>
-
-            <div className="col-6 col-md-3">
-              <div className="ia-summary-card">
-                <div className="ia-summary-label">Protein</div>
-                <div className="ia-summary-value">{formatNumber(targets.protein_target)}g</div>
-              </div>
-            </div>
-
-            <div className="col-6 col-md-3">
-              <div className="ia-summary-card">
-                <div className="ia-summary-label">Carbs</div>
-                <div className="ia-summary-value">{formatNumber(targets.carb_target)}g</div>
-              </div>
-            </div>
-
-            <div className="col-6 col-md-3">
-              <div className="ia-summary-card">
-                <div className="ia-summary-label">Fats</div>
-                <div className="ia-summary-value">{formatNumber(targets.fat_target)}g</div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-
   if (!mounted || status === "loading") {
     return (
       <>
+        <Head>
+          <title>Complete your setup</title>
+        </Head>
         <main className="container py-3" style={{ paddingBottom: 90, color: "#fff" }}>
-          <section className="ia-tile ia-tile-pad">
-            <div className="ia-page-title">Loading onboarding…</div>
-          </section>
+          <HomeLoadingScreen />
         </main>
         <BottomNav />
       </>
@@ -576,9 +484,7 @@ export default function OnboardingPage() {
         <main className="container py-3" style={{ paddingBottom: 90, color: "#fff" }}>
           <section className="ia-tile ia-tile-pad">
             <div className="ia-page-title">Failed to load your profile</div>
-            <div className="text-dim small mt-2">
-              Please refresh the page and try again.
-            </div>
+            <div className="text-dim small mt-2">Please refresh the page and try again.</div>
           </section>
         </main>
 
@@ -591,6 +497,7 @@ export default function OnboardingPage() {
     <>
       <Head>
         <title>Complete your setup</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
 
       <header className="container py-2" style={{ color: "#fff" }}>
@@ -603,16 +510,13 @@ export default function OnboardingPage() {
               </div>
               <div className="ia-page-title">Let’s tailor Iron Acre to you</div>
               <div className="ia-page-subtitle">
-                Step {stepIndex(step) + 1} of {STEPS.length}. Complete your profile so we can set better nutrition guidance and a cleaner starting point.
+                Step {stepIndex(step) + 1} of {STEPS.length}. Complete your profile so we can set better calories and macros.
               </div>
             </div>
 
             <div className="d-flex flex-column align-items-end gap-2">
-              {dirty ? (
-                <span className="ia-badge">Unsaved</span>
-              ) : savedMsg ? (
-                <span className="ia-inline-note-success">{savedMsg}</span>
-              ) : null}
+              {dirty ? <span className="ia-badge">Unsaved</span> : null}
+              {!dirty && savedMsg ? <span className="ia-inline-note-success">{savedMsg}</span> : null}
             </div>
           </div>
 
@@ -646,7 +550,7 @@ export default function OnboardingPage() {
           <section className="ia-tile ia-tile-pad mb-3">
             <div className="row g-3">
               <div className="col-12">
-                <label className="form-label">Sex</label>
+                <label className="form-label ia-label">Sex</label>
                 <div className="row g-2">
                   {[
                     { value: "male", label: "Male" },
@@ -676,10 +580,10 @@ export default function OnboardingPage() {
               </div>
 
               <div className="col-12 col-md-4">
-                <label className="form-label">Date of birth</label>
+                <label className="form-label ia-label">Date of birth</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control ia-form-input"
                   value={profile.DOB || ""}
                   onChange={(e) =>
                     setProfile((prev) => ({
@@ -691,13 +595,13 @@ export default function OnboardingPage() {
               </div>
 
               <div className="col-12 col-md-4">
-                <label className="form-label">Height (cm)</label>
+                <label className="form-label ia-label">Height (cm)</label>
                 <input
                   type="number"
                   min="100"
                   max="250"
                   step="1"
-                  className="form-control"
+                  className="form-control ia-form-input"
                   value={profile.height_cm ?? ""}
                   onChange={(e) =>
                     setProfile((prev) => ({
@@ -709,13 +613,13 @@ export default function OnboardingPage() {
               </div>
 
               <div className="col-12 col-md-4">
-                <label className="form-label">Weight (kg)</label>
+                <label className="form-label ia-label">Weight (kg)</label>
                 <input
                   type="number"
                   min="25"
                   max="300"
                   step="0.1"
-                  className="form-control"
+                  className="form-control ia-form-input"
                   value={profile.weight_kg ?? ""}
                   onChange={(e) =>
                     setProfile((prev) => ({
@@ -727,13 +631,13 @@ export default function OnboardingPage() {
               </div>
 
               <div className="col-12 col-md-4">
-                <label className="form-label">Body fat % (optional)</label>
+                <label className="form-label ia-label">Body fat % (optional)</label>
                 <input
                   type="number"
                   min="1"
                   max="70"
                   step="0.1"
-                  className="form-control"
+                  className="form-control ia-form-input"
                   value={profile.bodyfat_pct ?? ""}
                   onChange={(e) =>
                     setProfile((prev) => ({
@@ -757,7 +661,7 @@ export default function OnboardingPage() {
                 </div>
               </div>
 
-              <div className="row g-2">
+              <div className="d-grid gap-2">
                 {[
                   {
                     value: "lose",
@@ -778,22 +682,20 @@ export default function OnboardingPage() {
                   const selected = profile.goal_primary === opt.value;
 
                   return (
-                    <div key={opt.value} className="col-12">
-                      <button
-                        type="button"
-                        className={selected ? "ia-btn ia-btn-primary w-100" : "ia-btn ia-btn-outline w-100"}
-                        style={{ justifyContent: "space-between", minHeight: 52 }}
-                        onClick={() =>
-                          setProfile((prev) => ({
-                            ...prev,
-                            goal_primary: opt.value as GoalPrimary,
-                          }))
-                        }
-                      >
-                        <span>{opt.title}</span>
-                        <span className="text-dim small">{opt.subtitle}</span>
-                      </button>
-                    </div>
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className={selected ? "ia-onb-choice ia-onb-choice-selected" : "ia-onb-choice"}
+                      onClick={() =>
+                        setProfile((prev) => ({
+                          ...prev,
+                          goal_primary: opt.value as GoalPrimary,
+                        }))
+                      }
+                    >
+                      <span className="ia-onb-choice-title">{opt.title}</span>
+                      <span className="ia-onb-choice-subtitle">{opt.subtitle}</span>
+                    </button>
                   );
                 })}
               </div>
@@ -815,8 +717,7 @@ export default function OnboardingPage() {
                     <button
                       key={opt.job_type}
                       type="button"
-                      className={selected ? "ia-btn ia-btn-primary w-100" : "ia-btn ia-btn-outline w-100"}
-                      style={{ justifyContent: "space-between", minHeight: 52 }}
+                      className={selected ? "ia-onb-choice ia-onb-choice-selected" : "ia-onb-choice"}
                       onClick={() =>
                         setProfile((prev) => ({
                           ...prev,
@@ -825,8 +726,8 @@ export default function OnboardingPage() {
                         }))
                       }
                     >
-                      <span>{opt.title}</span>
-                      <span className="text-dim small">{opt.subtitle}</span>
+                      <span className="ia-onb-choice-title">{opt.title}</span>
+                      <span className="ia-onb-choice-subtitle">{opt.subtitle}</span>
                     </button>
                   );
                 })}
@@ -835,7 +736,120 @@ export default function OnboardingPage() {
           </>
         ) : null}
 
-        {step === "finish" ? dashboardReadyCard : null}
+        {step === "finish" ? (
+          <section className="ia-tile ia-tile-pad mb-3">
+            <div className="ia-kicker">
+              <i className="fas fa-flag-checkered" />
+              finish
+            </div>
+
+            <div className="ia-card-title-compact mt-2">Your setup is nearly done</div>
+            <div className="text-dim small mt-1">
+              Review the details below and save your onboarding to continue into the app.
+            </div>
+
+            <div className="row g-2 mt-2">
+              <div className="col-12 col-md-6">
+                <div className="ia-summary-card">
+                  <div className="ia-summary-label">Sex</div>
+                  <div className="ia-summary-value">{profile.sex || "—"}</div>
+                </div>
+              </div>
+
+              <div className="col-12 col-md-6">
+                <div className="ia-summary-card">
+                  <div className="ia-summary-label">Age</div>
+                  <div className="ia-summary-value">{profile.DOB ? age : "—"}</div>
+                </div>
+              </div>
+
+              <div className="col-12 col-md-6">
+                <div className="ia-summary-card">
+                  <div className="ia-summary-label">Height</div>
+                  <div className="ia-summary-value">
+                    {profile.height_cm ? `${formatNumber(profile.height_cm)} cm` : "—"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-12 col-md-6">
+                <div className="ia-summary-card">
+                  <div className="ia-summary-label">Weight</div>
+                  <div className="ia-summary-value">
+                    {profile.weight_kg ? `${formatNumber(profile.weight_kg)} kg` : "—"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-12 col-md-6">
+                <div className="ia-summary-card">
+                  <div className="ia-summary-label">Goal</div>
+                  <div className="ia-summary-value">
+                    {profile.goal_primary === "lose"
+                      ? "Lose weight"
+                      : profile.goal_primary === "tone"
+                      ? "Maintain / tone"
+                      : profile.goal_primary === "gain"
+                      ? "Gain muscle"
+                      : "—"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-12 col-md-6">
+                <div className="ia-summary-card">
+                  <div className="ia-summary-label">Activity</div>
+                  <div className="ia-summary-value">
+                    {ACTIVITY_OPTIONS.find((x) => x.job_type === profile.job_type)?.title || "—"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="ia-tile ia-tile-pad mt-3">
+              <div className="ia-kicker">
+                <i className="fas fa-bullseye" />
+                nutrition targets
+              </div>
+
+              {!canShowTargets ? (
+                <div className="text-dim small mt-2">
+                  Complete the previous steps to calculate your daily targets.
+                </div>
+              ) : (
+                <div className="row g-2 mt-2">
+                  <div className="col-6 col-md-3">
+                    <div className="ia-summary-card">
+                      <div className="ia-summary-label">Calories</div>
+                      <div className="ia-summary-value">{formatNumber(targets.caloric_target)}</div>
+                    </div>
+                  </div>
+
+                  <div className="col-6 col-md-3">
+                    <div className="ia-summary-card">
+                      <div className="ia-summary-label">Protein</div>
+                      <div className="ia-summary-value">{formatNumber(targets.protein_target)}g</div>
+                    </div>
+                  </div>
+
+                  <div className="col-6 col-md-3">
+                    <div className="ia-summary-card">
+                      <div className="ia-summary-label">Carbs</div>
+                      <div className="ia-summary-value">{formatNumber(targets.carb_target)}g</div>
+                    </div>
+                  </div>
+
+                  <div className="col-6 col-md-3">
+                    <div className="ia-summary-card">
+                      <div className="ia-summary-label">Fats</div>
+                      <div className="ia-summary-value">{formatNumber(targets.fat_target)}g</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        ) : null}
 
         {errorMsg ? (
           <section className="ia-tile ia-tile-pad mb-3">
@@ -884,6 +898,31 @@ export default function OnboardingPage() {
         </section>
 
         <style jsx>{`
+          .ia-label {
+            color: rgba(255, 255, 255, 0.88);
+            font-weight: var(--ia-fw-semi);
+            margin-bottom: 6px;
+          }
+
+          .ia-form-input {
+            min-height: 46px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.03);
+            color: #fff;
+          }
+
+          .ia-form-input:focus {
+            border-color: rgba(24, 255, 154, 0.42);
+            box-shadow: 0 0 0 3px rgba(24, 255, 154, 0.12);
+            background: rgba(255, 255, 255, 0.04);
+            color: #fff;
+          }
+
+          .ia-form-input::placeholder {
+            color: rgba(255, 255, 255, 0.38);
+          }
+
           .ia-summary-card {
             border-radius: 14px;
             padding: 12px 14px;
@@ -904,6 +943,79 @@ export default function OnboardingPage() {
             font-size: 1rem;
             font-weight: 700;
             color: #fff;
+          }
+
+          .ia-onb-choice {
+            width: 100%;
+            border: 1px solid rgba(24, 255, 154, 0.18);
+            background: rgba(6, 18, 24, 0.88);
+            color: #fff;
+            border-radius: 18px;
+            padding: 14px 16px;
+            min-height: 72px;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 4px;
+            box-shadow: inset 0 0 0 1px rgba(24, 255, 154, 0.04);
+          }
+
+          .ia-onb-choice:hover {
+            border-color: rgba(24, 255, 154, 0.28);
+            background: rgba(8, 22, 28, 0.94);
+          }
+
+          .ia-onb-choice-selected {
+            width: 100%;
+            border: none;
+            border-radius: 18px;
+            padding: 14px 16px;
+            min-height: 72px;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 4px;
+            color: #041311;
+            background: linear-gradient(135deg, var(--ia-neon), var(--ia-neon2));
+            box-shadow: var(--ia-btn-primary-shadow);
+          }
+
+          .ia-onb-choice-title {
+            display: block;
+            font-weight: 800;
+            font-size: 0.98rem;
+            line-height: 1.2;
+            white-space: normal;
+          }
+
+          .ia-onb-choice-subtitle {
+            display: block;
+            font-size: 0.78rem;
+            line-height: 1.35;
+            opacity: 0.92;
+            white-space: normal;
+          }
+
+          @media (max-width: 575.98px) {
+            .ia-onb-choice,
+            .ia-onb-choice-selected {
+              min-height: 78px;
+              padding: 13px 14px;
+              border-radius: 16px;
+            }
+
+            .ia-onb-choice-title {
+              font-size: 0.94rem;
+            }
+
+            .ia-onb-choice-subtitle {
+              font-size: 0.74rem;
+              line-height: 1.3;
+            }
           }
         `}</style>
       </main>
