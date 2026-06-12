@@ -1,845 +1,906 @@
+// pages/train.tsx
 "use client";
 
 import Head from "next/head";
 import Link from "next/link";
-import useSWR from "swr";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useMemo } from "react";
+import useSWR from "swr";
 import BottomNav from "../components/BottomNav";
-import ExerciseLibrary from "../components/train/ExerciseLibrary";
-
-// Charts
-import {
-  Chart as ChartJS,
-  LineElement,
-  PointElement,
-  CategoryScale,
-  LinearScale,
-  Tooltip,
-  Legend,
-  type ChartData,
-  type ChartOptions,
-  type ChartDataset,
-} from "chart.js";
-import { Line } from "react-chartjs-2";
-
-// Register chart elements once
-ChartJS.register(LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend);
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-// ---- Brand ------------------------------------------------------------------
-const ACCENT = "#FF8A2A";
+type SimpleWorkoutRef = {
+  id: string;
+  name?: string;
+  order?: number;
+  programId?: string;
+};
 
-// ---- Small date helpers -----------------------------------------------------
-function formatDateKeyLocal(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+type CurrentProgram = {
+  assignment_id: string;
+  program_id: string;
+  program_name: string;
+  status: string;
+  start_date: string | null;
+  end_date: string | null;
+  weeks: number;
+  current_week: number | null;
+  is_active_today: boolean;
+} | null;
+
+type HomeDayOverview = {
+  dateKey: string;
+  hasWorkout?: boolean;
+  workoutDone?: boolean;
+  workoutIds?: string[];
+  programmedWorkouts?: SimpleWorkoutRef[];
+  hasRecurringToday?: boolean;
+  recurringWorkouts: SimpleWorkoutRef[];
+  recurringDone: boolean;
+  optionalWorkouts?: SimpleWorkoutRef[];
+};
+
+type HomeOverviewResponse = {
+  weekStartYMD: string;
+  weekEndYMD: string;
+  fridayYMD: string;
+  todayYMD: string;
+  days: HomeDayOverview[];
+  currentProgram?: CurrentProgram;
+  weeklyTotals?: {
+    totalTasks: number;
+    completedTasks: number;
+    totalWorkoutsCompleted: number;
+    totalWorkoutTime: number;
+    totalCaloriesBurned: number;
+  };
+};
+
+type ProgramsWeeklyResponse = {
+  weekStartYMD: string;
+  weekEndYMD: string;
+  days: Record<string, SimpleWorkoutRef[]>;
+  debug?: {
+    programsMatched: number;
+    programsActiveInWeek: number;
+    scheduleRowsRead: number;
+    uniqueWorkoutIds: number;
+    assignmentsMatched?: number;
+  };
+};
+
+type WeeklyOverviewDay = {
+  dateKey: string;
+  hasWorkout: boolean;
+  workoutDone: boolean;
+  workoutIds: string[];
+  hasRecurringToday: boolean;
+  recurringWorkouts: SimpleWorkoutRef[];
+  recurringDone: boolean;
+  optionalWorkouts: SimpleWorkoutRef[];
+};
+
+type WeeklyOverviewResponse = {
+  weekStartYMD: string;
+  weekEndYMD: string;
+  fridayYMD: string;
+  days: WeeklyOverviewDay[];
+  weeklyTotals: {
+    totalTasks: number;
+    completedTasks: number;
+    totalWorkoutsCompleted: number;
+    totalWorkoutTime: number;
+    totalCaloriesBurned: number;
+  };
+};
+
+const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const DAY_SHORT: Record<string, string> = {
+  Monday: "Mon",
+  Tuesday: "Tue",
+  Wednesday: "Wed",
+  Thursday: "Thu",
+  Friday: "Fri",
+  Saturday: "Sat",
+  Sunday: "Sun",
+};
+
+function formatYMD(d: Date) {
+  return d.toLocaleDateString("en-CA");
 }
-function subDays(d: Date, days: number): Date {
-  const x = new Date(d);
-  x.setDate(x.getDate() - days);
-  return x;
+
+function parseYMD(ymd: string) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
 }
-function startOfWeekMonday(d: Date): Date {
-  const date = new Date(d);
-  const day = date.getDay(); // 0 Sun - 6 Sat
-  const diff = (day + 6) % 7; // days since Monday
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() - diff);
-  return date;
+
+function startOfAlignedWeek(d: Date) {
+  const day = d.getDay();
+  const diffToMon = (day + 6) % 7;
+  const out = new Date(d);
+  out.setDate(d.getDate() - diffToMon);
+  out.setHours(0, 0, 0, 0);
+  return out;
 }
-function endOfWeekSunday(d: Date): Date {
-  const sow = startOfWeekMonday(d);
-  const eow = new Date(sow);
-  eow.setDate(sow.getDate() + 6);
-  eow.setHours(23, 59, 59, 999);
-  return eow;
+
+function addDays(d: Date, days: number) {
+  const out = new Date(d);
+  out.setDate(out.getDate() + days);
+  return out;
 }
-function toDateSafe(v: any): Date | null {
+
+function formatDisplayDate(d: Date) {
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
+function toDateOrNull(v: string | null | undefined) {
   if (!v) return null;
-  if (v?.toDate && typeof v.toDate === "function") {
-    const d = v.toDate();
-    return d instanceof Date ? d : null;
-  }
   const d = new Date(v);
   return isNaN(d.getTime()) ? null : d;
 }
-function dayLabel(d: Date | null): string {
-  if (!d) return "Any day";
-  return d.toLocaleDateString(undefined, { weekday: "short" });
-}
-function dayIndexMonSun(d: Date | null): number {
-  if (!d) return 7; // unknown at bottom
-  const js = d.getDay(); // Sun=0..Sat=6
-  return js === 0 ? 6 : js - 1; // Mon=0..Sun=6
-}
-function dayNameToIndex(day: string | null | undefined): number | null {
-  if (!day) return null;
-  const s = String(day).trim().toLowerCase();
-  const map: Record<string, number> = {
-    mon: 0, monday: 0,
-    tue: 1, tues: 1, tuesday: 1,
-    wed: 2, weds: 2, wednesday: 2,
-    thu: 3, thur: 3, thurs: 3, thursday: 3,
-    fri: 4, friday: 4,
-    sat: 5, saturday: 5,
-    sun: 6, sunday: 6,
-  };
-  return map[s] ?? null;
-}
-function dateForWeekday(sow: Date, idxMonSun: number): Date {
-  const d = new Date(sow);
-  d.setDate(sow.getDate() + idxMonSun);
-  d.setHours(12, 0, 0, 0); // midday to avoid DST edge cases
-  return d;
-}
-function isoDate(d: Date | null): string {
-  if (!d) return "any";
-  return d.toISOString().slice(0, 10);
-}
-function arrIncludesCi(arr: any, needle: string): boolean {
-  if (!Array.isArray(arr)) return false;
-  const n = needle.toLowerCase();
-  return arr.some((x) => String(x || "").toLowerCase() === n);
+
+function getWeekStartForProgramWeek(startDate: string | null, weekNumber: number) {
+  const base = toDateOrNull(startDate) || new Date();
+  const shifted = addDays(base, Math.max(0, weekNumber - 1) * 7);
+  return startOfAlignedWeek(shifted);
 }
 
-// ---- Page -------------------------------------------------------------------
+function getDayDateFromWeekStart(weekStartYMD: string, dayName: string) {
+  const start = parseYMD(weekStartYMD);
+  const idx = DAY_ORDER.indexOf(dayName);
+  if (idx < 0) return null;
+  return addDays(start, idx);
+}
+
+function getHomeDayWorkouts(day?: HomeDayOverview): SimpleWorkoutRef[] {
+  if (!day) return [];
+  const recurring = Array.isArray(day.recurringWorkouts) ? day.recurringWorkouts : [];
+  if (recurring.length) return recurring;
+
+  const programmed = Array.isArray(day.programmedWorkouts) ? day.programmedWorkouts : [];
+  if (programmed.length) return programmed;
+
+  return [];
+}
+
+function getDayHref(workout?: SimpleWorkoutRef | null, dateYMD?: string | null) {
+  if (!workout?.id) return "#";
+  return `/gymworkout/${encodeURIComponent(workout.id)}${dateYMD ? `?date=${encodeURIComponent(dateYMD)}` : ""}`;
+}
+
+function compactCountLabel(count: number, singular: string, plural?: string) {
+  if (count === 1) return `1 ${singular}`;
+  return `${count} ${plural || `${singular}s`}`;
+}
+
+function LoadingCard({ title }: { title: string }) {
+  return (
+    <section className="ia-tile ia-tile-pad mb-3">
+      <div className="d-flex align-items-center justify-content-between">
+        <div className="ia-card-title-compact">{title}</div>
+        <i className="fas fa-spinner fa-spin text-dim" />
+      </div>
+    </section>
+  );
+}
+
+function EmptyTrainState() {
+  return (
+    <section className="ia-tile ia-tile-pad mb-3">
+      <div className="ia-card-title-compact">No active programme</div>
+      <div className="text-dim small mt-1">
+        Your workouts will appear here once a programme or recurring gym workouts have been assigned.
+      </div>
+      <div className="mt-3">
+        /iron-acre
+          Back to dashboard
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 export default function WorkoutHubPage() {
-  const { data: session } = useSession();
-  const userEmail = session?.user?.email || null;
+  const { data: session, status } = useSession();
+  const [mounted, setMounted] = useState(false);
+  const [selectedWeekNumber, setSelectedWeekNumber] = useState<number | null>(null);
 
-  // Completions history: primary then fallback
-  const todayKey = formatDateKeyLocal(new Date());
-  const fromKey = formatDateKeyLocal(subDays(new Date(), 90));
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  const historyUrl = userEmail
-    ? `/api/completions/history?email=${encodeURIComponent(userEmail)}&limit=5`
-    : null;
+  const userEmail = String(session?.user?.email || "").trim().toLowerCase();
+  const isAuthed = Boolean(userEmail);
 
-  const { data: histPrimary, error: histPrimaryErr } = useSWR(historyUrl, fetcher, {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-    dedupingInterval: 30_000,
-  });
+  const currentWeekStartYMD = useMemo(() => {
+    return formatYMD(startOfAlignedWeek(new Date()));
+  }, []);
 
-  const useFallback = !!histPrimaryErr;
-  const historyRangeUrl =
-    userEmail && useFallback
-      ? `/api/completions/index?user_email=${encodeURIComponent(
-          userEmail
-        )}&from=${encodeURIComponent(fromKey)}&to=${encodeURIComponent(todayKey)}`
-      : null;
+  const {
+    data: currentHomeOverview,
+    error: currentHomeErr,
+  } = useSWR<HomeOverviewResponse>(
+    mounted && isAuthed
+      ? `/api/iron-acre/home-overview?week=${encodeURIComponent(currentWeekStartYMD)}`
+      : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
 
-  const { data: histFallback } = useSWR(useFallback ? historyRangeUrl : null, fetcher, {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-    dedupingInterval: 30_000,
-  });
+  const currentProgram = currentHomeOverview?.currentProgram || null;
 
-  const historyPreview = useMemo(() => {
-    const src =
-      histPrimary?.results ||
-      histPrimary?.items ||
-      histPrimary?.completions ||
-      histPrimary?.data ||
-      histFallback?.results ||
-      histFallback?.items ||
-      histFallback?.completions ||
-      histFallback?.data ||
-      [];
+  useEffect(() => {
+    if (!currentProgram) return;
+    if (selectedWeekNumber != null) return;
 
-    const arr = Array.isArray(src) ? src : [];
-    const mapped = arr
-      .map((c: any) => ({
-        completed_date:
-          c.completed_date?.toDate?.() instanceof Date
-            ? c.completed_date.toDate()
-            : c.completed_date
-            ? new Date(c.completed_date)
-            : null,
-        calories_burned: Number(c.calories_burned || 0),
-        sets_completed: Number(c.sets_completed || 0),
-        weight_completed_with: c.weight_completed_with ?? null,
-        workout_name:
-          c.workout_name ??
-          c.name ??
-          c.title ??
-          c.workout?.name ??
-          c.workout_title ??
-          c.plan_name ??
-          null,
-      }))
-      .filter((c: any) => !!c.completed_date)
-      .sort(
-        (a: any, b: any) =>
-          (b.completed_date as Date).getTime() - (a.completed_date as Date).getTime()
-      )
-      .slice(0, 5);
+    const weekNum = Math.max(1, Number(currentProgram.current_week || 1));
+    setSelectedWeekNumber(weekNum);
+  }, [currentProgram, selectedWeekNumber]);
 
-    return mapped;
-  }, [histPrimary, histFallback]);
+  const effectiveWeekNumber = useMemo(() => {
+    if (!currentProgram) return 1;
+    return Math.max(1, Math.min(Number(selectedWeekNumber || currentProgram.current_week || 1), Number(currentProgram.weeks || 1)));
+  }, [currentProgram, selectedWeekNumber]);
+
+  const selectedWeekStartYMD = useMemo(() => {
+    if (!currentProgram?.start_date) return currentWeekStartYMD;
+    return formatYMD(getWeekStartForProgramWeek(currentProgram.start_date, effectiveWeekNumber));
+  }, [currentProgram, effectiveWeekNumber, currentWeekStartYMD]);
+
+  const {
+    data: selectedProgramsWeekly,
+    error: selectedProgramsErr,
+  } = useSWR<ProgramsWeeklyResponse>(
+    mounted && isAuthed && currentProgram
+      ? `/api/programs/weekly?week=${encodeURIComponent(selectedWeekStartYMD)}`
+      : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
+
+  const {
+    data: selectedWeeklyOverview,
+    error: selectedOverviewErr,
+  } = useSWR<WeeklyOverviewResponse>(
+    mounted && isAuthed && currentProgram
+      ? `/api/weekly/overview?week=${encodeURIComponent(selectedWeekStartYMD)}`
+      : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
+
+  const thisWeekCards = useMemo(() => {
+    const days = currentHomeOverview?.days || [];
+
+    const cards = days
+      .map((day) => {
+        const workouts = getHomeDayWorkouts(day);
+        if (!workouts.length) return null;
+
+        const first = workouts[0] || null;
+        const href = getDayHref(first, day.dateKey);
+        const done = day.hasRecurringToday ? Boolean(day.recurringDone) : Boolean(day.workoutDone);
+
+        return {
+          dateKey: day.dateKey,
+          title: first?.name || "Workout",
+          extraCount: Math.max(0, workouts.length - 1),
+          done,
+          href,
+          dayLabel: day.dateKey
+            ? new Date(`${day.dateKey}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" })
+            : "",
+        };
+      })
+      .filter(Boolean) as Array<{
+      dateKey: string;
+      title: string;
+      extraCount: number;
+      done: boolean;
+      href: string;
+      dayLabel: string;
+    }>;
+
+    cards.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+    return cards;
+  }, [currentHomeOverview]);
+
+  const selectedWeekSchedule = useMemo(() => {
+    const map = selectedProgramsWeekly?.days || {};
+    const overviewByDate = new Map(
+      (selectedWeeklyOverview?.days || []).map((d) => [d.dateKey, d] as const)
+    );
+
+    return DAY_ORDER.map((dayName) => {
+      const date = getDayDateFromWeekStart(selectedWeekStartYMD, dayName);
+      const ymd = date ? formatYMD(date) : "";
+      const workouts = Array.isArray(map[ymd]) ? map[ymd] : [];
+      const first = workouts[0] || null;
+      const overview = overviewByDate.get(ymd);
+
+      const done = Boolean(overview?.workoutDone);
+      const isToday = ymd === formatYMD(new Date());
+      const href = first ? getDayHref(first, ymd) : "#";
+
+      return {
+        dayName,
+        ymd,
+        workouts,
+        first,
+        done,
+        isToday,
+        href,
+      };
+    });
+  }, [selectedProgramsWeekly, selectedWeeklyOverview, selectedWeekStartYMD]);
+
+  const selectedWeekStats = useMemo(() => {
+    const dayCards = selectedWeekSchedule.filter((d) => d.workouts.length > 0);
+    const total = dayCards.length;
+    const completed = dayCards.filter((d) => d.done).length;
+    const remaining = Math.max(0, total - completed);
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    return {
+      total,
+      completed,
+      remaining,
+      pct,
+    };
+  }, [selectedWeekSchedule]);
+
+  const programmeProgressPct = useMemo(() => {
+    if (!currentProgram?.weeks || !effectiveWeekNumber) return 0;
+    const pct = Math.round((effectiveWeekNumber / Number(currentProgram.weeks)) * 100);
+    return Math.max(0, Math.min(100, pct));
+  }, [currentProgram, effectiveWeekNumber]);
+
+  const loading = !mounted || status === "loading";
+  const thisWeekLoading = isAuthed && !currentHomeOverview && !currentHomeErr;
+  const scheduleLoading =
+    isAuthed &&
+    !!currentProgram &&
+    ((!selectedProgramsWeekly && !selectedProgramsErr) || (!selectedWeeklyOverview && !selectedOverviewErr));
+
+  if (loading) {
+    return (
+      <>
+        <Head>
+          <title>Train • Iron Acre Gym</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        </Head>
+        <main className="container py-3" style={{ paddingBottom: 88, color: "#fff" }}>
+          <LoadingCard title="Loading Train" />
+        </main>
+        <BottomNav />
+      </>
+    );
+  }
+
+  if (!session) {
+    const cb = encodeURIComponent("/train");
+
+    return (
+      <>
+        <Head>
+          <title>Train • Iron Acre Gym</title>
+        </Head>
+
+        <main className="container py-4" style={{ paddingBottom: 88, color: "#fff" }}>
+          <section className="ia-tile ia-tile-pad">
+            <div className="ia-page-title">Train</div>
+            <div className="text-dim small mt-2">Please sign in to view your programme and weekly training schedule.</div>
+            <div className="mt-3">
+              {`/register?callbackUrl=${cb}`}
+                Sign in
+              </Link>
+            </div>
+          </section>
+        </main>
+
+        <BottomNav />
+      </>
+    );
+  }
 
   return (
     <>
       <Head>
-        <title>Train • BXKR</title>
+        <title>Train • Iron Acre Gym</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
 
-      <main
-        className="container py-3"
-        style={{
-          paddingBottom: 80,
-          color: "#fff",
-          borderRadius: 12,
-          minHeight: "100vh",
-        }}
-      >
-        {/* Header */}
-        <div className="mb-3">
-          <div className="d-flex align-items-center justify-content-between">
-            <div>
-              <h1 className="h4 mb-0" style={{ fontWeight: 700 }}>
-                Train
-              </h1>
-              <small style={{ opacity: 0.75 }}>Build momentum today</small>
-            </div>
+      <main className="container py-2 ia-train-page" style={{ color: "#fff", paddingBottom: 96 }}>
+        <section className="ia-tile ia-tile-pad mb-3">
+          <div className="ia-kicker">
+            <i className="fas fa-dumbbell" />
+            plan
           </div>
+          <div className="d-flex justify-content-between align-items-start gap-2 mt-1">
+            <div style={{ minWidth: 0 }}>
+              <div className="ia-page-title">Train</div>
+              <div className="ia-page-subtitle">Your personalised training schedule and current programme.</div>
+            </div>
 
-          {/* Weekly workouts (mandatory + optional, includes recurring assignments) */}
-          <WeeklyWorkoutsHeader email={userEmail} />
-        </div>
-
-        {/* Tiles */}
-        <section className="row gx-3">
-          {/* Workout History */}
-          <div className="col-12 col-md-6 mb-3">
-            <div className="futuristic-card p-3" style={{ height: "100%" }}>
-              <h6 className="mb-3" style={{ fontWeight: 700 }}>
-                Workout History
-              </h6>
-
-              {historyPreview.length ? (
-                historyPreview.map((c: any, idx: number) => {
-                  const dateText = new Date(c.completed_date).toLocaleDateString(undefined, {
-                    day: "numeric",
-                    month: "short",
-                  });
-                  const nameText = c.workout_name || "Workout";
-                  return (
-                    <div key={idx} className="mb-2 d-flex justify-content-between">
-                      <div>
-                        <div className="fw-semibold">
-                          {nameText} <span className="text-dim">— {dateText}</span>
-                        </div>
-                        <div>
-                          {Math.round(c.calories_burned || 0)} kcal · {c.sets_completed || 0} sets
-                        </div>
-                        {c.weight_completed_with != null && (
-                          <div className="small text-dim">Weight used: {c.weight_completed_with}</div>
-                        )}
-                      </div>
-                      <Link
-                        href="/history"
-                        className="btn btn-link text-dim"
-                        aria-label={`View details for ${nameText}`}
-                      >
-                        <i className="fas fa-chevron-right" />
-                      </Link>
-                    </div>
-                  );
-                })
-              ) : histPrimaryErr ? (
-                <div className="text-muted">Couldn’t load history</div>
-              ) : (
-                <div className="text-muted">No history yet</div>
-              )}
-
-              <Link
-                href="/history"
-                className="btn btn-outline-light btn-sm mt-2"
-                style={{ borderRadius: 24 }}
-              >
-                View More
+            <div className="d-flex gap-2">
+              /history
+                <i className="fas fa-history" />
               </Link>
-            </div>
-          </div>
-
-          {/* Benchmarks + Graphs */}
-          <div className="col-12 col-md-6 mb-3">
-            <div className="futuristic-card p-3" style={{ height: "100%" }}>
-              <h6 className="mb-3" style={{ fontWeight: 700 }}>
-                Benchmarks
-              </h6>
-
-              <BenchmarksList email={userEmail} />
-
-              <div className="mt-3">
-                <BenchmarkGraphs email={userEmail} />
-              </div>
+              /benchmarks
+                <i className="fas fa-chart-line" />
+              </Link>
             </div>
           </div>
         </section>
 
-        {/* Exercise Library with filters (external component) */}
-        <ExerciseLibrary />
+        {thisWeekLoading ? (
+          <LoadingCard title="This week" />
+        ) : (
+          <section className="ia-tile ia-tile-pad mb-3">
+            <div className="d-flex justify-content-between align-items-center gap-2">
+              <div>
+                <div className="ia-card-title-compact">This week</div>
+                <div className="text-dim small mt-1">
+                  {currentHomeOverview?.weekStartYMD || ""} → {currentHomeOverview?.weekEndYMD || ""}
+                </div>
+              </div>
+
+              /schedule
+                Book a class
+              </Link>
+            </div>
+
+            {thisWeekCards.length === 0 ? (
+              <div className="text-dim small mt-3">No workouts scheduled this week yet.</div>
+            ) : (
+              <div className="d-grid gap-2 mt-3">
+                {thisWeekCards.map((card) => (
+                  {card.href}
+                    <div className={`ia-train-list-card ${card.done ? "ia-train-list-card-done" : ""}`}>
+                      <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                        <span className="ia-day-pill">{card.dayLabel}</span>
+                      </div>
+
+                      <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                        <div className="ia-train-list-title">{card.title}</div>
+                        <div className="text-dim small">
+                          {card.extraCount > 0 ? `+${card.extraCount} more` : "Scheduled"}
+                        </div>
+                      </div>
+
+                      <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                        <span className={card.done ? "ia-badge ia-badge-neon" : "ia-badge"}>
+                          {card.done ? "Done" : "Open"}
+                        </span>
+                        <i className="fas fa-chevron-right text-dim" />
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {!currentProgram ? (
+          <EmptyTrainState />
+        ) : (
+          <>
+            <section className="ia-tile ia-tile-pad mb-3">
+              <div className="d-flex justify-content-between align-items-start gap-2">
+                <div style={{ minWidth: 0 }}>
+                  <div className="ia-card-title-compact">{currentProgram.program_name || "Active programme"}</div>
+                  <div className="text-dim small mt-1">
+                    Week {effectiveWeekNumber} of {currentProgram.weeks || 1}
+                  </div>
+                </div>
+
+                <div className="ia-week-badge">
+                  <span className="text-dim">Week</span>
+                  <strong>{effectiveWeekNumber}</strong>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <div className="d-flex justify-content-between align-items-center small mb-2">
+                  <span className="text-dim">Progress</span>
+                  <span className="fw-semibold">{selectedWeekStats.pct}%</span>
+                </div>
+
+                <div className="ia-progress-track">
+                  <div
+                    className="ia-progress-fill"
+                    style={{ width: `${selectedWeekStats.pct}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="row g-2 mt-2">
+                <div className="col-4">
+                  <div className="ia-stat-mini">
+                    <div className="ia-stat-mini-value">{selectedWeekStats.completed}</div>
+                    <div className="ia-stat-mini-label">Completed</div>
+                  </div>
+                </div>
+
+                <div className="col-4">
+                  <div className="ia-stat-mini">
+                    <div className="ia-stat-mini-value">{selectedWeekStats.remaining}</div>
+                    <div className="ia-stat-mini-label">Remaining</div>
+                  </div>
+                </div>
+
+                <div className="col-4">
+                  <div className="ia-stat-mini">
+                    <div className="ia-stat-mini-value">
+                      {currentProgram.end_date ? formatDisplayDate(new Date(currentProgram.end_date)) : "—"}
+                    </div>
+                    <div className="ia-stat-mini-label">End date</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {Number(currentProgram.weeks || 0) > 1 ? (
+              <section className="ia-tile ia-tile-pad mb-3">
+                <div className="ia-kicker">
+                  <i className="fas fa-layer-group" />
+                  programme weeks
+                </div>
+
+                <div className="ia-week-chip-row mt-2">
+                  {Array.from({ length: Number(currentProgram.weeks || 0) }, (_, i) => i + 1).map((weekNum) => {
+                    const active = weekNum === effectiveWeekNumber;
+                    return (
+                      <button
+                        key={weekNum}
+                        type="button"
+                        className={active ? "ia-week-chip ia-week-chip-active" : "ia-week-chip"}
+                        onClick={() => setSelectedWeekNumber(weekNum)}
+                      >
+                        W{weekNum}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
+
+            {scheduleLoading ? (
+              <LoadingCard title="Week schedule" />
+            ) : (
+              <section className="ia-tile ia-tile-pad mb-3">
+                <div className="d-flex justify-content-between align-items-center gap-2">
+                  <div>
+                    <div className="ia-card-title-compact">Week {effectiveWeekNumber} schedule</div>
+                    <div className="text-dim small mt-1">
+                      {selectedProgramsWeekly?.weekStartYMD || selectedWeekStartYMD} → {selectedProgramsWeekly?.weekEndYMD || ""}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="row g-2 mt-2">
+                  {selectedWeekSchedule.map((day) => {
+                    const hasWorkout = day.workouts.length > 0;
+                    const classes = [
+                      "col-12",
+                      "col-md-6",
+                    ].join(" ");
+
+                    const cardClasses = [
+                      "ia-schedule-day-card",
+                      hasWorkout ? "" : "ia-schedule-day-card-empty",
+                      day.done ? "ia-schedule-day-card-done" : "",
+                      day.isToday ? "ia-schedule-day-card-today" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ");
+
+                    const title = day.first?.name || "Rest / no workout";
+                    const countText = hasWorkout
+                      ? compactCountLabel(day.workouts.length, "workout")
+                      : "No scheduled workout";
+
+                    const cardInner = (
+                      <div className={cardClasses}>
+                        <div className="d-flex justify-content-between align-items-start gap-2">
+                          <div>
+                            <div className="ia-schedule-day-label">{DAY_SHORT[day.dayName]}</div>
+                            <div className="ia-schedule-day-date">
+                              {day.ymd ? new Date(`${day.ymd}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : ""}
+                            </div>
+                          </div>
+
+                          {day.done ? (
+                            <span className="ia-badge ia-badge-neon">Complete</span>
+                          ) : day.isToday ? (
+                            <span className="ia-badge">Today</span>
+                          ) : null}
+                        </div>
+
+                        <div className="ia-schedule-day-title mt-2">{title}</div>
+                        <div className="text-dim small mt-1">{countText}</div>
+
+                        {hasWorkout && day.workouts.length > 1 ? (
+                          <div className="text-dim small mt-1">
+                            +{day.workouts.length - 1} more in this day
+                          </div>
+                        ) : null}
+
+                        {hasWorkout ? (
+                          <div className="mt-3">
+                            <span className={day.isToday ? "ia-pill-highlight" : "ia-pill-muted"}>
+                              {day.isToday ? "Today" : day.done ? "Review" : "Open"}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+
+                    return (
+                      <div key={day.dayName} className={classes}>
+                        {hasWorkout ? (
+                          {day.href}
+                            {cardInner}
+                          </Link>
+                        ) : (
+                          cardInner
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+          </>
+        )}
+
+        <section className="ia-tile ia-tile-pad mb-3">
+          <div className="d-flex justify-content-between align-items-center gap-2">
+            <div>
+              <div className="ia-card-title-compact">Exercise library</div>
+              <div className="text-dim small mt-1">
+                Browse movement guidance, exercise options and reference material.
+              </div>
+            </div>
+
+            /exercise-library
+              Open library
+            </Link>
+          </div>
+        </section>
+
+        <style jsx>{`
+          .text-dim {
+            color: var(--ia-muted);
+          }
+
+          .ia-link-no-underline {
+            text-decoration: none;
+            color: inherit;
+          }
+
+          .ia-train-list-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+          }
+
+          .ia-train-list-card-done {
+            border-color: rgba(24, 255, 154, 0.24);
+            background: rgba(24, 255, 154, 0.08);
+          }
+
+          .ia-train-list-title {
+            font-weight: 700;
+            color: #fff;
+            line-height: 1.25;
+          }
+
+          .ia-day-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 46px;
+            min-height: 28px;
+            padding: 0 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #fff;
+            font-size: 0.76rem;
+            font-weight: 700;
+          }
+
+          .ia-week-badge {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 64px;
+            min-height: 64px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            flex-shrink: 0;
+          }
+
+          .ia-week-badge strong {
+            font-size: 1rem;
+            color: var(--ia-neon);
+          }
+
+          .ia-progress-track {
+            width: 100%;
+            height: 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+          }
+
+          .ia-progress-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--ia-neon), var(--ia-neon2));
+          }
+
+          .ia-stat-mini {
+            min-height: 84px;
+            border-radius: 14px;
+            padding: 12px 10px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            text-align: center;
+          }
+
+          .ia-stat-mini-value {
+            font-size: 1.02rem;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1.2;
+          }
+
+          .ia-stat-mini-label {
+            margin-top: 6px;
+            color: var(--ia-muted);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+          }
+
+          .ia-week-chip-row {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 2px;
+          }
+
+          .ia-week-chip {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.04);
+            color: #dce6f0;
+            border-radius: 999px;
+            min-height: 34px;
+            padding: 0 12px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            flex: 0 0 auto;
+          }
+
+          .ia-week-chip-active {
+            background: linear-gradient(135deg, var(--ia-neon), var(--ia-neon2));
+            color: #041311;
+            border: none;
+            box-shadow: var(--ia-btn-primary-shadow);
+          }
+
+          .ia-schedule-day-card {
+            min-height: 170px;
+            border-radius: 18px;
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+          }
+
+          .ia-schedule-day-card-empty {
+            opacity: 0.75;
+          }
+
+          .ia-schedule-day-card-done {
+            border-color: rgba(24, 255, 154, 0.22);
+            background: rgba(24, 255, 154, 0.08);
+          }
+
+          .ia-schedule-day-card-today {
+            box-shadow: inset 0 0 0 1px rgba(24, 255, 154, 0.26);
+          }
+
+          .ia-schedule-day-label {
+            color: var(--ia-neon);
+            font-weight: 800;
+            font-size: 0.8rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+          }
+
+          .ia-schedule-day-date {
+            color: var(--ia-muted);
+            font-size: 0.76rem;
+            margin-top: 2px;
+          }
+
+          .ia-schedule-day-title {
+            color: #fff;
+            font-weight: 700;
+            line-height: 1.3;
+            min-height: 44px;
+          }
+
+          .ia-pill-highlight,
+          .ia-pill-muted {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 28px;
+            padding: 0 12px;
+            border-radius: 999px;
+            font-size: 0.74rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+          }
+
+          .ia-pill-highlight {
+            color: #041311;
+            background: linear-gradient(135deg, var(--ia-neon), var(--ia-neon2));
+            box-shadow: var(--ia-btn-primary-shadow);
+          }
+
+          .ia-pill-muted {
+            color: #eef4fb;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+          }
+
+          @media (max-width: 575.98px) {
+            .ia-train-list-card {
+              padding: 11px 12px;
+              gap: 10px;
+            }
+
+            .ia-week-badge {
+              min-width: 58px;
+              min-height: 58px;
+              border-radius: 14px;
+            }
+
+            .ia-schedule-day-card {
+              min-height: 156px;
+              border-radius: 16px;
+              padding: 12px;
+            }
+
+            .ia-schedule-day-title {
+              min-height: 40px;
+              font-size: 0.95rem;
+            }
+
+            .ia-stat-mini {
+              min-height: 80px;
+            }
+          }
+        `}</style>
       </main>
 
       <BottomNav />
     </>
-  );
-}
-
-// ---- Weekly Workouts (Mandatory & Optional, includes recurring) -------------
-type WeeklyResp = {
-  weekStart?: string | Date | any;
-  workouts?: any[];
-  items?: any[];
-  results?: any[];
-  data?: any[];
-};
-
-type ListResp = { items?: any[] };
-
-type WeekCard = {
-  id: string;
-  name: string;
-  kind: "gym" | "bxkr" | "unknown";
-  date: Date | null;
-  isOptional: boolean;
-  href: string;
-};
-
-function inferKind(data: any): "gym" | "bxkr" | "unknown" {
-  const fromList = String(data?.kind || "").toLowerCase();
-  if (fromList === "gym" || fromList === "bxkr") return fromList as "gym" | "bxkr";
-  const wt = String(data?.workout_type || "").toLowerCase();
-  if (wt === "gym_custom") return "gym";
-  if (wt) return "bxkr";
-  return "unknown";
-}
-
-function WeeklyWorkoutsHeader({ email }: { email?: string | null }) {
-  // Primary source: /api/workouts → { weekStart, workouts: [] }
-  const key = email ? "/api/workouts" : null;
-  const { data: weeklyData, error } = useSWR<WeeklyResp>(key, fetcher, {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-    dedupingInterval: 60_000,
-    shouldRetryOnError: false,
-  });
-
-  // Secondary source: /api/workouts/list for recurring assignments
-  // We keep it broad (no visibility filter) so private or global both surface.
-  const listKey = email ? "/api/workouts/list?limit=300" : null;
-  const { data: listData } = useSWR<ListResp>(listKey, fetcher, {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-    dedupingInterval: 60_000,
-    shouldRetryOnError: false,
-  });
-
-  const { mandatory, optional, sow, eow } = useMemo(() => {
-    // 1) Base items from weekly API (dated items or API-provided)
-    const listA =
-      (Array.isArray(weeklyData?.workouts) && weeklyData!.workouts) ||
-      (Array.isArray(weeklyData?.results) && weeklyData!.results) ||
-      (Array.isArray(weeklyData?.items) && weeklyData!.items) ||
-      (Array.isArray(weeklyData?.data) && weeklyData!.data) ||
-      [];
-
-    // 2) Recurring items from the list API (assign to this week)
-    const fromListAll = Array.isArray(listData?.items) ? listData!.items : [];
-
-    const weekStart =
-      toDateSafe(weeklyData?.weekStart) ?? startOfWeekMonday(new Date());
-    const weekEnd = endOfWeekSunday(weekStart);
-
-    const baseRows: WeekCard[] = listA
-      .map((w: any): WeekCard | null => {
-        const id: string =
-          w.id ?? w.workout_id ?? w.workoutId ?? w.slug ?? w.doc_id ?? String(w._id || "");
-        if (!id) return null;
-
-        const name: string = w.name ?? w.workout_name ?? w.title ?? w.plan_name ?? "Workout";
-        const kind = inferKind(w);
-
-        const dateField =
-          w.date ??
-          w.scheduled_for ??
-          w.scheduled_at ??
-          w.due_date ??
-          w.day_date ??
-          w.start ??
-          w.starts_at ??
-          w.session_date ??
-          w.when ??
-          null;
-        const date = toDateSafe(dateField);
-
-        const isOptional: boolean =
-          (typeof w.optional === "boolean" && w.optional) ||
-          (typeof w.is_optional === "boolean" && w.is_optional) ||
-          (typeof w.mandatory === "boolean" ? !w.mandatory : false) ||
-          (typeof w.required === "boolean" ? !w.required : false) ||
-          false;
-
-        const href =
-          kind === "gym"
-            ? `/gymworkout/${encodeURIComponent(id)}${
-                date ? `?date=${encodeURIComponent(isoDate(date))}` : ""
-              }`
-            : `/workout/${encodeURIComponent(id)}`;
-
-        return { id, name, kind, date, isOptional, href };
-      })
-      .filter(Boolean) as WeekCard[];
-
-    // Recurring expansion
-    const recurringRows: WeekCard[] = (fromListAll as any[])
-      .filter((w) => {
-        if (!w || !w.recurring) return false;
-        if (!email) return false;
-        // Check assignment
-        if (!arrIncludesCi(w.assigned_to, email)) return false;
-
-        // Check window overlap
-        const rs = toDateSafe(w.recurring_start) ?? toDateSafe(w.start) ?? null;
-        const re = toDateSafe(w.recurring_end) ?? toDateSafe(w.end) ?? null;
-
-        // If no bounds provided, assume valid
-        const overlaps =
-          (!rs || rs.getTime() <= weekEnd.getTime()) &&
-          (!re || re.getTime() >= weekStart.getTime());
-
-        if (!overlaps) return false;
-
-        // Must have a day
-        const idx = dayNameToIndex(w.recurring_day);
-        return idx !== null;
-      })
-      .map((w) => {
-        const id: string =
-          w.id ?? w.workout_id ?? w.workoutId ?? w.slug ?? w.doc_id ?? String(w._id || "");
-        const name: string = w.name ?? w.workout_name ?? w.title ?? w.plan_name ?? "Workout";
-        const kind = inferKind(w);
-
-        const idx = dayNameToIndex(w.recurring_day)!; // guaranteed not null from filter
-        const date = dateForWeekday(weekStart, idx);
-
-        const isOptional: boolean =
-          (typeof w.optional === "boolean" && w.optional) ||
-          (typeof w.is_optional === "boolean" && w.is_optional) ||
-          (typeof w.mandatory === "boolean" ? !w.mandatory : false) ||
-          (typeof w.required === "boolean" ? !w.required : false) ||
-          false;
-
-        const href =
-          kind === "gym"
-            ? `/gymworkout/${encodeURIComponent(id)}?date=${encodeURIComponent(isoDate(date))}`
-            : `/workout/${encodeURIComponent(id)}`;
-
-        return { id, name, kind, date, isOptional, href };
-      });
-
-    // Merge and dedupe by (id + dateISO) so we don't double-list if weekly API also included it
-    const seen = new Set<string>();
-    const merged: WeekCard[] = [];
-
-    for (const r of [...baseRows, ...recurringRows]) {
-      const key = `${r.id}:${isoDate(r.date)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push(r);
-    }
-
-    // Keep only items that fall within the Mon–Sun window if a date is present
-    const inWindow = merged.filter((r) => {
-      if (!r.date) return true; // allow "Any day" items
-      return r.date.getTime() >= weekStart.getTime() && r.date.getTime() <= weekEnd.getTime();
-    });
-
-    // Sort by day index; "Any day" last, then name
-    inWindow.sort((a, b) => {
-      const da = dayIndexMonSun(a.date);
-      const db = dayIndexMonSun(b.date);
-      if (da !== db) return da - db;
-      return a.name.localeCompare(b.name);
-    });
-
-    const mandatory = inWindow.filter((r) => !r.isOptional);
-    const optional = inWindow.filter((r) => r.isOptional);
-
-    return { mandatory, optional, sow: weekStart, eow: weekEnd };
-  }, [weeklyData, listData, email]);
-
-  // Render states
-  if (error) {
-    return (
-      <div className="futuristic-card p-3 mt-2">
-        <div className="d-flex align-items-center justify-content-between">
-          <div>
-            <div className="fw-semibold">This week</div>
-            <div className="small text-dim">Couldn’t load your weekly workouts.</div>
-          </div>
-          <Link
-            href="/workouts"
-            className="btn btn-bxkr-outline btn-sm"
-            style={{ borderRadius: 24 }}
-          >
-            Browse
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const hasAny = (mandatory?.length || 0) + (optional?.length || 0) > 0;
-  const rangeLabel =
-    sow && eow
-      ? `${sow.toLocaleDateString(undefined, { day: "numeric", month: "short" })} – ${eow.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`
-      : "";
-
-  return (
-    <div className="futuristic-card p-3 mt-2">
-      <div className="d-flex align-items-center justify-content-between">
-        <div>
-          <div className="fw-semibold">Your week</div>
-          <div className="small text-dim">{rangeLabel}</div>
-        </div>
-        <div className="d-flex gap-2">
-          <Link
-            href="/schedule"
-            className="btn btn-bxkr-outline btn-sm"
-            style={{ borderRadius: 24 }}
-          >
-            Book A Class
-          </Link>
-          <Link
-            href="/workouts/freestyle"
-            className="btn btn-sm"
-            style={{
-              borderRadius: 24,
-              color: "#fff",
-              background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
-              boxShadow: `0 0 14px ${ACCENT}66`,
-            }}
-          >
-            Log freestyle
-          </Link>
-        </div>
-      </div>
-
-      {!hasAny ? (
-        <div className="mt-2 text-muted">No workouts scheduled this week.</div>
-      ) : (
-        <div className="mt-2">
-          {/* Mandatory */}
-          {mandatory.length > 0 && (
-            <div className="mb-2">
-              <div className="small text-dim mb-1">Mandatory</div>
-              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                {mandatory.map((w, i) => (
-                  <li key={`m-${w.id}-${isoDate(w.date)}-${i}`} className="mb-1">
-                    <Link
-                      href={w.href}
-                      className="w-100 d-flex align-items-center justify-content-between"
-                      style={{
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        background: "rgba(255,255,255,0.04)",
-                        color: "#fff",
-                        borderRadius: 10,
-                        padding: "10px 12px",
-                        textDecoration: "none",
-                      }}
-                      aria-label={`Open ${w.name}`}
-                    >
-                      <div className="d-flex align-items-center gap-2">
-                        <span
-                          className="badge"
-                          title={w.date ? w.date.toLocaleDateString() : "Any day"}
-                          style={{
-                            border: "1px solid rgba(255,255,255,0.2)",
-                            background: "transparent",
-                            color: "#fff",
-                          }}
-                        >
-                          {dayLabel(w.date)}
-                        </span>
-                        <div className="fw-semibold text-truncate" style={{ maxWidth: 220 }}>
-                          {w.name}
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center gap-2">
-                        <span
-                          className="badge"
-                          style={{
-                            background: ACCENT,
-                            color: "#0b0f14",
-                          }}
-                        >
-                          {w.kind === "gym" ? "Gym" : w.kind === "bxkr" ? "BXKR" : "Workout"}
-                        </span>
-                        <i className="fas fa-chevron-right text-dim" />
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Optional */}
-          {optional.length > 0 && (
-            <div>
-              <div className="small text-dim mb-1">Optional</div>
-              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                {optional.map((w, i) => (
-                  <li key={`o-${w.id}-${isoDate(w.date)}-${i}`} className="mb-1">
-                    <Link
-                      href={w.href}
-                      className="w-100 d-flex align-items-center justify-content-between"
-                      style={{
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        background: "rgba(255,255,255,0.04)",
-                        color: "#fff",
-                        borderRadius: 10,
-                        padding: "10px 12px",
-                        textDecoration: "none",
-                      }}
-                      aria-label={`Open ${w.name}`}
-                    >
-                      <div className="d-flex align-items-center gap-2">
-                        <span
-                          className="badge"
-                          title={w.date ? w.date.toLocaleDateString() : "Any day"}
-                          style={{
-                            border: "1px solid rgba(255,255,255,0.2)",
-                            background: "transparent",
-                            color: "#fff",
-                          }}
-                        >
-                          {dayLabel(w.date)}
-                        </span>
-                        <div className="fw-semibold text-truncate" style={{ maxWidth: 220 }}>
-                          {w.name}
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center gap-2">
-                        <span
-                          className="badge"
-                          style={{
-                            border: "1px solid rgba(255,255,255,0.2)",
-                            background: "transparent",
-                            color: "#fff",
-                          }}
-                        >
-                          Optional
-                        </span>
-                        <span
-                          className="badge"
-                          style={{
-                            background: ACCENT,
-                            color: "#0b0f14",
-                          }}
-                        >
-                          {w.kind === "gym" ? "Gym" : w.kind === "bxkr" ? "BXKR" : "Workout"}
-                        </span>
-                        <i className="fas fa-chevron-right text-dim" />
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---- Benchmarks (list, soft‑fail if API missing) ----------------------------
-function BenchmarksList({ email }: { email?: string | null }) {
-  const { data, error } = useSWR(
-    email ? `/api/benchmarks/latest?email=${encodeURIComponent(email)}` : null,
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-      dedupingInterval: 30_000,
-    }
-  );
-
-  const has = Array.isArray(data?.results) && data.results.length > 0;
-
-  if (error) return <div className="text-muted">Can’t load benchmarks</div>;
-  if (!has) return <div className="text-muted">No benchmarks yet</div>;
-
-  return (
-    <div>
-      {data.results.slice(0, 3).map((r: any, i: number) => (
-        <div key={i} className="mb-2">
-          <div className="fw-semibold">{r.name}</div>
-          <div className="small text-dim">
-            {r.value} {r.unit} · {r.date ? new Date(r.date).toLocaleDateString() : ""}
-          </div>
-        </div>
-      ))}
-      <div className="mt-2 d-flex gap-2">
-        <Link href="/benchmarks" className="btn btn-outline-light btn-sm" style={{ borderRadius: 24 }}>
-          View
-        </Link>
-        <Link
-          href="/benchmarks/new"
-          className="btn btn-sm"
-          style={{
-            borderRadius: 24,
-            color: "#fff",
-            background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
-            boxShadow: `0 0 14px ${ACCENT}88`,
-          }}
-        >
-          Add Result
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-// ---- Benchmark Graphs (weight & sets per kettlebell part) -------------------
-function BenchmarkGraphs({ email }: { email?: string | null }) {
-  const { data, error } = useSWR(
-    email ? `/api/benchmarks/series?email=${encodeURIComponent(email)}` : null,
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-    }
-  );
-
-  if (error) {
-    return (
-      <div className="text-muted">
-        Benchmark history unavailable. Add <code>/api/benchmarks/series</code> to see graphs.
-      </div>
-    );
-  }
-  const series: any[] = Array.isArray(data?.results || data?.items || data?.series)
-    ? (data.results || data.items || data.series)
-    : [];
-  if (series.length === 0) {
-    return <div className="text-muted">No benchmark history yet.</div>;
-  }
-
-  // Group by kettlebell part (or exercise name fallback)
-  const groups: Record<string, any[]> = {};
-  for (const row of series) {
-    const key =
-      row.part ||
-      row.kb_part ||
-      row.exercise_part ||
-      row.exercise_name ||
-      row.name ||
-      "Unknown Part";
-    (groups[key] ??= []).push(row);
-  }
-
-  return (
-    <div>
-      {Object.entries(groups).map(([part, rows]) => {
-        // sort by date ascending for a clean line
-        const sorted = rows
-          .map((r) => ({
-            date:
-              r.date?.toDate?.() instanceof Date
-                ? r.date.toDate()
-                : r.date
-                ? new Date(r.date)
-                : null,
-            weight:
-              r.weight != null
-                ? Number(r.weight)
-                : r.value_unit === "kg"
-                ? Number(r.value)
-                : null,
-            sets:
-              r.sets != null
-                ? Number(r.sets)
-                : r.sets_completed != null
-                ? Number(r.sets_completed)
-                : null,
-          }))
-          .filter((r) => !!r.date)
-          .sort((a, b) => (a.date as Date).getTime() - (b.date as Date).getTime());
-
-        if (sorted.length === 0) return null;
-
-        const labels = sorted.map((r) =>
-          (r.date as Date).toLocaleDateString(undefined, { day: "numeric", month: "short" })
-        );
-        const weightData = sorted.map((r) => (r.weight != null ? r.weight : 0));
-        const setsData = sorted.map((r) => (r.sets != null ? r.sets : 0));
-
-        // ---- Typed chart config ----
-        const dataCfg: ChartData<"line"> = {
-          labels,
-          datasets: [
-            {
-              label: "Weight (kg)",
-              data: weightData,
-              borderColor: "#FF8A2A",
-              backgroundColor: "rgba(255,138,42,0.2)",
-              tension: 0.3,
-              pointRadius: 3,
-            } as ChartDataset<"line">,
-            {
-              label: "Sets",
-              data: setsData,
-              borderColor: "#32ff7f",
-              backgroundColor: "rgba(50,255,127,0.2)",
-              tension: 0.3,
-              pointRadius: 3,
-              yAxisID: "y1",
-            } as ChartDataset<"line">,
-          ],
-        };
-
-        const options: ChartOptions<"line"> = {
-          responsive: true,
-          plugins: {
-            legend: { labels: { color: "#e9eef6" } },
-            tooltip: { mode: "index", intersect: false },
-          },
-          scales: {
-            x: {
-              ticks: { color: "#9fb0c3" },
-              grid: { color: "rgba(255,255,255,0.08)" },
-            },
-            y: {
-              ticks: { color: "#9fb0c3" },
-              grid: { color: "rgba(255,255,255,0.08)" },
-            },
-            y1: {
-              position: "right",
-              ticks: { color: "#9fb0c3" },
-              grid: { drawOnChartArea: false },
-            },
-          },
-        };
-
-        return (
-          <div key={part} className="mb-3">
-            <div className="fw-semibold mb-1">{part}</div>
-            <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: 8 }}>
-              <Line data={dataCfg} options={options} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
   );
 }
