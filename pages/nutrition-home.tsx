@@ -371,11 +371,11 @@ export default function NutritionHomePage() {
             </div>
 
             <div className="d-flex gap-2">
-              /nutrition
+              <Link href="/nutrition">
                 <i className="fas fa-plus" />
               </Link>
 
-              /recipes
+              <Link href="/recipes">
                 <i className="fas fa-book-open" />
               </Link>
             </div>
@@ -397,7 +397,7 @@ export default function NutritionHomePage() {
                   </div>
                 </div>
 
-                /nutrition
+                <Link href="/nutrition">
                   Log
                 </Link>
               </div>
@@ -444,7 +444,7 @@ export default function NutritionHomePage() {
                   </div>
                 </div>
 
-                /recipes
+                <Link href="/recipes">
                   Browse recipes
                 </Link>
               </div>
@@ -480,7 +480,7 @@ export default function NutritionHomePage() {
                       </div>
 
                       <div className="d-flex gap-2">
-                        /shopping/${list.id}
+                        <Link href="/shopping/${list.id}">
                           Open
                         </Link>
                         <button
@@ -611,7 +611,7 @@ export default function NutritionHomePage() {
               </div>
             </div>
 
-            /recipes
+            <Link href="/recipes">
               Browse recipes
             </Link>
           </div>
@@ -624,7 +624,7 @@ export default function NutritionHomePage() {
             <div className="row g-2 mt-2">
               {favRecipes.map((r) => (
                 <div key={r.id} className="col-6 col-sm-4 col-md-3">
-                  /recipes/${r.id}
+                  <Link href="/recipes/${r.id}">
                     <div className="ia-recipe-card">
                       {r.image ? (
                         <img src={r.image} alt={r.title} className="ia-recipe-card-image" />
@@ -716,7 +716,7 @@ export default function NutritionHomePage() {
                             {p.locked ? "Locked" : "Select"}
                           </button>
 
-                          /recipes
+                          <Link href="/recipes">
                             View recipes
                           </Link>
                         </div>
