@@ -96,6 +96,7 @@ type WeeklyOverviewResponse = {
 };
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
 const DAY_SHORT: Record<string, string> = {
   Monday: "Mon",
   Tuesday: "Tue",
@@ -131,7 +132,10 @@ function addDays(d: Date, days: number) {
 }
 
 function formatDisplayDate(d: Date) {
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return d.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+  });
 }
 
 function toDateOrNull(v: string | null | undefined) {
@@ -155,6 +159,7 @@ function getDayDateFromWeekStart(weekStartYMD: string, dayName: string) {
 
 function getHomeDayWorkouts(day?: HomeDayOverview): SimpleWorkoutRef[] {
   if (!day) return [];
+
   const recurring = Array.isArray(day.recurringWorkouts) ? day.recurringWorkouts : [];
   if (recurring.length) return recurring;
 
@@ -193,7 +198,7 @@ function EmptyTrainState() {
         Your workouts will appear here once a programme or recurring gym workouts have been assigned.
       </div>
       <div className="mt-3">
-        /iron-acre
+        <Link href="/iron-acre" className="ia-btn ia-btn-muted">
           Back to dashboard
         </Link>
       </div>
@@ -210,6 +215,15 @@ export default function WorkoutHubPage() {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    if (!mounted) return;
+    if (status === "loading") return;
+
+    if (!session && typeof window !== "undefined") {
+      window.location.replace(`/register?callbackUrl=${encodeURIComponent("/train")}`);
+    }
+  }, [mounted, session, status]);
+
   const userEmail = String(session?.user?.email || "").trim().toLowerCase();
   const isAuthed = Boolean(userEmail);
 
@@ -225,7 +239,10 @@ export default function WorkoutHubPage() {
       ? `/api/iron-acre/home-overview?week=${encodeURIComponent(currentWeekStartYMD)}`
       : null,
     fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60_000,
+    }
   );
 
   const currentProgram = currentHomeOverview?.currentProgram || null;
@@ -240,7 +257,14 @@ export default function WorkoutHubPage() {
 
   const effectiveWeekNumber = useMemo(() => {
     if (!currentProgram) return 1;
-    return Math.max(1, Math.min(Number(selectedWeekNumber || currentProgram.current_week || 1), Number(currentProgram.weeks || 1)));
+
+    return Math.max(
+      1,
+      Math.min(
+        Number(selectedWeekNumber || currentProgram.current_week || 1),
+        Number(currentProgram.weeks || 1)
+      )
+    );
   }, [currentProgram, selectedWeekNumber]);
 
   const selectedWeekStartYMD = useMemo(() => {
@@ -256,7 +280,10 @@ export default function WorkoutHubPage() {
       ? `/api/programs/weekly?week=${encodeURIComponent(selectedWeekStartYMD)}`
       : null,
     fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60_000,
+    }
   );
 
   const {
@@ -267,7 +294,10 @@ export default function WorkoutHubPage() {
       ? `/api/weekly/overview?week=${encodeURIComponent(selectedWeekStartYMD)}`
       : null,
     fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60_000,
+    }
   );
 
   const thisWeekCards = useMemo(() => {
@@ -289,7 +319,9 @@ export default function WorkoutHubPage() {
           done,
           href,
           dayLabel: day.dateKey
-            ? new Date(`${day.dateKey}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" })
+            ? new Date(`${day.dateKey}T00:00:00`).toLocaleDateString(undefined, {
+                weekday: "short",
+              })
             : "",
         };
       })
@@ -350,18 +382,13 @@ export default function WorkoutHubPage() {
     };
   }, [selectedWeekSchedule]);
 
-  const programmeProgressPct = useMemo(() => {
-    if (!currentProgram?.weeks || !effectiveWeekNumber) return 0;
-    const pct = Math.round((effectiveWeekNumber / Number(currentProgram.weeks)) * 100);
-    return Math.max(0, Math.min(100, pct));
-  }, [currentProgram, effectiveWeekNumber]);
-
   const loading = !mounted || status === "loading";
   const thisWeekLoading = isAuthed && !currentHomeOverview && !currentHomeErr;
   const scheduleLoading =
     isAuthed &&
     !!currentProgram &&
-    ((!selectedProgramsWeekly && !selectedProgramsErr) || (!selectedWeeklyOverview && !selectedOverviewErr));
+    ((!selectedProgramsWeekly && !selectedProgramsErr) ||
+      (!selectedWeeklyOverview && !selectedOverviewErr));
 
   if (loading) {
     return (
@@ -370,7 +397,7 @@ export default function WorkoutHubPage() {
           <title>Train • Iron Acre Gym</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         </Head>
-        <main className="container py-3" style={{ paddingBottom: 88, color: "#fff" }}>
+        <main className="container py-3 ia-train-page">
           <LoadingCard title="Loading Train" />
         </main>
         <BottomNav />
@@ -379,29 +406,7 @@ export default function WorkoutHubPage() {
   }
 
   if (!session) {
-    const cb = encodeURIComponent("/train");
-
-    return (
-      <>
-        <Head>
-          <title>Train • Iron Acre Gym</title>
-        </Head>
-
-        <main className="container py-4" style={{ paddingBottom: 88, color: "#fff" }}>
-          <section className="ia-tile ia-tile-pad">
-            <div className="ia-page-title">Train</div>
-            <div className="text-dim small mt-2">Please sign in to view your programme and weekly training schedule.</div>
-            <div className="mt-3">
-              {`/register?callbackUrl=${cb}`}
-                Sign in
-              </Link>
-            </div>
-          </section>
-        </main>
-
-        <BottomNav />
-      </>
-    );
+    return null;
   }
 
   return (
@@ -411,23 +416,26 @@ export default function WorkoutHubPage() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
 
-      <main className="container py-2 ia-train-page" style={{ color: "#fff", paddingBottom: 96 }}>
+      <main className="container py-2 ia-train-page">
         <section className="ia-tile ia-tile-pad mb-3">
           <div className="ia-kicker">
             <i className="fas fa-dumbbell" />
             plan
           </div>
+
           <div className="d-flex justify-content-between align-items-start gap-2 mt-1">
-            <div style={{ minWidth: 0 }}>
+            <div className="ia-train-header-copy">
               <div className="ia-page-title">Train</div>
-              <div className="ia-page-subtitle">Your personalised training schedule and current programme.</div>
+              <div className="ia-page-subtitle">
+                Your personalised training schedule and current programme.
+              </div>
             </div>
 
             <div className="d-flex gap-2">
-              /history
+              <Link href="/history" className="ia-btn ia-btn-muted ia-btn-sm" aria-label="History">
                 <i className="fas fa-history" />
               </Link>
-              /benchmarks
+              <Link href="/benchmarks" className="ia-btn ia-btn-muted ia-btn-sm" aria-label="Benchmarks">
                 <i className="fas fa-chart-line" />
               </Link>
             </div>
@@ -446,7 +454,7 @@ export default function WorkoutHubPage() {
                 </div>
               </div>
 
-              /schedule
+              <Link href="/schedule" className="ia-btn ia-btn-outline ia-btn-sm">
                 Book a class
               </Link>
             </div>
@@ -456,7 +464,7 @@ export default function WorkoutHubPage() {
             ) : (
               <div className="d-grid gap-2 mt-3">
                 {thisWeekCards.map((card) => (
-                  {card.href}
+                  <Link key={card.dateKey} href={card.href} className="ia-link-no-underline">
                     <div className={`ia-train-list-card ${card.done ? "ia-train-list-card-done" : ""}`}>
                       <div className="d-flex align-items-center gap-2 flex-shrink-0">
                         <span className="ia-day-pill">{card.dayLabel}</span>
@@ -489,8 +497,10 @@ export default function WorkoutHubPage() {
           <>
             <section className="ia-tile ia-tile-pad mb-3">
               <div className="d-flex justify-content-between align-items-start gap-2">
-                <div style={{ minWidth: 0 }}>
-                  <div className="ia-card-title-compact">{currentProgram.program_name || "Active programme"}</div>
+                <div className="ia-train-header-copy">
+                  <div className="ia-card-title-compact">
+                    {currentProgram.program_name || "Active programme"}
+                  </div>
                   <div className="text-dim small mt-1">
                     Week {effectiveWeekNumber} of {currentProgram.weeks || 1}
                   </div>
@@ -509,10 +519,7 @@ export default function WorkoutHubPage() {
                 </div>
 
                 <div className="ia-progress-track">
-                  <div
-                    className="ia-progress-fill"
-                    style={{ width: `${selectedWeekStats.pct}%` }}
-                  />
+                  <div className="ia-progress-fill" style={{ width: `${selectedWeekStats.pct}%` }} />
                 </div>
               </div>
 
@@ -552,6 +559,7 @@ export default function WorkoutHubPage() {
                 <div className="ia-week-chip-row mt-2">
                   {Array.from({ length: Number(currentProgram.weeks || 0) }, (_, i) => i + 1).map((weekNum) => {
                     const active = weekNum === effectiveWeekNumber;
+
                     return (
                       <button
                         key={weekNum}
@@ -575,7 +583,8 @@ export default function WorkoutHubPage() {
                   <div>
                     <div className="ia-card-title-compact">Week {effectiveWeekNumber} schedule</div>
                     <div className="text-dim small mt-1">
-                      {selectedProgramsWeekly?.weekStartYMD || selectedWeekStartYMD} → {selectedProgramsWeekly?.weekEndYMD || ""}
+                      {selectedProgramsWeekly?.weekStartYMD || selectedWeekStartYMD} →{" "}
+                      {selectedProgramsWeekly?.weekEndYMD || ""}
                     </div>
                   </div>
                 </div>
@@ -583,10 +592,7 @@ export default function WorkoutHubPage() {
                 <div className="row g-2 mt-2">
                   {selectedWeekSchedule.map((day) => {
                     const hasWorkout = day.workouts.length > 0;
-                    const classes = [
-                      "col-12",
-                      "col-md-6",
-                    ].join(" ");
+                    const classes = "col-12 col-md-6";
 
                     const cardClasses = [
                       "ia-schedule-day-card",
@@ -608,7 +614,12 @@ export default function WorkoutHubPage() {
                           <div>
                             <div className="ia-schedule-day-label">{DAY_SHORT[day.dayName]}</div>
                             <div className="ia-schedule-day-date">
-                              {day.ymd ? new Date(`${day.ymd}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : ""}
+                              {day.ymd
+                                ? new Date(`${day.ymd}T00:00:00`).toLocaleDateString(undefined, {
+                                    day: "numeric",
+                                    month: "short",
+                                  })
+                                : ""}
                             </div>
                           </div>
 
@@ -641,7 +652,7 @@ export default function WorkoutHubPage() {
                     return (
                       <div key={day.dayName} className={classes}>
                         {hasWorkout ? (
-                          {day.href}
+                          <Link href={day.href} className="ia-link-no-underline">
                             {cardInner}
                           </Link>
                         ) : (
@@ -665,239 +676,11 @@ export default function WorkoutHubPage() {
               </div>
             </div>
 
-            /exercise-library
+            <Link href="/exercise-library" className="ia-btn ia-btn-outline ia-btn-sm">
               Open library
             </Link>
           </div>
         </section>
-
-        <style jsx>{`
-          .text-dim {
-            color: var(--ia-muted);
-          }
-
-          .ia-link-no-underline {
-            text-decoration: none;
-            color: inherit;
-          }
-
-          .ia-train-list-card {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 14px;
-            border-radius: 16px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-          }
-
-          .ia-train-list-card-done {
-            border-color: rgba(24, 255, 154, 0.24);
-            background: rgba(24, 255, 154, 0.08);
-          }
-
-          .ia-train-list-title {
-            font-weight: 700;
-            color: #fff;
-            line-height: 1.25;
-          }
-
-          .ia-day-pill {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 46px;
-            min-height: 28px;
-            padding: 0 10px;
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            color: #fff;
-            font-size: 0.76rem;
-            font-weight: 700;
-          }
-
-          .ia-week-badge {
-            display: inline-flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-width: 64px;
-            min-height: 64px;
-            border-radius: 16px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            flex-shrink: 0;
-          }
-
-          .ia-week-badge strong {
-            font-size: 1rem;
-            color: var(--ia-neon);
-          }
-
-          .ia-progress-track {
-            width: 100%;
-            height: 10px;
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.08);
-            overflow: hidden;
-          }
-
-          .ia-progress-fill {
-            height: 100%;
-            border-radius: 999px;
-            background: linear-gradient(90deg, var(--ia-neon), var(--ia-neon2));
-          }
-
-          .ia-stat-mini {
-            min-height: 84px;
-            border-radius: 14px;
-            padding: 12px 10px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            text-align: center;
-          }
-
-          .ia-stat-mini-value {
-            font-size: 1.02rem;
-            font-weight: 800;
-            color: #fff;
-            line-height: 1.2;
-          }
-
-          .ia-stat-mini-label {
-            margin-top: 6px;
-            color: var(--ia-muted);
-            font-size: 0.72rem;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-          }
-
-          .ia-week-chip-row {
-            display: flex;
-            gap: 8px;
-            overflow-x: auto;
-            padding-bottom: 2px;
-          }
-
-          .ia-week-chip {
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(255, 255, 255, 0.04);
-            color: #dce6f0;
-            border-radius: 999px;
-            min-height: 34px;
-            padding: 0 12px;
-            font-size: 0.78rem;
-            font-weight: 700;
-            flex: 0 0 auto;
-          }
-
-          .ia-week-chip-active {
-            background: linear-gradient(135deg, var(--ia-neon), var(--ia-neon2));
-            color: #041311;
-            border: none;
-            box-shadow: var(--ia-btn-primary-shadow);
-          }
-
-          .ia-schedule-day-card {
-            min-height: 170px;
-            border-radius: 18px;
-            padding: 14px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-          }
-
-          .ia-schedule-day-card-empty {
-            opacity: 0.75;
-          }
-
-          .ia-schedule-day-card-done {
-            border-color: rgba(24, 255, 154, 0.22);
-            background: rgba(24, 255, 154, 0.08);
-          }
-
-          .ia-schedule-day-card-today {
-            box-shadow: inset 0 0 0 1px rgba(24, 255, 154, 0.26);
-          }
-
-          .ia-schedule-day-label {
-            color: var(--ia-neon);
-            font-weight: 800;
-            font-size: 0.8rem;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-          }
-
-          .ia-schedule-day-date {
-            color: var(--ia-muted);
-            font-size: 0.76rem;
-            margin-top: 2px;
-          }
-
-          .ia-schedule-day-title {
-            color: #fff;
-            font-weight: 700;
-            line-height: 1.3;
-            min-height: 44px;
-          }
-
-          .ia-pill-highlight,
-          .ia-pill-muted {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 28px;
-            padding: 0 12px;
-            border-radius: 999px;
-            font-size: 0.74rem;
-            font-weight: 800;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-          }
-
-          .ia-pill-highlight {
-            color: #041311;
-            background: linear-gradient(135deg, var(--ia-neon), var(--ia-neon2));
-            box-shadow: var(--ia-btn-primary-shadow);
-          }
-
-          .ia-pill-muted {
-            color: #eef4fb;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-          }
-
-          @media (max-width: 575.98px) {
-            .ia-train-list-card {
-              padding: 11px 12px;
-              gap: 10px;
-            }
-
-            .ia-week-badge {
-              min-width: 58px;
-              min-height: 58px;
-              border-radius: 14px;
-            }
-
-            .ia-schedule-day-card {
-              min-height: 156px;
-              border-radius: 16px;
-              padding: 12px;
-            }
-
-            .ia-schedule-day-title {
-              min-height: 40px;
-              font-size: 0.95rem;
-            }
-
-            .ia-stat-mini {
-              min-height: 80px;
-            }
-          }
-        `}</style>
       </main>
 
       <BottomNav />
