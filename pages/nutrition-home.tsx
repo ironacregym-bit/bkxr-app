@@ -4,7 +4,7 @@
 import Head from "next/head";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import useSWR, { mutate } from "swr";
+import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../components/BottomNav";
 
@@ -57,6 +57,14 @@ type MyPlanResp = {
   week: MyPlanWeek[];
 };
 
+type ProfileTargets = {
+  caloric_target?: number | null;
+  calorie_target?: number | null;
+  protein_target?: number | null;
+  carb_target?: number | null;
+  fat_target?: number | null;
+};
+
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 function startOfAlignedWeek(d: Date) {
@@ -79,6 +87,10 @@ function fmtDate(d: string | Date) {
     day: "2-digit",
     month: "short",
   });
+}
+
+function clampPct(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
 }
 
 function LoadingCard({ title }: { title: string }) {
@@ -142,6 +154,16 @@ export default function NutritionHomePage() {
     }
   );
 
+  const { data: profileResp } = useSWR<ProfileTargets>(
+    authed && email ? `/api/profile?email=${encodeURIComponent(email)}` : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 60_000,
+    }
+  );
+
   const totals: Totals = useMemo(() => {
     const entries = Array.isArray(entriesResp?.entries) ? entriesResp.entries : [];
     return entries.reduce(
@@ -155,6 +177,43 @@ export default function NutritionHomePage() {
       { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 } as Totals
     );
   }, [entriesResp]);
+
+  const mealsLogged = useMemo(() => {
+    return Array.isArray(entriesResp?.entries) ? entriesResp!.entries.length : 0;
+  }, [entriesResp]);
+
+  const targets = useMemo(() => {
+    const calories =
+      Number(profileResp?.caloric_target ?? profileResp?.calorie_target ?? 0) || 0;
+    const protein = Number(profileResp?.protein_target ?? 0) || 0;
+    const carbs = Number(profileResp?.carb_target ?? 0) || 0;
+    const fats = Number(profileResp?.fat_target ?? 0) || 0;
+
+    return {
+      calories,
+      protein,
+      carbs,
+      fats,
+    };
+  }, [profileResp]);
+
+  const remaining = useMemo(() => {
+    return {
+      calories: Math.max(0, targets.calories - totals.calories),
+      protein: Math.max(0, targets.protein - totals.protein_g),
+      carbs: Math.max(0, targets.carbs - totals.carbs_g),
+      fats: Math.max(0, targets.fats - totals.fat_g),
+    };
+  }, [targets, totals]);
+
+  const progress = useMemo(() => {
+    return {
+      calories: targets.calories > 0 ? clampPct((totals.calories / targets.calories) * 100) : 0,
+      protein: targets.protein > 0 ? clampPct((totals.protein_g / targets.protein) * 100) : 0,
+      carbs: targets.carbs > 0 ? clampPct((totals.carbs_g / targets.carbs) * 100) : 0,
+      fats: targets.fats > 0 ? clampPct((totals.fat_g / targets.fats) * 100) : 0,
+    };
+  }, [targets, totals]);
 
   const { data: listsResp, mutate: mutateLists } = useSWR<{ lists: ShoppingListMeta[] }>(
     authed ? `/api/shopping/lists` : null,
@@ -220,6 +279,13 @@ export default function NutritionHomePage() {
     e.setDate(weekStart.getDate() + 6);
     return e;
   }, [weekStart]);
+
+  const suggestionText = useMemo(() => {
+    if (mealsLogged === 0) return "No meals logged yet — start with your first meal.";
+    if (targets.protein > 0 && remaining.protein > 30) return `Protein is the priority — ${Math.round(remaining.protein)}g left today.`;
+    if (targets.calories > 0 && remaining.calories > 0) return `${Math.round(remaining.calories)} kcal remaining today.`;
+    return "You’re on track — keep logging meals to stay accurate.";
+  }, [mealsLogged, targets, remaining]);
 
   async function createList() {
     const name = listName.trim() || "My List";
@@ -381,59 +447,119 @@ export default function NutritionHomePage() {
             </div>
           </div>
 
-          {msg ? (
-            <div className="ia-inline-note-success mt-3">{msg}</div>
-          ) : null}
+          {msg ? <div className="ia-inline-note-success mt-3">{msg}</div> : null}
+        </section>
+
+        <section className="ia-tile ia-tile-pad mb-3 ia-nutrition-hero">
+          <div className="row g-3 align-items-stretch">
+            <div className="col-12 col-lg-5">
+              <div className="ia-nutrition-hero-main">
+                <div className="ia-kicker">today</div>
+                <div className="ia-nutrition-hero-value">
+                  {targets.calories > 0 ? Math.round(remaining.calories) : Math.round(totals.calories)}
+                </div>
+                <div className="ia-nutrition-hero-label">
+                  {targets.calories > 0 ? "kcal remaining" : "kcal logged"}
+                </div>
+
+                <div className="ia-progress-track mt-3">
+                  <div className="ia-progress-fill" style={{ width: `${progress.calories}%` }} />
+                </div>
+
+                <div className="d-flex justify-content-between align-items-center small mt-2">
+                  <span className="text-dim">
+                    {Math.round(totals.calories)} consumed
+                  </span>
+                  <span className="fw-semibold">
+                    {targets.calories > 0 ? `${Math.round(totals.calories)} / ${Math.round(targets.calories)}` : "No target set"}
+                  </span>
+                </div>
+
+                <div className="ia-inline-note-info mt-3">{suggestionText}</div>
+
+                <div className="d-flex gap-2 mt-3 flex-wrap">
+                  <Link href="/nutrition">
+                    Log nutrition
+                  </Link>
+
+                  <Link href="/recipes">
+                    Browse recipes
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-12 col-lg-7">
+              <div className="row g-2 h-100">
+                <div className="col-6">
+                  <div className="ia-nutrition-metric-card h-100">
+                    <div className="d-flex justify-content-between align-items-center gap-2">
+                      <div className="ia-list-row-title">Protein</div>
+                      <div className="text-dim small">
+                        {Math.round(totals.protein_g)} / {Math.round(targets.protein || 0)}g
+                      </div>
+                    </div>
+                    <div className="ia-progress-track mt-2">
+                      <div className="ia-progress-fill" style={{ width: `${progress.protein}%` }} />
+                    </div>
+                    <div className="text-dim small mt-2">
+                      {targets.protein > 0 ? `${Math.round(remaining.protein)}g left` : "No target set"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-6">
+                  <div className="ia-nutrition-metric-card h-100">
+                    <div className="d-flex justify-content-between align-items-center gap-2">
+                      <div className="ia-list-row-title">Carbs</div>
+                      <div className="text-dim small">
+                        {Math.round(totals.carbs_g)} / {Math.round(targets.carbs || 0)}g
+                      </div>
+                    </div>
+                    <div className="ia-progress-track mt-2">
+                      <div className="ia-progress-fill" style={{ width: `${progress.carbs}%` }} />
+                    </div>
+                    <div className="text-dim small mt-2">
+                      {targets.carbs > 0 ? `${Math.round(remaining.carbs)}g left` : "No target set"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-6">
+                  <div className="ia-nutrition-metric-card h-100">
+                    <div className="d-flex justify-content-between align-items-center gap-2">
+                      <div className="ia-list-row-title">Fats</div>
+                      <div className="text-dim small">
+                        {Math.round(totals.fat_g)} / {Math.round(targets.fats || 0)}g
+                      </div>
+                    </div>
+                    <div className="ia-progress-track mt-2">
+                      <div className="ia-progress-fill" style={{ width: `${progress.fats}%` }} />
+                    </div>
+                    <div className="text-dim small mt-2">
+                      {targets.fats > 0 ? `${Math.round(remaining.fats)}g left` : "No target set"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-6">
+                  <div className="ia-nutrition-metric-card h-100">
+                    <div className="d-flex justify-content-between align-items-center gap-2">
+                      <div className="ia-list-row-title">Meals logged</div>
+                      <div className="text-dim small">today</div>
+                    </div>
+                    <div className="ia-nutrition-meals-count">{mealsLogged}</div>
+                    <div className="text-dim small mt-1">
+                      {mealsLogged === 0 ? "Start with your first meal" : "Keep building your day"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section className="row g-2 mb-3">
-          <div className="col-12 col-md-6">
-            <section className="ia-tile ia-tile-pad ia-nutrition-today-card h-100">
-              <div className="d-flex justify-content-between align-items-start gap-2">
-                <div>
-                  <div className="ia-card-title-compact">Today</div>
-                  <div className="text-dim small mt-1">
-                    Snapshot of what you’ve logged today.
-                  </div>
-                </div>
-
-                <Link href="/nutrition">
-                  Log
-                </Link>
-              </div>
-
-              <div className="row g-2 mt-2">
-                <div className="col-6 col-md-3">
-                  <div className="ia-stat-mini">
-                    <div className="ia-stat-mini-value">{Math.round(totals.calories)}</div>
-                    <div className="ia-stat-mini-label">Calories</div>
-                  </div>
-                </div>
-
-                <div className="col-6 col-md-3">
-                  <div className="ia-stat-mini">
-                    <div className="ia-stat-mini-value">{Math.round(totals.protein_g)}g</div>
-                    <div className="ia-stat-mini-label">Protein</div>
-                  </div>
-                </div>
-
-                <div className="col-6 col-md-3">
-                  <div className="ia-stat-mini">
-                    <div className="ia-stat-mini-value">{Math.round(totals.carbs_g)}g</div>
-                    <div className="ia-stat-mini-label">Carbs</div>
-                  </div>
-                </div>
-
-                <div className="col-6 col-md-3">
-                  <div className="ia-stat-mini">
-                    <div className="ia-stat-mini-value">{Math.round(totals.fat_g)}g</div>
-                    <div className="ia-stat-mini-label">Fats</div>
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
-
           <div className="col-12 col-md-6">
             <section className="ia-tile ia-tile-pad h-100">
               <div className="d-flex justify-content-between align-items-start gap-2">
@@ -467,8 +593,11 @@ export default function NutritionHomePage() {
               </div>
 
               {!lists.length ? (
-                <div className="text-dim small mt-3">
-                  No lists yet. Create one to get started.
+                <div className="ia-empty-state mt-3">
+                  <div className="ia-empty-state-title">No shopping lists yet</div>
+                  <div className="text-dim small mt-1">
+                    Create your first list or build one from recipes and meal plans.
+                  </div>
                 </div>
               ) : (
                 <div className="d-grid gap-2 mt-3">
@@ -497,109 +626,118 @@ export default function NutritionHomePage() {
               )}
             </section>
           </div>
-        </section>
 
-        <section className="ia-tile ia-tile-pad mb-3">
-          <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-            <div>
-              <div className="ia-card-title-compact">Meal plans</div>
-              <div className="text-dim small mt-1">
-                Assign a plan to your planner and generate shopping from this week.
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="ia-btn ia-btn-muted"
-              onClick={() => setShowPlansModal(true)}
-            >
-              Browse plans
-            </button>
-          </div>
-
-          {!myPlan?.assignment ? (
-            <div className="text-dim small mt-3">
-              No active meal plan. Browse plans to get started.
-            </div>
-          ) : (
-            <>
-              <div className="ia-mealplan-header mt-3">
+          <div className="col-12 col-md-6">
+            <section className="ia-tile ia-tile-pad h-100">
+              <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
                 <div>
-                  <div className="ia-list-row-title">
-                    {myPlan.plan?.title || "Meal Plan"}
-                    {myPlan.plan?.tier === "premium" ? (
-                      <span className="ia-badge ia-badge-neon ms-2">Premium</span>
-                    ) : null}
-                  </div>
+                  <div className="ia-card-title-compact">Meal plans</div>
                   <div className="text-dim small mt-1">
-                    {fmtDate(myPlan.assignment.start_date)} — {fmtDate(myPlan.assignment.end_date)}
+                    Assign a plan and turn this week into a shopping list.
                   </div>
                 </div>
 
-                <div className="ia-mealplan-actions">
-                  <label className="ia-inline-label">Household</label>
-                  <input
-                    className="form-control ia-form-input ia-household-input"
-                    type="number"
-                    min={1}
-                    value={household}
-                    onChange={(e) => setHousehold(Math.max(1, Number(e.target.value) || 1))}
-                  />
-                  <button
-                    type="button"
-                    className="ia-btn ia-btn-primary"
-                    onClick={() => shoppingFromPlan()}
-                  >
-                    Add week to shopping list
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="ia-btn ia-btn-muted"
+                  onClick={() => setShowPlansModal(true)}
+                >
+                  Browse plans
+                </button>
               </div>
 
-              <div className="row g-2 mt-2">
-                {myPlan.week.map((d) => (
-                  <div key={d.ymd} className="col-12 col-md-6 col-lg-4">
-                    <div className="ia-meal-day-card">
+              {!myPlan?.assignment ? (
+                <div className="ia-empty-state mt-3">
+                  <div className="ia-empty-state-title">No active meal plan</div>
+                  <div className="text-dim small mt-1">
+                    Browse plans to add meals straight into your planner.
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="ia-mealplan-header mt-3">
+                    <div>
                       <div className="ia-list-row-title">
-                        {d.day} <span className="text-dim small">({d.ymd})</span>
+                        {myPlan.plan?.title || "Meal Plan"}
+                        {myPlan.plan?.tier === "premium" ? (
+                          <span className="ia-badge ia-badge-neon ms-2">Premium</span>
+                        ) : null}
                       </div>
+                      <div className="text-dim small mt-1">
+                        {fmtDate(myPlan.assignment.start_date)} — {fmtDate(myPlan.assignment.end_date)}
+                      </div>
+                    </div>
 
-                      {!d.items.length ? (
-                        <div className="text-dim small mt-2">—</div>
-                      ) : (
-                        <div className="d-grid gap-2 mt-2">
-                          {d.items.map((it) => (
-                            <div key={it.id} className="ia-meal-item">
-                              {it.image ? (
-                                <img
-                                  src={it.image}
-                                  alt={it.title || "Meal"}
-                                  className="ia-meal-item-image"
-                                />
-                              ) : (
-                                <div className="ia-meal-item-image ia-meal-item-image-empty">
-                                  No image
-                                </div>
-                              )}
-
-                              <div className="ia-meal-item-copy">
-                                <div className="ia-meal-item-title">{it.title || "Meal"}</div>
-                                <div className="text-dim small">
-                                  {it.meal_type} • {Math.round(it.scaled?.calories || 0)} kcal • P
-                                  {Math.round(it.scaled?.protein_g || 0)} • C
-                                  {Math.round(it.scaled?.carbs_g || 0)} • F
-                                  {Math.round(it.scaled?.fat_g || 0)}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                    <div className="ia-mealplan-actions">
+                      <label className="ia-inline-label">Household</label>
+                      <input
+                        className="form-control ia-form-input ia-household-input"
+                        type="number"
+                        min={1}
+                        value={household}
+                        onChange={(e) => setHousehold(Math.max(1, Number(e.target.value) || 1))}
+                      />
+                      <button
+                        type="button"
+                        className="ia-btn ia-btn-primary"
+                        onClick={() => shoppingFromPlan()}
+                      >
+                        Add week to shopping list
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            </>
-          )}
+
+                  <div className="row g-2 mt-2">
+                    {myPlan.week.map((d) => (
+                      <div key={d.ymd} className="col-12 col-md-6">
+                        <div className="ia-meal-day-card">
+                          <div className="ia-list-row-title">
+                            {d.day} <span className="text-dim small">({d.ymd})</span>
+                          </div>
+
+                          {!d.items.length ? (
+                            <div className="text-dim small mt-2">—</div>
+                          ) : (
+                            <div className="d-grid gap-2 mt-2">
+                              {d.items.slice(0, 2).map((it) => (
+                                <div key={it.id} className="ia-meal-item">
+                                  {it.image ? (
+                                    <img
+                                      src={it.image}
+                                      alt={it.title || "Meal"}
+                                      className="ia-meal-item-image"
+                                    />
+                                  ) : (
+                                    <div className="ia-meal-item-image ia-meal-item-image-empty">
+                                      No image
+                                    </div>
+                                  )}
+
+                                  <div className="ia-meal-item-copy">
+                                    <div className="ia-meal-item-title">{it.title || "Meal"}</div>
+                                    <div className="text-dim small">
+                                      {it.meal_type} • {Math.round(it.scaled?.calories || 0)} kcal • P
+                                      {Math.round(it.scaled?.protein_g || 0)} • C
+                                      {Math.round(it.scaled?.carbs_g || 0)} • F
+                                      {Math.round(it.scaled?.fat_g || 0)}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+
+                              {d.items.length > 2 ? (
+                                <div className="text-dim small">+{d.items.length - 2} more meals</div>
+                              ) : null}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+          </div>
         </section>
 
         <section className="ia-tile ia-tile-pad mb-3">
@@ -617,13 +755,21 @@ export default function NutritionHomePage() {
           </div>
 
           {!favRecipes.length ? (
-            <div className="text-dim small mt-3">
-              No favourites yet. Browse recipes and tap the heart to save.
+            <div className="ia-empty-state mt-3">
+              <div className="ia-empty-state-title">No favourites yet</div>
+              <div className="text-dim small mt-1">
+                Browse recipes and tap the heart to save meals for later.
+              </div>
             </div>
           ) : (
             <div className="row g-2 mt-2">
               {favRecipes.map((r) => (
-                <div key={r.id} className="col-6 col-sm-4 col-md-3">
+                <div
+                  key={r.id}
+                  className={
+                    favRecipes.length === 1 ? "col-12 col-md-6" : "col-6 col-sm-4 col-md-3"
+                  }
+                >
                   <Link href="/recipes/${r.id}">
                     <div className="ia-recipe-card">
                       {r.image ? (
@@ -716,7 +862,7 @@ export default function NutritionHomePage() {
                             {p.locked ? "Locked" : "Select"}
                           </button>
 
-                          <Link href="/recipes">
+                          /recipes
                             View recipes
                           </Link>
                         </div>
@@ -821,3 +967,5 @@ export default function NutritionHomePage() {
     </>
   );
 }
+
+
