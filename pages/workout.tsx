@@ -662,7 +662,7 @@ export default function WorkoutHubPage() {
                     );
 
                     return (
-                      <div key={`${day.dayName}-${day.ymd}`} className="col-12 col-md-6">
+                      <div key={`${day.dayName}-${day.ymd}`} className="col-6 col-md-6">
                         {hasWorkout ? (
                           <Link href={day.href} className="ia-link-no-underline">
                             {cardInner}
