@@ -1,6 +1,5 @@
 // pages/train.tsx
 "use client";
-
 import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -95,7 +94,15 @@ type WeeklyOverviewResponse = {
   };
 };
 
-const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const DAY_ORDER = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+] as const;
 
 const DAY_SHORT: Record<string, string> = {
   Monday: "Mon",
@@ -152,7 +159,7 @@ function getWeekStartForProgramWeek(startDate: string | null, weekNumber: number
 
 function getDayDateFromWeekStart(weekStartYMD: string, dayName: string) {
   const start = parseYMD(weekStartYMD);
-  const idx = DAY_ORDER.indexOf(dayName);
+  const idx = DAY_ORDER.indexOf(dayName as (typeof DAY_ORDER)[number]);
   if (idx < 0) return null;
   return addDays(start, idx);
 }
@@ -171,7 +178,9 @@ function getHomeDayWorkouts(day?: HomeDayOverview): SimpleWorkoutRef[] {
 
 function getDayHref(workout?: SimpleWorkoutRef | null, dateYMD?: string | null) {
   if (!workout?.id) return "#";
-  return `/gymworkout/${encodeURIComponent(workout.id)}${dateYMD ? `?date=${encodeURIComponent(dateYMD)}` : ""}`;
+  return `/gymworkout/${encodeURIComponent(workout.id)}${
+    dateYMD ? `?date=${encodeURIComponent(dateYMD)}` : ""
+  }`;
 }
 
 function compactCountLabel(count: number, singular: string, plural?: string) {
@@ -195,7 +204,8 @@ function EmptyTrainState() {
     <section className="ia-tile ia-tile-pad mb-3">
       <div className="ia-card-title-compact">No active programme</div>
       <div className="text-dim small mt-1">
-        Your workouts will appear here once a programme or recurring gym workouts have been assigned.
+        Your workouts will appear here once a programme or recurring gym workouts have been
+        assigned.
       </div>
       <div className="mt-3">
         <Link href="/iron-acre" className="ia-btn ia-btn-muted">
@@ -208,6 +218,7 @@ function EmptyTrainState() {
 
 export default function WorkoutHubPage() {
   const { data: session, status } = useSession();
+
   const [mounted, setMounted] = useState(false);
   const [selectedWeekNumber, setSelectedWeekNumber] = useState<number | null>(null);
 
@@ -231,10 +242,7 @@ export default function WorkoutHubPage() {
     return formatYMD(startOfAlignedWeek(new Date()));
   }, []);
 
-  const {
-    data: currentHomeOverview,
-    error: currentHomeErr,
-  } = useSWR<HomeOverviewResponse>(
+  const { data: currentHomeOverview, error: currentHomeErr } = useSWR<HomeOverviewResponse>(
     mounted && isAuthed
       ? `/api/iron-acre/home-overview?week=${encodeURIComponent(currentWeekStartYMD)}`
       : null,
@@ -272,33 +280,29 @@ export default function WorkoutHubPage() {
     return formatYMD(getWeekStartForProgramWeek(currentProgram.start_date, effectiveWeekNumber));
   }, [currentProgram, effectiveWeekNumber, currentWeekStartYMD]);
 
-  const {
-    data: selectedProgramsWeekly,
-    error: selectedProgramsErr,
-  } = useSWR<ProgramsWeeklyResponse>(
-    mounted && isAuthed && currentProgram
-      ? `/api/programs/weekly?week=${encodeURIComponent(selectedWeekStartYMD)}`
-      : null,
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 60_000,
-    }
-  );
+  const { data: selectedProgramsWeekly, error: selectedProgramsErr } =
+    useSWR<ProgramsWeeklyResponse>(
+      mounted && isAuthed && currentProgram
+        ? `/api/programs/weekly?week=${encodeURIComponent(selectedWeekStartYMD)}`
+        : null,
+      fetcher,
+      {
+        revalidateOnFocus: false,
+        dedupingInterval: 60_000,
+      }
+    );
 
-  const {
-    data: selectedWeeklyOverview,
-    error: selectedOverviewErr,
-  } = useSWR<WeeklyOverviewResponse>(
-    mounted && isAuthed && currentProgram
-      ? `/api/weekly/overview?week=${encodeURIComponent(selectedWeekStartYMD)}`
-      : null,
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 60_000,
-    }
-  );
+  const { data: selectedWeeklyOverview, error: selectedOverviewErr } =
+    useSWR<WeeklyOverviewResponse>(
+      mounted && isAuthed && currentProgram
+        ? `/api/weekly/overview?week=${encodeURIComponent(selectedWeekStartYMD)}`
+        : null,
+      fetcher,
+      {
+        revalidateOnFocus: false,
+        dedupingInterval: 60_000,
+      }
+    );
 
   const thisWeekCards = useMemo(() => {
     const days = currentHomeOverview?.days || [];
@@ -382,6 +386,12 @@ export default function WorkoutHubPage() {
     };
   }, [selectedWeekSchedule]);
 
+  const programmeProgressPct = useMemo(() => {
+    if (!currentProgram?.weeks || !effectiveWeekNumber) return 0;
+    const pct = Math.round((effectiveWeekNumber / Number(currentProgram.weeks)) * 100);
+    return Math.max(0, Math.min(100, pct));
+  }, [currentProgram, effectiveWeekNumber]);
+
   const loading = !mounted || status === "loading";
   const thisWeekLoading = isAuthed && !currentHomeOverview && !currentHomeErr;
   const scheduleLoading =
@@ -397,9 +407,11 @@ export default function WorkoutHubPage() {
           <title>Train • Iron Acre Gym</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         </Head>
+
         <main className="container py-3 ia-train-page">
           <LoadingCard title="Loading Train" />
         </main>
+
         <BottomNav />
       </>
     );
@@ -432,11 +444,12 @@ export default function WorkoutHubPage() {
             </div>
 
             <div className="d-flex gap-2">
-              <Link href="/history" className="ia-btn ia-btn-muted ia-btn-sm" aria-label="History">
-                <i className="fas fa-history" />
+              <Link href="/workouts/freestyle" className="ia-btn ia-btn-muted">
+                <i className="fas fa-plus" />
               </Link>
-              <Link href="/benchmarks" className="ia-btn ia-btn-muted ia-btn-sm" aria-label="Benchmarks">
-                <i className="fas fa-chart-line" />
+
+              <Link href="/schedule" className="ia-btn ia-btn-muted">
+                <i className="fas fa-calendar-alt" />
               </Link>
             </div>
           </div>
@@ -453,38 +466,35 @@ export default function WorkoutHubPage() {
                   {currentHomeOverview?.weekStartYMD || ""} → {currentHomeOverview?.weekEndYMD || ""}
                 </div>
               </div>
-
-              <Link href="/schedule" className="ia-btn ia-btn-outline ia-btn-sm">
-                Book a class
-              </Link>
             </div>
 
             {thisWeekCards.length === 0 ? (
               <div className="text-dim small mt-3">No workouts scheduled this week yet.</div>
             ) : (
-              <div className="d-grid gap-2 mt-3">
+              <div className="row g-2 mt-3">
                 {thisWeekCards.map((card) => (
-                  <Link key={card.dateKey} href={card.href} className="ia-link-no-underline">
-                    <div className={`ia-train-list-card ${card.done ? "ia-train-list-card-done" : ""}`}>
-                      <div className="d-flex align-items-center gap-2 flex-shrink-0">
-                        <span className="ia-day-pill">{card.dayLabel}</span>
-                      </div>
+                  <div key={card.dateKey} className="col-6">
+                    <Link href={card.href} className="ia-link-no-underline">
+                      <div
+                        className={`ia-train-pill-card ${
+                          card.done ? "ia-train-pill-card-done" : ""
+                        }`}
+                      >
+                        <div className="d-flex justify-content-between align-items-start gap-2">
+                          <span className="ia-day-pill">{card.dayLabel}</span>
+                          <span className={card.done ? "ia-badge ia-badge-neon" : "ia-badge"}>
+                            {card.done ? "Done" : "Open"}
+                          </span>
+                        </div>
 
-                      <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                        <div className="ia-train-list-title">{card.title}</div>
-                        <div className="text-dim small">
+                        <div className="ia-train-pill-title mt-2">{card.title}</div>
+
+                        <div className="text-dim small mt-1">
                           {card.extraCount > 0 ? `+${card.extraCount} more` : "Scheduled"}
                         </div>
                       </div>
-
-                      <div className="d-flex align-items-center gap-2 flex-shrink-0">
-                        <span className={card.done ? "ia-badge ia-badge-neon" : "ia-badge"}>
-                          {card.done ? "Done" : "Open"}
-                        </span>
-                        <i className="fas fa-chevron-right text-dim" />
-                      </div>
-                    </div>
-                  </Link>
+                    </Link>
+                  </div>
                 ))}
               </div>
             )}
@@ -506,20 +516,19 @@ export default function WorkoutHubPage() {
                   </div>
                 </div>
 
-                <div className="ia-week-badge">
-                  <span className="text-dim">Week</span>
-                  <strong>{effectiveWeekNumber}</strong>
+                <div className="ia-week-badge ia-week-badge-compact">
+                  <strong>Week {effectiveWeekNumber}</strong>
                 </div>
               </div>
 
               <div className="mt-3">
                 <div className="d-flex justify-content-between align-items-center small mb-2">
-                  <span className="text-dim">Progress</span>
-                  <span className="fw-semibold">{selectedWeekStats.pct}%</span>
+                  <span className="text-dim">Programme progress</span>
+                  <span className="fw-semibold">{programmeProgressPct}%</span>
                 </div>
 
                 <div className="ia-progress-track">
-                  <div className="ia-progress-fill" style={{ width: `${selectedWeekStats.pct}%` }} />
+                  <div className="ia-progress-fill" style={{ width: `${programmeProgressPct}%` }} />
                 </div>
               </div>
 
@@ -541,7 +550,9 @@ export default function WorkoutHubPage() {
                 <div className="col-4">
                   <div className="ia-stat-mini">
                     <div className="ia-stat-mini-value">
-                      {currentProgram.end_date ? formatDisplayDate(new Date(currentProgram.end_date)) : "—"}
+                      {currentProgram.end_date
+                        ? formatDisplayDate(new Date(currentProgram.end_date))
+                        : "—"}
                     </div>
                     <div className="ia-stat-mini-label">End date</div>
                   </div>
@@ -557,7 +568,10 @@ export default function WorkoutHubPage() {
                 </div>
 
                 <div className="ia-week-chip-row mt-2">
-                  {Array.from({ length: Number(currentProgram.weeks || 0) }, (_, i) => i + 1).map((weekNum) => {
+                  {Array.from(
+                    { length: Number(currentProgram.weeks || 0) },
+                    (_, i) => i + 1
+                  ).map((weekNum) => {
                     const active = weekNum === effectiveWeekNumber;
 
                     return (
@@ -592,8 +606,6 @@ export default function WorkoutHubPage() {
                 <div className="row g-2 mt-2">
                   {selectedWeekSchedule.map((day) => {
                     const hasWorkout = day.workouts.length > 0;
-                    const classes = "col-12 col-md-6";
-
                     const cardClasses = [
                       "ia-schedule-day-card",
                       hasWorkout ? "" : "ia-schedule-day-card-empty",
@@ -650,7 +662,7 @@ export default function WorkoutHubPage() {
                     );
 
                     return (
-                      <div key={day.dayName} className={classes}>
+                      <div key={`${day.dayName}-${day.ymd}`} className="col-12 col-md-6">
                         {hasWorkout ? (
                           <Link href={day.href} className="ia-link-no-underline">
                             {cardInner}
@@ -676,7 +688,7 @@ export default function WorkoutHubPage() {
               </div>
             </div>
 
-            <Link href="/exercise-library" className="ia-btn ia-btn-outline ia-btn-sm">
+            <Link href="/exercise-library" className="ia-btn ia-btn-primary">
               Open library
             </Link>
           </div>
