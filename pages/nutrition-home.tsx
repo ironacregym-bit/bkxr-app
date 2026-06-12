@@ -862,7 +862,7 @@ export default function NutritionHomePage() {
                             {p.locked ? "Locked" : "Select"}
                           </button>
 
-                          /recipes
+                          <Link href="/recipes">
                             View recipes
                           </Link>
                         </div>
