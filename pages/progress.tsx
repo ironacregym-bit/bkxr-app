@@ -504,7 +504,7 @@ export default function ProgressPage() {
     const today = new Date();
     for (let i = 0; i < 3650; i++) {
       const d = addDays(today, -i);
-      const ymd = fmtYMD(d);
+      const ymd = formatYMD(d);
       if (allDaysSet.has(ymd)) streak++;
       else break;
     }
