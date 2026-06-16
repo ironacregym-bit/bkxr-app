@@ -4,12 +4,10 @@
 import Head from "next/head";
 import Link from "next/link";
 import useSWR from "swr";
-import useSWRInfinite from "swr/infinite";
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import BottomNav from "../components/BottomNav";
 
-// Chart.js
 import {
   Chart as ChartJS,
   LineElement,
@@ -35,44 +33,7 @@ const fetcher = (u: string) =>
 
 type ScopeMode = "program" | "all";
 type TimeRange = "7d" | "30d" | "90d";
-
-type Completion = {
-  id?: string;
-  user_email?: string | null;
-  is_freestyle?: boolean;
-  activity_type?: string | null;
-  duration_minutes?: number | null;
-  calories_burned?: number | null;
-  rpe?: number | null;
-  is_benchmark?: boolean;
-  benchmark_metrics?: Record<string, any> | null;
-  workout_id?: string | null;
-  sets_completed?: number | null;
-  weight_completed_with?: number | null;
-  completed_date?: string | { toDate?: () => Date } | { _seconds?: number; _nanoseconds?: number } | null;
-  date_completed?: string | { toDate?: () => Date } | { _seconds?: number; _nanoseconds?: number } | null;
-  started_at?: string | { toDate?: () => Date } | null;
-  created_at?: string | { toDate?: () => Date } | null;
-};
-
-type CompletionsResp = {
-  results?: Completion[];
-  items?: Completion[];
-  completions?: Completion[];
-  data?: Completion[];
-  nextCursor?: string | null;
-};
-
-type CheckinRow = {
-  date: string;
-  weight_kg: number | null;
-  body_fat_pct: number | null;
-  photo_url?: string | null;
-};
-
-type CheckinsSeriesResp = {
-  results: CheckinRow[];
-};
+type LiftKey = "squat" | "bench" | "deadlift" | "ohp";
 
 type CurrentProgram = {
   assignment_id: string;
@@ -86,15 +47,45 @@ type CurrentProgram = {
   is_active_today: boolean;
 } | null;
 
-type HomeOverviewResponse = {
-  currentProgram?: CurrentProgram;
-};
-
-type LiftKey = "squat" | "bench" | "deadlift" | "ohp";
-
 type StrengthPoint = {
   date: string;
   value: number;
+};
+
+type ProgressOverviewResponse = {
+  scope: ScopeMode;
+  range: TimeRange;
+  startYMD: string;
+  endYMD: string;
+  currentProgram: CurrentProgram;
+  kpis: {
+    sessions: number;
+    calories: number;
+    currentStreak: number;
+    totalCompletionsAllTime: number;
+  };
+  weight: {
+    start_weight_kg: number | null;
+    current_weight_kg: number | null;
+    delta_kg: number;
+    delta_pct: number;
+    points: Array<{ date: string; value: number }>;
+  };
+  strength: Record<
+    LiftKey,
+    {
+      latest: number | null;
+      previous: number | null;
+      delta: number | null;
+      points: StrengthPoint[];
+    }
+  >;
+  checkins: Array<{
+    date: string;
+    weight_kg: number | null;
+    body_fat_pct: number | null;
+    photo_url?: string | null;
+  }>;
 };
 
 const LIFT_LABELS: Record<LiftKey, string> = {
@@ -104,30 +95,8 @@ const LIFT_LABELS: Record<LiftKey, string> = {
   ohp: "OHP",
 };
 
-const LIFT_MATCHERS: Record<LiftKey, string[]> = {
-  squat: ["squat", "back squat", "front squat"],
-  bench: ["bench", "bench press"],
-  deadlift: ["deadlift"],
-  ohp: ["ohp", "overhead press", "strict press", "press"],
-};
-
 function formatYMD(d: Date) {
   return d.toLocaleDateString("en-CA");
-}
-
-function addDays(d: Date, n: number) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-
-function startOfAlignedWeek(d: Date) {
-  const day = d.getDay();
-  const diffToMon = (day + 6) % 7;
-  const s = new Date(d);
-  s.setDate(d.getDate() - diffToMon);
-  s.setHours(0, 0, 0, 0);
-  return s;
 }
 
 function fmtShortDate(ymd: string) {
@@ -137,148 +106,8 @@ function fmtShortDate(ymd: string) {
   });
 }
 
-function toISO(v: any) {
-  try {
-    if (!v) return null;
-    if (typeof v?.toDate === "function") {
-      const d = v.toDate();
-      return d && !isNaN(d.getTime()) ? d.toISOString() : null;
-    }
-    if (typeof v === "object" && typeof v._seconds === "number") {
-      const ms = v._seconds * 1000 + (typeof v._nanoseconds === "number" ? v._nanoseconds / 1e6 : 0);
-      const d = new Date(ms);
-      return !isNaN(d.getTime()) ? d.toISOString() : null;
-    }
-    const d = new Date(v);
-    return !isNaN(d.getTime()) ? d.toISOString() : null;
-  } catch {
-    return null;
-  }
-}
-
-function getCompletionISO(c: Completion) {
-  return (
-    toISO((c as any).completed_date) ||
-    toISO((c as any).date_completed) ||
-    toISO((c as any).started_at) ||
-    toISO((c as any).created_at)
-  );
-}
-
-function rangeDaysToNumber(range: TimeRange) {
-  if (range === "7d") return 7;
-  if (range === "30d") return 30;
-  return 90;
-}
-
-function clampPct(value: number) {
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
-function getBenchmarkValue(part: any) {
-  if (!part || typeof part !== "object") return null;
-
-  const candidates = [
-    part.one_rm,
-    part.estimated_1rm,
-    part.estimated1rm,
-    part.rm_1,
-    part.value,
-    part.weight_kg,
-    part.weight,
-  ];
-
-  for (const c of candidates) {
-    const n = Number(c);
-    if (Number.isFinite(n) && n > 0) return n;
-  }
-
-  return null;
-}
-
-function normaliseName(value: string) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function inferLiftKey(name: string): LiftKey | null {
-  const n = normaliseName(name);
-
-  for (const [lift, matchers] of Object.entries(LIFT_MATCHERS) as [LiftKey, string[]][]) {
-    if (matchers.some((m) => n.includes(m))) return lift;
-  }
-
-  return null;
-}
-
-function extractStrengthSeries(completions: Completion[], startYMD: string, endYMD: string) {
-  const out: Record<LiftKey, StrengthPoint[]> = {
-    squat: [],
-    bench: [],
-    deadlift: [],
-    ohp: [],
-  };
-
-  for (const c of completions) {
-    const iso = getCompletionISO(c);
-    if (!iso) continue;
-    const ymd = iso.slice(0, 10);
-    if (ymd < startYMD || ymd > endYMD) continue;
-
-    const metrics = c.benchmark_metrics;
-    if (!metrics || typeof metrics !== "object") continue;
-
-    for (const [name, part] of Object.entries(metrics)) {
-      const lift = inferLiftKey(name);
-      if (!lift) continue;
-
-      const value = getBenchmarkValue(part);
-      if (!value) continue;
-
-      out[lift].push({
-        date: ymd,
-        value,
-      });
-    }
-  }
-
-  for (const lift of Object.keys(out) as LiftKey[]) {
-    out[lift].sort((a, b) => a.date.localeCompare(b.date));
-  }
-
-  return out;
-}
-
-function getDateWindow(scope: ScopeMode, range: TimeRange, currentProgram: CurrentProgram) {
-  const today = new Date();
-  const end = new Date(today);
-  end.setHours(23, 59, 59, 999);
-
-  const days = rangeDaysToNumber(range);
-  const rangeStart = addDays(new Date(today), -(days - 1));
-  rangeStart.setHours(0, 0, 0, 0);
-
-  if (scope !== "program" || !currentProgram?.start_date) {
-    return {
-      start: rangeStart,
-      end,
-    };
-  }
-
-  const programStart = new Date(`${currentProgram.start_date}T00:00:00`);
-  const computedStart = programStart > rangeStart ? programStart : rangeStart;
-
-  let programEnd = end;
-  if (currentProgram.end_date) {
-    const endFromProgram = new Date(`${currentProgram.end_date}T23:59:59`);
-    if (!isNaN(endFromProgram.getTime()) && endFromProgram < programEnd) {
-      programEnd = endFromProgram;
-    }
-  }
-
-  return {
-    start: computedStart,
-    end: programEnd,
-  };
+function classNames(...items: Array<string | false | null | undefined>) {
+  return items.filter(Boolean).join(" ");
 }
 
 function LoadingCard({ title }: { title: string }) {
@@ -293,17 +122,18 @@ function LoadingCard({ title }: { title: string }) {
 }
 
 function MiniSpark({
-  labels,
-  values,
+  points,
   accent = "#18ff9a",
 }: {
-  labels: string[];
-  values: number[];
+  points: StrengthPoint[];
   accent?: string;
 }) {
-  if (!values.length) {
-    return <div className="text-dim small">No data yet</div>;
+  if (!points.length) {
+    return <div className="text-dim small mt-2">No data yet</div>;
   }
+
+  const labels = points.map((p) => fmtShortDate(p.date));
+  const values = points.map((p) => p.value);
 
   const chartData: ChartData<"line"> = {
     labels,
@@ -312,7 +142,7 @@ function MiniSpark({
         label: "1RM",
         data: values,
         borderColor: accent,
-        backgroundColor: "rgba(24,255,154,0.08)",
+        backgroundColor: "rgba(24,255,154,0.10)",
         tension: 0.35,
         pointRadius: 0,
         fill: true,
@@ -323,17 +153,14 @@ function MiniSpark({
   const options: ChartOptions<"line"> = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
     plugins: {
       legend: { display: false },
       tooltip: { enabled: false },
     },
     scales: {
-      x: {
-        display: false,
-      },
-      y: {
-        display: false,
-      },
+      x: { display: false },
+      y: { display: false },
     },
     elements: {
       line: {
@@ -369,166 +196,37 @@ export default function ProgressPage() {
     }
   }, [mounted, session, status]);
 
-  const email = String(session?.user?.email || "").trim().toLowerCase();
-  const isAuthed = Boolean(email);
+  const shouldLoad = mounted && status === "authenticated";
 
-  const currentWeekStart = useMemo(() => formatYMD(startOfAlignedWeek(new Date())), []);
+  const progressKey = shouldLoad
+    ? `/api/progress/overview?scope=${encodeURIComponent(scope)}&range=${encodeURIComponent(range)}`
+    : null;
 
-  const { data: homeOverview } = useSWR<HomeOverviewResponse>(
-    mounted && isAuthed
-      ? `/api/iron-acre/home-overview?week=${encodeURIComponent(currentWeekStart)}`
-      : null,
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 60_000,
-    }
-  );
-
-  const currentProgram = homeOverview?.currentProgram || null;
+  const { data, error, isValidating } = useSWR<ProgressOverviewResponse>(progressKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30_000,
+  });
 
   useEffect(() => {
-    if (!currentProgram) {
+    if (!data) return;
+    if (!data.currentProgram && scope === "program") {
       setScope("all");
     }
-  }, [currentProgram]);
-
-  const PAGE_LIMIT = 300;
-
-  const getKey = (pageIndex: number, previousPageData: CompletionsResp | null) => {
-    if (!mounted || !email) return null;
-    if (previousPageData && !previousPageData.nextCursor) return null;
-
-    const params = new URLSearchParams();
-    params.set("user_email", email);
-    params.set("limit", String(PAGE_LIMIT));
-
-    if (pageIndex > 0 && previousPageData?.nextCursor) {
-      params.set("cursor", previousPageData.nextCursor);
-    }
-
-    return `/api/completions?${params.toString()}`;
-  };
-
-  const { data: completionPages, error: completionsErr, isValidating: completionsLoading } =
-    useSWRInfinite<CompletionsResp>(getKey, fetcher, {
-      revalidateOnFocus: false,
-      dedupingInterval: 30_000,
-    });
-
-  const allCompletions = useMemo(() => {
-    const flatten: Completion[] = [];
-    for (const p of completionPages || []) {
-      const src = p?.results || p?.items || p?.completions || p?.data || [];
-      if (Array.isArray(src)) flatten.push(...src);
-    }
-    return flatten;
-  }, [completionPages]);
-
-  const { data: checkinsResp, error: checkinsErr } = useSWR<CheckinsSeriesResp>(
-    mounted && email ? `/api/checkins/series?email=${encodeURIComponent(email)}&limit=1000` : null,
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 60_000,
-      shouldRetryOnError: false,
-    }
-  );
-
-  const allCheckins = useMemo(() => {
-    const rows = Array.isArray(checkinsResp?.results) ? checkinsResp.results.slice() : [];
-    rows.sort((a, b) => a.date.localeCompare(b.date));
-    return rows;
-  }, [checkinsResp]);
-
-  const { start, end } = useMemo(() => getDateWindow(scope, range, currentProgram), [scope, range, currentProgram]);
-  const startYMD = formatYMD(start);
-  const endYMD = formatYMD(end);
-
-  const filteredCheckins = useMemo(() => {
-    return allCheckins.filter((c) => c.date >= startYMD && c.date <= endYMD);
-  }, [allCheckins, startYMD, endYMD]);
-
-  const filteredCompletions = useMemo(() => {
-    return allCompletions.filter((c) => {
-      const iso = getCompletionISO(c);
-      if (!iso) return false;
-      const ymd = iso.slice(0, 10);
-      return ymd >= startYMD && ymd <= endYMD;
-    });
-  }, [allCompletions, startYMD, endYMD]);
-
-  const baselineForScope = useMemo(() => {
-    if (scope === "program" && currentProgram?.start_date) {
-      const programStart = currentProgram.start_date;
-      const programEnd = currentProgram.end_date || "9999-12-31";
-      return allCheckins.filter((c) => c.date >= programStart && c.date <= programEnd);
-    }
-    return allCheckins;
-  }, [scope, currentProgram, allCheckins]);
-
-  const firstWeight = baselineForScope.find((c) => typeof c.weight_kg === "number" && c.weight_kg !== null) || null;
-  const latestWeight = [...filteredCheckins]
-    .reverse()
-    .find((c) => typeof c.weight_kg === "number" && c.weight_kg !== null) || null;
-
-  const weightDeltaKg = useMemo(() => {
-    if (!firstWeight?.weight_kg || !latestWeight?.weight_kg) return 0;
-    return latestWeight.weight_kg - firstWeight.weight_kg;
-  }, [firstWeight, latestWeight]);
-
-  const weightDeltaPct = useMemo(() => {
-    if (!firstWeight?.weight_kg || !latestWeight?.weight_kg) return 0;
-    if (!firstWeight.weight_kg) return 0;
-    return ((latestWeight.weight_kg - firstWeight.weight_kg) / firstWeight.weight_kg) * 100;
-  }, [firstWeight, latestWeight]);
-
-  const filteredCalories = useMemo(() => {
-    return filteredCompletions.reduce((sum, c) => sum + Number(c.calories_burned || 0), 0);
-  }, [filteredCompletions]);
-
-  const filteredSessions = filteredCompletions.length;
-
-  const allDaysSet = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of allCompletions) {
-      const iso = getCompletionISO(c);
-      if (!iso) continue;
-      set.add(iso.slice(0, 10));
-    }
-    return set;
-  }, [allCompletions]);
-
-  const currentStreak = useMemo(() => {
-    let streak = 0;
-    const today = new Date();
-    for (let i = 0; i < 3650; i++) {
-      const d = addDays(today, -i);
-      const ymd = formatYMD(d);
-      if (allDaysSet.has(ymd)) streak++;
-      else break;
-    }
-    return streak;
-  }, [allDaysSet]);
+  }, [data, scope]);
 
   const weightChart = useMemo(() => {
-    const labels = filteredCheckins.map((r) =>
-      new Date(`${r.date}T00:00:00`).toLocaleDateString(undefined, {
-        day: "numeric",
-        month: "short",
-      })
-    );
+    const points = data?.weight?.points || [];
+    if (!points.length) return null;
 
-    const values = filteredCheckins.map((r) =>
-      typeof r.weight_kg === "number" ? r.weight_kg : null
-    );
+    const labels = points.map((p) => fmtShortDate(p.date));
+    const values = points.map((p) => p.value);
 
     const chartData: ChartData<"line"> = {
       labels,
       datasets: [
         {
           label: "Weight (kg)",
-          data: values as (number | null)[],
+          data: values,
           borderColor: "#18ff9a",
           backgroundColor: "rgba(24,255,154,0.14)",
           tension: 0.35,
@@ -541,17 +239,29 @@ export default function ProgressPage() {
     const options: ChartOptions<"line"> = {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
       plugins: {
         legend: { display: false },
       },
       scales: {
         x: {
-          ticks: { color: "#9fb0c3" },
-          grid: { color: "rgba(255,255,255,0.06)" },
+          ticks: {
+            color: "#9fb0c3",
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 6,
+          },
+          grid: {
+            color: "rgba(255,255,255,0.06)",
+          },
         },
         y: {
-          ticks: { color: "#9fb0c3" },
-          grid: { color: "rgba(255,255,255,0.06)" },
+          ticks: {
+            color: "#9fb0c3",
+          },
+          grid: {
+            color: "rgba(255,255,255,0.06)",
+          },
         },
       },
       elements: {
@@ -562,29 +272,52 @@ export default function ProgressPage() {
     };
 
     return { chartData, options };
-  }, [filteredCheckins]);
-
-  const strengthSeries = useMemo(() => {
-    return extractStrengthSeries(allCompletions, startYMD, endYMD);
-  }, [allCompletions, startYMD, endYMD]);
+  }, [data]);
 
   const strengthCards = useMemo(() => {
-    return (Object.keys(LIFT_LABELS) as LiftKey[]).map((lift) => {
-      const points = strengthSeries[lift] || [];
-      const latest = points.length ? points[points.length - 1].value : null;
-      const prev = points.length > 1 ? points[points.length - 2].value : null;
-      const delta = latest != null && prev != null ? latest - prev : null;
+    const strength = data?.strength;
+    if (!strength) return [];
 
-      return {
-        key: lift,
-        label: LIFT_LABELS[lift],
-        latest,
-        delta,
-        labels: points.map((p) => fmtShortDate(p.date)),
-        values: points.map((p) => p.value),
-      };
-    });
-  }, [strengthSeries]);
+    return (Object.keys(LIFT_LABELS) as LiftKey[]).map((lift) => ({
+      key: lift,
+      label: LIFT_LABELS[lift],
+      latest: strength[lift]?.latest ?? null,
+      previous: strength[lift]?.previous ?? null,
+      delta: strength[lift]?.delta ?? null,
+      points: strength[lift]?.points ?? [],
+    }));
+  }, [data]);
+
+  const currentWeight = data?.weight?.current_weight_kg ?? null;
+  const startWeight = data?.weight?.start_weight_kg ?? null;
+  const deltaKg = data?.weight?.delta_kg ?? 0;
+  const deltaPct = data?.weight?.delta_pct ?? 0;
+
+  const rangeLabel = useMemo(() => {
+    if (!data) return "";
+    return `${fmtShortDate(data.startYMD)} – ${fmtShortDate(data.endYMD)}`;
+  }, [data]);
+
+  const loading = !mounted || status === "loading" || (shouldLoad && !data && !error);
+
+  if (loading) {
+    return (
+      <>
+        <Head>
+          <title>Progress • Iron Acre Gym</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        </Head>
+        <main className="container py-2 ia-progress-page">
+          <LoadingCard title="Loading Progress" />
+        </main>
+        <BottomNav />
+      </>
+    );
+  }
+
+  if (!session) {
+    return null;
+  }
 
   return (
     <>
@@ -609,11 +342,11 @@ export default function ProgressPage() {
             </div>
 
             <div className="d-flex gap-2">
-              <Link href="/checkin">
+              /checkin
                 <i className="fas fa-plus" />
               </Link>
 
-              <Link href="/schedule">
+              /schedule
                 <i className="fas fa-calendar-alt" />
               </Link>
             </div>
@@ -625,16 +358,16 @@ export default function ProgressPage() {
             <div className="d-flex gap-2 flex-wrap">
               <button
                 type="button"
-                className={scope === "program" && !!currentProgram ? "ia-seg-btn ia-seg-btn-active" : "ia-seg-btn"}
-                onClick={() => currentProgram && setScope("program")}
-                disabled={!currentProgram}
+                className={classNames("ia-seg-btn", scope === "program" && data?.currentProgram && "ia-seg-btn-active")}
+                onClick={() => data?.currentProgram && setScope("program")}
+                disabled={!data?.currentProgram}
               >
                 Program
               </button>
 
               <button
                 type="button"
-                className={scope === "all" ? "ia-seg-btn ia-seg-btn-active" : "ia-seg-btn"}
+                className={classNames("ia-seg-btn", scope === "all" && "ia-seg-btn-active")}
                 onClick={() => setScope("all")}
               >
                 All time
@@ -646,7 +379,7 @@ export default function ProgressPage() {
                 <button
                   key={r}
                   type="button"
-                  className={range === r ? "ia-seg-btn ia-seg-btn-active" : "ia-seg-btn"}
+                  className={classNames("ia-seg-btn", range === r && "ia-seg-btn-active")}
                   onClick={() => setRange(r)}
                 >
                   {r.replace("d", "D")}
@@ -655,14 +388,12 @@ export default function ProgressPage() {
             </div>
           </div>
 
-          {scope === "program" && currentProgram ? (
-            <div className="text-dim small mt-2">
-              {currentProgram.program_name} • Week {currentProgram.current_week || 1} of{" "}
-              {currentProgram.weeks || 1}
-            </div>
-          ) : (
-            <div className="text-dim small mt-2">Viewing all-time progress</div>
-          )}
+          <div className="text-dim small mt-2">
+            {scope === "program" && data?.currentProgram
+              ? `${data.currentProgram.program_name} • Week ${data.currentProgram.current_week || 1} of ${data.currentProgram.weeks || 1}`
+              : "Viewing all-time progress"}{" "}
+            {rangeLabel ? `• ${rangeLabel}` : ""}
+          </div>
         </section>
 
         <section className="ia-tile ia-tile-pad mb-3 ia-progress-hero">
@@ -673,29 +404,29 @@ export default function ProgressPage() {
                   <div>
                     <div className="ia-kicker">weight</div>
                     <div className="ia-progress-weight-value">
-                      {latestWeight?.weight_kg != null ? latestWeight.weight_kg.toFixed(1) : "—"}kg
+                      {currentWeight != null ? `${currentWeight.toFixed(1)}kg` : "—kg"}
                     </div>
                     <div className="text-dim small mt-1">
-                      {latestWeight?.date ? fmtShortDate(latestWeight.date) : "No check-ins yet"}
+                      {startWeight != null ? `Started at ${startWeight.toFixed(1)}kg` : "No check-ins yet"}
                     </div>
                   </div>
 
                   <div className="ia-progress-delta-pill">
-                    <div className={weightDeltaKg <= 0 ? "ia-delta-good" : "ia-delta-bad"}>
-                      {weightDeltaKg > 0 ? "+" : ""}
-                      {weightDeltaKg.toFixed(1)}kg
+                    <div className={deltaKg <= 0 ? "ia-delta-good" : "ia-delta-bad"}>
+                      {deltaKg > 0 ? "+" : ""}
+                      {deltaKg.toFixed(1)}kg
                     </div>
-                    <div className="text-dim small">
-                      {weightDeltaPct > 0 ? "+" : ""}
-                      {weightDeltaPct.toFixed(1)}%
+                    <div className={deltaPct <= 0 ? "ia-delta-good small" : "ia-delta-bad small"}>
+                      {deltaPct > 0 ? "+" : ""}
+                      {deltaPct.toFixed(1)}%
                     </div>
                   </div>
                 </div>
 
                 <div className="ia-progress-chart-wrap mt-3">
-                  {checkinsErr ? (
-                    <div className="text-dim small">No check-ins yet.</div>
-                  ) : filteredCheckins.length ? (
+                  {error ? (
+                    <div className="text-dim small">Unable to load weight data.</div>
+                  ) : weightChart ? (
                     <Line data={weightChart.chartData} options={weightChart.options} />
                   ) : (
                     <div className="text-dim small">No weight data in this range.</div>
@@ -708,21 +439,21 @@ export default function ProgressPage() {
               <div className="row g-2 h-100">
                 <div className="col-4 col-lg-12">
                   <div className="ia-stat-mini h-100">
-                    <div className="ia-stat-mini-value">{filteredSessions}</div>
+                    <div className="ia-stat-mini-value">{data?.kpis.sessions || 0}</div>
                     <div className="ia-stat-mini-label">Sessions</div>
                   </div>
                 </div>
 
                 <div className="col-4 col-lg-12">
                   <div className="ia-stat-mini h-100">
-                    <div className="ia-stat-mini-value">{Math.round(filteredCalories)}</div>
+                    <div className="ia-stat-mini-value">{Math.round(data?.kpis.calories || 0)}</div>
                     <div className="ia-stat-mini-label">Calories</div>
                   </div>
                 </div>
 
                 <div className="col-4 col-lg-12">
                   <div className="ia-stat-mini h-100">
-                    <div className="ia-stat-mini-value">{currentStreak}</div>
+                    <div className="ia-stat-mini-value">{data?.kpis.currentStreak || 0}</div>
                     <div className="ia-stat-mini-label">Day streak</div>
                   </div>
                 </div>
@@ -730,12 +461,12 @@ export default function ProgressPage() {
             </div>
           </div>
 
-          {completionsLoading ? (
-            <div className="text-dim small mt-2">Loading all-time progress…</div>
+          {isValidating ? (
+            <div className="text-dim small mt-2">Refreshing progress…</div>
           ) : null}
 
-          {completionsErr ? (
-            <div className="ia-inline-note-error mt-2">Unable to load completion history.</div>
+          {error ? (
+            <div className="ia-inline-note-error mt-2">Unable to load progress overview.</div>
           ) : null}
         </section>
 
@@ -743,10 +474,12 @@ export default function ProgressPage() {
           <div className="d-flex justify-content-between align-items-center gap-2">
             <div>
               <div className="ia-card-title-compact">Strength</div>
-              <div className="text-dim small mt-1">Estimated 1RM trend by lift in the selected range.</div>
+              <div className="text-dim small mt-1">
+                Estimated 1RM trend by lift in the selected range.
+              </div>
             </div>
 
-            <Link href="/train">
+            /train
               Open training
             </Link>
           </div>
@@ -775,7 +508,7 @@ export default function ProgressPage() {
                     </div>
                   </div>
 
-                  <MiniSpark labels={card.labels} values={card.values} />
+                  <MiniSpark points={card.points} />
                 </div>
               </div>
             ))}
@@ -786,59 +519,50 @@ export default function ProgressPage() {
           <div className="d-flex justify-content-between align-items-center gap-2">
             <div>
               <div className="ia-card-title-compact">Check-ins</div>
-              <div className="text-dim small mt-1">Review historic check-ins and jump back into a specific day.</div>
+              <div className="text-dim small mt-1">
+                Review historic check-ins and jump back into a specific day.
+              </div>
             </div>
 
-            <Link href="/checkin">
+            /checkin
               Add check-in
             </Link>
           </div>
 
-          {checkinsErr ? (
-            <div className="text-dim small mt-3">No check-ins yet.</div>
-          ) : !filteredCheckins.length ? (
+          {!data?.checkins?.length ? (
             <div className="text-dim small mt-3">No check-ins in this selected range.</div>
           ) : (
             <div className="d-grid gap-2 mt-3">
-              {[...filteredCheckins].reverse().map((c, idx) => {
-                const ymd = c.date;
-                return (
-                  <div key={`${ymd}-${idx}`} className="ia-checkin-row">
-                    <div className="ia-checkin-row-main">
-                      <div className="ia-list-row-title">
-                        {new Date(`${ymd}T00:00:00`).toLocaleDateString(undefined, {
-                          weekday: "short",
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </div>
-                      <div className="text-dim small mt-1">
-                        {typeof c.weight_kg === "number" ? `${c.weight_kg} kg` : "—"} •{" "}
-                        {typeof c.body_fat_pct === "number" ? `${c.body_fat_pct}% body fat` : "—"}
-                      </div>
+              {data.checkins.map((c, idx) => (
+                <div key={`${c.date}-${idx}`} className="ia-checkin-row">
+                  <div className="ia-checkin-row-main">
+                    <div className="ia-list-row-title">
+                      {new Date(`${c.date}T00:00:00`).toLocaleDateString(undefined, {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
                     </div>
-
-                    <div className="d-flex gap-2 flex-wrap">
-                      <Link href="{`/checkin?date=${encodeURIComponent(ymd)}`}">
-                        Edit
-                      </Link>
-
-                      {c.photo_url ? (
-                        <a
-                          href={c.photo_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ia-btn ia-btn-primary"
-                        >
-                          Photo
-                        </a>
-                      ) : null}
-
+                    <div className="text-dim small mt-1">
+                      {typeof c.weight_kg === "number" ? `${c.weight_kg} kg` : "—"} •{" "}
+                      {typeof c.body_fat_pct === "number" ? `${c.body_fat_pct}% body fat` : "—"}
                     </div>
                   </div>
-                );
-              })}
+
+                  <div className="d-flex gap-2 flex-wrap">
+                    {`/checkin?date=${encodeURIComponent(c.date)}`}
+                      Edit
+                    </Link>
+
+                    {c.photo_url ? (
+                      {c.photo_url}
+                        Photo
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </section>
