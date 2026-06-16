@@ -3,9 +3,9 @@
 
 import Head from "next/head";
 import Link from "next/link";
-import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
+import useSWR from "swr";
 import BottomNav from "../components/BottomNav";
 
 import {
@@ -95,10 +95,6 @@ const LIFT_LABELS: Record<LiftKey, string> = {
   ohp: "OHP",
 };
 
-function formatYMD(d: Date) {
-  return d.toLocaleDateString("en-CA");
-}
-
 function fmtShortDate(ymd: string) {
   return new Date(`${ymd}T00:00:00`).toLocaleDateString(undefined, {
     day: "numeric",
@@ -110,13 +106,39 @@ function classNames(...items: Array<string | false | null | undefined>) {
   return items.filter(Boolean).join(" ");
 }
 
-function LoadingCard({ title }: { title: string }) {
+function LoadingScreen() {
   return (
-    <section className="ia-tile ia-tile-pad mb-3">
-      <div className="d-flex align-items-center justify-content-between">
-        <div className="ia-card-title-compact">{title}</div>
+    <main className="container py-4 ia-home-loading">
+      <div className="ia-tile ia-tile-pad ia-home-loading-card">
+        <div className="ia-home-loading-icon">
+          <i className="fas fa-spinner fa-spin" />
+        </div>
+        <div className="ia-page-title">Loading progress</div>
+        <div className="text-dim small mt-1">
+          Pulling in your trends, check-ins and strength data.
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function SectionLoadingCard({
+  title,
+  icon,
+}: {
+  title: string;
+  icon: string;
+}) {
+  return (
+    <section className="ia-tile ia-tile-pad mb-2 ia-section-loading">
+      <div className="d-flex justify-content-between align-items-center">
+        <div className="ia-kicker">
+          <i className={`fas ${icon}`} />
+          {title.toUpperCase()}
+        </div>
         <i className="fas fa-spinner fa-spin text-dim" />
       </div>
+      <div className="text-dim small mt-2">Loading {title.toLowerCase()}…</div>
     </section>
   );
 }
@@ -163,14 +185,12 @@ function MiniSpark({
       y: { display: false },
     },
     elements: {
-      line: {
-        borderWidth: 2,
-      },
+      line: { borderWidth: 2 },
     },
   };
 
   return (
-    <div className="ia-progress-spark">
+    <div style={{ height: 54, marginTop: 12 }}>
       <Line data={chartData} options={options} />
     </div>
   );
@@ -196,13 +216,16 @@ export default function ProgressPage() {
     }
   }, [mounted, session, status]);
 
-  const shouldLoad = mounted && status === "authenticated";
+  const progressKey =
+    mounted && status === "authenticated"
+      ? `/api/progress/overview?scope=${encodeURIComponent(scope)}&range=${encodeURIComponent(range)}`
+      : null;
 
-  const progressKey = shouldLoad
-    ? `/api/progress/overview?scope=${encodeURIComponent(scope)}&range=${encodeURIComponent(range)}`
-    : null;
-
-  const { data, error, isValidating } = useSWR<ProgressOverviewResponse>(progressKey, fetcher, {
+  const {
+    data,
+    error,
+    isValidating,
+  } = useSWR<ProgressOverviewResponse>(progressKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
@@ -218,7 +241,13 @@ export default function ProgressPage() {
     const points = data?.weight?.points || [];
     if (!points.length) return null;
 
-    const labels = points.map((p) => fmtShortDate(p.date));
+    const labels = points.map((p) =>
+      new Date(`${p.date}T00:00:00`).toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+      })
+    );
+
     const values = points.map((p) => p.value);
 
     const chartData: ChartData<"line"> = {
@@ -249,7 +278,7 @@ export default function ProgressPage() {
             color: "#9fb0c3",
             maxRotation: 0,
             autoSkip: true,
-            maxTicksLimit: 6,
+            maxTicksLimit: 5,
           },
           grid: {
             color: "rgba(255,255,255,0.06)",
@@ -282,7 +311,6 @@ export default function ProgressPage() {
       key: lift,
       label: LIFT_LABELS[lift],
       latest: strength[lift]?.latest ?? null,
-      previous: strength[lift]?.previous ?? null,
       delta: strength[lift]?.delta ?? null,
       points: strength[lift]?.points ?? [],
     }));
@@ -298,18 +326,19 @@ export default function ProgressPage() {
     return `${fmtShortDate(data.startYMD)} – ${fmtShortDate(data.endYMD)}`;
   }, [data]);
 
-  const loading = !mounted || status === "loading" || (shouldLoad && !data && !error);
+  const coreReady =
+    mounted &&
+    status !== "loading" &&
+    (!session || !!data || !!error);
 
-  if (loading) {
+  if (!mounted || !coreReady) {
     return (
       <>
         <Head>
           <title>Progress • Iron Acre Gym</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         </Head>
-        <main className="container py-2 ia-progress-page">
-          <LoadingCard title="Loading Progress" />
-        </main>
+        <LoadingScreen />
         <BottomNav />
       </>
     );
@@ -326,15 +355,15 @@ export default function ProgressPage() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
 
-      <main className="container py-2 ia-progress-page">
-        <section className="ia-tile ia-tile-pad mb-3">
+      <main className="container py-2 iron-acre-home">
+        <section className="ia-tile ia-tile-pad mb-2">
           <div className="ia-kicker">
             <i className="fas fa-chart-line" />
             progress
           </div>
 
-          <div className="d-flex justify-content-between align-items-start gap-2 mt-1 flex-wrap">
-            <div className="ia-progress-header-copy">
+          <div className="d-flex justify-content-between align-items-start gap-2 mt-1">
+            <div style={{ minWidth: 0 }}>
               <div className="ia-page-title">Progress</div>
               <div className="ia-page-subtitle">
                 Track weight, strength and consistency over time.
@@ -342,23 +371,26 @@ export default function ProgressPage() {
             </div>
 
             <div className="d-flex gap-2">
-              <Link href="/checkin">
+              <Link href="/checkin" className="ia-btn ia-btn-primary" aria-label="Add check-in">
                 <i className="fas fa-plus" />
               </Link>
 
-              <Link href="/schedule">
+              <Link href="/schedule" className="ia-btn ia-btn-muted" aria-label="Open schedule">
                 <i className="fas fa-calendar-alt" />
               </Link>
             </div>
           </div>
         </section>
 
-        <section className="ia-tile ia-tile-pad mb-3">
+        <section className="ia-tile ia-tile-pad mb-2">
           <div className="d-flex justify-content-between align-items-center gap-2 flex-wrap">
             <div className="d-flex gap-2 flex-wrap">
               <button
                 type="button"
-                className={classNames("ia-seg-btn", scope === "program" && data?.currentProgram && "ia-seg-btn-active")}
+                className={classNames(
+                  "ia-btn",
+                  scope === "program" && data?.currentProgram ? "ia-btn-primary" : "ia-btn-muted"
+                )}
                 onClick={() => data?.currentProgram && setScope("program")}
                 disabled={!data?.currentProgram}
               >
@@ -367,7 +399,10 @@ export default function ProgressPage() {
 
               <button
                 type="button"
-                className={classNames("ia-seg-btn", scope === "all" && "ia-seg-btn-active")}
+                className={classNames(
+                  "ia-btn",
+                  scope === "all" ? "ia-btn-primary" : "ia-btn-muted"
+                )}
                 onClick={() => setScope("all")}
               >
                 All time
@@ -379,7 +414,10 @@ export default function ProgressPage() {
                 <button
                   key={r}
                   type="button"
-                  className={classNames("ia-seg-btn", range === r && "ia-seg-btn-active")}
+                  className={classNames(
+                    "ia-btn",
+                    range === r ? "ia-btn-primary" : "ia-btn-muted"
+                  )}
                   onClick={() => setRange(r)}
                 >
                   {r.replace("d", "D")}
@@ -391,186 +429,268 @@ export default function ProgressPage() {
           <div className="text-dim small mt-2">
             {scope === "program" && data?.currentProgram
               ? `${data.currentProgram.program_name} • Week ${data.currentProgram.current_week || 1} of ${data.currentProgram.weeks || 1}`
-              : "Viewing all-time progress"}{" "}
-            {rangeLabel ? `• ${rangeLabel}` : ""}
+              : "Viewing all-time progress"}
+            {rangeLabel ? ` • ${rangeLabel}` : ""}
           </div>
         </section>
 
-        <section className="ia-tile ia-tile-pad mb-3 ia-progress-hero">
-          <div className="row g-3 align-items-stretch">
-            <div className="col-12 col-lg-8">
-              <div className="ia-progress-weight-card">
-                <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-                  <div>
-                    <div className="ia-kicker">weight</div>
-                    <div className="ia-progress-weight-value">
-                      {currentWeight != null ? `${currentWeight.toFixed(1)}kg` : "—kg"}
-                    </div>
-                    <div className="text-dim small mt-1">
-                      {startWeight != null ? `Started at ${startWeight.toFixed(1)}kg` : "No check-ins yet"}
-                    </div>
-                  </div>
-
-                  <div className="ia-progress-delta-pill">
-                    <div className={deltaKg <= 0 ? "ia-delta-good" : "ia-delta-bad"}>
-                      {deltaKg > 0 ? "+" : ""}
-                      {deltaKg.toFixed(1)}kg
-                    </div>
-                    <div className={deltaPct <= 0 ? "ia-delta-good small" : "ia-delta-bad small"}>
-                      {deltaPct > 0 ? "+" : ""}
-                      {deltaPct.toFixed(1)}%
-                    </div>
-                  </div>
-                </div>
-
-                <div className="ia-progress-chart-wrap mt-3">
-                  {error ? (
-                    <div className="text-dim small">Unable to load weight data.</div>
-                  ) : weightChart ? (
-                    <Line data={weightChart.chartData} options={weightChart.options} />
-                  ) : (
-                    <div className="text-dim small">No weight data in this range.</div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="col-12 col-lg-4">
-              <div className="row g-2 h-100">
-                <div className="col-4 col-lg-12">
-                  <div className="ia-stat-mini h-100">
-                    <div className="ia-stat-mini-value">{data?.kpis.sessions || 0}</div>
-                    <div className="ia-stat-mini-label">Sessions</div>
-                  </div>
-                </div>
-
-                <div className="col-4 col-lg-12">
-                  <div className="ia-stat-mini h-100">
-                    <div className="ia-stat-mini-value">{Math.round(data?.kpis.calories || 0)}</div>
-                    <div className="ia-stat-mini-label">Calories</div>
-                  </div>
-                </div>
-
-                <div className="col-4 col-lg-12">
-                  <div className="ia-stat-mini h-100">
-                    <div className="ia-stat-mini-value">{data?.kpis.currentStreak || 0}</div>
-                    <div className="ia-stat-mini-label">Day streak</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {isValidating ? (
-            <div className="text-dim small mt-2">Refreshing progress…</div>
-          ) : null}
-
-          {error ? (
-            <div className="ia-inline-note-error mt-2">Unable to load progress overview.</div>
-          ) : null}
-        </section>
-
-        <section className="ia-tile ia-tile-pad mb-3">
-          <div className="d-flex justify-content-between align-items-center gap-2">
-            <div>
-              <div className="ia-card-title-compact">Strength</div>
-              <div className="text-dim small mt-1">
-                Estimated 1RM trend by lift in the selected range.
-              </div>
-            </div>
-
-            <Link href="/train">
-              Open training
-            </Link>
-          </div>
-
-          <div className="row g-2 mt-2">
-            {strengthCards.map((card) => (
-              <div key={card.key} className="col-6">
-                <div className="ia-strength-card">
-                  <div className="d-flex justify-content-between align-items-start gap-2">
+        {error ? (
+          <section className="ia-tile ia-tile-pad mb-2">
+            <div className="ia-inline-note-error">Unable to load progress overview.</div>
+          </section>
+        ) : !data ? (
+          <SectionLoadingCard title="Weight" icon="fa-chart-line" />
+        ) : (
+          <section className="ia-tile ia-tile-pad mb-2">
+            <div className="row g-2 align-items-stretch">
+              <div className="col-12 col-lg-8">
+                <div
+                  style={{
+                    borderRadius: 16,
+                    padding: 14,
+                    minHeight: "100%",
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
                     <div>
-                      <div className="ia-strength-card-label">{card.label}</div>
-                      <div className="ia-strength-card-value">
-                        {card.latest != null ? `${Math.round(card.latest)} kg` : "—"}
+                      <div className="ia-kicker">weight</div>
+                      <div style={{ fontSize: "2rem", lineHeight: 1, fontWeight: 900, marginTop: 8 }}>
+                        {currentWeight != null ? `${currentWeight.toFixed(1)}kg` : "—kg"}
+                      </div>
+                      <div className="text-dim small mt-1">
+                        {startWeight != null ? `Started at ${startWeight.toFixed(1)}kg` : "No check-ins yet"}
                       </div>
                     </div>
 
-                    <div className="text-end">
-                      {card.delta != null ? (
-                        <div className={card.delta >= 0 ? "ia-delta-good" : "ia-delta-bad"}>
-                          {card.delta > 0 ? "+" : ""}
-                          {Math.round(card.delta)}kg
-                        </div>
-                      ) : (
-                        <div className="text-dim small">No change</div>
-                      )}
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        flexDirection: "column",
+                        alignItems: "flex-end",
+                        justifyContent: "center",
+                        minWidth: 92,
+                        minHeight: 54,
+                        padding: "8px 10px",
+                        borderRadius: 14,
+                        background: "rgba(255,255,255,0.05)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          color: deltaKg <= 0 ? "var(--ia-neon)" : "#ff6f91",
+                          fontWeight: 800,
+                        }}
+                      >
+                        {deltaKg > 0 ? "+" : ""}
+                        {deltaKg.toFixed(1)}kg
+                      </div>
+                      <div className="text-dim small">
+                        {deltaPct > 0 ? "+" : ""}
+                        {deltaPct.toFixed(1)}%
+                      </div>
                     </div>
                   </div>
 
-                  <MiniSpark points={card.points} />
+                  <div style={{ height: 250, marginTop: 14 }}>
+                    {weightChart ? (
+                      <Line data={weightChart.chartData} options={weightChart.options} />
+                    ) : (
+                      <div className="text-dim small">No weight data in this range.</div>
+                    )}
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        </section>
 
-        <section className="ia-tile ia-tile-pad mb-3">
-          <div className="d-flex justify-content-between align-items-center gap-2">
-            <div>
-              <div className="ia-card-title-compact">Check-ins</div>
-              <div className="text-dim small mt-1">
-                Review historic check-ins and jump back into a specific day.
+              <div className="col-12 col-lg-4">
+                <div className="row g-2 h-100">
+                  <div className="col-4 col-lg-12">
+                    <div className="ia-stat-mini h-100">
+                      <div className="ia-stat-mini-value">{data.kpis.sessions || 0}</div>
+                      <div className="ia-stat-mini-label">Sessions</div>
+                    </div>
+                  </div>
+
+                  <div className="col-4 col-lg-12">
+                    <div className="ia-stat-mini h-100">
+                      <div className="ia-stat-mini-value">{Math.round(data.kpis.calories || 0)}</div>
+                      <div className="ia-stat-mini-label">Calories</div>
+                    </div>
+                  </div>
+
+                  <div className="col-4 col-lg-12">
+                    <div className="ia-stat-mini h-100">
+                      <div className="ia-stat-mini-value">{data.kpis.currentStreak || 0}</div>
+                      <div className="ia-stat-mini-label">Day streak</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <Link href="/checkin">
-              Add check-in
-            </Link>
-          </div>
+            {isValidating ? (
+              <div className="text-dim small mt-2">Refreshing progress…</div>
+            ) : null}
+          </section>
+        )}
 
-          {!data?.checkins?.length ? (
-            <div className="text-dim small mt-3">No check-ins in this selected range.</div>
-          ) : (
-            <div className="d-grid gap-2 mt-3">
-              {data.checkins.map((c, idx) => (
-                <div key={`${c.date}-${idx}`} className="ia-checkin-row">
-                  <div className="ia-checkin-row-main">
-                    <div className="ia-list-row-title">
-                      {new Date(`${c.date}T00:00:00`).toLocaleDateString(undefined, {
-                        weekday: "short",
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
+        {!data ? (
+          <SectionLoadingCard title="Strength" icon="fa-dumbbell" />
+        ) : (
+          <section className="ia-tile ia-tile-pad mb-2">
+            <div className="d-flex justify-content-between align-items-center gap-2">
+              <div>
+                <div className="ia-card-title-compact">Strength</div>
+                <div className="text-dim small mt-1">
+                  Estimated 1RM trend by lift in the selected range.
+                </div>
+              </div>
+
+              <Link href="/train" className="ia-btn ia-btn-muted">
+                Open training
+              </Link>
+            </div>
+
+            <div className="row g-2 mt-2">
+              {strengthCards.map((card) => (
+                <div key={card.key} className="col-6">
+                  <div
+                    style={{
+                      borderRadius: 14,
+                      padding: 12,
+                      height: "100%",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                    }}
+                  >
+                    <div className="d-flex justify-content-between align-items-start gap-2">
+                      <div>
+                        <div
+                          className="text-dim small"
+                          style={{
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {card.label}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.02rem",
+                            fontWeight: 800,
+                            lineHeight: 1.2,
+                            marginTop: 4,
+                          }}
+                        >
+                          {card.latest != null ? `${Math.round(card.latest)} kg` : "—"}
+                        </div>
+                      </div>
+
+                      <div className="text-end">
+                        {card.delta != null ? (
+                          <div
+                            style={{
+                              color: card.delta >= 0 ? "var(--ia-neon)" : "#ff6f91",
+                              fontWeight: 800,
+                              fontSize: "0.82rem",
+                            }}
+                          >
+                            {card.delta > 0 ? "+" : ""}
+                            {Math.round(card.delta)}kg
+                          </div>
+                        ) : (
+                          <div className="text-dim small">No change</div>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-dim small mt-1">
-                      {typeof c.weight_kg === "number" ? `${c.weight_kg} kg` : "—"} •{" "}
-                      {typeof c.body_fat_pct === "number" ? `${c.body_fat_pct}% body fat` : "—"}
-                    </div>
-                  </div>
 
-                  <div className="d-flex gap-2 flex-wrap">
-                    <Link href="{`/checkin?date=${encodeURIComponent(c.date)}`}">
-                      Edit
-                    </Link>
-
-                    {c.photo_url ? (
-                      <a
-                        href={c.photo_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ia-btn ia-btn-primary"
-                      >
-                        Photo
-                      </a>
-                    ) : null}
+                    <MiniSpark points={card.points} />
                   </div>
                 </div>
               ))}
             </div>
-          )}
-        </section>
+          </section>
+        )}
+
+        {!data ? (
+          <SectionLoadingCard title="Check-ins" icon="fa-clipboard-check" />
+        ) : (
+          <section className="ia-tile ia-tile-pad mb-2">
+            <div className="d-flex justify-content-between align-items-center gap-2">
+              <div>
+                <div className="ia-card-title-compact">Check-ins</div>
+                <div className="text-dim small mt-1">
+                  Review historic check-ins and jump back into a specific day.
+                </div>
+              </div>
+
+              <Link href="/checkin" className="ia-btn ia-btn-primary">
+                Add check-in
+              </Link>
+            </div>
+
+            {!data.checkins.length ? (
+              <div className="text-dim small mt-3">No check-ins in this selected range.</div>
+            ) : (
+              <div className="d-grid gap-2 mt-3">
+                {data.checkins.map((c, idx) => (
+                  <div
+                    key={`${c.date}-${idx}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "10px 0",
+                      borderBottom:
+                        idx === data.checkins.length - 1
+                          ? "none"
+                          : "1px solid rgba(255,255,255,0.08)",
+                    }}
+                  >
+                    <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                      <div className="ia-card-title-compact">
+                        {new Date(`${c.date}T00:00:00`).toLocaleDateString(undefined, {
+                          weekday: "short",
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </div>
+                      <div className="text-dim small mt-1">
+                        {typeof c.weight_kg === "number" ? `${c.weight_kg} kg` : "—"} •{" "}
+                        {typeof c.body_fat_pct === "number" ? `${c.body_fat_pct}% body fat` : "—"}
+                      </div>
+                    </div>
+
+                    <div className="d-flex gap-2 flex-wrap">
+                      <Link
+                        href={`/checkin?date=${encodeURIComponent(c.date)}`}
+                        className="ia-btn ia-btn-outline"
+                      >
+                        Edit
+                      </Link>
+
+                      {c.photo_url ? (
+                        <a
+                          href={c.photo_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ia-btn ia-btn-muted"
+                        >
+                          Photo
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </main>
 
       <BottomNav />
