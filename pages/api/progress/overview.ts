@@ -8,6 +8,7 @@ import { hasRole } from "../../../lib/rbac";
 
 type ScopeMode = "program" | "all";
 type TimeRange = "7d" | "30d" | "90d";
+type LiftKey = "squat" | "bench" | "deadlift" | "ohp";
 
 type SimpleCheckin = {
   date: string;
@@ -20,8 +21,6 @@ type StrengthPoint = {
   date: string;
   value: number;
 };
-
-type LiftKey = "squat" | "bench" | "deadlift" | "ohp";
 
 type CurrentProgram = {
   assignment_id: string;
@@ -100,19 +99,30 @@ function endOfDay(d: Date) {
   return out;
 }
 
+function numOrNull(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function toDate(v: any): Date | null {
   try {
     if (!v) return null;
-    if (typeof v?.toDate === "function") return v.toDate();
+
+    if (typeof v?.toDate === "function") {
+      const d = v.toDate();
+      return d instanceof Date && !isNaN(d.getTime()) ? d : null;
+    }
+
     if (typeof v === "object" && typeof v._seconds === "number") {
       const ms =
         v._seconds * 1000 +
         (typeof v._nanoseconds === "number" ? v._nanoseconds / 1e6 : 0);
       const d = new Date(ms);
-      return isNaN(d.getTime()) ? null : d;
+      return !isNaN(d.getTime()) ? d : null;
     }
+
     const d = new Date(v);
-    return isNaN(d.getTime()) ? null : d;
+    return !isNaN(d.getTime()) ? d : null;
   } catch {
     return null;
   }
@@ -145,14 +155,17 @@ function normaliseName(value: string) {
 
 function inferLiftKey(name: string): LiftKey | null {
   const n = normaliseName(name);
+
   for (const [lift, matchers] of Object.entries(LIFT_MATCHERS) as [LiftKey, string[]][]) {
     if (matchers.some((m) => n.includes(m))) return lift;
   }
+
   return null;
 }
 
 function getBenchmarkValue(part: any) {
   if (!part || typeof part !== "object") return null;
+
   const candidates = [
     part.one_rm,
     part.estimated_1rm,
@@ -162,10 +175,12 @@ function getBenchmarkValue(part: any) {
     part.weight_kg,
     part.weight,
   ];
+
   for (const c of candidates) {
     const n = Number(c);
     if (Number.isFinite(n) && n > 0) return n;
   }
+
   return null;
 }
 
@@ -186,13 +201,15 @@ async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
       const start = toDate(a.start_date);
       const end = toDate(a.end_date);
       const programId = String(a.program_id || "").trim();
+
       if (!programId || !start) return null;
 
       const programDoc = await firestore.collection(PROGRAMS_COLLECTION).doc(programId).get();
       const programData = programDoc.exists ? (programDoc.data() as any) : null;
 
       const weeks = Number(a.weeks || programData?.weeks || 0) || 0;
-      const computedEnd = end || (weeks > 0 ? addDays(startOfDay(start), weeks * 7 - 1) : null);
+      const computedEnd =
+        end || (weeks > 0 ? addDays(startOfDay(start), weeks * 7 - 1) : null);
 
       const isActiveToday =
         now >= startOfDay(start) &&
@@ -211,9 +228,9 @@ async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
         program_id: programId,
         program_name: String(programData?.name || a.program_name || "Program"),
         status: String(a.status || "active"),
-        start_date: start ? formatYMD(startOfDay(start)) : null,
+        start_date: formatYMD(startOfDay(start)),
         end_date: computedEnd ? formatYMD(startOfDay(computedEnd)) : null,
-        weeks: weeks || 0,
+        weeks,
         current_week: currentWeek,
         is_active_today: isActiveToday,
       } as CurrentProgram;
@@ -239,6 +256,7 @@ async function getCheckins(userEmail: string): Promise<SimpleCheckin[]> {
       .map((doc) => {
         const data = doc.data() as any;
         const date = doc.id.split("__")[1] || "";
+
         return {
           date,
           weight_kg:
@@ -256,11 +274,13 @@ async function getCheckins(userEmail: string): Promise<SimpleCheckin[]> {
       .sort((a, b) => a.date.localeCompare(b.date));
   } catch {
     const all = await firestore.collection(CHECKINS_COLLECTION).get();
+
     return all.docs
       .filter((doc) => doc.id.startsWith(`${userEmail}__`))
       .map((doc) => {
         const data = doc.data() as any;
         const date = doc.id.split("__")[1] || "";
+
         return {
           date,
           weight_kg:
@@ -280,12 +300,20 @@ async function getCheckins(userEmail: string): Promise<SimpleCheckin[]> {
 }
 
 async function getCompletions(userEmail: string) {
-  const snap = await firestore
-    .collection(COMPLETIONS_COLLECTION)
-    .where("user_email", "==", userEmail)
-    .get();
+  try {
+    const snap = await firestore
+      .collection(COMPLETIONS_COLLECTION)
+      .where("user_email", "==", userEmail)
+      .get();
 
-  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+  } catch {
+    const snap = await firestore.collection(COMPLETIONS_COLLECTION).get();
+
+    return snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as any) }))
+      .filter((row: any) => String(row.user_email || "").trim().toLowerCase() === userEmail);
+  }
 }
 
 export default async function handler(
@@ -358,17 +386,18 @@ export default async function handler(
       scope === "program" && currentProgram?.start_date
         ? allCheckins.filter((c) => {
             const endLimit = currentProgram.end_date || "9999-12-31";
-            return c.date >= currentProgram.start_date! && c.date <= endLimit;
+            return c.date >= currentProgram.start_date && c.date <= endLimit;
           })
         : allCheckins;
 
     const firstWeight =
-      baselineCheckins.find((c) => typeof c.weight_kg === "number" && c.weight_kg !== null) || null;
+      baselineCheckins.find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) ||
+      null;
 
     const latestWeight =
       [...filteredCheckins]
         .reverse()
-        .find((c) => typeof c.weight_kg === "number" && c.weight_kg !== null) || null;
+        .find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) || null;
 
     const deltaKg =
       firstWeight?.weight_kg != null && latestWeight?.weight_kg != null
@@ -413,6 +442,7 @@ export default async function handler(
     for (const c of allCompletions) {
       const iso = getCompletionISO(c);
       if (!iso) continue;
+
       const ymd = iso.slice(0, 10);
       if (ymd < startYMD || ymd > endYMD) continue;
 
@@ -435,13 +465,20 @@ export default async function handler(
 
     for (const key of Object.keys(strength) as LiftKey[]) {
       strength[key].points.sort((a, b) => a.date.localeCompare(b.date));
-      const latest = strength[key].points[strength[key].points.length - 1]?.value ?? null;
-      const previous = strength[key].points[strength[key].points.length - 2]?.value ?? null;
+
+      const latest =
+        strength[key].points.length > 0
+          ? strength[key].points[strength[key].points.length - 1].value
+          : null;
+
+      const previous =
+        strength[key].points.length > 1
+          ? strength[key].points[strength[key].points.length - 2].value
+          : null;
 
       strength[key].latest = latest;
       strength[key].previous = previous;
-      strength[key].delta =
-        latest != null && previous != null ? latest - previous : null;
+      strength[key].delta = latest != null && previous != null ? latest - previous : null;
     }
 
     const payload: Resp = {
