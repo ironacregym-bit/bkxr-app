@@ -18,13 +18,14 @@ import {
   LinearScale,
   Tooltip,
   Legend,
+  Filler,
   type ChartData,
   type ChartOptions,
   type ChartDataset,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
-ChartJS.register(LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend);
+ChartJS.register(LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend, Filler);
 
 const fetcher = (u: string) =>
   fetch(u).then((r) => {
@@ -32,53 +33,9 @@ const fetcher = (u: string) =>
     return r.json();
   });
 
-// ---- Helpers ---------------------------------------------------------------
-const ACCENT = "#FF8A2A";
-const fmtYMD = (d: Date) => d.toISOString().slice(0, 10);
-const addDays = (d: Date, n: number) => {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-};
+type ScopeMode = "program" | "all";
+type TimeRange = "7d" | "30d" | "90d";
 
-/** Robust Firestore timestamp parser:
- * - Timestamp.toDate()
- * - Firestore JSON: { _seconds, _nanoseconds }
- * - ISO strings or epoch-like values
- * Returns ISO string or null
- */
-const toISO = (v: any) => {
-  try {
-    if (!v) return null;
-    if (typeof v?.toDate === "function") {
-      const d = v.toDate();
-      return d && !isNaN(d.getTime()) ? d.toISOString() : null;
-    }
-    if (typeof v === "object" && typeof v._seconds === "number") {
-      const ms = v._seconds * 1000 + (typeof v._nanoseconds === "number" ? v._nanoseconds / 1e6 : 0);
-      const d = new Date(ms);
-      return !isNaN(d.getTime()) ? d.toISOString() : null;
-    }
-    const d = new Date(v);
-    return !isNaN(d.getTime()) ? d.toISOString() : null;
-  } catch {
-    return null;
-  }
-};
-
-// ISO week key, Mon-based (YYYY-Www); we also keep the last date for chart label spacing
-function toWeekKeyKeepLast(ymd: string) {
-  const d = new Date(ymd + "T00:00:00");
-  const day = (d.getDay() + 6) % 7; // 0..6 (Mon..Sun)
-  const thursday = addDays(d, 3 - day);
-  const year = thursday.getFullYear();
-  const oneJan = new Date(year, 0, 1);
-  const week = Math.round((+thursday - +oneJan) / (7 * 24 * 3600 * 1000)) + 1;
-  const ww = String(week).padStart(2, "0");
-  return { weekKey: `${year}-W${ww}`, lastDate: ymd };
-}
-
-// ---- Shapes ---------------------------------------------------------------
 type Completion = {
   id?: string;
   user_email?: string | null;
@@ -98,7 +55,7 @@ type Completion = {
   created_at?: string | { toDate?: () => Date } | null;
 };
 
-type CompletionsIndexResp = {
+type CompletionsResp = {
   results?: Completion[];
   items?: Completion[];
   completions?: Completion[];
@@ -112,547 +69,772 @@ type CheckinRow = {
   body_fat_pct: number | null;
   photo_url?: string | null;
 };
-type CheckinsSeriesResp = { results: CheckinRow[] };
 
-// ---- Page -----------------------------------------------------------------
+type CheckinsSeriesResp = {
+  results: CheckinRow[];
+};
+
+type CurrentProgram = {
+  assignment_id: string;
+  program_id: string;
+  program_name: string;
+  status: string;
+  start_date: string | null;
+  end_date: string | null;
+  weeks: number;
+  current_week: number | null;
+  is_active_today: boolean;
+} | null;
+
+type HomeOverviewResponse = {
+  currentProgram?: CurrentProgram;
+};
+
+type LiftKey = "squat" | "bench" | "deadlift" | "ohp";
+
+type StrengthPoint = {
+  date: string;
+  value: number;
+};
+
+const LIFT_LABELS: Record<LiftKey, string> = {
+  squat: "Squat",
+  bench: "Bench",
+  deadlift: "Deadlift",
+  ohp: "OHP",
+};
+
+const LIFT_MATCHERS: Record<LiftKey, string[]> = {
+  squat: ["squat", "back squat", "front squat"],
+  bench: ["bench", "bench press"],
+  deadlift: ["deadlift"],
+  ohp: ["ohp", "overhead press", "strict press", "press"],
+};
+
+function formatYMD(d: Date) {
+  return d.toLocaleDateString("en-CA");
+}
+
+function addDays(d: Date, n: number) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+function startOfAlignedWeek(d: Date) {
+  const day = d.getDay();
+  const diffToMon = (day + 6) % 7;
+  const s = new Date(d);
+  s.setDate(d.getDate() - diffToMon);
+  s.setHours(0, 0, 0, 0);
+  return s;
+}
+
+function fmtShortDate(ymd: string) {
+  return new Date(`${ymd}T00:00:00`).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function toISO(v: any) {
+  try {
+    if (!v) return null;
+    if (typeof v?.toDate === "function") {
+      const d = v.toDate();
+      return d && !isNaN(d.getTime()) ? d.toISOString() : null;
+    }
+    if (typeof v === "object" && typeof v._seconds === "number") {
+      const ms = v._seconds * 1000 + (typeof v._nanoseconds === "number" ? v._nanoseconds / 1e6 : 0);
+      const d = new Date(ms);
+      return !isNaN(d.getTime()) ? d.toISOString() : null;
+    }
+    const d = new Date(v);
+    return !isNaN(d.getTime()) ? d.toISOString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function getCompletionISO(c: Completion) {
+  return (
+    toISO((c as any).completed_date) ||
+    toISO((c as any).date_completed) ||
+    toISO((c as any).started_at) ||
+    toISO((c as any).created_at)
+  );
+}
+
+function rangeDaysToNumber(range: TimeRange) {
+  if (range === "7d") return 7;
+  if (range === "30d") return 30;
+  return 90;
+}
+
+function clampPct(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function getBenchmarkValue(part: any) {
+  if (!part || typeof part !== "object") return null;
+
+  const candidates = [
+    part.one_rm,
+    part.estimated_1rm,
+    part.estimated1rm,
+    part.rm_1,
+    part.value,
+    part.weight_kg,
+    part.weight,
+  ];
+
+  for (const c of candidates) {
+    const n = Number(c);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+
+  return null;
+}
+
+function normaliseName(value: string) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function inferLiftKey(name: string): LiftKey | null {
+  const n = normaliseName(name);
+
+  for (const [lift, matchers] of Object.entries(LIFT_MATCHERS) as [LiftKey, string[]][]) {
+    if (matchers.some((m) => n.includes(m))) return lift;
+  }
+
+  return null;
+}
+
+function extractStrengthSeries(completions: Completion[], startYMD: string, endYMD: string) {
+  const out: Record<LiftKey, StrengthPoint[]> = {
+    squat: [],
+    bench: [],
+    deadlift: [],
+    ohp: [],
+  };
+
+  for (const c of completions) {
+    const iso = getCompletionISO(c);
+    if (!iso) continue;
+    const ymd = iso.slice(0, 10);
+    if (ymd < startYMD || ymd > endYMD) continue;
+
+    const metrics = c.benchmark_metrics;
+    if (!metrics || typeof metrics !== "object") continue;
+
+    for (const [name, part] of Object.entries(metrics)) {
+      const lift = inferLiftKey(name);
+      if (!lift) continue;
+
+      const value = getBenchmarkValue(part);
+      if (!value) continue;
+
+      out[lift].push({
+        date: ymd,
+        value,
+      });
+    }
+  }
+
+  for (const lift of Object.keys(out) as LiftKey[]) {
+    out[lift].sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  return out;
+}
+
+function getDateWindow(scope: ScopeMode, range: TimeRange, currentProgram: CurrentProgram) {
+  const today = new Date();
+  const end = new Date(today);
+  end.setHours(23, 59, 59, 999);
+
+  const days = rangeDaysToNumber(range);
+  const rangeStart = addDays(new Date(today), -(days - 1));
+  rangeStart.setHours(0, 0, 0, 0);
+
+  if (scope !== "program" || !currentProgram?.start_date) {
+    return {
+      start: rangeStart,
+      end,
+    };
+  }
+
+  const programStart = new Date(`${currentProgram.start_date}T00:00:00`);
+  const computedStart = programStart > rangeStart ? programStart : rangeStart;
+
+  let programEnd = end;
+  if (currentProgram.end_date) {
+    const endFromProgram = new Date(`${currentProgram.end_date}T23:59:59`);
+    if (!isNaN(endFromProgram.getTime()) && endFromProgram < programEnd) {
+      programEnd = endFromProgram;
+    }
+  }
+
+  return {
+    start: computedStart,
+    end: programEnd,
+  };
+}
+
+function LoadingCard({ title }: { title: string }) {
+  return (
+    <section className="ia-tile ia-tile-pad mb-3">
+      <div className="d-flex align-items-center justify-content-between">
+        <div className="ia-card-title-compact">{title}</div>
+        <i className="fas fa-spinner fa-spin text-dim" />
+      </div>
+    </section>
+  );
+}
+
+function MiniSpark({
+  labels,
+  values,
+  accent = "#18ff9a",
+}: {
+  labels: string[];
+  values: number[];
+  accent?: string;
+}) {
+  if (!values.length) {
+    return <div className="text-dim small">No data yet</div>;
+  }
+
+  const chartData: ChartData<"line"> = {
+    labels,
+    datasets: [
+      {
+        label: "1RM",
+        data: values,
+        borderColor: accent,
+        backgroundColor: "rgba(24,255,154,0.08)",
+        tension: 0.35,
+        pointRadius: 0,
+        fill: true,
+      } as ChartDataset<"line">,
+    ],
+  };
+
+  const options: ChartOptions<"line"> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { enabled: false },
+    },
+    scales: {
+      x: {
+        display: false,
+      },
+      y: {
+        display: false,
+      },
+    },
+    elements: {
+      line: {
+        borderWidth: 2,
+      },
+    },
+  };
+
+  return (
+    <div className="ia-progress-spark">
+      <Line data={chartData} options={options} />
+    </div>
+  );
+}
+
 export default function ProgressPage() {
-  const { data: session } = useSession();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  const email = session?.user?.email || null;
+  const { data: session, status } = useSession();
 
-  // -------- All‑time completions (paged) -----------------------------------
-  // We page all completions to compute all-time KPIs and weekly charts.
-  const PAGE_LIMIT = 500;
-  const getKey = (pageIndex: number, previousPageData: CompletionsIndexResp | null) => {
+  const [mounted, setMounted] = useState(false);
+  const [scope, setScope] = useState<ScopeMode>("program");
+  const [range, setRange] = useState<TimeRange>("30d");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    if (status === "loading") return;
+
+    if (!session && typeof window !== "undefined") {
+      window.location.replace(`/register?callbackUrl=${encodeURIComponent("/progress")}`);
+    }
+  }, [mounted, session, status]);
+
+  const email = String(session?.user?.email || "").trim().toLowerCase();
+  const isAuthed = Boolean(email);
+
+  const currentWeekStart = useMemo(() => formatYMD(startOfAlignedWeek(new Date())), []);
+
+  const { data: homeOverview } = useSWR<HomeOverviewResponse>(
+    mounted && isAuthed
+      ? `/api/iron-acre/home-overview?week=${encodeURIComponent(currentWeekStart)}`
+      : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60_000,
+    }
+  );
+
+  const currentProgram = homeOverview?.currentProgram || null;
+
+  useEffect(() => {
+    if (!currentProgram) {
+      setScope("all");
+    }
+  }, [currentProgram]);
+
+  const PAGE_LIMIT = 300;
+
+  const getKey = (pageIndex: number, previousPageData: CompletionsResp | null) => {
     if (!mounted || !email) return null;
-    if (previousPageData && !previousPageData.nextCursor) return null; // end
+    if (previousPageData && !previousPageData.nextCursor) return null;
+
     const params = new URLSearchParams();
     params.set("user_email", email);
     params.set("limit", String(PAGE_LIMIT));
+
     if (pageIndex > 0 && previousPageData?.nextCursor) {
       params.set("cursor", previousPageData.nextCursor);
     }
-    // NOTE: unified route is /api/completions (NOT /api/completions/index)
+
     return `/api/completions?${params.toString()}`;
   };
 
-  const {
-    data: pages,
-    error: compsErr,
-    isValidating: compsLoading,
-  } = useSWRInfinite<CompletionsIndexResp>(getKey, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 30_000,
-  });
+  const { data: completionPages, error: completionsErr, isValidating: completionsLoading } =
+    useSWRInfinite<CompletionsResp>(getKey, fetcher, {
+      revalidateOnFocus: false,
+      dedupingInterval: 30_000,
+    });
 
-  const allCompletions: Completion[] = useMemo(() => {
+  const allCompletions = useMemo(() => {
     const flatten: Completion[] = [];
-    for (const p of pages || []) {
+    for (const p of completionPages || []) {
       const src = p?.results || p?.items || p?.completions || p?.data || [];
       if (Array.isArray(src)) flatten.push(...src);
     }
     return flatten;
-  }, [pages]);
+  }, [completionPages]);
 
-  // -------- Check‑ins series (show all) ------------------------------------
-  // Pull a large window to approximate "all checks" (change 1000 if you need more).
-  const checkinsKey =
-    mounted && email
-      ? `/api/checkins/series?email=${encodeURIComponent(email)}&limit=1000`
-      : null;
+  const { data: checkinsResp, error: checkinsErr } = useSWR<CheckinsSeriesResp>(
+    mounted && email ? `/api/checkins/series?email=${encodeURIComponent(email)}&limit=1000` : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60_000,
+      shouldRetryOnError: false,
+    }
+  );
 
-  const { data: checkins, error: checkinsErr } = useSWR<CheckinsSeriesResp>(checkinsKey, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 60_000,
-    shouldRetryOnError: false,
-  });
+  const allCheckins = useMemo(() => {
+    const rows = Array.isArray(checkinsResp?.results) ? checkinsResp.results.slice() : [];
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    return rows;
+  }, [checkinsResp]);
 
-  // -------- Aggregate all‑time KPIs + weekly series ------------------------
-  const {
-    allTimeSessions,
-    allTimeCalories,
-    currentStreak,
-    maxStreak,
-    weeklyCaloriesAsc,
-    weeklySessionsAsc,
-    topLoads,
-  } = useMemo(() => {
-    const daySet = new Set<string>();
-    const weeklyMap = new Map<
-      string,
-      { calories: number; sessions: number; lastDate: string }
-    >();
-    const loads: { weight_kg: number; when: string }[] = [];
+  const { start, end } = useMemo(() => getDateWindow(scope, range, currentProgram), [scope, range, currentProgram]);
+  const startYMD = formatYMD(start);
+  const endYMD = formatYMD(end);
 
-    let totalCalories = 0;
-    let totalSessions = 0;
+  const filteredCheckins = useMemo(() => {
+    return allCheckins.filter((c) => c.date >= startYMD && c.date <= endYMD);
+  }, [allCheckins, startYMD, endYMD]);
 
-    for (const c of allCompletions) {
-      // IMPORTANT: include date_completed fallback (and keep started_at/created_at as last resort)
-      const iso =
-        toISO((c as any).completed_date) ||
-        toISO((c as any).date_completed) ||
-        toISO((c as any).started_at) ||
-        toISO((c as any).created_at);
-
-      if (!iso) continue;
-
+  const filteredCompletions = useMemo(() => {
+    return allCompletions.filter((c) => {
+      const iso = getCompletionISO(c);
+      if (!iso) return false;
       const ymd = iso.slice(0, 10);
-      daySet.add(ymd);
-      totalSessions += 1;
+      return ymd >= startYMD && ymd <= endYMD;
+    });
+  }, [allCompletions, startYMD, endYMD]);
 
-      const cal = Number(c.calories_burned) || 0;
-      totalCalories += cal;
-
-      const { weekKey, lastDate } = toWeekKeyKeepLast(ymd);
-      const wk = weeklyMap.get(weekKey) || { calories: 0, sessions: 0, lastDate };
-      wk.calories += cal;
-      wk.sessions += 1;
-      if (ymd > wk.lastDate) wk.lastDate = ymd;
-      weeklyMap.set(weekKey, wk);
-
-      // Heaviest loads (aggregate + benchmark parts)
-      const aggW = Number(c.weight_completed_with);
-      if (Number.isFinite(aggW) && aggW > 0) loads.push({ weight_kg: aggW, when: iso });
-      if (c.benchmark_metrics && typeof c.benchmark_metrics === "object") {
-        for (const [, part] of Object.entries(c.benchmark_metrics)) {
-          const w = Number((part as any)?.weight_kg);
-          if (Number.isFinite(w) && w > 0) loads.push({ weight_kg: w, when: iso });
-        }
-      }
+  const baselineForScope = useMemo(() => {
+    if (scope === "program" && currentProgram?.start_date) {
+      const programStart = currentProgram.start_date;
+      const programEnd = currentProgram.end_date || "9999-12-31";
+      return allCheckins.filter((c) => c.date >= programStart && c.date <= programEnd);
     }
+    return allCheckins;
+  }, [scope, currentProgram, allCheckins]);
 
-    // Current streak up to today (consecutive days with >=1 completion)
-    const today = new Date();
-    let currentStreak = 0;
-    for (let i = 0; i < 3650; i++) {
-      const d = addDays(new Date(today), -i);
-      const k = fmtYMD(d);
-      if (daySet.has(k)) currentStreak++;
-      else break;
+  const firstWeight = baselineForScope.find((c) => typeof c.weight_kg === "number" && c.weight_kg !== null) || null;
+  const latestWeight = [...filteredCheckins]
+    .reverse()
+    .find((c) => typeof c.weight_kg === "number" && c.weight_kg !== null) || null;
+
+  const weightDeltaKg = useMemo(() => {
+    if (!firstWeight?.weight_kg || !latestWeight?.weight_kg) return 0;
+    return latestWeight.weight_kg - firstWeight.weight_kg;
+  }, [firstWeight, latestWeight]);
+
+  const weightDeltaPct = useMemo(() => {
+    if (!firstWeight?.weight_kg || !latestWeight?.weight_kg) return 0;
+    if (!firstWeight.weight_kg) return 0;
+    return ((latestWeight.weight_kg - firstWeight.weight_kg) / firstWeight.weight_kg) * 100;
+  }, [firstWeight, latestWeight]);
+
+  const filteredCalories = useMemo(() => {
+    return filteredCompletions.reduce((sum, c) => sum + Number(c.calories_burned || 0), 0);
+  }, [filteredCompletions]);
+
+  const filteredSessions = filteredCompletions.length;
+
+  const allDaysSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of allCompletions) {
+      const iso = getCompletionISO(c);
+      if (!iso) continue;
+      set.add(iso.slice(0, 10));
     }
-
-    // Max streak across history
-    const sortedDays = Array.from(daySet).sort((a, b) => a.localeCompare(b));
-    let maxStreak = 0;
-    let run = 0;
-    let prev: string | null = null;
-    for (const k of sortedDays) {
-      if (!prev) {
-        run = 1;
-        prev = k;
-        maxStreak = Math.max(maxStreak, run);
-        continue;
-      }
-      const prevDate = new Date(prev);
-      const thisDate = new Date(k);
-      const diffDays = Math.round((+thisDate - +prevDate) / (1000 * 60 * 60 * 24));
-      if (diffDays === 1) {
-        run++;
-      } else {
-        run = 1;
-      }
-      prev = k;
-      maxStreak = Math.max(maxStreak, run);
-    }
-
-    // Weekly ascending arrays for charts
-    const weeklyAsc = Array.from(weeklyMap.entries())
-      .map(([wk, v]) => ({ weekKey: wk, lastDate: v.lastDate, calories: v.calories, sessions: v.sessions }))
-      .sort((a, b) => a.lastDate.localeCompare(b.lastDate));
-
-    const weeklyCaloriesAsc = weeklyAsc.map((r) => ({ dateKey: r.lastDate, value: r.calories }));
-    const weeklySessionsAsc = weeklyAsc.map((r) => ({ dateKey: r.lastDate, value: r.sessions }));
-
-    const topLoads = loads.sort((a, b) => b.weight_kg - a.weight_kg).slice(0, 5);
-
-    return {
-      allTimeSessions: totalSessions,
-      allTimeCalories: totalCalories,
-      currentStreak,
-      maxStreak,
-      weeklyCaloriesAsc,
-      weeklySessionsAsc,
-      topLoads,
-    };
+    return set;
   }, [allCompletions]);
 
-  // -------- Weight/Body Fat charts (end at last check‑in) ------------------
+  const currentStreak = useMemo(() => {
+    let streak = 0;
+    const today = new Date();
+    for (let i = 0; i < 3650; i++) {
+      const d = addDays(today, -i);
+      const ymd = fmtYMD(d);
+      if (allDaysSet.has(ymd)) streak++;
+      else break;
+    }
+    return streak;
+  }, [allDaysSet]);
+
   const weightChart = useMemo(() => {
-    if (checkinsErr) return null;
-    const src = (checkins?.results || []).slice().reverse(); // ascending to last check‑in
-    const labels = src.map((r) =>
-      new Date(r.date).toLocaleDateString(undefined, { day: "numeric", month: "short" })
+    const labels = filteredCheckins.map((r) =>
+      new Date(`${r.date}T00:00:00`).toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+      })
     );
-    const data = src.map((r) => (typeof r.weight_kg === "number" ? r.weight_kg : null));
+
+    const values = filteredCheckins.map((r) =>
+      typeof r.weight_kg === "number" ? r.weight_kg : null
+    );
 
     const chartData: ChartData<"line"> = {
       labels,
       datasets: [
         {
           label: "Weight (kg)",
-          data: data as (number | null)[],
-          borderColor: "#4fa3a5",
-          backgroundColor: "rgba(79,163,165,0.25)",
-          tension: 0.3,
-          pointRadius: 2,
+          data: values as (number | null)[],
+          borderColor: "#18ff9a",
+          backgroundColor: "rgba(24,255,154,0.14)",
+          tension: 0.35,
+          pointRadius: 0,
+          fill: true,
         } as ChartDataset<"line">,
       ],
     };
+
     const options: ChartOptions<"line"> = {
       responsive: true,
-      plugins: { legend: { labels: { color: "#e9eef6" } } },
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+      },
       scales: {
-        x: { ticks: { color: "#9fb0c3" }, grid: { color: "rgba(255,255,255,0.08)" } },
-        y: { ticks: { color: "#9fb0c3" }, grid: { color: "rgba(255,255,255,0.08)" } },
+        x: {
+          ticks: { color: "#9fb0c3" },
+          grid: { color: "rgba(255,255,255,0.06)" },
+        },
+        y: {
+          ticks: { color: "#9fb0c3" },
+          grid: { color: "rgba(255,255,255,0.06)" },
+        },
+      },
+      elements: {
+        line: {
+          borderWidth: 2.5,
+        },
       },
     };
-    return { chartData, options };
-  }, [checkins, checkinsErr]);
 
-  const bodyFatChart = useMemo(() => {
-    if (checkinsErr) return null;
-    const src = (checkins?.results || []).slice().reverse();
-    const labels = src.map((r) =>
-      new Date(r.date).toLocaleDateString(undefined, { day: "numeric", month: "short" })
-    );
-    const data = src.map((r) => (typeof r.body_fat_pct === "number" ? r.body_fat_pct : null));
-
-    const chartData: ChartData<"line"> = {
-      labels,
-      datasets: [
-        {
-          label: "Body fat (%)",
-          data: data as (number | null)[],
-          borderColor: "#ff4fa3",
-          backgroundColor: "rgba(255,79,163,0.25)",
-          tension: 0.3,
-          pointRadius: 2,
-        } as ChartDataset<"line">,
-      ],
-    };
-    const options: ChartOptions<"line"> = {
-      responsive: true,
-      plugins: { legend: { labels: { color: "#e9eef6" } } },
-      scales: {
-        x: { ticks: { color: "#9fb0c3" }, grid: { color: "rgba(255,255,255,0.08)" } },
-        y: { ticks: { color: "#9fb0c3" }, grid: { color: "rgba(255,255,255,0.08)" } },
-      },
-    };
     return { chartData, options };
-  }, [checkins, checkinsErr]);
+  }, [filteredCheckins]);
 
-  // -------- Weekly charts (same size as the above) -------------------------
-  const weeklyCaloriesChart = useMemo(() => {
-    const labels = weeklyCaloriesAsc.map((r) =>
-      new Date(r.dateKey).toLocaleDateString(undefined, { day: "numeric", month: "short" })
-    );
-    const data = weeklyCaloriesAsc.map((r) => r.value);
-    const chartData: ChartData<"line"> = {
-      labels,
-      datasets: [
-        {
-          label: "Calories burned (per week)",
-          data,
-          borderColor: ACCENT,
-          backgroundColor: "rgba(255,138,42,0.25)",
-          tension: 0.3,
-          pointRadius: 2,
-        } as ChartDataset<"line">,
-      ],
-    };
-    const options: ChartOptions<"line"> = {
-      responsive: true,
-      plugins: { legend: { labels: { color: "#e9eef6" } } },
-      scales: {
-        x: { ticks: { color: "#9fb0c3" }, grid: { color: "rgba(255,255,255,0.08)" } },
-        y: { ticks: { color: "#9fb0c3" }, grid: { color: "rgba(255,255,255,0.08)" } },
-      },
-    };
-    return { chartData, options };
-  }, [weeklyCaloriesAsc]);
+  const strengthSeries = useMemo(() => {
+    return extractStrengthSeries(allCompletions, startYMD, endYMD);
+  }, [allCompletions, startYMD, endYMD]);
 
-  const weeklySessionsChart = useMemo(() => {
-    const labels = weeklySessionsAsc.map((r) =>
-      new Date(r.dateKey).toLocaleDateString(undefined, { day: "numeric", month: "short" })
-    );
-    const data = weeklySessionsAsc.map((r) => r.value);
-    const chartData: ChartData<"line"> = {
-      labels,
-      datasets: [
-        {
-          label: "Sessions completed (per week)",
-          data,
-          borderColor: "#32ff7f",
-          backgroundColor: "rgba(50,255,127,0.25)",
-          tension: 0.3,
-          pointRadius: 2,
-        } as ChartDataset<"line">,
-      ],
-    };
-    const options: ChartOptions<"line"> = {
-      responsive: true,
-      plugins: { legend: { labels: { color: "#e9eef6" } } },
-      scales: {
-        x: { ticks: { color: "#9fb0c3" }, grid: { color: "rgba(255,255,255,0.08)" } },
-        y: { ticks: { color: "#9fb0c3" }, grid: { color: "rgba(255,255,255,0.08)" } },
-      },
-    };
-    return { chartData, options };
-  }, [weeklySessionsAsc]);
+  const strengthCards = useMemo(() => {
+    return (Object.keys(LIFT_LABELS) as LiftKey[]).map((lift) => {
+      const points = strengthSeries[lift] || [];
+      const latest = points.length ? points[points.length - 1].value : null;
+      const prev = points.length > 1 ? points[points.length - 2].value : null;
+      const delta = latest != null && prev != null ? latest - prev : null;
+
+      return {
+        key: lift,
+        label: LIFT_LABELS[lift],
+        latest,
+        delta,
+        labels: points.map((p) => fmtShortDate(p.date)),
+        values: points.map((p) => p.value),
+      };
+    });
+  }, [strengthSeries]);
 
   return (
     <>
       <Head>
-        <title>Progress • BXKR</title>
+        <title>Progress • Iron Acre Gym</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="mobile-web-app-capable" content="yes" />
       </Head>
 
-      <main
-        className="container py-3"
-        style={{ paddingBottom: 90, color: "#fff", borderRadius: 12, minHeight: "100vh" }}
-      >
-        {/* Header */}
-        <div className="d-flex align-items-center justify-content-between mb-3">
-          <div>
-            <h1 className="h4 mb-0" style={{ fontWeight: 700 }}>
-              Progress
-            </h1>
-            <small className="text-dim">Trends, check‑ins, and recent lifts</small>
+      <main className="container py-2 ia-progress-page">
+        <section className="ia-tile ia-tile-pad mb-3">
+          <div className="ia-kicker">
+            <i className="fas fa-chart-line" />
+            progress
           </div>
-          <div className="d-flex gap-2">
-            <Link href="/checkin" className="btn btn-bxkr-outline btn-sm" style={{ borderRadius: 24 }}>
-              Add check‑in
-            </Link>
-            <a
-              href="https://bkxr-app.vercel.app/schedule"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-sm"
-              style={{
-                borderRadius: 24,
-                color: "#fff",
-                background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
-                boxShadow: `0 0 14px ${ACCENT}66`,
-              }}
-            >
-              Book a class
-            </a>
-          </div>
-        </div>
 
-        {/* KPIs (all‑time) */}
-        <section className="row gx-3">
-          <div className="col-6 col-md-3 mb-3">
-            <div className="futuristic-card p-3">
-              <div className="small text-dim">Sessions (all time)</div>
-              <div className="h4 m-0">{allTimeSessions}</div>
+          <div className="d-flex justify-content-between align-items-start gap-2 mt-1 flex-wrap">
+            <div className="ia-progress-header-copy">
+              <div className="ia-page-title">Progress</div>
+              <div className="ia-page-subtitle">
+                Track weight, strength and consistency over time.
+              </div>
             </div>
-          </div>
-          <div className="col-6 col-md-3 mb-3">
-            <div className="futuristic-card p-3">
-              <div className="small text-dim">Calories (all time)</div>
-              <div className="h4 m-0">{allTimeCalories}</div>
-            </div>
-          </div>
-          <div className="col-6 col-md-3 mb-3">
-            <div className="futuristic-card p-3">
-              <div className="small text-dim">Current streak</div>
-              <div className="h4 m-0">{currentStreak} days</div>
-            </div>
-          </div>
-          <div className="col-6 col-md-3 mb-3">
-            <div className="futuristic-card p-3">
-              <div className="small text-dim">Max streak</div>
-              <div className="h4 m-0">{maxStreak} days</div>
+
+            <div className="d-flex gap-2">
+              /checkin
+                <i className="fas fa-plus" />
+              </Link>
+
+              /schedule
+                <i className="fas fa-calendar-alt" />
+              </Link>
             </div>
           </div>
         </section>
 
-        {/* Charts (two rows; all same size) */}
-        <section className="row gx-3">
-          {/* Row 1: Weight / Body fat (end at last check‑in) */}
-          <div className="col-12 col-md-6 mb-3">
-            <div className="futuristic-card p-3">
-              <h6 className="mb-2" style={{ fontWeight: 700 }}>
-                Weight
-              </h6>
-              {checkinsErr ? (
-                <div className="text-dim">No check‑ins yet.</div>
-              ) : weightChart ? (
-                <Line data={weightChart.chartData} options={weightChart.options} />
-              ) : (
-                <div className="text-dim">No check‑ins yet.</div>
-              )}
+        <section className="ia-tile ia-tile-pad mb-3">
+          <div className="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <div className="d-flex gap-2 flex-wrap">
+              <button
+                type="button"
+                className={scope === "program" && !!currentProgram ? "ia-seg-btn ia-seg-btn-active" : "ia-seg-btn"}
+                onClick={() => currentProgram && setScope("program")}
+                disabled={!currentProgram}
+              >
+                Program
+              </button>
+
+              <button
+                type="button"
+                className={scope === "all" ? "ia-seg-btn ia-seg-btn-active" : "ia-seg-btn"}
+                onClick={() => setScope("all")}
+              >
+                All time
+              </button>
+            </div>
+
+            <div className="d-flex gap-2 flex-wrap">
+              {(["7d", "30d", "90d"] as TimeRange[]).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  className={range === r ? "ia-seg-btn ia-seg-btn-active" : "ia-seg-btn"}
+                  onClick={() => setRange(r)}
+                >
+                  {r.replace("d", "D")}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="col-12 col-md-6 mb-3">
-            <div className="futuristic-card p-3">
-              <h6 className="mb-2" style={{ fontWeight: 700 }}>
-                Body fat
-              </h6>
-              {checkinsErr ? (
-                <div className="text-dim">No check‑ins yet.</div>
-              ) : bodyFatChart ? (
-                <Line data={bodyFatChart.chartData} options={bodyFatChart.options} />
-              ) : (
-                <div className="text-dim">No check‑ins yet.</div>
-              )}
+          {scope === "program" && currentProgram ? (
+            <div className="text-dim small mt-2">
+              {currentProgram.program_name} • Week {currentProgram.current_week || 1} of{" "}
+              {currentProgram.weeks || 1}
             </div>
-          </div>
+          ) : (
+            <div className="text-dim small mt-2">Viewing all-time progress</div>
+          )}
+        </section>
 
-          {/* Row 2: Calories/week / Sessions/week (same size as above) */}
-          <div className="col-12 col-md-6 mb-3">
-            <div className="futuristic-card p-3">
-              <h6 className="mb-2" style={{ fontWeight: 700 }}>
-                Calories burned (per week)
-              </h6>
-              <Line
-                data={weeklyCaloriesChart.chartData}
-                options={weeklyCaloriesChart.options}
-              />
-              {compsLoading && (
-                <div className="small text-dim mt-1">Loading all-time history…</div>
-              )}
-              {compsErr && (
-                <div className="small text-danger mt-1">
-                  Unable to load all-time data.
+        <section className="ia-tile ia-tile-pad mb-3 ia-progress-hero">
+          <div className="row g-3 align-items-stretch">
+            <div className="col-12 col-lg-8">
+              <div className="ia-progress-weight-card">
+                <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                  <div>
+                    <div className="ia-kicker">weight</div>
+                    <div className="ia-progress-weight-value">
+                      {latestWeight?.weight_kg != null ? latestWeight.weight_kg.toFixed(1) : "—"}kg
+                    </div>
+                    <div className="text-dim small mt-1">
+                      {latestWeight?.date ? fmtShortDate(latestWeight.date) : "No check-ins yet"}
+                    </div>
+                  </div>
+
+                  <div className="ia-progress-delta-pill">
+                    <div className={weightDeltaKg <= 0 ? "ia-delta-good" : "ia-delta-bad"}>
+                      {weightDeltaKg > 0 ? "+" : ""}
+                      {weightDeltaKg.toFixed(1)}kg
+                    </div>
+                    <div className="text-dim small">
+                      {weightDeltaPct > 0 ? "+" : ""}
+                      {weightDeltaPct.toFixed(1)}%
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                <div className="ia-progress-chart-wrap mt-3">
+                  {checkinsErr ? (
+                    <div className="text-dim small">No check-ins yet.</div>
+                  ) : filteredCheckins.length ? (
+                    <Line data={weightChart.chartData} options={weightChart.options} />
+                  ) : (
+                    <div className="text-dim small">No weight data in this range.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="col-12 col-lg-4">
+              <div className="row g-2 h-100">
+                <div className="col-4 col-lg-12">
+                  <div className="ia-stat-mini h-100">
+                    <div className="ia-stat-mini-value">{filteredSessions}</div>
+                    <div className="ia-stat-mini-label">Sessions</div>
+                  </div>
+                </div>
+
+                <div className="col-4 col-lg-12">
+                  <div className="ia-stat-mini h-100">
+                    <div className="ia-stat-mini-value">{Math.round(filteredCalories)}</div>
+                    <div className="ia-stat-mini-label">Calories</div>
+                  </div>
+                </div>
+
+                <div className="col-4 col-lg-12">
+                  <div className="ia-stat-mini h-100">
+                    <div className="ia-stat-mini-value">{currentStreak}</div>
+                    <div className="ia-stat-mini-label">Day streak</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="col-12 col-md-6 mb-3">
-            <div className="futuristic-card p-3">
-              <h6 className="mb-2" style={{ fontWeight: 700 }}>
-                Sessions completed (per week)
-              </h6>
-              <Line
-                data={weeklySessionsChart.chartData}
-                options={weeklySessionsChart.options}
-              />
+          {completionsLoading ? (
+            <div className="text-dim small mt-2">Loading all-time progress…</div>
+          ) : null}
+
+          {completionsErr ? (
+            <div className="ia-inline-note-error mt-2">Unable to load completion history.</div>
+          ) : null}
+        </section>
+
+        <section className="ia-tile ia-tile-pad mb-3">
+          <div className="d-flex justify-content-between align-items-center gap-2">
+            <div>
+              <div className="ia-card-title-compact">Strength</div>
+              <div className="text-dim small mt-1">Estimated 1RM trend by lift in the selected range.</div>
             </div>
+
+            /train
+              Open training
+            </Link>
+          </div>
+
+          <div className="row g-2 mt-2">
+            {strengthCards.map((card) => (
+              <div key={card.key} className="col-6">
+                <div className="ia-strength-card">
+                  <div className="d-flex justify-content-between align-items-start gap-2">
+                    <div>
+                      <div className="ia-strength-card-label">{card.label}</div>
+                      <div className="ia-strength-card-value">
+                        {card.latest != null ? `${Math.round(card.latest)} kg` : "—"}
+                      </div>
+                    </div>
+
+                    <div className="text-end">
+                      {card.delta != null ? (
+                        <div className={card.delta >= 0 ? "ia-delta-good" : "ia-delta-bad"}>
+                          {card.delta > 0 ? "+" : ""}
+                          {Math.round(card.delta)}kg
+                        </div>
+                      ) : (
+                        <div className="text-dim small">No change</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <MiniSpark labels={card.labels} values={card.values} />
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
-        {/* Recent kettlebell loads */}
-        <section className="row gx-3">
-          <div className="col-12 col-md-6 mb-3">
-            <div className="futuristic-card p-3">
-              <h6 className="mb-2" style={{ fontWeight: 700 }}>
-                Recent loads (heaviest)
-              </h6>
-              {topLoads.length ? (
-                <ul className="m-0" style={{ paddingLeft: 18 }}>
-                  {topLoads.map((l, i) => (
-                    <li key={`${l.when}-${i}`} className="mb-1">
-                      <span className="fw-semibold">{l.weight_kg} kg</span>
-                      <span className="text-dim">
-                        {" "}
-                        •{" "}
-                        {new Date(l.when).toLocaleDateString(undefined, {
+        <section className="ia-tile ia-tile-pad mb-3">
+          <div className="d-flex justify-content-between align-items-center gap-2">
+            <div>
+              <div className="ia-card-title-compact">Check-ins</div>
+              <div className="text-dim small mt-1">Review historic check-ins and jump back into a specific day.</div>
+            </div>
+
+            /checkin
+              Add check-in
+            </Link>
+          </div>
+
+          {checkinsErr ? (
+            <div className="text-dim small mt-3">No check-ins yet.</div>
+          ) : !filteredCheckins.length ? (
+            <div className="text-dim small mt-3">No check-ins in this selected range.</div>
+          ) : (
+            <div className="d-grid gap-2 mt-3">
+              {[...filteredCheckins].reverse().map((c, idx) => {
+                const ymd = c.date;
+                return (
+                  <div key={`${ymd}-${idx}`} className="ia-checkin-row">
+                    <div className="ia-checkin-row-main">
+                      <div className="ia-list-row-title">
+                        {new Date(`${ymd}T00:00:00`).toLocaleDateString(undefined, {
+                          weekday: "short",
                           day: "numeric",
                           month: "short",
+                          year: "numeric",
                         })}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="text-dim">No loads recorded yet.</div>
-              )}
-            </div>
-          </div>
-
-          {/* All Check-ins list with per-day Edit links */}
-          <div className="col-12 col-md-6 mb-3">
-            <div className="futuristic-card p-3">
-              <div className="d-flex align-items-center justify-content-between">
-                <h6 className="mb-2" style={{ fontWeight: 700 }}>
-                  Check‑ins
-                </h6>
-                <Link
-                  href="/checkin"
-                  className="btn btn-bxkr-outline btn-sm"
-                  style={{ borderRadius: 24 }}
-                >
-                  Add
-                </Link>
-              </div>
-
-              {checkinsErr ? (
-                <div className="text-dim">No check‑ins yet.</div>
-              ) : (checkins?.results || []).length ? (
-                <div
-                  style={{
-                    maxHeight: 360,
-                    overflowY: "auto",
-                    paddingRight: 4,
-                  }}
-                >
-                  {(checkins?.results || []).map((c, idx) => {
-                    const date = new Date(c.date);
-                    const ymd = date.toISOString().slice(0, 10); // link to specific day
-                    return (
-                      <div
-                        key={`${ymd}-${idx}`}
-                        className="d-flex align-items-center justify-content-between mb-2"
-                      >
-                        <div>
-                          <div className="small text-dim">
-                            {date.toLocaleDateString(undefined, {
-                              weekday: "short",
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })}
-                          </div>
-                          <div className="fw-semibold">
-                            {typeof c.weight_kg === "number" ? `${c.weight_kg} kg` : "—"} ·{" "}
-                            {typeof c.body_fat_pct === "number"
-                              ? `${c.body_fat_pct}%`
-                              : "—"}
-                          </div>
-                        </div>
-                        <div className="d-flex gap-2">
-                          <Link
-                            href={`/checkin?date=${encodeURIComponent(ymd)}`}
-                            className="btn btn-sm btn-bxkr-outline"
-                            style={{ borderRadius: 24 }}
-                            aria-label={`Edit check-in ${ymd}`}
-                          >
-                            Edit
-                          </Link>
-                          {c.photo_url ? (
-                            <a
-                              href={c.photo_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="btn btn-sm"
-                              style={{
-                                borderRadius: 24,
-                                color: "#fff",
-                                background: `linear-gradient(135deg, ${ACCENT}, #ff7f32)`,
-                                boxShadow: `0 0 14px ${ACCENT}66`,
-                              }}
-                              aria-label="Open photo"
-                            >
-                              Photo
-                            </a>
-                          ) : null}
-                        </div>
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-dim">No check‑ins yet.</div>
-              )}
+                      <div className="text-dim small mt-1">
+                        {typeof c.weight_kg === "number" ? `${c.weight_kg} kg` : "—"} •{" "}
+                        {typeof c.body_fat_pct === "number" ? `${c.body_fat_pct}% body fat` : "—"}
+                      </div>
+                    </div>
+
+                    <div className="d-flex gap-2 flex-wrap">
+                      {`/checkin?date=${encodeURIComponent(ymd)}`}
+                        Edit
+                      </Link>
+
+                      {c.photo_url ? (
+                        {c.photo_url}
+                          Photo
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          )}
         </section>
       </main>
 
