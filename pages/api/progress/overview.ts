@@ -383,12 +383,13 @@ export default async function handler(
     });
 
     const baselineCheckins =
-      scope === "program" && currentProgram?.start_date
-        ? allCheckins.filter((c) => {
-            const endLimit = currentProgram.end_date || "9999-12-31";
-            return c.date >= currentProgram.start_date && c.date <= endLimit;
-          })
-        : allCheckins;
+        scope === "program" && currentProgram?.start_date
+          ? allCheckins.filter((c) => {
+              const startLimit = String(currentProgram.start_date || "");
+              const endLimit = currentProgram.end_date || "9999-12-31";
+              return c.date >= startLimit && c.date <= endLimit;
+            })
+          : allCheckins;
 
     const firstWeight =
       baselineCheckins.find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) ||
