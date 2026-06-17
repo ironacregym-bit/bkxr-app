@@ -8,7 +8,6 @@ import { hasRole } from "../../../lib/rbac";
 
 type ScopeMode = "program" | "all";
 type TimeRange = "7d" | "30d" | "90d";
-type LiftKey = "squat" | "bench" | "deadlift" | "ohp";
 
 type SimpleCheckin = {
   date: string;
@@ -34,6 +33,18 @@ type CurrentProgram = {
   is_active_today: boolean;
 } | null;
 
+type StrengthCard = {
+  key: string;
+  title: string;
+  latest: number | null;
+  baseline: number | null;
+  delta: number | null;
+  points: StrengthPoint[];
+  best_e1rm_kg?: number | null;
+  best_true_1rm_kg?: number | null;
+  training_max_kg?: number | null;
+};
+
 type Resp = {
   scope: ScopeMode;
   range: TimeRange;
@@ -53,19 +64,16 @@ type Resp = {
     delta_pct: number;
     points: Array<{ date: string; value: number }>;
   };
-  strength: Record<
-    LiftKey,
-    {
-      latest: number | null;
-      previous: number | null;
-      delta: number | null;
-      points: StrengthPoint[];
-      best_e1rm_kg?: number | null;
-      training_max_kg?: number | null;
-      exercise_name?: string | null;
-    }
-  >;
+  strengthCards: StrengthCard[];
   checkins: SimpleCheckin[];
+  debug?: {
+    userEmail: string;
+    checkinsFound: number;
+    completionsFound: number;
+    strengthExercisesFound: number;
+    liftDocsFound: number;
+    strengthCardsBuilt: number;
+  };
 };
 
 const CHECKINS_COLLECTION = "check_ins";
@@ -73,34 +81,7 @@ const COMPLETIONS_COLLECTION = "workoutCompletions";
 const PROGRAM_ASSIGNMENTS_COLLECTION = "program_assignments";
 const PROGRAMS_COLLECTION = "programs";
 const STRENGTH_PROFILES_COLLECTION = "strength_profiles";
-
-const LIFT_MATCHERS: Record<LiftKey, string[]> = {
-  squat: [
-    "barbell_back_squat",
-    "barbell_front_squat",
-    "back squat",
-    "front squat",
-    "barbell squat",
-    "squat",
-  ],
-  bench: [
-    "barbell_bench_press",
-    "bench press",
-    "bench",
-  ],
-  deadlift: [
-    "barbell_deadlift",
-    "deadlift",
-  ],
-  ohp: [
-    "barbell_strict_press",
-    "strict press",
-    "overhead press",
-    "shoulder press",
-    "press",
-    "ohp",
-  ],
-};
+const STRENGTH_EXERCISES_COLLECTION = "strength_exercises";
 
 function formatYMD(d: Date) {
   return d.toLocaleDateString("en-CA");
@@ -169,51 +150,19 @@ function rangeDaysToNumber(range: TimeRange) {
   return 90;
 }
 
-function normaliseName(value: string) {
-  return String(value || "").trim().toLowerCase();
-}
-
 function safeNum(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
-function inferLiftKey(...values: Array<string | undefined | null>): LiftKey | null {
-  const search = values
-    .map((v) => normaliseName(v || ""))
-    .filter(Boolean)
-    .join(" | ");
-
-  if (!search) return null;
-
-  for (const [lift, matchers] of Object.entries(LIFT_MATCHERS) as [LiftKey, string[]][]) {
-    if (matchers.some((m) => search.includes(normaliseName(m)))) {
-      return lift;
-    }
-  }
-
-  return null;
+function normalise(value: string) {
+  return String(value || "").trim().toLowerCase();
 }
 
 function estimate1RM(weight: number, reps: number) {
   if (!(weight > 0) || !(reps > 0)) return null;
   if (reps === 1) return weight;
   return weight * (1 + reps / 30);
-}
-
-function dedupeStrengthPoints(points: StrengthPoint[]) {
-  const byDate = new Map<string, number>();
-
-  for (const p of points) {
-    const prev = byDate.get(p.date);
-    if (prev == null || p.value > prev) {
-      byDate.set(p.date, p.value);
-    }
-  }
-
-  return Array.from(byDate.entries())
-    .map(([date, value]) => ({ date, value }))
-    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
@@ -269,8 +218,7 @@ async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
     })
   );
 
-  const active = candidates.find((c) => c?.is_active_today) || candidates[0] || null;
-  return active || null;
+  return candidates.find((c) => c?.is_active_today) || candidates[0] || null;
 }
 
 async function getCheckins(userEmail: string): Promise<SimpleCheckin[]> {
@@ -348,115 +296,126 @@ async function getCompletions(userEmail: string) {
   }
 }
 
-async function getStrengthProfiles(
+async function getTrackedStrengthExercises() {
+  const snap = await firestore.collection(STRENGTH_EXERCISES_COLLECTION).get();
+
+  return snap.docs
+    .map((doc) => {
+      const data = doc.data() as any;
+      return {
+        id: doc.id,
+        exercise_name: String(data?.exercise_name || doc.id),
+        tracked: data?.tracked !== false,
+      };
+    })
+    .filter((x) => x.tracked);
+}
+
+function chooseBest1RM(row: any) {
+  const true1rm = safeNum(row?.true_1rm_kg);
+  const e1rm = safeNum(row?.e1rm_kg);
+  return true1rm ?? e1rm ?? null;
+}
+
+async function getStrengthCards(
   userEmail: string,
   startYMD: string,
   endYMD: string
-) {
-  try {
-    const liftsSnap = await firestore
+): Promise<StrengthCard[]> {
+  const [trackedExercises, liftsSnap] = await Promise.all([
+    getTrackedStrengthExercises(),
+    firestore
       .collection(STRENGTH_PROFILES_COLLECTION)
       .doc(userEmail)
       .collection("lifts")
-      .get();
+      .get(),
+  ]);
 
-    const out: Partial<
-      Record<
-        LiftKey,
-        {
-          latest: number | null;
-          previous: number | null;
-          delta: number | null;
-          points: StrengthPoint[];
-          best_e1rm_kg?: number | null;
-          best_true_1rm_kg?: number | null;
-          training_max_kg?: number | null;
-          exercise_name?: string | null;
-        }
-      >
-    > = {};
+  const trackedById = new Map(
+    trackedExercises.map((x) => [normalise(x.id), x])
+  );
 
-    for (const doc of liftsSnap.docs) {
-      const data = doc.data() as any;
-      const lift = inferLiftKey(doc.id, data?.exercise_name);
+  const trackedByName = new Map(
+    trackedExercises.map((x) => [normalise(x.exercise_name), x])
+  );
 
-      if (!lift) continue;
+  const cards: StrengthCard[] = [];
 
-      let entryDocs: any[] = [];
-      try {
-        const entriesSnap = await doc.ref.collection("entries").get();
-        entryDocs = entriesSnap.docs.map((d) => d.data() || {});
-      } catch {
-        entryDocs = [];
-      }
+  for (const doc of liftsSnap.docs) {
+    const data = doc.data() as any;
 
-      const rawPoints: StrengthPoint[] = entryDocs
-        .map((row: any) => {
-          const dateKey =
-            typeof row?.date_key === "string" && row.date_key
-              ? row.date_key
-              : null;
+    const exercise =
+      trackedById.get(normalise(doc.id)) ||
+      trackedByName.get(normalise(data?.exercise_name || ""));
 
-          if (!dateKey || dateKey < startYMD || dateKey > endYMD) return null;
+    if (!exercise) continue;
 
-          const true1rm = safeNum(row?.true_1rm_kg);
-          const e1rm = safeNum(row?.e1rm_kg);
-
-          // Prefer true 1RM when present, otherwise estimated 1RM
-          const value = true1rm ?? e1rm;
-          if (value == null || value <= 0) return null;
-
-          return {
-            date: dateKey,
-            value: Number(value.toFixed(1)),
-          } as StrengthPoint;
-        })
-        .filter(Boolean) as StrengthPoint[];
-
-      rawPoints.sort((a, b) => a.date.localeCompare(b.date));
-
-      // Keep only PR progression:
-      // first session becomes baseline, then only later increases survive
-      const prPoints: StrengthPoint[] = [];
-      let bestSoFar: number | null = null;
-
-      for (const p of rawPoints) {
-        if (bestSoFar == null) {
-          prPoints.push(p);
-          bestSoFar = p.value;
-          continue;
-        }
-
-        if (p.value > bestSoFar) {
-          prPoints.push(p);
-          bestSoFar = p.value;
-        }
-      }
-
-      const latest =
-        prPoints.length > 0 ? prPoints[prPoints.length - 1].value : null;
-      const first =
-        prPoints.length > 0 ? prPoints[0].value : null;
-
-      out[lift] = {
-        latest,
-        previous: first,
-        delta:
-          latest != null && first != null
-            ? Number((latest - first).toFixed(1))
-            : null,
-        points: prPoints,
-        best_e1rm_kg: safeNum(data?.best_e1rm_kg),
-        best_true_1rm_kg: safeNum(data?.best_true_1rm_kg),
-        training_max_kg: safeNum(data?.training_max_kg),
-        exercise_name: data?.exercise_name ? String(data.exercise_name) : null,
-      };
+    let entryRows: any[] = [];
+    try {
+      const entriesSnap = await doc.ref.collection("entries").get();
+      entryRows = entriesSnap.docs.map((d) => d.data() || {});
+    } catch {
+      entryRows = [];
     }
 
-    return out;
-  } catch {
-    return {};
+    const rawPoints = entryRows
+      .map((row) => {
+        const dateKey =
+          typeof row?.date_key === "string" && row.date_key
+            ? row.date_key
+            : null;
+
+        if (!dateKey || dateKey < startYMD || dateKey > endYMD) return null;
+
+        const value = chooseBest1RM(row);
+        if (value == null || value <= 0) return null;
+
+        return {
+          date: dateKey,
+          value: Number(value.toFixed(1)),
+        } as StrengthPoint;
+      })
+      .filter(Boolean) as StrengthPoint[];
+
+    rawPoints.sort((a, b) => a.date.localeCompare(b.date));
+
+    // Keep first point as baseline, then only increases after that
+    const prPoints: StrengthPoint[] = [];
+    let bestSoFar: number | null = null;
+
+    for (const p of rawPoints) {
+      if (bestSoFar == null) {
+        prPoints.push(p);
+        bestSoFar = p.value;
+        continue;
+      }
+
+      if (p.value > bestSoFar) {
+        prPoints.push(p);
+        bestSoFar = p.value;
+      }
+    }
+
+    const baseline = prPoints.length ? prPoints[0].value : null;
+    const latest = prPoints.length ? prPoints[prPoints.length - 1].value : null;
+    const delta =
+      baseline != null && latest != null ? Number((latest - baseline).toFixed(1)) : null;
+
+    cards.push({
+      key: exercise.id,
+      title: exercise.exercise_name,
+      latest,
+      baseline,
+      delta,
+      points: prPoints,
+      best_e1rm_kg: safeNum(data?.best_e1rm_kg),
+      best_true_1rm_kg: safeNum(data?.best_true_1rm_kg),
+      training_max_kg: safeNum(data?.training_max_kg),
+    });
   }
+
+  cards.sort((a, b) => a.title.localeCompare(b.title));
+  return cards;
 }
 
 export default async function handler(
@@ -487,10 +446,10 @@ export default async function handler(
       rawRange === "7d" || rawRange === "90d" ? (rawRange as TimeRange) : "30d";
 
     const [currentProgram, allCheckins, allCompletions] = await Promise.all([
-          getCurrentProgram(userEmail),
-          getCheckins(userEmail),
-          getCompletions(userEmail),
-        ]);
+      getCurrentProgram(userEmail),
+      getCheckins(userEmail),
+      getCompletions(userEmail),
+    ]);
 
     const today = new Date();
     const end = endOfDay(today);
@@ -515,8 +474,9 @@ export default async function handler(
 
     const startYMD = formatYMD(start);
     const endYMD = formatYMD(effectiveEnd);
-    const strengthProfiles = await getStrengthProfiles(userEmail, startYMD, endYMD);
-    
+
+    const strengthCards = await getStrengthCards(userEmail, startYMD, endYMD);
+
     const filteredCheckins = allCheckins.filter((c) => c.date >= startYMD && c.date <= endYMD);
 
     const filteredCompletions = allCompletions.filter((c) => {
@@ -578,36 +538,6 @@ export default async function handler(
       0
     );
 
-    const strength: Resp["strength"] = {
-      squat: { latest: null, previous: null, delta: null, points: [] },
-      bench: { latest: null, previous: null, delta: null, points: [] },
-      deadlift: { latest: null, previous: null, delta: null, points: [] },
-      ohp: { latest: null, previous: null, delta: null, points: [] },
-    };
-
-    for (const key of Object.keys(strength) as LiftKey[]) {
-      const profile = strengthProfiles[key];
-
-      if (!profile) continue;
-
-      strength[key].points = Array.isArray(profile.points) ? profile.points : [];
-      strength[key].latest = profile.latest ?? null;
-      strength[key].previous = profile.previous ?? null;
-      strength[key].delta = profile.delta ?? null;
-
-      if (profile.best_e1rm_kg != null) {
-        strength[key].best_e1rm_kg = profile.best_e1rm_kg;
-      }
-      if ((profile as any).best_true_1rm_kg != null) {
-        (strength[key] as any).best_true_1rm_kg = (profile as any).best_true_1rm_kg;
-      }
-      if (profile.training_max_kg != null) {
-        strength[key].training_max_kg = profile.training_max_kg;
-      }
-      if (profile.exercise_name) {
-        strength[key].exercise_name = profile.exercise_name;
-      }
-    }
     const payload: Resp = {
       scope,
       range,
@@ -632,8 +562,16 @@ export default async function handler(
             value: c.weight_kg as number,
           })),
       },
-      strength,
+      strengthCards,
       checkins: [...filteredCheckins].reverse(),
+      debug: {
+        userEmail,
+        checkinsFound: allCheckins.length,
+        completionsFound: allCompletions.length,
+        strengthExercisesFound: strengthCards.length,
+        liftDocsFound: strengthCards.length,
+        strengthCardsBuilt: strengthCards.length,
+      },
     };
 
     res.setHeader("Cache-Control", "private, max-age=30, stale-while-revalidate=60");
