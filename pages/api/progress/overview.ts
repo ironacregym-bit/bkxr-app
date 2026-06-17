@@ -515,7 +515,8 @@ export default async function handler(
 
     const startYMD = formatYMD(start);
     const endYMD = formatYMD(effectiveEnd);
-
+    const strengthProfiles = await getStrengthProfiles(userEmail, startYMD, endYMD);
+    
     const filteredCheckins = allCheckins.filter((c) => c.date >= startYMD && c.date <= endYMD);
 
     const filteredCompletions = allCompletions.filter((c) => {
@@ -584,87 +585,29 @@ export default async function handler(
       ohp: { latest: null, previous: null, delta: null, points: [] },
     };
 
-    for (const c of allCompletions) {
-      const iso = getCompletionISO(c);
-      if (!iso) continue;
-
-      const ymd = iso.slice(0, 10);
-      if (ymd < startYMD || ymd > endYMD) continue;
-
-      const sets = Array.isArray((c as any).sets) ? (c as any).sets : [];
-      const bestForCompletion = new Map<LiftKey, number>();
-
-      for (const s of sets) {
-        const lift = inferLiftKey(
-          s?.movement_key,
-          s?.exercise_id,
-          s?.exercise_name
-        );
-        if (!lift) continue;
-
-        const reps = Number(s?.reps || 0);
-        const weight =
-          Number(s?.weight ?? s?.weight_kg ?? s?.load ?? 0);
-
-        const e1rm = estimate1RM(weight, reps);
-        if (!e1rm) continue;
-
-        const prev = bestForCompletion.get(lift);
-        if (prev == null || e1rm > prev) {
-          bestForCompletion.set(lift, e1rm);
-        }
-      }
-
-      for (const [lift, value] of bestForCompletion.entries()) {
-        strength[lift].points.push({
-          date: ymd,
-          value: Number(value.toFixed(1)),
-        });
-      }
-    }
-
     for (const key of Object.keys(strength) as LiftKey[]) {
       const profile = strengthProfiles[key];
-      const points = dedupeStrengthPoints(strength[key].points);
 
-      if (!points.length && profile?.points?.length) {
-        const fallbackPoints = profile.points.filter(
-          (p) => p.date >= startYMD && p.date <= endYMD
-        );
-        strength[key].points = fallbackPoints;
-      } else {
-        strength[key].points = points;
-      }
+      if (!profile) continue;
 
-      const latestFromPoints =
-        strength[key].points.length > 0
-          ? strength[key].points[strength[key].points.length - 1].value
-          : null;
+      strength[key].points = Array.isArray(profile.points) ? profile.points : [];
+      strength[key].latest = profile.latest ?? null;
+      strength[key].previous = profile.previous ?? null;
+      strength[key].delta = profile.delta ?? null;
 
-      const previousFromPoints =
-        strength[key].points.length > 1
-          ? strength[key].points[strength[key].points.length - 2].value
-          : null;
-
-      const latest = latestFromPoints ?? profile?.latest ?? null;
-      const previous = previousFromPoints ?? profile?.previous ?? null;
-
-      strength[key].latest = latest;
-      strength[key].previous = previous;
-      strength[key].delta =
-        latest != null && previous != null ? Number((latest - previous).toFixed(1)) : null;
-
-      if (profile?.best_e1rm_kg != null) {
+      if (profile.best_e1rm_kg != null) {
         strength[key].best_e1rm_kg = profile.best_e1rm_kg;
       }
-      if (profile?.training_max_kg != null) {
+      if ((profile as any).best_true_1rm_kg != null) {
+        (strength[key] as any).best_true_1rm_kg = (profile as any).best_true_1rm_kg;
+      }
+      if (profile.training_max_kg != null) {
         strength[key].training_max_kg = profile.training_max_kg;
       }
-      if (profile?.exercise_name) {
+      if (profile.exercise_name) {
         strength[key].exercise_name = profile.exercise_name;
       }
     }
-
     const payload: Resp = {
       scope,
       range,
