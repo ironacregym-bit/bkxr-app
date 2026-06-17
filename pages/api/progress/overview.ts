@@ -69,11 +69,19 @@ type Resp = {
   debug?: {
     userEmail: string;
     checkinsFound: number;
+    filteredCheckinsFound: number;
     completionsFound: number;
+    filteredCompletionsFound: number;
     strengthExercisesFound: number;
     liftDocsFound: number;
     strengthCardsBuilt: number;
   };
+};
+
+type StrengthExerciseMeta = {
+  id: string;
+  exercise_name: string;
+  tracked: boolean;
 };
 
 const CHECKINS_COLLECTION = "check_ins";
@@ -159,66 +167,93 @@ function normalise(value: string) {
   return String(value || "").trim().toLowerCase();
 }
 
-function estimate1RM(weight: number, reps: number) {
-  if (!(weight > 0) || !(reps > 0)) return null;
-  if (reps === 1) return weight;
-  return weight * (1 + reps / 30);
+function humaniseKey(value: string) {
+  const withSpaces = String(value || "")
+    .replace(/[|_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return withSpaces
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function chooseBest1RM(row: any) {
+  const true1rm = safeNum(row?.true_1rm_kg);
+  const e1rm = safeNum(row?.e1rm_kg);
+  return true1rm ?? e1rm ?? null;
 }
 
 async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
-  const assignmentsSnap = await firestore
-    .collection(PROGRAM_ASSIGNMENTS_COLLECTION)
-    .where("user_email", "==", userEmail)
-    .where("status", "==", "active")
-    .get();
+  try {
+    const assignmentsSnap = await firestore
+      .collection(PROGRAM_ASSIGNMENTS_COLLECTION)
+      .where("user_email", "==", userEmail)
+      .where("status", "==", "active")
+      .get();
 
-  if (assignmentsSnap.empty) return null;
+    if (assignmentsSnap.empty) return null;
 
-  const now = startOfDay(new Date());
+    const now = startOfDay(new Date());
 
-  const candidates = await Promise.all(
-    assignmentsSnap.docs.map(async (doc) => {
-      const a = doc.data() as any;
-      const start = toDate(a.start_date);
-      const end = toDate(a.end_date);
-      const programId = String(a.program_id || "").trim();
+    const candidates = await Promise.all(
+      assignmentsSnap.docs.map(async (doc) => {
+        const a = doc.data() as any;
+        const start = toDate(a.start_date);
+        const end = toDate(a.end_date);
+        const programId = String(a.program_id || "").trim();
 
-      if (!programId || !start) return null;
+        if (!programId || !start) return null;
 
-      const programDoc = await firestore.collection(PROGRAMS_COLLECTION).doc(programId).get();
-      const programData = programDoc.exists ? (programDoc.data() as any) : null;
+        let programName = String(a.program_name || "Program");
+        let weeks = Number(a.weeks || 0) || 0;
 
-      const weeks = Number(a.weeks || programData?.weeks || 0) || 0;
-      const computedEnd =
-        end || (weeks > 0 ? addDays(startOfDay(start), weeks * 7 - 1) : null);
+        try {
+          const programDoc = await firestore.collection(PROGRAMS_COLLECTION).doc(programId).get();
+          if (programDoc.exists) {
+            const programData = programDoc.data() as any;
+            programName = String(programData?.name || programName);
+            weeks = Number(programData?.weeks || weeks || 0) || 0;
+          }
+        } catch {
+          // Soft fail, use assignment values
+        }
 
-      const isActiveToday =
-        now >= startOfDay(start) &&
-        (!computedEnd || now <= endOfDay(computedEnd));
+        const computedEnd =
+          end || (weeks > 0 ? addDays(startOfDay(start), weeks * 7 - 1) : null);
 
-      let currentWeek: number | null = null;
-      if (isActiveToday) {
-        const diffDays = Math.floor(
-          (+startOfDay(now) - +startOfDay(start)) / (1000 * 60 * 60 * 24)
-        );
-        currentWeek = Math.floor(diffDays / 7) + 1;
-      }
+        const isActiveToday =
+          now >= startOfDay(start) &&
+          (!computedEnd || now <= endOfDay(computedEnd));
 
-      return {
-        assignment_id: doc.id,
-        program_id: programId,
-        program_name: String(programData?.name || a.program_name || "Program"),
-        status: String(a.status || "active"),
-        start_date: formatYMD(startOfDay(start)),
-        end_date: computedEnd ? formatYMD(startOfDay(computedEnd)) : null,
-        weeks,
-        current_week: currentWeek,
-        is_active_today: isActiveToday,
-      } as CurrentProgram;
-    })
-  );
+        let currentWeek: number | null = null;
+        if (isActiveToday) {
+          const diffDays = Math.floor(
+            (+startOfDay(now) - +startOfDay(start)) / (1000 * 60 * 60 * 24)
+          );
+          currentWeek = Math.floor(diffDays / 7) + 1;
+        }
 
-  return candidates.find((c) => c?.is_active_today) || candidates[0] || null;
+        return {
+          assignment_id: doc.id,
+          program_id: programId,
+          program_name: programName,
+          status: String(a.status || "active"),
+          start_date: formatYMD(startOfDay(start)),
+          end_date: computedEnd ? formatYMD(startOfDay(computedEnd)) : null,
+          weeks,
+          current_week: currentWeek,
+          is_active_today: isActiveToday,
+        } as CurrentProgram;
+      })
+    );
+
+    return candidates.find((c) => c?.is_active_today) || candidates[0] || null;
+  } catch {
+    return null;
+  }
 }
 
 async function getCheckins(userEmail: string): Promise<SimpleCheckin[]> {
@@ -296,40 +331,40 @@ async function getCompletions(userEmail: string) {
   }
 }
 
-async function getTrackedStrengthExercises() {
-  const snap = await firestore.collection(STRENGTH_EXERCISES_COLLECTION).get();
+async function getTrackedStrengthExercises(): Promise<StrengthExerciseMeta[]> {
+  try {
+    const snap = await firestore.collection(STRENGTH_EXERCISES_COLLECTION).get();
 
-  return snap.docs
-    .map((doc) => {
-      const data = doc.data() as any;
-      return {
-        id: doc.id,
-        exercise_name: String(data?.exercise_name || doc.id),
-        tracked: data?.tracked !== false,
-      };
-    })
-    .filter((x) => x.tracked);
-}
-
-function chooseBest1RM(row: any) {
-  const true1rm = safeNum(row?.true_1rm_kg);
-  const e1rm = safeNum(row?.e1rm_kg);
-  return true1rm ?? e1rm ?? null;
+    return snap.docs
+      .map((doc) => {
+        const data = doc.data() as any;
+        return {
+          id: doc.id,
+          exercise_name: String(data?.exercise_name || doc.id),
+          tracked: data?.tracked !== false,
+        };
+      })
+      .filter((x) => x.tracked);
+  } catch {
+    return [];
+  }
 }
 
 async function getStrengthCards(
   userEmail: string,
   startYMD: string,
   endYMD: string
-): Promise<StrengthCard[]> {
-  const [trackedExercises, liftsSnap] = await Promise.all([
-    getTrackedStrengthExercises(),
-    firestore
-      .collection(STRENGTH_PROFILES_COLLECTION)
-      .doc(userEmail)
-      .collection("lifts")
-      .get(),
-  ]);
+): Promise<{
+  cards: StrengthCard[];
+  trackedExercisesFound: number;
+  liftDocsFound: number;
+}> {
+  let trackedExercises: StrengthExerciseMeta[] = [];
+  try {
+    trackedExercises = await getTrackedStrengthExercises();
+  } catch {
+    trackedExercises = [];
+  }
 
   const trackedById = new Map(
     trackedExercises.map((x) => [normalise(x.id), x])
@@ -339,16 +374,33 @@ async function getStrengthCards(
     trackedExercises.map((x) => [normalise(x.exercise_name), x])
   );
 
+  let liftsSnap;
+  try {
+    liftsSnap = await firestore
+      .collection(STRENGTH_PROFILES_COLLECTION)
+      .doc(userEmail)
+      .collection("lifts")
+      .get();
+  } catch {
+    return {
+      cards: [],
+      trackedExercisesFound: trackedExercises.length,
+      liftDocsFound: 0,
+    };
+  }
+
   const cards: StrengthCard[] = [];
 
   for (const doc of liftsSnap.docs) {
     const data = doc.data() as any;
 
-    const exercise =
+    const enrichedExercise =
       trackedById.get(normalise(doc.id)) ||
       trackedByName.get(normalise(data?.exercise_name || ""));
 
-    if (!exercise) continue;
+    const title =
+      enrichedExercise?.exercise_name ||
+      (data?.exercise_name ? String(data.exercise_name) : humaniseKey(doc.id));
 
     let entryRows: any[] = [];
     try {
@@ -361,9 +413,7 @@ async function getStrengthCards(
     const rawPoints = entryRows
       .map((row) => {
         const dateKey =
-          typeof row?.date_key === "string" && row.date_key
-            ? row.date_key
-            : null;
+          typeof row?.date_key === "string" && row.date_key ? row.date_key : null;
 
         if (!dateKey || dateKey < startYMD || dateKey > endYMD) return null;
 
@@ -379,7 +429,7 @@ async function getStrengthCards(
 
     rawPoints.sort((a, b) => a.date.localeCompare(b.date));
 
-    // Keep first point as baseline, then only increases after that
+    // First point = baseline, after that only keep PR increases
     const prPoints: StrengthPoint[] = [];
     let bestSoFar: number | null = null;
 
@@ -396,14 +446,21 @@ async function getStrengthCards(
       }
     }
 
-    const baseline = prPoints.length ? prPoints[0].value : null;
-    const latest = prPoints.length ? prPoints[prPoints.length - 1].value : null;
+    const fallbackBest =
+      safeNum(data?.best_true_1rm_kg) ??
+      safeNum(data?.best_e1rm_kg) ??
+      null;
+
+    const baseline = prPoints.length ? prPoints[0].value : fallbackBest;
+    const latest = prPoints.length ? prPoints[prPoints.length - 1].value : fallbackBest;
     const delta =
-      baseline != null && latest != null ? Number((latest - baseline).toFixed(1)) : null;
+      baseline != null && latest != null
+        ? Number((latest - baseline).toFixed(1))
+        : null;
 
     cards.push({
-      key: exercise.id,
-      title: exercise.exercise_name,
+      key: doc.id,
+      title,
       latest,
       baseline,
       delta,
@@ -415,7 +472,12 @@ async function getStrengthCards(
   }
 
   cards.sort((a, b) => a.title.localeCompare(b.title));
-  return cards;
+
+  return {
+    cards,
+    trackedExercisesFound: trackedExercises.length,
+    liftDocsFound: liftsSnap.size,
+  };
 }
 
 export default async function handler(
@@ -433,7 +495,10 @@ export default async function handler(
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const userEmail = String((session.user as any)?.email || "").trim().toLowerCase();
+    const userEmail = String((session.user as any)?.email || "")
+      .trim()
+      .toLowerCase();
+
     if (!userEmail) {
       return res.status(400).json({ error: "Unable to resolve user email" });
     }
@@ -452,21 +517,24 @@ export default async function handler(
     ]);
 
     const today = new Date();
-    const end = endOfDay(today);
     const defaultStart = startOfDay(addDays(today, -(rangeDaysToNumber(range) - 1)));
 
     let start = defaultStart;
+    let effectiveEnd = endOfDay(today);
 
     if (scope === "program" && currentProgram?.start_date) {
-      const programStart = startOfDay(new Date(`${currentProgram.start_date}T00:00:00`));
+      const programStart = startOfDay(
+        new Date(`${currentProgram.start_date}T00:00:00`)
+      );
       if (!isNaN(programStart.getTime()) && programStart > start) {
         start = programStart;
       }
     }
 
-    let effectiveEnd = end;
     if (scope === "program" && currentProgram?.end_date) {
-      const programEnd = endOfDay(new Date(`${currentProgram.end_date}T00:00:00`));
+      const programEnd = endOfDay(
+        new Date(`${currentProgram.end_date}T00:00:00`)
+      );
       if (!isNaN(programEnd.getTime()) && programEnd < effectiveEnd) {
         effectiveEnd = programEnd;
       }
@@ -475,9 +543,15 @@ export default async function handler(
     const startYMD = formatYMD(start);
     const endYMD = formatYMD(effectiveEnd);
 
-    const strengthCards = await getStrengthCards(userEmail, startYMD, endYMD);
+    const {
+      cards: strengthCards,
+      trackedExercisesFound,
+      liftDocsFound,
+    } = await getStrengthCards(userEmail, startYMD, endYMD);
 
-    const filteredCheckins = allCheckins.filter((c) => c.date >= startYMD && c.date <= endYMD);
+    const filteredCheckins = allCheckins.filter(
+      (c) => c.date >= startYMD && c.date <= endYMD
+    );
 
     const filteredCompletions = allCompletions.filter((c) => {
       const iso = getCompletionISO(c);
@@ -497,8 +571,9 @@ export default async function handler(
     })();
 
     const firstWeight =
-      baselineCheckins.find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) ||
-      null;
+      baselineCheckins.find(
+        (c) => typeof c.weight_kg === "number" && c.weight_kg != null
+      ) || null;
 
     const latestWeight =
       [...filteredCheckins]
@@ -563,13 +638,15 @@ export default async function handler(
           })),
       },
       strengthCards,
-      checkins: [...filteredCheckins].reverse(),
+      checkins: [...allCheckins].reverse().slice(0, 12),
       debug: {
         userEmail,
         checkinsFound: allCheckins.length,
+        filteredCheckinsFound: filteredCheckins.length,
         completionsFound: allCompletions.length,
-        strengthExercisesFound: strengthCards.length,
-        liftDocsFound: strengthCards.length,
+        filteredCompletionsFound: filteredCompletions.length,
+        strengthExercisesFound: trackedExercisesFound,
+        liftDocsFound,
         strengthCardsBuilt: strengthCards.length,
       },
     };
