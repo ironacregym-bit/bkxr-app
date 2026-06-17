@@ -348,7 +348,11 @@ async function getCompletions(userEmail: string) {
   }
 }
 
-async function getStrengthProfiles(userEmail: string) {
+async function getStrengthProfiles(
+  userEmail: string,
+  startYMD: string,
+  endYMD: string
+) {
   try {
     const liftsSnap = await firestore
       .collection(STRENGTH_PROFILES_COLLECTION)
@@ -365,35 +369,87 @@ async function getStrengthProfiles(userEmail: string) {
           delta: number | null;
           points: StrengthPoint[];
           best_e1rm_kg?: number | null;
+          best_true_1rm_kg?: number | null;
           training_max_kg?: number | null;
           exercise_name?: string | null;
-          best_e1rm_date?: string | null;
         }
       >
     > = {};
 
     for (const doc of liftsSnap.docs) {
       const data = doc.data() as any;
-
       const lift = inferLiftKey(doc.id, data?.exercise_name);
+
       if (!lift) continue;
 
-      const bestE1RM = safeNum(data?.best_e1rm_kg);
-      const bestE1RMDate =
-        typeof data?.best_e1rm_date === "string" ? data.best_e1rm_date : null;
+      let entryDocs: any[] = [];
+      try {
+        const entriesSnap = await doc.ref.collection("entries").get();
+        entryDocs = entriesSnap.docs.map((d) => d.data() || {});
+      } catch {
+        entryDocs = [];
+      }
+
+      const rawPoints: StrengthPoint[] = entryDocs
+        .map((row: any) => {
+          const dateKey =
+            typeof row?.date_key === "string" && row.date_key
+              ? row.date_key
+              : null;
+
+          if (!dateKey || dateKey < startYMD || dateKey > endYMD) return null;
+
+          const true1rm = safeNum(row?.true_1rm_kg);
+          const e1rm = safeNum(row?.e1rm_kg);
+
+          // Prefer true 1RM when present, otherwise estimated 1RM
+          const value = true1rm ?? e1rm;
+          if (value == null || value <= 0) return null;
+
+          return {
+            date: dateKey,
+            value: Number(value.toFixed(1)),
+          } as StrengthPoint;
+        })
+        .filter(Boolean) as StrengthPoint[];
+
+      rawPoints.sort((a, b) => a.date.localeCompare(b.date));
+
+      // Keep only PR progression:
+      // first session becomes baseline, then only later increases survive
+      const prPoints: StrengthPoint[] = [];
+      let bestSoFar: number | null = null;
+
+      for (const p of rawPoints) {
+        if (bestSoFar == null) {
+          prPoints.push(p);
+          bestSoFar = p.value;
+          continue;
+        }
+
+        if (p.value > bestSoFar) {
+          prPoints.push(p);
+          bestSoFar = p.value;
+        }
+      }
+
+      const latest =
+        prPoints.length > 0 ? prPoints[prPoints.length - 1].value : null;
+      const first =
+        prPoints.length > 0 ? prPoints[0].value : null;
 
       out[lift] = {
-        latest: bestE1RM,
-        previous: null,
-        delta: null,
-        points:
-          bestE1RM && bestE1RMDate
-            ? [{ date: bestE1RMDate, value: bestE1RM }]
-            : [],
-        best_e1rm_kg: bestE1RM,
+        latest,
+        previous: first,
+        delta:
+          latest != null && first != null
+            ? Number((latest - first).toFixed(1))
+            : null,
+        points: prPoints,
+        best_e1rm_kg: safeNum(data?.best_e1rm_kg),
+        best_true_1rm_kg: safeNum(data?.best_true_1rm_kg),
         training_max_kg: safeNum(data?.training_max_kg),
         exercise_name: data?.exercise_name ? String(data.exercise_name) : null,
-        best_e1rm_date: bestE1RMDate,
       };
     }
 
@@ -430,12 +486,11 @@ export default async function handler(
     const range: TimeRange =
       rawRange === "7d" || rawRange === "90d" ? (rawRange as TimeRange) : "30d";
 
-    const [currentProgram, allCheckins, allCompletions, strengthProfiles] = await Promise.all([
-      getCurrentProgram(userEmail),
-      getCheckins(userEmail),
-      getCompletions(userEmail),
-      getStrengthProfiles(userEmail),
-    ]);
+    const [currentProgram, allCheckins, allCompletions] = await Promise.all([
+          getCurrentProgram(userEmail),
+          getCheckins(userEmail),
+          getCompletions(userEmail),
+        ]);
 
     const today = new Date();
     const end = endOfDay(today);
