@@ -6,21 +6,6 @@ import firestore from "../../../lib/firestoreClient";
 import { authOptions } from "../auth/[...nextauth]";
 import { hasRole } from "../../../lib/rbac";
 
-type ScopeMode = "program" | "all";
-type TimeRange = "7d" | "30d" | "90d";
-
-type SimpleCheckin = {
-  date: string;
-  weight_kg: number | null;
-  body_fat_pct: number | null;
-  photo_url?: string | null;
-};
-
-type StrengthPoint = {
-  date: string;
-  value: number;
-};
-
 type CurrentProgram = {
   assignment_id: string;
   program_id: string;
@@ -32,6 +17,24 @@ type CurrentProgram = {
   current_week: number | null;
   is_active_today: boolean;
 } | null;
+
+type SimpleCheckin = {
+  date: string;
+  weight_kg: number | null;
+  body_fat_pct: number | null;
+  photo_url?: string | null;
+};
+
+type CompletionSeriesRow = {
+  date: string;
+  sessions: number;
+  calories_burned: number;
+};
+
+type StrengthPoint = {
+  date: string;
+  value: number;
+};
 
 type StrengthCard = {
   key: string;
@@ -46,32 +49,19 @@ type StrengthCard = {
 };
 
 type Resp = {
-  scope: ScopeMode;
-  range: TimeRange;
-  startYMD: string;
-  endYMD: string;
   currentProgram: CurrentProgram;
-  kpis: {
-    sessions: number;
-    calories: number;
-    currentStreak: number;
-    totalCompletionsAllTime: number;
-  };
-  weight: {
-    start_weight_kg: number | null;
-    current_weight_kg: number | null;
-    delta_kg: number;
-    delta_pct: number;
-    points: Array<{ date: string; value: number }>;
-  };
-  strengthCards: StrengthCard[];
   checkins: SimpleCheckin[];
+  completionSeries: CompletionSeriesRow[];
+  strengthCards: StrengthCard[];
+  kpis: {
+    totalCompletionsAllTime: number;
+    totalCaloriesAllTime: number;
+    currentStreak: number;
+  };
   debug?: {
     userEmail: string;
     checkinsFound: number;
-    filteredCheckinsFound: number;
     completionsFound: number;
-    filteredCompletionsFound: number;
     strengthExercisesFound: number;
     liftDocsFound: number;
     strengthCardsBuilt: number;
@@ -91,23 +81,23 @@ const PROGRAMS_COLLECTION = "programs";
 const STRENGTH_PROFILES_COLLECTION = "strength_profiles";
 const STRENGTH_EXERCISES_COLLECTION = "strength_exercises";
 
-function formatYMD(d: Date) {
+function formatYMD(d: Date): string {
   return d.toLocaleDateString("en-CA");
 }
 
-function addDays(d: Date, days: number) {
+function addDays(d: Date, days: number): Date {
   const out = new Date(d);
   out.setDate(out.getDate() + days);
   return out;
 }
 
-function startOfDay(d: Date) {
+function startOfDay(d: Date): Date {
   const out = new Date(d);
   out.setHours(0, 0, 0, 0);
   return out;
 }
 
-function endOfDay(d: Date) {
+function endOfDay(d: Date): Date {
   const out = new Date(d);
   out.setHours(23, 59, 59, 999);
   return out;
@@ -137,12 +127,12 @@ function toDate(v: any): Date | null {
   }
 }
 
-function toISO(v: any) {
+function toISO(v: any): string | null {
   const d = toDate(v);
   return d ? d.toISOString() : null;
 }
 
-function getCompletionISO(c: any) {
+function getCompletionISO(c: any): string | null {
   return (
     toISO(c.completed_date) ||
     toISO(c.date_completed) ||
@@ -152,22 +142,16 @@ function getCompletionISO(c: any) {
   );
 }
 
-function rangeDaysToNumber(range: TimeRange) {
-  if (range === "7d") return 7;
-  if (range === "30d") return 30;
-  return 90;
-}
-
 function safeNum(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
-function normalise(value: string) {
+function normalise(value: string): string {
   return String(value || "").trim().toLowerCase();
 }
 
-function humaniseKey(value: string) {
+function humaniseKey(value: string): string {
   const withSpaces = String(value || "")
     .replace(/[|_]+/g, " ")
     .replace(/\s+/g, " ")
@@ -180,7 +164,7 @@ function humaniseKey(value: string) {
     .join(" ");
 }
 
-function chooseBest1RM(row: any) {
+function chooseBest1RM(row: any): number | null {
   const true1rm = safeNum(row?.true_1rm_kg);
   const e1rm = safeNum(row?.e1rm_kg);
   return true1rm ?? e1rm ?? null;
@@ -218,7 +202,7 @@ async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
             weeks = Number(programData?.weeks || weeks || 0) || 0;
           }
         } catch {
-          // Soft fail, use assignment values
+          // Soft fail - use assignment values
         }
 
         const computedEnd =
@@ -285,12 +269,12 @@ async function getCheckins(userEmail: string): Promise<SimpleCheckin[]> {
           photo_url: data?.photo_url || null,
         };
       })
-      .filter((r) => !!r.date)
+      .filter((row) => !!row.date)
       .sort((a, b) => a.date.localeCompare(b.date));
   } catch {
-    const all = await firestore.collection(CHECKINS_COLLECTION).get();
+    const snap = await firestore.collection(CHECKINS_COLLECTION).get();
 
-    return all.docs
+    return snap.docs
       .filter((doc) => doc.id.startsWith(`${userEmail}__`))
       .map((doc) => {
         const data = doc.data() as any;
@@ -309,12 +293,12 @@ async function getCheckins(userEmail: string): Promise<SimpleCheckin[]> {
           photo_url: data?.photo_url || null,
         };
       })
-      .filter((r) => !!r.date)
+      .filter((row) => !!row.date)
       .sort((a, b) => a.date.localeCompare(b.date));
   }
 }
 
-async function getCompletions(userEmail: string) {
+async function getCompletions(userEmail: string): Promise<any[]> {
   try {
     const snap = await firestore
       .collection(COMPLETIONS_COLLECTION)
@@ -344,34 +328,27 @@ async function getTrackedStrengthExercises(): Promise<StrengthExerciseMeta[]> {
           tracked: data?.tracked !== false,
         };
       })
-      .filter((x) => x.tracked);
+      .filter((row) => row.tracked);
   } catch {
     return [];
   }
 }
 
 async function getStrengthCards(
-  userEmail: string,
-  startYMD: string,
-  endYMD: string
+  userEmail: string
 ): Promise<{
   cards: StrengthCard[];
   trackedExercisesFound: number;
   liftDocsFound: number;
 }> {
-  let trackedExercises: StrengthExerciseMeta[] = [];
-  try {
-    trackedExercises = await getTrackedStrengthExercises();
-  } catch {
-    trackedExercises = [];
-  }
+  const trackedExercises = await getTrackedStrengthExercises();
 
-  const trackedById = new Map(
-    trackedExercises.map((x) => [normalise(x.id), x])
+  const trackedById = new Map<string, StrengthExerciseMeta>(
+    trackedExercises.map((row) => [normalise(row.id), row])
   );
 
-  const trackedByName = new Map(
-    trackedExercises.map((x) => [normalise(x.exercise_name), x])
+  const trackedByName = new Map<string, StrengthExerciseMeta>(
+    trackedExercises.map((row) => [normalise(row.exercise_name), row])
   );
 
   let liftsSnap;
@@ -415,7 +392,7 @@ async function getStrengthCards(
         const dateKey =
           typeof row?.date_key === "string" && row.date_key ? row.date_key : null;
 
-        if (!dateKey || dateKey < startYMD || dateKey > endYMD) return null;
+        if (!dateKey) return null;
 
         const value = chooseBest1RM(row);
         if (value == null || value <= 0) return null;
@@ -429,20 +406,19 @@ async function getStrengthCards(
 
     rawPoints.sort((a, b) => a.date.localeCompare(b.date));
 
-    // First point = baseline, after that only keep PR increases
     const prPoints: StrengthPoint[] = [];
     let bestSoFar: number | null = null;
 
-    for (const p of rawPoints) {
+    for (const point of rawPoints) {
       if (bestSoFar == null) {
-        prPoints.push(p);
-        bestSoFar = p.value;
+        prPoints.push(point);
+        bestSoFar = point.value;
         continue;
       }
 
-      if (p.value > bestSoFar) {
-        prPoints.push(p);
-        bestSoFar = p.value;
+      if (point.value > bestSoFar) {
+        prPoints.push(point);
+        bestSoFar = point.value;
       }
     }
 
@@ -495,111 +471,50 @@ export default async function handler(
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const userEmail = String((session.user as any)?.email || "")
-      .trim()
-      .toLowerCase();
+    const userEmail = String((session.user as any)?.email || "").trim().toLowerCase();
 
     if (!userEmail) {
       return res.status(400).json({ error: "Unable to resolve user email" });
     }
 
-    const rawScope = String(req.query.scope || "program").toLowerCase();
-    const rawRange = String(req.query.range || "30d").toLowerCase();
-
-    const scope: ScopeMode = rawScope === "all" ? "all" : "program";
-    const range: TimeRange =
-      rawRange === "7d" || rawRange === "90d" ? (rawRange as TimeRange) : "30d";
-
-    const [currentProgram, allCheckins, allCompletions] = await Promise.all([
+    const [currentProgram, allCheckins, allCompletions, strengthResult] = await Promise.all([
       getCurrentProgram(userEmail),
       getCheckins(userEmail),
       getCompletions(userEmail),
+      getStrengthCards(userEmail),
     ]);
 
-    const today = new Date();
-    const defaultStart = startOfDay(addDays(today, -(rangeDaysToNumber(range) - 1)));
-
-    let start = defaultStart;
-    let effectiveEnd = endOfDay(today);
-
-    if (scope === "program" && currentProgram?.start_date) {
-      const programStart = startOfDay(
-        new Date(`${currentProgram.start_date}T00:00:00`)
-      );
-      if (!isNaN(programStart.getTime()) && programStart > start) {
-        start = programStart;
-      }
-    }
-
-    if (scope === "program" && currentProgram?.end_date) {
-      const programEnd = endOfDay(
-        new Date(`${currentProgram.end_date}T00:00:00`)
-      );
-      if (!isNaN(programEnd.getTime()) && programEnd < effectiveEnd) {
-        effectiveEnd = programEnd;
-      }
-    }
-
-    const startYMD = formatYMD(start);
-    const endYMD = formatYMD(effectiveEnd);
-
-    const {
-      cards: strengthCards,
-      trackedExercisesFound,
-      liftDocsFound,
-    } = await getStrengthCards(userEmail, startYMD, endYMD);
-
-    const filteredCheckins = allCheckins.filter(
-      (c) => c.date >= startYMD && c.date <= endYMD
-    );
-
-    const filteredCompletions = allCompletions.filter((c) => {
-      const iso = getCompletionISO(c);
-      if (!iso) return false;
-      const ymd = iso.slice(0, 10);
-      return ymd >= startYMD && ymd <= endYMD;
-    });
-
-    const baselineCheckins = (() => {
-      if (scope !== "program") return allCheckins;
-      if (!currentProgram?.start_date) return allCheckins;
-
-      const startLimit = currentProgram.start_date;
-      const endLimit = currentProgram.end_date || "9999-12-31";
-
-      return allCheckins.filter((c) => c.date >= startLimit && c.date <= endLimit);
-    })();
-
-    const firstWeight =
-      baselineCheckins.find(
-        (c) => typeof c.weight_kg === "number" && c.weight_kg != null
-      ) || null;
-
-    const latestWeight =
-      [...filteredCheckins]
-        .reverse()
-        .find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) || null;
-
-    const deltaKg =
-      firstWeight?.weight_kg != null && latestWeight?.weight_kg != null
-        ? latestWeight.weight_kg - firstWeight.weight_kg
-        : 0;
-
-    const deltaPct =
-      firstWeight?.weight_kg != null &&
-      latestWeight?.weight_kg != null &&
-      firstWeight.weight_kg !== 0
-        ? ((latestWeight.weight_kg - firstWeight.weight_kg) / firstWeight.weight_kg) * 100
-        : 0;
-
+    const byDate = new Map<string, { sessions: number; calories_burned: number }>();
     const allDaySet = new Set<string>();
-    for (const c of allCompletions) {
-      const iso = getCompletionISO(c);
+    let totalCaloriesAllTime = 0;
+
+    for (const completion of allCompletions) {
+      const iso = getCompletionISO(completion);
       if (!iso) continue;
-      allDaySet.add(iso.slice(0, 10));
+
+      const date = iso.slice(0, 10);
+      const calories_burned = Number(completion.calories_burned || 0);
+
+      allDaySet.add(date);
+      totalCaloriesAllTime += calories_burned;
+
+      const prev = byDate.get(date) || { sessions: 0, calories_burned: 0 };
+      prev.sessions += 1;
+      prev.calories_burned += calories_burned;
+      byDate.set(date, prev);
     }
+
+    const completionSeries: CompletionSeriesRow[] = Array.from(byDate.entries())
+      .map(([date, row]) => ({
+        date,
+        sessions: row.sessions,
+        calories_burned: row.calories_burned,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
 
     let currentStreak = 0;
+    const today = new Date();
+
     for (let i = 0; i < 3650; i++) {
       const d = addDays(today, -i);
       const ymd = formatYMD(d);
@@ -607,47 +522,23 @@ export default async function handler(
       else break;
     }
 
-    const sessions = filteredCompletions.length;
-    const calories = filteredCompletions.reduce(
-      (sum, c) => sum + Number(c.calories_burned || 0),
-      0
-    );
-
     const payload: Resp = {
-      scope,
-      range,
-      startYMD,
-      endYMD,
       currentProgram,
+      checkins: allCheckins,
+      completionSeries,
+      strengthCards: strengthResult.cards,
       kpis: {
-        sessions,
-        calories,
-        currentStreak,
         totalCompletionsAllTime: allCompletions.length,
+        totalCaloriesAllTime,
+        currentStreak,
       },
-      weight: {
-        start_weight_kg: firstWeight?.weight_kg ?? null,
-        current_weight_kg: latestWeight?.weight_kg ?? null,
-        delta_kg: Number(deltaKg.toFixed(1)),
-        delta_pct: Number(deltaPct.toFixed(1)),
-        points: filteredCheckins
-          .filter((c) => typeof c.weight_kg === "number" && c.weight_kg != null)
-          .map((c) => ({
-            date: c.date,
-            value: c.weight_kg as number,
-          })),
-      },
-      strengthCards,
-      checkins: [...allCheckins].reverse().slice(0, 12),
       debug: {
         userEmail,
         checkinsFound: allCheckins.length,
-        filteredCheckinsFound: filteredCheckins.length,
         completionsFound: allCompletions.length,
-        filteredCompletionsFound: filteredCompletions.length,
-        strengthExercisesFound: trackedExercisesFound,
-        liftDocsFound,
-        strengthCardsBuilt: strengthCards.length,
+        strengthExercisesFound: strengthResult.trackedExercisesFound,
+        liftDocsFound: strengthResult.liftDocsFound,
+        strengthCardsBuilt: strengthResult.cards.length,
       },
     };
 
