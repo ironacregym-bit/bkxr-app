@@ -115,10 +115,10 @@ function toDate(v: any): Date | null {
       return d instanceof Date && !isNaN(d.getTime()) ? d : null;
     }
 
-    if (typeof v === "object" && typeof v._seconds === "number") {
+    if (typeof v === "object" && typeof v?._seconds === "number") {
       const ms =
         v._seconds * 1000 +
-        (typeof v._nanoseconds === "number" ? v._nanoseconds / 1e6 : 0);
+        (typeof v?._nanoseconds === "number" ? v._nanoseconds / 1e6 : 0);
       const d = new Date(ms);
       return !isNaN(d.getTime()) ? d : null;
     }
@@ -137,11 +137,11 @@ function toISO(v: any): string | null {
 
 function getCompletionISO(c: any): string | null {
   return (
-    toISO(c.completed_date) ||
-    toISO(c.date_completed) ||
-    toISO(c.completed_at) ||
-    toISO(c.started_at) ||
-    toISO(c.created_at)
+    toISO(c?.completed_date) ||
+    toISO(c?.date_completed) ||
+    toISO(c?.completed_at) ||
+    toISO(c?.started_at) ||
+    toISO(c?.created_at)
   );
 }
 
@@ -167,10 +167,62 @@ function humaniseKey(value: string): string {
     .join(" ");
 }
 
-function chooseBest1RM(row: any): number | null {
+function getBestEntryValue(row: any): number | null {
   const true1rm = safeNum(row?.true_1rm_kg);
   const e1rm = safeNum(row?.e1rm_kg ?? row?.e1rm1_kg ?? row?.e1_rm_kg);
   return true1rm ?? e1rm ?? null;
+}
+
+function sumKgLiftedFromCompletion(completion: any): number {
+  const sets = Array.isArray(completion?.sets) ? completion.sets : [];
+  let total = 0;
+
+  for (const s of sets) {
+    const reps = Number(s?.reps ?? 0);
+    const weight = Number(s?.weight ?? s?.weight_kg ?? s?.load ?? 0);
+
+    if (Number.isFinite(reps) && reps > 0 && Number.isFinite(weight) && weight > 0) {
+      total += reps * weight;
+    }
+  }
+
+  return Number(total.toFixed(1));
+}
+
+function dedupeBestPoints(points: StrengthPoint[]): StrengthPoint[] {
+  const bestByDate = new Map<string, number>();
+
+  for (const point of points) {
+    const prev = bestByDate.get(point.date);
+    if (prev == null || point.value > prev) {
+      bestByDate.set(point.date, point.value);
+    }
+  }
+
+  return Array.from(bestByDate.entries())
+    .map(([date, value]) => ({ date, value }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function toPrOnlySeries(points: StrengthPoint[]): StrengthPoint[] {
+  const sorted = [...points].sort((a, b) => a.date.localeCompare(b.date));
+  const prPoints: StrengthPoint[] = [];
+  let bestSoFar: number | null = null;
+
+  for (const point of sorted) {
+    if (bestSoFar == null) {
+      prPoints.push(point);
+      bestSoFar = point.value;
+      continue;
+    }
+
+    if (point.value > bestSoFar) {
+      prPoints.push(point);
+      bestSoFar = point.value;
+    }
+  }
+
+  return prPoints;
 }
 
 async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
@@ -188,14 +240,14 @@ async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
     const candidates = await Promise.all(
       assignmentsSnap.docs.map(async (doc) => {
         const a = doc.data() as any;
-        const start = toDate(a.start_date);
-        const end = toDate(a.end_date);
-        const programId = String(a.program_id || "").trim();
+        const start = toDate(a?.start_date);
+        const end = toDate(a?.end_date);
+        const programId = String(a?.program_id || "").trim();
 
         if (!programId || !start) return null;
 
-        let programName = String(a.program_name || "Program");
-        let weeks = Number(a.weeks || 0) || 0;
+        let programName = String(a?.program_name || "Program");
+        let weeks = Number(a?.weeks || 0) || 0;
 
         try {
           const programDoc = await firestore.collection(PROGRAMS_COLLECTION).doc(programId).get();
@@ -205,7 +257,7 @@ async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
             weeks = Number(programData?.weeks || weeks || 0) || 0;
           }
         } catch {
-          // Soft fail - keep assignment values
+          // Soft fail
         }
 
         const computedEnd =
@@ -227,7 +279,7 @@ async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
           assignment_id: doc.id,
           program_id: programId,
           program_name: programName,
-          status: String(a.status || "active"),
+          status: String(a?.status || "active"),
           start_date: formatYMD(startOfDay(start)),
           end_date: computedEnd ? formatYMD(startOfDay(computedEnd)) : null,
           weeks,
@@ -265,8 +317,8 @@ async function getCheckins(userEmail: string): Promise<SimpleCheckin[]> {
             typeof data?.weight_kg === "number"
               ? data.weight_kg
               : typeof data?.weight === "number"
-              ? data.weight
-              : null,
+                ? data.weight
+                : null,
           body_fat_pct:
             typeof data?.body_fat_pct === "number" ? data.body_fat_pct : null,
           photo_url: data?.photo_url || null,
@@ -289,8 +341,8 @@ async function getCheckins(userEmail: string): Promise<SimpleCheckin[]> {
             typeof data?.weight_kg === "number"
               ? data.weight_kg
               : typeof data?.weight === "number"
-              ? data.weight
-              : null,
+                ? data.weight
+                : null,
           body_fat_pct:
             typeof data?.body_fat_pct === "number" ? data.body_fat_pct : null,
           photo_url: data?.photo_url || null,
@@ -381,9 +433,7 @@ async function getStrengthCards(
       trackedByExactId.get(doc.id) ||
       trackedByNormalisedId.get(normalise(doc.id));
 
-    if (!tracked) {
-      continue;
-    }
+    if (!tracked) continue;
 
     matchedLiftIds.push(doc.id);
 
@@ -399,14 +449,14 @@ async function getStrengthCards(
       entryRows = [];
     }
 
-    const rawPoints = entryRows
+    const entryPoints = entryRows
       .map((row) => {
         const dateKey =
           typeof row?.date_key === "string" && row.date_key ? row.date_key : null;
 
         if (!dateKey) return null;
 
-        const value = chooseBest1RM(row);
+        const value = getBestEntryValue(row);
         if (value == null || value <= 0) return null;
 
         return {
@@ -416,31 +466,41 @@ async function getStrengthCards(
       })
       .filter(Boolean) as StrengthPoint[];
 
-    rawPoints.sort((a, b) => a.date.localeCompare(b.date));
+    const dedupedEntryPoints = dedupeBestPoints(entryPoints);
+    let prPoints = toPrOnlySeries(dedupedEntryPoints);
 
-    const prPoints: StrengthPoint[] = [];
-    let bestSoFar: number | null = null;
+    const bestTrue = safeNum(data?.best_true_1rm_kg);
+    const bestTrueDate =
+      typeof data?.best_true_1rm_date === "string" ? data.best_true_1rm_date : null;
 
-    for (const point of rawPoints) {
-      if (bestSoFar == null) {
-        prPoints.push(point);
-        bestSoFar = point.value;
-        continue;
-      }
+    const bestE1 = safeNum(data?.best_e1rm_kg);
+    const bestE1Date =
+      typeof data?.best_e1rm_date === "string" ? data.best_e1rm_date : null;
 
-      if (point.value > bestSoFar) {
-        prPoints.push(point);
-        bestSoFar = point.value;
-      }
+    const fallbackBest = bestTrue ?? bestE1 ?? null;
+    const fallbackBestDate = bestTrue != null ? bestTrueDate : bestE1Date;
+
+    const latestFromPoints =
+      prPoints.length > 0 ? prPoints[prPoints.length - 1].value : null;
+
+    if (
+      fallbackBest != null &&
+      fallbackBestDate &&
+      (latestFromPoints == null || fallbackBest > latestFromPoints)
+    ) {
+      prPoints = toPrOnlySeries(
+        dedupeBestPoints([
+          ...prPoints,
+          {
+            date: fallbackBestDate,
+            value: Number(fallbackBest.toFixed(1)),
+          },
+        ])
+      );
     }
 
-    const fallbackBest =
-      safeNum(data?.best_true_1rm_kg) ??
-      safeNum(data?.best_e1rm_kg) ??
-      null;
-
-    const baseline = prPoints.length ? prPoints[0].value : fallbackBest;
-    const latest = prPoints.length ? prPoints[prPoints.length - 1].value : fallbackBest;
+    const baseline = prPoints.length > 0 ? prPoints[0].value : fallbackBest;
+    const latest = prPoints.length > 0 ? prPoints[prPoints.length - 1].value : fallbackBest;
     const delta =
       baseline != null && latest != null
         ? Number((latest - baseline).toFixed(1))
@@ -453,8 +513,8 @@ async function getStrengthCards(
       baseline,
       delta,
       points: prPoints,
-      best_e1rm_kg: safeNum(data?.best_e1rm_kg),
-      best_true_1rm_kg: safeNum(data?.best_true_1rm_kg),
+      best_e1rm_kg: bestE1,
+      best_true_1rm_kg: bestTrue,
       training_max_kg: safeNum(data?.training_max_kg),
     });
   }
@@ -511,7 +571,7 @@ export default async function handler(
       if (!iso) continue;
 
       const date = iso.slice(0, 10);
-      const caloriesBurned = Number(completion.calories_burned || 0);
+      const caloriesBurned = Number(completion?.calories_burned || 0);
       const kgLifted = sumKgLiftedFromCompletion(completion);
 
       allDaySet.add(date);
@@ -581,20 +641,4 @@ export default async function handler(
     console.error("[progress/overview] error:", err?.message || err);
     return res.status(500).json({ error: "Failed to build progress overview" });
   }
-}
-
-function sumKgLiftedFromCompletion(completion: any): number {
-  const sets = Array.isArray(completion?.sets) ? completion.sets : [];
-  let total = 0;
-
-  for (const s of sets) {
-    const reps = Number(s?.reps ?? 0);
-    const weight = Number(s?.weight ?? s?.weight_kg ?? s?.load ?? 0);
-
-    if (Number.isFinite(reps) && reps > 0 && Number.isFinite(weight) && weight > 0) {
-      total += reps * weight;
-    }
-  }
-
-  return Number(total.toFixed(1));
 }
