@@ -887,11 +887,16 @@ export default function ProgressPage() {
                         Edit
                       </Link>
 
-                      {c.photo_url ? (
-                        {c.photo_url}
-                          Photo
-                        </a>
-                      ) : null}
+                    {c.photo_url ? (
+                      <a
+                        href={c.photo_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ia-btn ia-btn-muted"
+                      >
+                        Photo
+                      </a>
+                    ) : null}
                     </div>
                   </div>
                 ))}
