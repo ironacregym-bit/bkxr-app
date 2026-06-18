@@ -179,8 +179,7 @@ function sumKgLiftedFromCompletion(completion: any): number {
 
   for (const s of sets) {
     const reps = Number(s?.reps ?? 0);
-    const weight =
-      Number(s?.weight ?? s?.weight_kg ?? s?.load ?? s?.weight_used ?? 0);
+    const weight = Number(s?.weight ?? s?.weight_kg ?? s?.load ?? 0);
 
     if (Number.isFinite(reps) && reps > 0 && Number.isFinite(weight) && weight > 0) {
       total += reps * weight;
@@ -222,7 +221,7 @@ async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
             weeks = Number(programData?.weeks || weeks || 0) || 0;
           }
         } catch {
-          // soft fail - use assignment values
+          // Soft fail - keep assignment values
         }
 
         const computedEnd =
@@ -435,7 +434,6 @@ async function getStrengthCards(
 
     rawPoints.sort((a, b) => a.date.localeCompare(b.date));
 
-    // Keep first point as baseline, then only keep PR increases
     const prPoints: StrengthPoint[] = [];
     let bestSoFar: number | null = null;
 
