@@ -173,22 +173,6 @@ function chooseBest1RM(row: any): number | null {
   return true1rm ?? e1rm ?? null;
 }
 
-function sumKgLiftedFromCompletion(completion: any): number {
-  const sets = Array.isArray(completion?.sets) ? completion.sets : [];
-  let total = 0;
-
-  for (const s of sets) {
-    const reps = Number(s?.reps ?? 0);
-    const weight = Number(s?.weight ?? s?.weight_kg ?? s?.load ?? 0);
-
-    if (Number.isFinite(reps) && reps > 0 && Number.isFinite(weight) && weight > 0) {
-      total += reps * weight;
-    }
-  }
-
-  return Number(total.toFixed(1));
-}
-
 async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
   try {
     const assignmentsSnap = await firestore
