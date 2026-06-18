@@ -1,4 +1,3 @@
-// pages/progress.tsx// 
 "use client";
 
 import Head from "next/head";
@@ -323,15 +322,20 @@ export default function ProgressPage() {
     return scopeCheckins.filter((c) => c.date >= selectedStartYMD && c.date <= selectedEndYMD);
   }, [scopeCheckins, selectedStartYMD, selectedEndYMD]);
 
+  const checkinsForDisplay = useMemo(() => {
+    return visibleCheckins.length > 0 ? visibleCheckins : scopeCheckins;
+  }, [visibleCheckins, scopeCheckins]);
+
   const scopeCompletionSeries = useMemo(() => {
     const rows = data?.completionSeries || [];
     return rows.filter((r) => r.date >= scopeStartYMD && r.date <= scopeEndYMD);
   }, [data, scopeStartYMD, scopeEndYMD]);
 
   const visibleCompletionSeries = useMemo(() => {
-    return scopeCompletionSeries.filter(
+    const filtered = scopeCompletionSeries.filter(
       (r) => r.date >= selectedStartYMD && r.date <= selectedEndYMD
     );
+    return filtered.length > 0 ? filtered : scopeCompletionSeries;
   }, [scopeCompletionSeries, selectedStartYMD, selectedEndYMD]);
 
   const weightBaseline = useMemo(() => {
@@ -341,19 +345,12 @@ export default function ProgressPage() {
   }, [scopeCheckins]);
 
   const weightLatest = useMemo(() => {
-    const inRange =
-      [...visibleCheckins]
-        .reverse()
-        .find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) || null;
-
-    if (inRange) return inRange;
-
     return (
-      [...(data?.checkins || [])]
+      [...checkinsForDisplay]
         .reverse()
         .find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) || null
     );
-  }, [visibleCheckins, data]);
+  }, [checkinsForDisplay]);
 
   const currentWeight = weightLatest?.weight_kg ?? null;
   const startWeight = weightBaseline?.weight_kg ?? null;
@@ -377,7 +374,7 @@ export default function ProgressPage() {
   }, [visibleCompletionSeries]);
 
   const weightChart = useMemo(() => {
-    const points = visibleCheckins
+    const points = checkinsForDisplay
       .filter((p) => typeof p.weight_kg === "number" && p.weight_kg != null)
       .map((p) => ({ date: p.date, value: p.weight_kg as number }));
 
@@ -437,7 +434,7 @@ export default function ProgressPage() {
     };
 
     return { chartData, options };
-  }, [visibleCheckins]);
+  }, [checkinsForDisplay]);
 
   const visibleStrengthCards = useMemo<VisibleStrengthCard[]>(() => {
     const cards = data?.strengthCards || [];
@@ -456,10 +453,15 @@ export default function ProgressPage() {
         const baseline =
           points.length > 0 ? points[0].value : card.baseline ?? card.latest ?? null;
 
+        const latestFromPoints =
+          points.length > 0 ? points[points.length - 1].value : null;
+
+        const latestCandidates = [latestFromPoints, card.latest].filter(
+          (v): v is number => typeof v === "number" && Number.isFinite(v)
+        );
+
         const latest =
-          points.length > 0
-            ? points[points.length - 1].value
-            : card.latest ?? null;
+          latestCandidates.length > 0 ? Math.max(...latestCandidates) : null;
 
         const deltaKg =
           baseline != null && latest != null
@@ -686,7 +688,7 @@ export default function ProgressPage() {
                     {weightChart ? (
                       <Line data={weightChart.chartData} options={weightChart.options} />
                     ) : (
-                      <div className="text-dim small">No weight data in this range.</div>
+                      <div className="text-dim small">No weight data available.</div>
                     )}
                   </div>
                 </div>
@@ -744,7 +746,7 @@ export default function ProgressPage() {
             </div>
 
             {!visibleStrengthCards.length ? (
-              <div className="text-dim small mt-3">No strength data in this range.</div>
+              <div className="text-dim small mt-3">No strength data available.</div>
             ) : (
               <div className="row g-2 mt-2">
                 {visibleStrengthCards.map((card) => (
@@ -803,7 +805,7 @@ export default function ProgressPage() {
                                 }}
                               >
                                 {card.deltaKg > 0 ? "+" : ""}
-                                {fmtKg(card.deltaKg).replace("kg", "kg")}
+                                {fmtKg(card.deltaKg)}
                               </div>
 
                               <div
@@ -852,11 +854,11 @@ export default function ProgressPage() {
               </Link>
             </div>
 
-            {!visibleCheckins.length ? (
-              <div className="text-dim small mt-3">No check-ins in this selected range.</div>
+            {!checkinsForDisplay.length ? (
+              <div className="text-dim small mt-3">No check-ins available.</div>
             ) : (
               <div className="d-grid gap-2 mt-3">
-                {[...visibleCheckins].reverse().map((c, idx) => (
+                {[...checkinsForDisplay].reverse().map((c, idx) => (
                   <div
                     key={`${c.date}-${idx}`}
                     style={{
@@ -866,7 +868,7 @@ export default function ProgressPage() {
                       gap: 12,
                       padding: "10px 0",
                       borderBottom:
-                        idx === visibleCheckins.length - 1
+                        idx === checkinsForDisplay.length - 1
                           ? "none"
                           : "1px solid rgba(255,255,255,0.08)",
                     }}
