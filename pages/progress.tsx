@@ -33,7 +33,6 @@ const fetcher = (u: string) =>
 
 type ScopeMode = "program" | "all";
 type TimeRange = "7d" | "30d" | "90d";
-type LiftKey = "squat" | "bench" | "deadlift" | "ohp";
 
 type CurrentProgram = {
   assignment_id: string;
@@ -52,48 +51,73 @@ type StrengthPoint = {
   value: number;
 };
 
-type ProgressOverviewResponse = {
-  scope: ScopeMode;
-  range: TimeRange;
-  startYMD: string;
-  endYMD: string;
-  currentProgram: CurrentProgram;
-  kpis: {
-    sessions: number;
-    calories: number;
-    currentStreak: number;
-    totalCompletionsAllTime: number;
-  };
-  weight: {
-    start_weight_kg: number | null;
-    current_weight_kg: number | null;
-    delta_kg: number;
-    delta_pct: number;
-    points: Array<{ date: string; value: number }>;
-  };
-  strength: Record<
-    LiftKey,
-    {
-      latest: number | null;
-      previous: number | null;
-      delta: number | null;
-      points: StrengthPoint[];
-    }
-  >;
-  checkins: Array<{
-    date: string;
-    weight_kg: number | null;
-    body_fat_pct: number | null;
-    photo_url?: string | null;
-  }>;
+type StrengthCard = {
+  key: string;
+  title: string;
+  latest: number | null;
+  baseline: number | null;
+  delta: number | null;
+  points: StrengthPoint[];
+  best_e1rm_kg?: number | null;
+  best_true_1rm_kg?: number | null;
+  training_max_kg?: number | null;
 };
 
-const LIFT_LABELS: Record<LiftKey, string> = {
-  squat: "Squat",
-  bench: "Bench",
-  deadlift: "Deadlift",
-  ohp: "OHP",
+type Checkin = {
+  date: string;
+  weight_kg: number | null;
+  body_fat_pct: number | null;
+  photo_url?: string | null;
 };
+
+type CompletionSeriesRow = {
+  date: string;
+  sessions: number;
+  calories_burned: number;
+};
+
+type ProgressOverviewResponse = {
+  currentProgram: CurrentProgram;
+  checkins: Checkin[];
+  completionSeries: CompletionSeriesRow[];
+  strengthCards: StrengthCard[];
+  kpis: {
+    totalCompletionsAllTime: number;
+    totalCaloriesAllTime: number;
+    currentStreak: number;
+  };
+  debug?: {
+    userEmail: string;
+    checkinsFound: number;
+    completionsFound: number;
+    strengthExercisesFound: number;
+    liftDocsFound: number;
+    strengthCardsBuilt: number;
+    matchedLiftIds: string[];
+  };
+};
+
+function formatYMD(d: Date) {
+  return d.toLocaleDateString("en-CA");
+}
+
+function addDays(d: Date, days: number) {
+  const out = new Date(d);
+  out.setDate(out.getDate() + days);
+  return out;
+}
+
+function startOfDay(d: Date) {
+  const out = new Date(d);
+  out.setHours(0, 0, 0, 0);
+  return out;
+}
+
+function endOfDay(d: Date) {
+  const out = new Date(d);
+  out.setHours(23, 59, 59, 999);
+  return out;
+}
 
 function fmtShortDate(ymd: string) {
   return new Date(`${ymd}T00:00:00`).toLocaleDateString(undefined, {
@@ -104,6 +128,12 @@ function fmtShortDate(ymd: string) {
 
 function classNames(...items: Array<string | false | null | undefined>) {
   return items.filter(Boolean).join(" ");
+}
+
+function rangeDaysToNumber(range: TimeRange) {
+  if (range === "7d") return 7;
+  if (range === "30d") return 30;
+  return 90;
 }
 
 function LoadingScreen() {
@@ -217,15 +247,9 @@ export default function ProgressPage() {
   }, [mounted, session, status]);
 
   const progressKey =
-    mounted && status === "authenticated"
-      ? `/api/progress/overview?scope=${encodeURIComponent(scope)}&range=${encodeURIComponent(range)}`
-      : null;
+    mounted && status === "authenticated" ? "/api/progress/overview" : null;
 
-  const {
-    data,
-    error,
-    isValidating,
-  } = useSWR<ProgressOverviewResponse>(progressKey, fetcher, {
+  const { data, error, isValidating } = useSWR<ProgressOverviewResponse>(progressKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
@@ -237,17 +261,105 @@ export default function ProgressPage() {
     }
   }, [data, scope]);
 
+  const scopeStartYMD = useMemo(() => {
+    if (scope === "program" && data?.currentProgram?.start_date) {
+      return data.currentProgram.start_date;
+    }
+
+    const firstCheckin = data?.checkins?.[0]?.date || null;
+    const firstCompletion = data?.completionSeries?.[0]?.date || null;
+
+    if (firstCheckin && firstCompletion) {
+      return firstCheckin < firstCompletion ? firstCheckin : firstCompletion;
+    }
+
+    return firstCheckin || firstCompletion || formatYMD(startOfDay(new Date()));
+  }, [data, scope]);
+
+  const scopeEndYMD = useMemo(() => {
+    if (scope === "program" && data?.currentProgram?.end_date) {
+      return data.currentProgram.end_date;
+    }
+    return formatYMD(endOfDay(new Date()));
+  }, [data, scope]);
+
+  const selectedStartYMD = useMemo(() => {
+    const today = startOfDay(new Date());
+    const rangeStart = addDays(today, -(rangeDaysToNumber(range) - 1));
+    const rangeStartYMD = formatYMD(rangeStart);
+
+    if (scopeStartYMD > rangeStartYMD) return scopeStartYMD;
+    return rangeStartYMD;
+  }, [scopeStartYMD, range]);
+
+  const selectedEndYMD = useMemo(() => {
+    const todayYMD = formatYMD(endOfDay(new Date()));
+    if (scopeEndYMD < todayYMD) return scopeEndYMD;
+    return todayYMD;
+  }, [scopeEndYMD]);
+
+  const scopeCheckins = useMemo(() => {
+    const rows = data?.checkins || [];
+    return rows.filter((c) => c.date >= scopeStartYMD && c.date <= scopeEndYMD);
+  }, [data, scopeStartYMD, scopeEndYMD]);
+
+  const visibleCheckins = useMemo(() => {
+    return scopeCheckins.filter((c) => c.date >= selectedStartYMD && c.date <= selectedEndYMD);
+  }, [scopeCheckins, selectedStartYMD, selectedEndYMD]);
+
+  const scopeCompletionSeries = useMemo(() => {
+    const rows = data?.completionSeries || [];
+    return rows.filter((r) => r.date >= scopeStartYMD && r.date <= scopeEndYMD);
+  }, [data, scopeStartYMD, scopeEndYMD]);
+
+  const visibleCompletionSeries = useMemo(() => {
+    return scopeCompletionSeries.filter(
+      (r) => r.date >= selectedStartYMD && r.date <= selectedEndYMD
+    );
+  }, [scopeCompletionSeries, selectedStartYMD, selectedEndYMD]);
+
+  const weightBaseline = useMemo(() => {
+    return scopeCheckins.find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) || null;
+  }, [scopeCheckins]);
+
+  const weightLatest = useMemo(() => {
+    return [...visibleCheckins]
+      .reverse()
+      .find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) || null;
+  }, [visibleCheckins]);
+
+  const currentWeight = weightLatest?.weight_kg ?? null;
+  const startWeight = weightBaseline?.weight_kg ?? null;
+
+  const deltaKg = useMemo(() => {
+    if (startWeight == null || currentWeight == null) return 0;
+    return Number((currentWeight - startWeight).toFixed(1));
+  }, [startWeight, currentWeight]);
+
+  const deltaPct = useMemo(() => {
+    if (startWeight == null || currentWeight == null || startWeight === 0) return 0;
+    return Number((((currentWeight - startWeight) / startWeight) * 100).toFixed(1));
+  }, [startWeight, currentWeight]);
+
+  const visibleSessions = useMemo(() => {
+    return visibleCompletionSeries.reduce((sum, row) => sum + Number(row.sessions || 0), 0);
+  }, [visibleCompletionSeries]);
+
+  const visibleCalories = useMemo(() => {
+    return visibleCompletionSeries.reduce(
+      (sum, row) => sum + Number(row.calories_burned || 0),
+      0
+    );
+  }, [visibleCompletionSeries]);
+
   const weightChart = useMemo(() => {
-    const points = data?.weight?.points || [];
+    const points = visibleCheckins
+      .filter((p) => typeof p.weight_kg === "number" && p.weight_kg != null)
+      .map((p) => ({ date: p.date, value: p.weight_kg as number }));
+
     if (!points.length) return null;
 
-    const labels = points.map((p) =>
-      new Date(`${p.date}T00:00:00`).toLocaleDateString(undefined, {
-        day: "numeric",
-        month: "short",
-      })
-    );
-
+    const labels = points.map((p) => fmtShortDate(p.date));
     const values = points.map((p) => p.value);
 
     const chartData: ChartData<"line"> = {
@@ -301,35 +413,50 @@ export default function ProgressPage() {
     };
 
     return { chartData, options };
-  }, [data]);
+  }, [visibleCheckins]);
 
-  const strengthCards = useMemo(() => {
-    const strength = data?.strength;
-    if (!strength) return [];
+  const visibleStrengthCards = useMemo(() => {
+    const cards = data?.strengthCards || [];
 
-    return (Object.keys(LIFT_LABELS) as LiftKey[]).map((lift) => ({
-      key: lift,
-      label: LIFT_LABELS[lift],
-      latest: strength[lift]?.latest ?? null,
-      delta: strength[lift]?.delta ?? null,
-      points: strength[lift]?.points ?? [],
-    }));
-  }, [data]);
+    return cards
+      .map((card) => {
+        const points = (card.points || []).filter(
+          (p) => p.date >= selectedStartYMD && p.date <= selectedEndYMD
+        );
 
-  const currentWeight = data?.weight?.current_weight_kg ?? null;
-  const startWeight = data?.weight?.start_weight_kg ?? null;
-  const deltaKg = data?.weight?.delta_kg ?? 0;
-  const deltaPct = data?.weight?.delta_pct ?? 0;
+        const baseline =
+          points.length > 0
+            ? points[0].value
+            : card.baseline ?? card.latest ?? null;
+
+        const latest =
+          points.length > 0
+            ? points[points.length - 1].value
+            : card.latest ?? null;
+
+        const delta =
+          baseline != null && latest != null
+            ? Number((latest - baseline).toFixed(1))
+            : null;
+
+        return {
+          key: card.key,
+          label: card.title,
+          latest,
+          delta,
+          points,
+          trainingMax: card.training_max_kg ?? null,
+          bestTrue1RM: card.best_true_1rm_kg ?? null,
+        };
+      })
+      .filter((card) => card.latest != null || card.points.length > 0);
+  }, [data, selectedStartYMD, selectedEndYMD]);
 
   const rangeLabel = useMemo(() => {
-    if (!data) return "";
-    return `${fmtShortDate(data.startYMD)} – ${fmtShortDate(data.endYMD)}`;
-  }, [data]);
+    return `${fmtShortDate(selectedStartYMD)} – ${fmtShortDate(selectedEndYMD)}`;
+  }, [selectedStartYMD, selectedEndYMD]);
 
-  const coreReady =
-    mounted &&
-    status !== "loading" &&
-    (!session || !!data || !!error);
+  const coreReady = mounted && status !== "loading" && (!session || !!data || !!error);
 
   if (!mounted || !coreReady) {
     return (
@@ -371,11 +498,11 @@ export default function ProgressPage() {
             </div>
 
             <div className="d-flex gap-2">
-              <Link href="/checkin" className="ia-btn ia-btn-primary" aria-label="Add check-in">
+              /checkin
                 <i className="fas fa-plus" />
               </Link>
 
-              <Link href="/schedule" className="ia-btn ia-btn-muted" aria-label="Open schedule">
+              /schedule
                 <i className="fas fa-calendar-alt" />
               </Link>
             </div>
@@ -456,11 +583,20 @@ export default function ProgressPage() {
                   <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
                     <div>
                       <div className="ia-kicker">weight</div>
-                      <div style={{ fontSize: "2rem", lineHeight: 1, fontWeight: 900, marginTop: 8 }}>
+                      <div
+                        style={{
+                          fontSize: "2rem",
+                          lineHeight: 1,
+                          fontWeight: 900,
+                          marginTop: 8,
+                        }}
+                      >
                         {currentWeight != null ? `${currentWeight.toFixed(1)}kg` : "—kg"}
                       </div>
                       <div className="text-dim small mt-1">
-                        {startWeight != null ? `Started at ${startWeight.toFixed(1)}kg` : "No check-ins yet"}
+                        {startWeight != null
+                          ? `Started at ${startWeight.toFixed(1)}kg`
+                          : "No check-ins yet"}
                       </div>
                     </div>
 
@@ -508,14 +644,14 @@ export default function ProgressPage() {
                 <div className="row g-2 h-100">
                   <div className="col-4 col-lg-12">
                     <div className="ia-stat-mini h-100">
-                      <div className="ia-stat-mini-value">{data.kpis.sessions || 0}</div>
+                      <div className="ia-stat-mini-value">{visibleSessions}</div>
                       <div className="ia-stat-mini-label">Sessions</div>
                     </div>
                   </div>
 
                   <div className="col-4 col-lg-12">
                     <div className="ia-stat-mini h-100">
-                      <div className="ia-stat-mini-value">{Math.round(data.kpis.calories || 0)}</div>
+                      <div className="ia-stat-mini-value">{Math.round(visibleCalories)}</div>
                       <div className="ia-stat-mini-label">Calories</div>
                     </div>
                   </div>
@@ -544,74 +680,84 @@ export default function ProgressPage() {
               <div>
                 <div className="ia-card-title-compact">Strength</div>
                 <div className="text-dim small mt-1">
-                  Estimated 1RM trend by lift in the selected range.
+                  True 1RM / estimated 1RM progression in the selected range.
                 </div>
               </div>
 
-              <Link href="/train" className="ia-btn ia-btn-muted">
+              /train
                 Open training
               </Link>
             </div>
 
-            <div className="row g-2 mt-2">
-              {strengthCards.map((card) => (
-                <div key={card.key} className="col-6">
-                  <div
-                    style={{
-                      borderRadius: 14,
-                      padding: 12,
-                      height: "100%",
-                      background: "rgba(255,255,255,0.04)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                    }}
-                  >
-                    <div className="d-flex justify-content-between align-items-start gap-2">
-                      <div>
-                        <div
-                          className="text-dim small"
-                          style={{
-                            textTransform: "uppercase",
-                            letterSpacing: "0.04em",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {card.label}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "1.02rem",
-                            fontWeight: 800,
-                            lineHeight: 1.2,
-                            marginTop: 4,
-                          }}
-                        >
-                          {card.latest != null ? `${Math.round(card.latest)} kg` : "—"}
-                        </div>
-                      </div>
-
-                      <div className="text-end">
-                        {card.delta != null ? (
+            {!visibleStrengthCards.length ? (
+              <div className="text-dim small mt-3">No strength data in this range.</div>
+            ) : (
+              <div className="row g-2 mt-2">
+                {visibleStrengthCards.map((card) => (
+                  <div key={card.key} className="col-6">
+                    <div
+                      style={{
+                        borderRadius: 14,
+                        padding: 12,
+                        height: "100%",
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                      }}
+                    >
+                      <div className="d-flex justify-content-between align-items-start gap-2">
+                        <div style={{ minWidth: 0 }}>
                           <div
+                            className="text-dim small"
                             style={{
-                              color: card.delta >= 0 ? "var(--ia-neon)" : "#ff6f91",
-                              fontWeight: 800,
-                              fontSize: "0.82rem",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.04em",
+                              fontWeight: 700,
+                              lineHeight: 1.2,
                             }}
                           >
-                            {card.delta > 0 ? "+" : ""}
-                            {Math.round(card.delta)}kg
+                            {card.label}
                           </div>
-                        ) : (
-                          <div className="text-dim small">No change</div>
-                        )}
-                      </div>
-                    </div>
+                          <div
+                            style={{
+                              fontSize: "1.02rem",
+                              fontWeight: 800,
+                              lineHeight: 1.2,
+                              marginTop: 4,
+                            }}
+                          >
+                            {card.latest != null ? `${Math.round(card.latest)} kg` : "—"}
+                          </div>
+                          {card.trainingMax != null ? (
+                            <div className="text-dim small mt-1">
+                              TM {Math.round(card.trainingMax)}kg
+                            </div>
+                          ) : null}
+                        </div>
 
-                    <MiniSpark points={card.points} />
+                        <div className="text-end">
+                          {card.delta != null ? (
+                            <div
+                              style={{
+                                color: card.delta >= 0 ? "var(--ia-neon)" : "#ff6f91",
+                                fontWeight: 800,
+                                fontSize: "0.82rem",
+                              }}
+                            >
+                              {card.delta > 0 ? "+" : ""}
+                              {Math.round(card.delta)}kg
+                            </div>
+                          ) : (
+                            <div className="text-dim small">No change</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <MiniSpark points={card.points} />
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
@@ -627,16 +773,16 @@ export default function ProgressPage() {
                 </div>
               </div>
 
-              <Link href="/checkin" className="ia-btn ia-btn-primary">
+              /checkin
                 Add check-in
               </Link>
             </div>
 
-            {!data.checkins.length ? (
+            {!visibleCheckins.length ? (
               <div className="text-dim small mt-3">No check-ins in this selected range.</div>
             ) : (
               <div className="d-grid gap-2 mt-3">
-                {data.checkins.map((c, idx) => (
+                {[...visibleCheckins].reverse().map((c, idx) => (
                   <div
                     key={`${c.date}-${idx}`}
                     style={{
@@ -646,7 +792,7 @@ export default function ProgressPage() {
                       gap: 12,
                       padding: "10px 0",
                       borderBottom:
-                        idx === data.checkins.length - 1
+                        idx === visibleCheckins.length - 1
                           ? "none"
                           : "1px solid rgba(255,255,255,0.08)",
                     }}
@@ -667,20 +813,14 @@ export default function ProgressPage() {
                     </div>
 
                     <div className="d-flex gap-2 flex-wrap">
-                      <Link
-                        href={`/checkin?date=${encodeURIComponent(c.date)}`}
+                      }`}
                         className="ia-btn ia-btn-outline"
                       >
                         Edit
                       </Link>
 
                       {c.photo_url ? (
-                        <a
-                          href={c.photo_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ia-btn ia-btn-muted"
-                        >
+                        {c.photo_url}
                           Photo
                         </a>
                       ) : null}
