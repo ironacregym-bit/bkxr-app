@@ -534,11 +534,11 @@ export default function ProgressPage() {
             </div>
 
             <div className="d-flex gap-2">
-              /checkin
+              <Link href="/checkin">
                 <i className="fas fa-plus" />
               </Link>
 
-              /schedule
+             <Link href="/schedule">
                 <i className="fas fa-calendar-alt" />
               </Link>
             </div>
@@ -732,7 +732,7 @@ export default function ProgressPage() {
                 </div>
               </div>
 
-              /train
+              <Link href="/train">
                 Open training
               </Link>
             </div>
@@ -841,7 +841,7 @@ export default function ProgressPage() {
                 </div>
               </div>
 
-              /checkin
+              <Link href="/checkin">
                 Add check-in
               </Link>
             </div>
@@ -881,7 +881,7 @@ export default function ProgressPage() {
                     </div>
 
                     <div className="d-flex gap-2 flex-wrap">
-                      }`}
+                      <Link href="}`}"
                         className="ia-btn ia-btn-outline"
                       >
                         Edit
