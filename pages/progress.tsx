@@ -1,4 +1,4 @@
-// pages/progress.tsx 
+// pages/progress.tsx
 "use client";
 
 import Head from "next/head";
@@ -74,6 +74,7 @@ type CompletionSeriesRow = {
   date: string;
   sessions: number;
   calories_burned: number;
+  kg_lifted: number;
 };
 
 type ProgressOverviewResponse = {
@@ -84,6 +85,7 @@ type ProgressOverviewResponse = {
   kpis: {
     totalCompletionsAllTime: number;
     totalCaloriesAllTime: number;
+    totalKgLiftedAllTime: number;
     currentStreak: number;
   };
   debug?: {
@@ -319,14 +321,25 @@ export default function ProgressPage() {
   }, [scopeCompletionSeries, selectedStartYMD, selectedEndYMD]);
 
   const weightBaseline = useMemo(() => {
-    return scopeCheckins.find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) || null;
+    return (
+      scopeCheckins.find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) || null
+    );
   }, [scopeCheckins]);
 
   const weightLatest = useMemo(() => {
-    return [...visibleCheckins]
-      .reverse()
-      .find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) || null;
-  }, [visibleCheckins]);
+    const inRange =
+      [...visibleCheckins]
+        .reverse()
+        .find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) || null;
+
+    if (inRange) return inRange;
+
+    return (
+      [...(data?.checkins || [])]
+        .reverse()
+        .find((c) => typeof c.weight_kg === "number" && c.weight_kg != null) || null
+    );
+  }, [visibleCheckins, data]);
 
   const currentWeight = weightLatest?.weight_kg ?? null;
   const startWeight = weightBaseline?.weight_kg ?? null;
@@ -345,11 +358,8 @@ export default function ProgressPage() {
     return visibleCompletionSeries.reduce((sum, row) => sum + Number(row.sessions || 0), 0);
   }, [visibleCompletionSeries]);
 
-  const visibleCalories = useMemo(() => {
-    return visibleCompletionSeries.reduce(
-      (sum, row) => sum + Number(row.calories_burned || 0),
-      0
-    );
+  const visibleKgLifted = useMemo(() => {
+    return visibleCompletionSeries.reduce((sum, row) => sum + Number(row.kg_lifted || 0), 0);
   }, [visibleCompletionSeries]);
 
   const weightChart = useMemo(() => {
@@ -425,25 +435,28 @@ export default function ProgressPage() {
         );
 
         const baseline =
-          points.length > 0
-            ? points[0].value
-            : card.baseline ?? card.latest ?? null;
+          points.length > 0 ? points[0].value : card.baseline ?? card.latest ?? null;
 
         const latest =
-          points.length > 0
-            ? points[points.length - 1].value
-            : card.latest ?? null;
+          points.length > 0 ? points[points.length - 1].value : card.latest ?? null;
 
-        const delta =
+        const deltaKg =
           baseline != null && latest != null
             ? Number((latest - baseline).toFixed(1))
+            : null;
+
+        const deltaPct =
+          baseline != null && latest != null && baseline > 0
+            ? Number((((latest - baseline) / baseline) * 100).toFixed(1))
             : null;
 
         return {
           key: card.key,
           label: card.title,
           latest,
-          delta,
+          baseline,
+          deltaKg,
+          deltaPct,
           points,
           trainingMax: card.training_max_kg ?? null,
           bestTrue1RM: card.best_true_1rm_kg ?? null,
@@ -498,11 +511,19 @@ export default function ProgressPage() {
             </div>
 
             <div className="d-flex gap-2">
-              <Link href="/checkin">
+              <Link
+                href="/checkin"
+                className="ia-btn ia-btn-primary"
+                aria-label="Add check-in"
+              >
                 <i className="fas fa-plus" />
               </Link>
 
-              <Link href="/schedule">
+              <Link
+                href="/schedule"
+                className="ia-btn ia-btn-muted"
+                aria-label="Open schedule"
+              >
                 <i className="fas fa-calendar-alt" />
               </Link>
             </div>
@@ -606,8 +627,8 @@ export default function ProgressPage() {
                         flexDirection: "column",
                         alignItems: "flex-end",
                         justifyContent: "center",
-                        minWidth: 92,
-                        minHeight: 54,
+                        minWidth: 96,
+                        minHeight: 56,
                         padding: "8px 10px",
                         borderRadius: 14,
                         background: "rgba(255,255,255,0.05)",
@@ -616,14 +637,24 @@ export default function ProgressPage() {
                     >
                       <div
                         style={{
-                          color: deltaKg <= 0 ? "var(--ia-neon)" : "#ff6f91",
+                          color: "var(--ia-info-text, #bfe3ff)",
                           fontWeight: 800,
+                          fontSize: "1rem",
+                          lineHeight: 1.1,
                         }}
                       >
                         {deltaKg > 0 ? "+" : ""}
                         {deltaKg.toFixed(1)}kg
                       </div>
-                      <div className="text-dim small">
+                      <div
+                        style={{
+                          color: "var(--ia-info-text, #bfe3ff)",
+                          fontWeight: 700,
+                          fontSize: "0.82rem",
+                          lineHeight: 1.1,
+                          marginTop: 4,
+                        }}
+                      >
                         {deltaPct > 0 ? "+" : ""}
                         {deltaPct.toFixed(1)}%
                       </div>
@@ -651,8 +682,10 @@ export default function ProgressPage() {
 
                   <div className="col-4 col-lg-12">
                     <div className="ia-stat-mini h-100">
-                      <div className="ia-stat-mini-value">{Math.round(visibleCalories)}</div>
-                      <div className="ia-stat-mini-label">Calories</div>
+                      <div className="ia-stat-mini-value">
+                        {Math.round(visibleKgLifted)}kg
+                      </div>
+                      <div className="ia-stat-mini-label">KG lifted</div>
                     </div>
                   </div>
 
@@ -684,7 +717,7 @@ export default function ProgressPage() {
                 </div>
               </div>
 
-              <Link href="/train">
+              <Link href="/train" className="ia-btn ia-btn-muted">
                 Open training
               </Link>
             </div>
@@ -717,16 +750,19 @@ export default function ProgressPage() {
                           >
                             {card.label}
                           </div>
+
                           <div
                             style={{
-                              fontSize: "1.02rem",
+                              fontSize: "1.12rem",
                               fontWeight: 800,
                               lineHeight: 1.2,
                               marginTop: 4,
+                              color: "var(--ia-neon)",
                             }}
                           >
                             {card.latest != null ? `${Math.round(card.latest)} kg` : "—"}
                           </div>
+
                           {card.trainingMax != null ? (
                             <div className="text-dim small mt-1">
                               TM {Math.round(card.trainingMax)}kg
@@ -735,17 +771,34 @@ export default function ProgressPage() {
                         </div>
 
                         <div className="text-end">
-                          {card.delta != null ? (
-                            <div
-                              style={{
-                                color: card.delta >= 0 ? "var(--ia-neon)" : "#ff6f91",
-                                fontWeight: 800,
-                                fontSize: "0.82rem",
-                              }}
-                            >
-                              {card.delta > 0 ? "+" : ""}
-                              {Math.round(card.delta)}kg
-                            </div>
+                          {card.deltaKg != null ? (
+                            <>
+                              <div
+                                style={{
+                                  color: "var(--ia-info-text, #bfe3ff)",
+                                  fontWeight: 800,
+                                  fontSize: "0.95rem",
+                                  lineHeight: 1.1,
+                                }}
+                              >
+                                {card.deltaKg > 0 ? "+" : ""}
+                                {Math.round(card.deltaKg)}kg
+                              </div>
+
+                              <div
+                                style={{
+                                  color: "var(--ia-info-text, #bfe3ff)",
+                                  fontWeight: 700,
+                                  fontSize: "0.82rem",
+                                  lineHeight: 1.1,
+                                  marginTop: 4,
+                                }}
+                              >
+                                {card.deltaPct != null
+                                  ? `${card.deltaPct > 0 ? "+" : ""}${card.deltaPct}%`
+                                  : ""}
+                              </div>
+                            </>
                           ) : (
                             <div className="text-dim small">No change</div>
                           )}
@@ -773,7 +826,7 @@ export default function ProgressPage() {
                 </div>
               </div>
 
-              <Link href="/checkin">
+              <Link href="/checkin" className="ia-btn ia-btn-primary">
                 Add check-in
               </Link>
             </div>
@@ -819,7 +872,7 @@ export default function ProgressPage() {
                       >
                         Edit
                       </Link>
-                    
+
                       {c.photo_url ? (
                         <a
                           href={c.photo_url}
