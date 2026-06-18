@@ -29,6 +29,7 @@ type CompletionSeriesRow = {
   date: string;
   sessions: number;
   calories_burned: number;
+  kg_lifted: number;
 };
 
 type StrengthPoint = {
@@ -56,6 +57,7 @@ type Resp = {
   kpis: {
     totalCompletionsAllTime: number;
     totalCaloriesAllTime: number;
+    totalKgLiftedAllTime: number;
     currentStreak: number;
   };
   debug?: {
@@ -65,6 +67,7 @@ type Resp = {
     strengthExercisesFound: number;
     liftDocsFound: number;
     strengthCardsBuilt: number;
+    matchedLiftIds: string[];
   };
 };
 
@@ -166,8 +169,25 @@ function humaniseKey(value: string): string {
 
 function chooseBest1RM(row: any): number | null {
   const true1rm = safeNum(row?.true_1rm_kg);
-  const e1rm = safeNum(row?.e1rm_kg);
+  const e1rm = safeNum(row?.e1rm_kg ?? row?.e1rm1_kg ?? row?.e1_rm_kg);
   return true1rm ?? e1rm ?? null;
+}
+
+function sumKgLiftedFromCompletion(completion: any): number {
+  const sets = Array.isArray(completion?.sets) ? completion.sets : [];
+  let total = 0;
+
+  for (const s of sets) {
+    const reps = Number(s?.reps ?? 0);
+    const weight =
+      Number(s?.weight ?? s?.weight_kg ?? s?.load ?? s?.weight_used ?? 0);
+
+    if (Number.isFinite(reps) && reps > 0 && Number.isFinite(weight) && weight > 0) {
+      total += reps * weight;
+    }
+  }
+
+  return Number(total.toFixed(1));
 }
 
 async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
@@ -202,7 +222,7 @@ async function getCurrentProgram(userEmail: string): Promise<CurrentProgram> {
             weeks = Number(programData?.weeks || weeks || 0) || 0;
           }
         } catch {
-          // Soft fail - use assignment values
+          // soft fail - use assignment values
         }
 
         const computedEnd =
@@ -340,15 +360,16 @@ async function getStrengthCards(
   cards: StrengthCard[];
   trackedExercisesFound: number;
   liftDocsFound: number;
+  matchedLiftIds: string[];
 }> {
   const trackedExercises = await getTrackedStrengthExercises();
 
-  const trackedById = new Map<string, StrengthExerciseMeta>(
-    trackedExercises.map((row) => [normalise(row.id), row])
+  const trackedByExactId = new Map<string, StrengthExerciseMeta>(
+    trackedExercises.map((row) => [row.id, row])
   );
 
-  const trackedByName = new Map<string, StrengthExerciseMeta>(
-    trackedExercises.map((row) => [normalise(row.exercise_name), row])
+  const trackedByNormalisedId = new Map<string, StrengthExerciseMeta>(
+    trackedExercises.map((row) => [normalise(row.id), row])
   );
 
   let liftsSnap;
@@ -363,20 +384,28 @@ async function getStrengthCards(
       cards: [],
       trackedExercisesFound: trackedExercises.length,
       liftDocsFound: 0,
+      matchedLiftIds: [],
     };
   }
 
   const cards: StrengthCard[] = [];
+  const matchedLiftIds: string[] = [];
 
   for (const doc of liftsSnap.docs) {
     const data = doc.data() as any;
 
-    const enrichedExercise =
-      trackedById.get(normalise(doc.id)) ||
-      trackedByName.get(normalise(data?.exercise_name || ""));
+    const tracked =
+      trackedByExactId.get(doc.id) ||
+      trackedByNormalisedId.get(normalise(doc.id));
+
+    if (!tracked) {
+      continue;
+    }
+
+    matchedLiftIds.push(doc.id);
 
     const title =
-      enrichedExercise?.exercise_name ||
+      tracked.exercise_name ||
       (data?.exercise_name ? String(data.exercise_name) : humaniseKey(doc.id));
 
     let entryRows: any[] = [];
@@ -406,6 +435,7 @@ async function getStrengthCards(
 
     rawPoints.sort((a, b) => a.date.localeCompare(b.date));
 
+    // Keep first point as baseline, then only keep PR increases
     const prPoints: StrengthPoint[] = [];
     let bestSoFar: number | null = null;
 
@@ -453,6 +483,7 @@ async function getStrengthCards(
     cards,
     trackedExercisesFound: trackedExercises.length,
     liftDocsFound: liftsSnap.size,
+    matchedLiftIds,
   };
 }
 
@@ -477,30 +508,44 @@ export default async function handler(
       return res.status(400).json({ error: "Unable to resolve user email" });
     }
 
-    const [currentProgram, allCheckins, allCompletions, strengthResult] = await Promise.all([
-      getCurrentProgram(userEmail),
-      getCheckins(userEmail),
-      getCompletions(userEmail),
-      getStrengthCards(userEmail),
-    ]);
+    const [currentProgram, allCheckins, allCompletions, strengthResult] =
+      await Promise.all([
+        getCurrentProgram(userEmail),
+        getCheckins(userEmail),
+        getCompletions(userEmail),
+        getStrengthCards(userEmail),
+      ]);
 
-    const byDate = new Map<string, { sessions: number; calories_burned: number }>();
+    const byDate = new Map<
+      string,
+      { sessions: number; calories_burned: number; kg_lifted: number }
+    >();
     const allDaySet = new Set<string>();
     let totalCaloriesAllTime = 0;
+    let totalKgLiftedAllTime = 0;
 
     for (const completion of allCompletions) {
       const iso = getCompletionISO(completion);
       if (!iso) continue;
 
       const date = iso.slice(0, 10);
-      const calories_burned = Number(completion.calories_burned || 0);
+      const caloriesBurned = Number(completion.calories_burned || 0);
+      const kgLifted = sumKgLiftedFromCompletion(completion);
 
       allDaySet.add(date);
-      totalCaloriesAllTime += calories_burned;
+      totalCaloriesAllTime += caloriesBurned;
+      totalKgLiftedAllTime += kgLifted;
 
-      const prev = byDate.get(date) || { sessions: 0, calories_burned: 0 };
+      const prev = byDate.get(date) || {
+        sessions: 0,
+        calories_burned: 0,
+        kg_lifted: 0,
+      };
+
       prev.sessions += 1;
-      prev.calories_burned += calories_burned;
+      prev.calories_burned += caloriesBurned;
+      prev.kg_lifted += kgLifted;
+
       byDate.set(date, prev);
     }
 
@@ -508,7 +553,8 @@ export default async function handler(
       .map(([date, row]) => ({
         date,
         sessions: row.sessions,
-        calories_burned: row.calories_burned,
+        calories_burned: Number(row.calories_burned.toFixed(1)),
+        kg_lifted: Number(row.kg_lifted.toFixed(1)),
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -518,8 +564,11 @@ export default async function handler(
     for (let i = 0; i < 3650; i++) {
       const d = addDays(today, -i);
       const ymd = formatYMD(d);
-      if (allDaySet.has(ymd)) currentStreak++;
-      else break;
+      if (allDaySet.has(ymd)) {
+        currentStreak++;
+      } else {
+        break;
+      }
     }
 
     const payload: Resp = {
@@ -529,7 +578,8 @@ export default async function handler(
       strengthCards: strengthResult.cards,
       kpis: {
         totalCompletionsAllTime: allCompletions.length,
-        totalCaloriesAllTime,
+        totalCaloriesAllTime: Number(totalCaloriesAllTime.toFixed(1)),
+        totalKgLiftedAllTime: Number(totalKgLiftedAllTime.toFixed(1)),
         currentStreak,
       },
       debug: {
@@ -539,6 +589,7 @@ export default async function handler(
         strengthExercisesFound: strengthResult.trackedExercisesFound,
         liftDocsFound: strengthResult.liftDocsFound,
         strengthCardsBuilt: strengthResult.cards.length,
+        matchedLiftIds: strengthResult.matchedLiftIds,
       },
     };
 
@@ -548,4 +599,20 @@ export default async function handler(
     console.error("[progress/overview] error:", err?.message || err);
     return res.status(500).json({ error: "Failed to build progress overview" });
   }
+}
+
+function sumKgLiftedFromCompletion(completion: any): number {
+  const sets = Array.isArray(completion?.sets) ? completion.sets : [];
+  let total = 0;
+
+  for (const s of sets) {
+    const reps = Number(s?.reps ?? 0);
+    const weight = Number(s?.weight ?? s?.weight_kg ?? s?.load ?? 0);
+
+    if (Number.isFinite(reps) && reps > 0 && Number.isFinite(weight) && weight > 0) {
+      total += reps * weight;
+    }
+  }
+
+  return Number(total.toFixed(1));
 }
