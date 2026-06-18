@@ -1,4 +1,4 @@
-// pages/progress.tsx
+// pages/progress.tsx// 
 "use client";
 
 import Head from "next/head";
@@ -99,43 +99,60 @@ type ProgressOverviewResponse = {
   };
 };
 
-function formatYMD(d: Date) {
+type VisibleStrengthCard = {
+  key: string;
+  label: string;
+  latest: number | null;
+  baseline: number | null;
+  deltaKg: number | null;
+  deltaPct: number | null;
+  points: StrengthPoint[];
+  trainingMax: number | null;
+  bestTrue1RM: number | null;
+};
+
+function formatYMD(d: Date): string {
   return d.toLocaleDateString("en-CA");
 }
 
-function addDays(d: Date, days: number) {
+function addDays(d: Date, days: number): Date {
   const out = new Date(d);
   out.setDate(out.getDate() + days);
   return out;
 }
 
-function startOfDay(d: Date) {
+function startOfDay(d: Date): Date {
   const out = new Date(d);
   out.setHours(0, 0, 0, 0);
   return out;
 }
 
-function endOfDay(d: Date) {
+function endOfDay(d: Date): Date {
   const out = new Date(d);
   out.setHours(23, 59, 59, 999);
   return out;
 }
 
-function fmtShortDate(ymd: string) {
+function fmtShortDate(ymd: string): string {
   return new Date(`${ymd}T00:00:00`).toLocaleDateString(undefined, {
     day: "numeric",
     month: "short",
   });
 }
 
-function classNames(...items: Array<string | false | null | undefined>) {
+function classNames(...items: Array<string | false | null | undefined>): string {
   return items.filter(Boolean).join(" ");
 }
 
-function rangeDaysToNumber(range: TimeRange) {
+function rangeDaysToNumber(range: TimeRange): number {
   if (range === "7d") return 7;
   if (range === "30d") return 30;
   return 90;
+}
+
+function fmtKg(value: number | null): string {
+  if (value == null) return "—";
+  return value % 1 === 0 ? `${value.toFixed(0)}kg` : `${value.toFixed(1)}kg`;
 }
 
 function LoadingScreen() {
@@ -289,15 +306,12 @@ export default function ProgressPage() {
     const today = startOfDay(new Date());
     const rangeStart = addDays(today, -(rangeDaysToNumber(range) - 1));
     const rangeStartYMD = formatYMD(rangeStart);
-
-    if (scopeStartYMD > rangeStartYMD) return scopeStartYMD;
-    return rangeStartYMD;
+    return scopeStartYMD > rangeStartYMD ? scopeStartYMD : rangeStartYMD;
   }, [scopeStartYMD, range]);
 
   const selectedEndYMD = useMemo(() => {
     const todayYMD = formatYMD(endOfDay(new Date()));
-    if (scopeEndYMD < todayYMD) return scopeEndYMD;
-    return todayYMD;
+    return scopeEndYMD < todayYMD ? scopeEndYMD : todayYMD;
   }, [scopeEndYMD]);
 
   const scopeCheckins = useMemo(() => {
@@ -425,20 +439,27 @@ export default function ProgressPage() {
     return { chartData, options };
   }, [visibleCheckins]);
 
-  const visibleStrengthCards = useMemo(() => {
+  const visibleStrengthCards = useMemo<VisibleStrengthCard[]>(() => {
     const cards = data?.strengthCards || [];
 
     return cards
       .map((card) => {
-        const points = (card.points || []).filter(
+        const allPoints = Array.isArray(card.points) ? [...card.points] : [];
+        allPoints.sort((a, b) => a.date.localeCompare(b.date));
+
+        const rangedPoints = allPoints.filter(
           (p) => p.date >= selectedStartYMD && p.date <= selectedEndYMD
         );
+
+        const points = rangedPoints.length > 0 ? rangedPoints : allPoints;
 
         const baseline =
           points.length > 0 ? points[0].value : card.baseline ?? card.latest ?? null;
 
         const latest =
-          points.length > 0 ? points[points.length - 1].value : card.latest ?? null;
+          points.length > 0
+            ? points[points.length - 1].value
+            : card.latest ?? null;
 
         const deltaKg =
           baseline != null && latest != null
@@ -760,12 +781,12 @@ export default function ProgressPage() {
                               color: "var(--ia-neon)",
                             }}
                           >
-                            {card.latest != null ? `${Math.round(card.latest)} kg` : "—"}
+                            {card.latest != null ? fmtKg(card.latest) : "—"}
                           </div>
 
                           {card.trainingMax != null ? (
                             <div className="text-dim small mt-1">
-                              TM {Math.round(card.trainingMax)}kg
+                              TM {fmtKg(card.trainingMax)}
                             </div>
                           ) : null}
                         </div>
@@ -782,7 +803,7 @@ export default function ProgressPage() {
                                 }}
                               >
                                 {card.deltaKg > 0 ? "+" : ""}
-                                {Math.round(card.deltaKg)}kg
+                                {fmtKg(card.deltaKg).replace("kg", "kg")}
                               </div>
 
                               <div
