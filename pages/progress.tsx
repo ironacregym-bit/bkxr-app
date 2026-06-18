@@ -534,19 +534,11 @@ export default function ProgressPage() {
             </div>
 
             <div className="d-flex gap-2">
-              <Link
-                href="/checkin"
-                className="ia-btn ia-btn-primary"
-                aria-label="Add check-in"
-              >
+              /checkin
                 <i className="fas fa-plus" />
               </Link>
 
-              <Link
-                href="/schedule"
-                className="ia-btn ia-btn-muted"
-                aria-label="Open schedule"
-              >
+              /schedule
                 <i className="fas fa-calendar-alt" />
               </Link>
             </div>
@@ -740,7 +732,7 @@ export default function ProgressPage() {
                 </div>
               </div>
 
-              <Link href="/train" className="ia-btn ia-btn-muted">
+              /train
                 Open training
               </Link>
             </div>
@@ -849,7 +841,7 @@ export default function ProgressPage() {
                 </div>
               </div>
 
-              <Link href="/checkin" className="ia-btn ia-btn-primary">
+              /checkin
                 Add check-in
               </Link>
             </div>
@@ -889,20 +881,14 @@ export default function ProgressPage() {
                     </div>
 
                     <div className="d-flex gap-2 flex-wrap">
-                      <Link
-                        href={`/checkin?date=${encodeURIComponent(c.date)}`}
+                      }`}
                         className="ia-btn ia-btn-outline"
                       >
                         Edit
                       </Link>
 
                       {c.photo_url ? (
-                        <a
-                          href={c.photo_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ia-btn ia-btn-muted"
-                        >
+                        {c.photo_url}
                           Photo
                         </a>
                       ) : null}
