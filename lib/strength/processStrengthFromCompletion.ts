@@ -1,5 +1,3 @@
-// File: lib/strength/processStrengthFromCompletion.ts
-
 import firestore from "../firestoreClient";
 import { Timestamp } from "@google-cloud/firestore";
 
@@ -12,8 +10,8 @@ type GymCompletionSet = {
 };
 
 type StrengthExerciseConfig = {
-  id: string; // strength_exercises doc id (canonical key)
-  exercise_name: string; // display label
+  id: string;
+  exercise_name: string;
   tracked: boolean;
   max_rep_for_e1rm?: number | null;
   rounding_kg?: number | null;
@@ -64,13 +62,18 @@ function toTimestamp(v: any): Timestamp {
   }
 }
 
-export async function processStrengthFromCompletion(args: { completionId: string; userEmail: string }) {
+export async function processStrengthFromCompletion(args: {
+  completionId: string;
+  userEmail: string;
+}) {
   const { completionId, userEmail } = args;
   const user_key = normKey(userEmail);
 
   const completionRef = firestore.collection("workoutCompletions").doc(completionId);
   const completionSnap = await completionRef.get();
-  if (!completionSnap.exists) return { ok: false, reason: "completion_not_found" as const };
+  if (!completionSnap.exists) {
+    return { ok: false, reason: "completion_not_found" as const };
+  }
 
   const completion = completionSnap.data() as any;
 
@@ -84,9 +87,12 @@ export async function processStrengthFromCompletion(args: { completionId: string
       : toTimestamp(new Date());
 
   const processedSourceTS: Timestamp | null =
-    completion?.processed_strength_source_updated_at?.toDate ? completion.processed_strength_source_updated_at : null;
+    completion?.processed_strength_source_updated_at?.toDate
+      ? completion.processed_strength_source_updated_at
+      : null;
 
-  // Edit-safe idempotency: skip only if we processed this same version of the completion
+  // Edit-safe idempotency:
+  // skip only if we already processed this exact version of the completion
   if (
     completion?.processed_strength_version === 1 &&
     processedSourceTS &&
@@ -109,7 +115,11 @@ export async function processStrengthFromCompletion(args: { completionId: string
   }
 
   // Load tracked exercises
-  const exSnap = await firestore.collection("strength_exercises").where("tracked", "==", true).get();
+  const exSnap = await firestore
+    .collection("strength_exercises")
+    .where("tracked", "==", true)
+    .get();
+
   const tracked: StrengthExerciseConfig[] = exSnap.docs.map((d) => {
     const x = d.data() as any;
     return {
@@ -145,7 +155,11 @@ export async function processStrengthFromCompletion(args: { completionId: string
     if (nameKey) trackedByName.set(nameKey, t);
   }
 
-  const completedTS: Timestamp = completion?.completed_date?.toDate ? completion.completed_date : Timestamp.now();
+  const completedTS: Timestamp =
+    completion?.completed_date?.toDate
+      ? completion.completed_date
+      : Timestamp.now();
+
   const date_key = toDateKey(completedTS);
 
   // Group sets by lift doc id (strength_exercises doc id)
@@ -192,7 +206,6 @@ export async function processStrengthFromCompletion(args: { completionId: string
     { merge: true }
   );
 
-  // ✅ No entries writes. Increase-only updates.
   for (const [liftId, bucket] of grouped.entries()) {
     const { cfg, sets: liftSets } = bucket;
 
@@ -223,39 +236,70 @@ export async function processStrengthFromCompletion(args: { completionId: string
     const liftSnap = await liftRef.get();
     const cur = liftSnap.exists ? (liftSnap.data() as any) : {};
 
-    const curTrue = typeof cur?.best_true_1rm_kg === "number" ? cur.best_true_1rm_kg : null;
-    const curE = typeof cur?.best_e1rm_kg === "number" ? cur.best_e1rm_kg : null;
-    const curTM = typeof cur?.training_max_kg === "number" ? cur.training_max_kg : null;
+    const curTrue =
+      typeof cur?.best_true_1rm_kg === "number" ? cur.best_true_1rm_kg : null;
+    const curE =
+      typeof cur?.best_e1rm_kg === "number" ? cur.best_e1rm_kg : null;
+    const curTM =
+      typeof cur?.training_max_kg === "number" ? cur.training_max_kg : null;
 
-    const patch: any = {
+    const patch: Record<string, any> = {
       exercise_name: cfg.exercise_name,
       updated_at: Timestamp.now(),
     };
 
-    // ✅ Your requirement: only update 1RM if higher than before
+    // Increase-only parent lift updates
     if (bestTrueThisCompletion != null && (curTrue == null || bestTrueThisCompletion > curTrue)) {
       patch.best_true_1rm_kg = bestTrueThisCompletion;
       patch.best_true_1rm_date = date_key;
       patch.best_true_1rm_completion_id = completionId;
     }
 
-    // Optional but useful: keep e1RM and TM increase-only too
     if (bestEThisCompletion != null && (curE == null || bestEThisCompletion > curE)) {
       patch.best_e1rm_kg = bestEThisCompletion;
       patch.best_e1rm_date = date_key;
       patch.best_e1rm_completion_id = completionId;
     }
 
-    // TM derived from best e1RM (increase-only)
-    const nextE = typeof patch.best_e1rm_kg === "number" ? patch.best_e1rm_kg : curE;
+    const nextE =
+      typeof patch.best_e1rm_kg === "number" ? patch.best_e1rm_kg : curE;
+
     const nextTM =
-      typeof nextE === "number" && nextE > 0 ? roundToIncrement(nextE * tmFactor, rounding) : null;
+      typeof nextE === "number" && nextE > 0
+        ? roundToIncrement(nextE * tmFactor, rounding)
+        : null;
 
     if (nextTM != null && (curTM == null || nextTM > curTM)) {
       patch.training_max_kg = nextTM;
     }
 
     await liftRef.set(patch, { merge: true });
+
+    // IMPORTANT:
+    // Write one entry per completionId, so:
+    // - editing the same completion updates the same entry
+    // - creating a new completion creates a new entry
+    const entryRef = liftRef.collection("entries").doc(completionId);
+
+    const entryPayload: Record<string, any> = {
+      completion_id: completionId,
+      date_key,
+      completed_at: completedTS,
+      exercise_name: cfg.exercise_name,
+      exercise_id: liftId,
+      movement_key: cfg.id,
+      updated_at: Timestamp.now(),
+    };
+
+    if (bestTrueThisCompletion != null) {
+      entryPayload.true_1rm_kg = bestTrueThisCompletion;
+    }
+
+    if (bestEThisCompletion != null) {
+      entryPayload.e1rm_kg = bestEThisCompletion;
+    }
+
+    await entryRef.set(entryPayload, { merge: true });
   }
 
   await completionRef.set(
