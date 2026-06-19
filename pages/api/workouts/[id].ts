@@ -1,9 +1,8 @@
-// pages/api/workouts/admin/[id].ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { adminDb as db } from "../../../lib/firebaseAdmin";
 
 /**
- * Admin workout fetch (hardened)
+ * Public/user workout fetch
  * - Loads workout doc + rounds + items
  * - Normalises Superset inner array: `superset_items` -> `items`
  * - Preserves strength blocks:
@@ -12,25 +11,29 @@ import { adminDb as db } from "../../../lib/firebaseAdmin";
  * - Tolerates missing `order` by sorting in-memory
  */
 
-export const config = { api: { bodyParser: false } };
-
 type ApiError = { error: string; where?: string; details?: string };
 
 function fail(res: NextApiResponse<ApiError>, whereStr: string, e?: any) {
   const msg = (e && (e.message || String(e))) || "Unknown error";
-  console.error(`[workouts/admin/[id]] ${whereStr}:`, msg);
+  console.error(`[workouts/[id]] ${whereStr}:`, msg);
   return res.status(500).json({
-    error: "Failed to load workout for admin",
+    error: "Failed to load workout",
     where: whereStr,
     details: msg,
   });
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse<any | ApiError>) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse<any | ApiError>
+) {
   try {
     const idParam = Array.isArray(req.query.id) ? req.query.id[0] : req.query.id;
-    const workout_id = (idParam || "").trim();
-    if (!workout_id) return res.status(400).json({ error: "id is required" });
+    const workout_id = String(idParam || "").trim();
+
+    if (!workout_id) {
+      return res.status(400).json({ error: "id is required" });
+    }
 
     // 1) Load workout doc
     let doc;
@@ -39,16 +42,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     } catch (e) {
       return fail(res, "get(workout)", e);
     }
-    if (!doc.exists) return res.status(404).json({ error: "Workout not found" });
+
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Workout not found" });
+    }
 
     const base = doc.data() || {};
 
     // 2) Load rounds (ordered if possible)
     let roundsSnap;
     try {
-      roundsSnap = await db.collection("workouts").doc(workout_id).collection("rounds").orderBy("order", "asc").get();
+      roundsSnap = await db
+        .collection("workouts")
+        .doc(workout_id)
+        .collection("rounds")
+        .orderBy("order", "asc")
+        .get();
     } catch (e) {
-      console.warn("[workouts/admin/[id]] orderBy(order) on rounds failed; retrying without orderBy");
+      console.warn("[workouts/[id]] orderBy(order) on rounds failed; retrying without orderBy");
       try {
         roundsSnap = await db.collection("workouts").doc(workout_id).collection("rounds").get();
       } catch (ee) {
@@ -66,15 +77,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       try {
         try {
           itemsSnap = await db
-            .collection("workouts").doc(workout_id)
-            .collection("rounds").doc(rDoc.id)
+            .collection("workouts")
+            .doc(workout_id)
+            .collection("rounds")
+            .doc(rDoc.id)
             .collection("items")
             .orderBy("order", "asc")
             .get();
         } catch {
           itemsSnap = await db
-            .collection("workouts").doc(workout_id)
-            .collection("rounds").doc(rDoc.id)
+            .collection("workouts")
+            .doc(workout_id)
+            .collection("rounds")
+            .doc(rDoc.id)
             .collection("items")
             .get();
         }
@@ -91,24 +106,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           d.is_superset === true;
 
         if (isSuperset) {
-          // Prefer explicit items if present, else use superset_items
-          if (!Array.isArray(out.items) && Array.isArray(d.superset_items)) {
-            out.items = d.superset_items;
+          if (!Array.isArray(out.items) && Array.isArray((d as any).superset_items)) {
+            out.items = (d as any).superset_items;
           }
           if (!Array.isArray(out.items)) out.items = [];
 
-          // Ensure each sub item preserves strength (if present)
           out.items = out.items.map((s: any) => ({
             exercise_id: s?.exercise_id ?? "",
             reps: s?.reps ?? null,
             weight_kg: s?.weight_kg ?? null,
             strength: s?.strength ?? null,
+            exercise_name: s?.exercise_name ?? null,
           }));
         }
 
-        // Ensure Single.strength preserved (no-op if missing)
         if (String(d.type || "").toLowerCase() === "single") {
-          out.strength = d?.strength ?? null;
+          out.strength = (d as any)?.strength ?? null;
         }
 
         return out;
@@ -130,7 +143,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const byName = (n: string) => rounds.find((r) => key(r.name) === key(n)) || null;
 
     const warmup = byName("Warm Up") || byName("Warmup");
-    const main = byName("Main Set") || byName("Main") || rounds.find((r) => (r?.order ?? 0) === 2) || null;
+    const main =
+      byName("Main Set") ||
+      byName("Main") ||
+      rounds.find((r) => (r?.order ?? 0) === 2) ||
+      null;
     const finisher = byName("Finisher");
 
     return res.status(200).json({
