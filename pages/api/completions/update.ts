@@ -1,5 +1,4 @@
-// File: pages/api/completions/update.ts
-
+// pages/api/completions/update.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient";
 import { Timestamp, FieldValue } from "@google-cloud/firestore";
@@ -22,9 +21,7 @@ function toNumberOrNull(x: any): number | null {
   const n = Number(x);
   if (!Number.isFinite(n)) return null;
 
-  // For weight/reps, 0 is not meaningful
   if (n === 0) return null;
-
   return n;
 }
 
@@ -52,24 +49,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const session = await getServerSession(req, res, authOptions);
-    if (!session?.user?.email) return res.status(401).json({ error: "Not signed in" });
-    const user_email = session.user.email.toLowerCase();
+    if (!session?.user?.email) {
+      return res.status(401).json({ error: "Not signed in" });
+    }
 
+    const user_email = session.user.email.toLowerCase();
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
 
     const completion_id = String(body.completion_id || body.id || "").trim();
-    if (!completion_id) return res.status(400).json({ error: "completion_id required" });
+    if (!completion_id) {
+      return res.status(400).json({ error: "completion_id required" });
+    }
 
     const docRef = firestore.collection("workoutCompletions").doc(completion_id);
     const snap = await docRef.get();
-    if (!snap.exists) return res.status(404).json({ error: "Completion not found" });
+
+    if (!snap.exists) {
+      return res.status(404).json({ error: "Completion not found" });
+    }
 
     const existing = snap.data() as any;
     if (String(existing?.user_email || "").toLowerCase() !== user_email) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    // Build updated sets (same shape as create)
     const incomingSets: any[] = Array.isArray(body.sets) ? body.sets : [];
     const gymSets: GymCompletionSet[] = incomingSets
       .map((s: any): GymCompletionSet => ({
@@ -81,8 +84,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }))
       .filter((s) => s.exercise_id && Number.isFinite(s.set) && s.set > 0);
 
-    // Summary fields
     const calories_burned = toNumberOrNull(body.calories_burned);
+
     const duration_minutes =
       body.duration_minutes != null
         ? toNumberOrNull(body.duration_minutes)
@@ -110,49 +113,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         weight_completed_with = null;
       } else {
         const asNum = Number(body.weight_completed_with);
-        weight_completed_with = Number.isFinite(asNum) ? asNum : String(body.weight_completed_with);
+        weight_completed_with = Number.isFinite(asNum)
+          ? asNum
+          : String(body.weight_completed_with);
       }
     }
 
-    // Optional: keep completed_date stable by default; allow override if provided
     const now = new Date();
     const completedDateTS =
-      body.completed_at != null ? Timestamp.fromDate(new Date(body.completed_at)) : (existing?.completed_date ?? Timestamp.fromDate(now));
+      body.completed_at != null
+        ? Timestamp.fromDate(new Date(body.completed_at))
+        : existing?.completed_date ?? Timestamp.fromDate(now);
 
     const patch: Record<string, any> = {
       updated_at: Timestamp.fromDate(now),
 
-      // Keep these stable but allow overwrite if caller sends them
-      workout_id: typeof body.workout_id === "string" && body.workout_id.trim() ? body.workout_id.trim() : existing?.workout_id ?? null,
+      workout_id:
+        typeof body.workout_id === "string" && body.workout_id.trim()
+          ? body.workout_id.trim()
+          : existing?.workout_id ?? null,
+
       activity_type,
 
       completed_date: completedDateTS,
-      date_completed: completedDateTS, // legacy field
+      date_completed: completedDateTS,
 
-      // gym details
-      sets: gymSets,
-
-      // summary
       calories_burned: calories_burned ?? null,
       duration_minutes: duration_minutes ?? null,
       rpe: rpe ?? null,
       notes: notes ?? null,
       weight_completed_with: weight_completed_with ?? null,
 
-      // ✅ Force strength reprocessing on edit
       processed_strength_version: FieldValue.delete(),
       processed_strength_at: FieldValue.delete(),
       processed_strength_source_updated_at: FieldValue.delete(),
     };
 
+    // Important:
+    // only replace sets if the client actually sent some.
+    // this prevents wiping historical data with an empty array.
+    if (gymSets.length > 0) {
+      patch.sets = gymSets;
+    }
+
     await docRef.set(patch, { merge: true });
 
-    // Re-run strength processing for this completion
     try {
-      await processStrengthFromCompletion({ completionId: completion_id, userEmail: user_email });
+      await processStrengthFromCompletion({
+        completionId: completion_id,
+        userEmail: user_email,
+      });
     } catch (e) {
       console.error("[strength/process:update] error:", (e as any)?.message || e);
-      // do not fail update if strength processing fails
     }
 
     return res.status(200).json({ ok: true, id: completion_id });
