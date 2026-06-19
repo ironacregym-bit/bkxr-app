@@ -1,5 +1,4 @@
-// File: pages/gymworkout/[id].tsx
-
+// pages/gymworkout/[id].tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
@@ -10,8 +9,19 @@ import HeaderBar from "../../components/gymworkout/HeaderBar";
 import MediaModal from "../../components/gymworkout/MediaModal";
 import CompletionModal from "../../components/gymworkout/CompletionModal";
 import RoundSection from "../../components/gymworkout/RoundSection";
-import type { Completion, CompletionSet, GymWorkout, PreviousCompletion, UIRound } from "../../components/gymworkout/types";
-import { fixGifUrl, formatYMD, startOfAlignedWeek, endOfAlignedWeek } from "../../components/gymworkout/utils";
+import type {
+  Completion,
+  CompletionSet,
+  GymWorkout,
+  PreviousCompletion,
+  UIRound,
+} from "../../components/gymworkout/types";
+import {
+  fixGifUrl,
+  formatYMD,
+  startOfAlignedWeek,
+  endOfAlignedWeek,
+} from "../../components/gymworkout/utils";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -44,6 +54,42 @@ function difficultyFromRPE(rpe: any): string {
   return "Hard";
 }
 
+function extractYMDFromUnknownDate(v: any): string | null {
+  try {
+    if (!v) return null;
+
+    if (typeof v === "string") {
+      return v.slice(0, 10);
+    }
+
+    if (typeof v?.toDate === "function") {
+      const d = v.toDate();
+      if (d instanceof Date && !isNaN(d.getTime())) {
+        return d.toISOString().slice(0, 10);
+      }
+    }
+
+    if (typeof v === "object" && typeof v._seconds === "number") {
+      const ms =
+        v._seconds * 1000 +
+        (typeof v._nanoseconds === "number" ? v._nanoseconds / 1e6 : 0);
+      const d = new Date(ms);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().slice(0, 10);
+      }
+    }
+
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().slice(0, 10);
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export default function GymWorkoutViewerPage() {
   const router = useRouter();
   const { id, date } = router.query;
@@ -60,8 +106,12 @@ export default function GymWorkoutViewerPage() {
   const weekStartKey = useMemo(() => formatYMD(startOfAlignedWeek(selectedDate)), [selectedDate]);
   const weekEndKey = useMemo(() => formatYMD(endOfAlignedWeek(selectedDate)), [selectedDate]);
 
-  const workoutUrl = id && !Array.isArray(id) ? `/api/workouts/${encodeURIComponent(String(id))}` : null;
-  const { data, error } = useSWR<GymWorkout>(workoutUrl, fetcher, { revalidateOnFocus: false });
+  const workoutUrl =
+    id && !Array.isArray(id) ? `/api/workouts/${encodeURIComponent(String(id))}` : null;
+
+  const { data, error } = useSWR<GymWorkout>(workoutUrl, fetcher, {
+    revalidateOnFocus: false,
+  });
 
   const { data: strengthProfileResp } = useSWR(
     mounted ? "/api/strength/profile/get" : null,
@@ -69,8 +119,10 @@ export default function GymWorkoutViewerPage() {
     { revalidateOnFocus: false, dedupingInterval: 60_000 }
   );
 
-  const trainingMaxes: Record<string, number> = strengthProfileResp?.profile?.training_maxes || {};
-  const defaultRounding: number = strengthProfileResp?.profile?.rounding_increment_kg ?? 2.5;
+  const trainingMaxes: Record<string, number> =
+    strengthProfileResp?.profile?.training_maxes || {};
+  const defaultRounding: number =
+    strengthProfileResp?.profile?.rounding_increment_kg ?? 2.5;
 
   const [formSets, setFormSets] = useState<CompletionSet[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -89,11 +141,9 @@ export default function GymWorkoutViewerPage() {
   const [mediaGif, setMediaGif] = useState<string | undefined>();
   const [mediaVideo, setMediaVideo] = useState<string | undefined>();
 
-  // Edit mode
   const [editingCompletionId, setEditingCompletionId] = useState<string | null>(null);
   const hydratedForCompletionId = useRef<string | null>(null);
 
-  // Previous session (latest overall)
   useEffect(() => {
     if (!mounted || !id || Array.isArray(id)) return;
 
@@ -101,12 +151,14 @@ export default function GymWorkoutViewerPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         const last = json?.last || json;
-        if (last?.sets) setPreviousSession({ sets: last.sets, completedAt: last.completed_date });
+        if (last?.sets) {
+          setPreviousSession({ sets: last.sets, completedAt: last.completed_date });
+        }
       })
       .catch(() => {});
   }, [mounted, id]);
 
-  // Completion in this week window (prefer selected day)
+  // Only edit if the returned completion belongs to the exact selected day.
   useEffect(() => {
     if (!mounted || !id || Array.isArray(id)) return;
 
@@ -122,6 +174,17 @@ export default function GymWorkoutViewerPage() {
         const last = json?.last || null;
 
         if (!last?.id) {
+          setEditingCompletionId(null);
+          hydratedForCompletionId.current = null;
+          return;
+        }
+
+        const completedDate =
+          extractYMDFromUnknownDate(last.completed_date) ||
+          extractYMDFromUnknownDate(last.date_completed) ||
+          extractYMDFromUnknownDate(last.completed_at);
+
+        if (completedDate !== selectedYMD) {
           setEditingCompletionId(null);
           hydratedForCompletionId.current = null;
           return;
@@ -147,11 +210,17 @@ export default function GymWorkoutViewerPage() {
         setFormSets(mappedSets);
 
         setCalories(
-          typeof last.calories_burned === "number" && Number.isFinite(last.calories_burned) ? String(last.calories_burned) : ""
+          typeof last.calories_burned === "number" && Number.isFinite(last.calories_burned)
+            ? String(last.calories_burned)
+            : ""
         );
+
         setDuration(
-          typeof last.duration_minutes === "number" && Number.isFinite(last.duration_minutes) ? String(last.duration_minutes) : ""
+          typeof last.duration_minutes === "number" && Number.isFinite(last.duration_minutes)
+            ? String(last.duration_minutes)
+            : ""
         );
+
         setNotes(typeof last.notes === "string" ? last.notes : "");
         setDifficulty(difficultyFromRPE(last.rpe));
       })
@@ -181,7 +250,9 @@ export default function GymWorkoutViewerPage() {
   const volumeKg = useMemo(() => {
     let v = 0;
     for (const s of formSets) {
-      if (typeof s.weight === "number" && typeof s.reps === "number") v += s.weight * s.reps;
+      if (typeof s.weight === "number" && typeof s.reps === "number") {
+        v += s.weight * s.reps;
+      }
     }
     return Math.round(v);
   }, [formSets]);
@@ -194,7 +265,7 @@ export default function GymWorkoutViewerPage() {
 
   function toggleTick(exercise_id: string, setNum: number) {
     const k = `${exercise_id}|${setNum}`;
-    setTickKeys((m) => ({ ...m, [k]: !m[k] }));
+    setTickKeys((m) => ({ ...m, !m[k] }));
   }
 
   const mediaRounds = useMemo(() => toMediaRounds(data), [data]);
@@ -213,7 +284,10 @@ export default function GymWorkoutViewerPage() {
       const next = [...prev];
 
       const patchMovementKey =
-        typeof (patch as any)?.movement_key === "string" ? String((patch as any).movement_key).trim() : "";
+        typeof (patch as any)?.movement_key === "string"
+          ? String((patch as any).movement_key).trim()
+          : "";
+
       const useMovementKey = Boolean(patchMovementKey);
 
       const idx = next.findIndex((s) => {
@@ -258,17 +332,22 @@ export default function GymWorkoutViewerPage() {
     items?: Completion[];
     completions?: Completion[];
     data?: Completion[];
-  }>(weekCompletionsKey, fetcher, { revalidateOnFocus: false, dedupingInterval: 30_000 });
+  }>(weekCompletionsKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30_000,
+  });
 
   const isCompleted = useMemo(() => {
     if (editingCompletionId) return true;
     if (!weekCompletions || !id || Array.isArray(id)) return false;
+
     const list: Completion[] =
       (weekCompletions.results as Completion[]) ||
       (weekCompletions.items as Completion[]) ||
       (weekCompletions.completions as Completion[]) ||
       (weekCompletions.data as Completion[]) ||
       [];
+
     const idStr = String(id);
     return list.some((c) => String(c.workout_id || "") === idStr);
   }, [weekCompletions, id, editingCompletionId]);
@@ -279,7 +358,12 @@ export default function GymWorkoutViewerPage() {
     try {
       setSubmitting(true);
 
-      const body: any = { workout_id: id, activity_type: "Strength training", sets: formSets };
+      const body: any = {
+        workout_id: id,
+        activity_type: "Strength training",
+        sets: formSets,
+      };
+
       if (calories) body.calories_burned = Number(calories);
       if (duration) body.duration_minutes = Number(duration);
 
@@ -289,7 +373,7 @@ export default function GymWorkoutViewerPage() {
       if (notes.trim()) body.notes = notes.trim();
 
       const isEditing = Boolean(editingCompletionId);
-      const endpoint = isEditing ? `/api/completions/update` : `/api/completions/create`;
+      const endpoint = isEditing ? "/api/completions/update" : "/api/completions/create";
       if (isEditing) body.completion_id = editingCompletionId;
 
       const res = await fetch(endpoint, {
@@ -351,7 +435,11 @@ export default function GymWorkoutViewerPage() {
                 {isCompleted ? (
                   <span
                     className="badge"
-                    style={{ color: "#22c55e", border: "1px solid #22c55eAA", background: "transparent" }}
+                    style={{
+                      color: "#22c55e",
+                      border: "1px solid #22c55eAA",
+                      background: "transparent",
+                    }}
                   >
                     Completed
                   </span>
@@ -375,8 +463,11 @@ export default function GymWorkoutViewerPage() {
                   <div className="mt-2 small">
                     {(previousSession.sets as any[]).map((s, i) => (
                       <div key={i} className="mb-1">
-                        <strong>{s.exercise_id}</strong> — Set {s.set}: {s.weight ?? "-"}kg × {s.reps ?? "-"} reps
-                        {s.movement_key ? <span className="text-dim"> • {s.movement_key}</span> : null}
+                        <strong>{s.exercise_id}</strong> — Set {s.set}: {s.weight ?? "-"}kg ×{" "}
+                        {s.reps ?? "-"} reps
+                        {s.movement_key ? (
+                          <span className="text-dim"> • {s.movement_key}</span>
+                        ) : null}
                       </div>
                     ))}
                   </div>
