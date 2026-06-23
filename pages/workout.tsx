@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import useSWR from "swr";
 import BottomNav from "../components/BottomNav";
+import TrainWeekCardGrid from "../components/train/TrainWeekCardGrid";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -306,6 +307,7 @@ export default function WorkoutHubPage() {
 
   const thisWeekCards = useMemo(() => {
     const days = currentHomeOverview?.days || [];
+    const todayYMD = formatYMD(new Date());
 
     const cards = days
       .map((day) => {
@@ -327,6 +329,7 @@ export default function WorkoutHubPage() {
                 weekday: "short",
               })
             : "",
+          isToday: day.dateKey === todayYMD,
         };
       })
       .filter(Boolean) as Array<{
@@ -336,6 +339,7 @@ export default function WorkoutHubPage() {
       done: boolean;
       href: string;
       dayLabel: string;
+      isToday: boolean;
     }>;
 
     cards.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
@@ -468,36 +472,7 @@ export default function WorkoutHubPage() {
               </div>
             </div>
 
-            {thisWeekCards.length === 0 ? (
-              <div className="text-dim small mt-3">No workouts scheduled this week yet.</div>
-            ) : (
-              <div className="row g-2 mt-3">
-                {thisWeekCards.map((card) => (
-                  <div key={card.dateKey} className="col-6">
-                    <Link href={card.href} className="ia-link-no-underline">
-                      <div
-                        className={`ia-train-pill-card ${
-                          card.done ? "ia-train-pill-card-done" : ""
-                        }`}
-                      >
-                        <div className="d-flex justify-content-between align-items-start gap-2">
-                          <span className="ia-day-pill">{card.dayLabel}</span>
-                          <span className={card.done ? "ia-badge ia-badge-neon" : "ia-badge"}>
-                            {card.done ? "Done" : "Open"}
-                          </span>
-                        </div>
-
-                        <div className="ia-train-pill-title mt-2">{card.title}</div>
-
-                        <div className="text-dim small mt-1">
-                          {card.extraCount > 0 ? `+${card.extraCount} more` : "Scheduled"}
-                        </div>
-                      </div>
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            )}
+            <TrainWeekCardGrid cards={thisWeekCards} />
           </section>
         )}
 
@@ -550,9 +525,7 @@ export default function WorkoutHubPage() {
                 <div className="col-4">
                   <div className="ia-stat-mini">
                     <div className="ia-stat-mini-value">
-                      {currentProgram.end_date
-                        ? formatDisplayDate(new Date(currentProgram.end_date))
-                        : "—"}
+                      {currentProgram.end_date ? formatDisplayDate(new Date(currentProgram.end_date)) : "—"}
                     </div>
                     <div className="ia-stat-mini-label">End date</div>
                   </div>
@@ -568,23 +541,22 @@ export default function WorkoutHubPage() {
                 </div>
 
                 <div className="ia-week-chip-row mt-2">
-                  {Array.from(
-                    { length: Number(currentProgram.weeks || 0) },
-                    (_, i) => i + 1
-                  ).map((weekNum) => {
-                    const active = weekNum === effectiveWeekNumber;
+                  {Array.from({ length: Number(currentProgram.weeks || 0) }, (_, i) => i + 1).map(
+                    (weekNum) => {
+                      const active = weekNum === effectiveWeekNumber;
 
-                    return (
-                      <button
-                        key={weekNum}
-                        type="button"
-                        className={active ? "ia-week-chip ia-week-chip-active" : "ia-week-chip"}
-                        onClick={() => setSelectedWeekNumber(weekNum)}
-                      >
-                        W{weekNum}
-                      </button>
-                    );
-                  })}
+                      return (
+                        <button
+                          key={weekNum}
+                          type="button"
+                          className={active ? "ia-week-chip ia-week-chip-active" : "ia-week-chip"}
+                          onClick={() => setSelectedWeekNumber(weekNum)}
+                        >
+                          W{weekNum}
+                        </button>
+                      );
+                    }
+                  )}
                 </div>
               </section>
             ) : null}
