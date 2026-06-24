@@ -146,15 +146,15 @@ export default function IronAcreLandingPage() {
               </p>
 
               <div className="ia-brand-hero-ctas">
-                /app-signup
+                <Link href="/app-signup">
                   Get the app
                 </Link>
 
-                /founders
+                <Link href="/founders">
                   Explore the gym
                 </Link>
 
-                https://www.youtube.com/
+                <Link href="https://www.youtube.com/">
                   Watch the podcast
                 </a>
               </div>
@@ -301,10 +301,10 @@ export default function IronAcreLandingPage() {
                 </div>
 
                 <div className="mt-3 d-flex gap-2 flex-wrap">
-                  /founders
+                  <Link href="/waitlist">
                     Join founding members
                   </Link>
-                  /founders
+                  <Link href="/founders">
                     Register interest
                   </Link>
                 </div>
@@ -362,9 +362,9 @@ export default function IronAcreLandingPage() {
                 </div>
 
                 <div className="mt-3">
-                  https://www.youtube.com/
+                  <Link href="https://www.youtube.com/">
                     Watch on YouTube
-                  </a>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -489,10 +489,10 @@ export default function IronAcreLandingPage() {
             </div>
 
             <div className="ia-brand-footer-links">
-              /app-signupApp</Link>
-              /foundersGym</Link>
-              /foundersFounders</Link>
-              https://www.youtube.com/
+              <Link href="/app-signupApp"></Link>
+              <Link href="/foundersGym"></Link>
+              <Link href="/foundersFounders"></Link>
+              <Link href="https://www.youtube.com/"></Link>
                 Podcast
               </a>
               #Instagram</a>
