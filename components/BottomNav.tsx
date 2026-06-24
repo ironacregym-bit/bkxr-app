@@ -1,7 +1,8 @@
-// components/BottomNav.tsx
 "use client";
 
-import Link from "/navigation";import Link from "next/link";
+import Link from "next/link";
+import { useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 import { useMemo } from "react";
 
 const NAV_HEIGHT = 72;
@@ -167,4 +168,3 @@ export default function BottomNav() {
     </>
   );
 }
-import { useSession } from "next-auth/react";
