@@ -112,14 +112,17 @@ function PathCardItem({ card }: { card: PathCard }) {
     </div>
   );
 
-  if (card.href.startsWith("http")) {
-    return (
-      {card.href}
+if (card.href.startsWith("http")) {
+  -link-no-underline"  return (
+        target="_blank"
+        rel="noopener noreferrer"
+      >
         {content}
       </a>
     );
   }
-
+    <a
+      href={card.href}
   return (
     {card.href}
       {content}
