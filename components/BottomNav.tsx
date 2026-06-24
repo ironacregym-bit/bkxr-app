@@ -1,9 +1,7 @@
 // components/BottomNav.tsx
 "use client";
 
-import Link from "next/link";
-import { useSession } from "next-auth/react";
-import { usePathname } from "next/navigation";
+import Link from "/navigation";import Link from "next/link";
 import { useMemo } from "react";
 
 const NAV_HEIGHT = 72;
@@ -16,7 +14,7 @@ export default function BottomNav() {
   const navItems = useMemo(
     () => [
       { href: "/", icon: "fa-home", label: "Home" },
-      { href: "/train", icon: "fa-dumbbell", label: "Train" },
+      { href: "/workout", icon: "fa-dumbbell", label: "Train" },
       { href: "/nutrition-home", icon: "fa-utensils", label: "Nutrition" },
       { href: "/progress", icon: "fa-chart-line", label: "Progress" },
       { href: "/more", icon: "fa-ellipsis-h", label: "More" },
@@ -28,7 +26,6 @@ export default function BottomNav() {
 
   return (
     <>
-      {/* Spacer so page content never gets hidden behind fixed bottom nav */}
       <div
         aria-hidden="true"
         style={{
@@ -63,18 +60,18 @@ export default function BottomNav() {
           const targetHref = item.href === "/more" ? moreHref : item.href;
 
           const isNutrition = item.href === "/nutrition-home";
-          const isTrain = item.href === "/train";
+          const isTrain = item.href === "/workout";
           const isHome = item.href === "/";
 
           const isActive =
             pathname === targetHref ||
-            (isHome && pathname === "/iron-acre") ||
+            (isHome && (pathname === "/" || pathname === "/iron-acre")) ||
             (item.href === "/more" && pathname.startsWith("/more")) ||
             (item.href === "/progress" && pathname.startsWith("/progress")) ||
             (isTrain &&
-              (pathname.startsWith("/train") ||
+              (pathname.startsWith("/workout") ||
                 pathname.startsWith("/gymworkout") ||
-                pathname.startsWith("/workout"))) ||
+                pathname.startsWith("/train"))) ||
             (isNutrition &&
               (pathname.startsWith("/nutrition-home") || pathname.startsWith("/nutrition")));
 
@@ -89,7 +86,6 @@ export default function BottomNav() {
                 color: "inherit",
                 flex: 1,
                 minWidth: 0,
-                display: "flex",
               }}
             >
               <div
@@ -100,21 +96,20 @@ export default function BottomNav() {
                   flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: 2,
-                  padding: "4px 0 2px",
+                  gap: 1,
+                  padding: "4px 0 0",
                 }}
               >
-                {/* Active top highlight */}
                 <div
                   aria-hidden="true"
                   style={{
                     position: "absolute",
                     top: -8,
-                    width: isActive ? 28 : 0,
+                    width: isActive ? 24 : 0,
                     height: 3,
                     borderRadius: 999,
                     background: "var(--ia-neon, #23ff96)",
-                    boxShadow: isActive ? "0 0 16px rgba(35,255,150,0.45)" : "none",
+                    boxShadow: isActive ? "0 0 14px rgba(35,255,150,0.40)" : "none",
                     opacity: isActive ? 1 : 0,
                     transition: "all 0.2s ease",
                   }}
@@ -139,8 +134,8 @@ export default function BottomNav() {
                       fontSize: 18,
                       color: isActive
                         ? "var(--ia-neon, #23ff96)"
-                        : "rgba(255,255,255,0.85)",
-                      textShadow: isActive ? "0 0 14px rgba(35,255,150,0.28)" : "none",
+                        : "rgba(255,255,255,0.84)",
+                      textShadow: isActive ? "0 0 14px rgba(35,255,150,0.24)" : "none",
                       transition: "all 0.2s ease",
                     }}
                   />
@@ -152,12 +147,12 @@ export default function BottomNav() {
                     lineHeight: 1,
                     color: isActive
                       ? "var(--ia-neon, #23ff96)"
-                      : "rgba(255,255,255,0.78)",
+                      : "rgba(255,255,255,0.76)",
                     opacity: isActive ? 1 : 0.9,
                     fontWeight: isActive ? 700 : 500,
                     textAlign: "center",
                     whiteSpace: "nowrap",
-                    transform: "translateY(-1px)",
+                    transform: "translateY(-2px)",
                     transition: "all 0.2s ease",
                     letterSpacing: isActive ? "0.01em" : "0",
                   }}
@@ -172,3 +167,4 @@ export default function BottomNav() {
     </>
   );
 }
+import { useSession } from "next-auth/react";
