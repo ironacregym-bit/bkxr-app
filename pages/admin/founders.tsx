@@ -78,10 +78,10 @@ export default function AdminFoundersPage() {
             </div>
 
             <div className="d-flex gap-2">
-              /founders
+              <Link href="/founders">
                 Open public page
               </Link>
-              /iron-acre
+              <Link href="/iron-acre">
                 Dashboard
               </Link>
             </div>
