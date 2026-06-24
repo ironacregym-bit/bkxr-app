@@ -156,7 +156,7 @@ export default function IronAcreLandingPage() {
 
                 <Link href="https://www.youtube.com/">
                   Watch the podcast
-                </a>
+                </Link>
               </div>
 
               <div className="ia-brand-hero-meta">
