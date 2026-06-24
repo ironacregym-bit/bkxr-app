@@ -113,18 +113,8 @@ function PathCardItem({ card }: { card: PathCard }) {
   );
 
 if (card.href.startsWith("http")) {
-  -link-no-underline"  return (
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        {content}
-      </a>
-    );
-  }
-    <a
-      href={card.href}
   return (
-    {card.href}
+    <Link href="{card.href}">
       {content}
     </Link>
   );
