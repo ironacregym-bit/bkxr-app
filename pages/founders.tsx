@@ -1,11 +1,11 @@
-// pages/founders.tsx
 "use client";
+
+import Head from "next/head";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
 type FormState = {
-
-  name: string;import Head from "next/head";
+  name: string;
   email: string;
   phone: string;
   interested_classes: string[];
@@ -357,4 +357,3 @@ export default function FoundersPage() {
     </>
   );
 }
-
