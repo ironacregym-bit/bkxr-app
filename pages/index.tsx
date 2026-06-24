@@ -1,762 +1,988 @@
 // pages/index.tsx
+"use client";
+
 import Head from "next/head";
-import useSWR from "swr";
-import { useEffect, useMemo, useState } from "react";
-import { signIn, signOut, useSession } from "next-auth/react";
-import BottomNav from "../components/BottomNav";
-import AddToHomeScreen from "../components/AddToHomeScreen";
-import { getSession } from "next-auth/react";
-import type { GetServerSideProps } from "next";
-import DailyTasksCard from "../components/DailyTasksCard";
-import WeeklyCircles from "../components/dashboard/WeeklyCircles";
-import NotificationsBanner from "../components/NotificationsBanner";
+import Link from "next/link";
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
-  const host = String(context.req.headers.host || "").toLowerCase();
-
-  // If request is coming from ironacregym.vercel.app, send them to Iron Acre home
-  if (host.includes("ironacregym")) {
-    return {
-      redirect: { destination: "/iron-acre", permanent: false },
-    };
-  }
-
-  // BXKR behaviour stays exactly the same
-  const session = await getSession(context);
-  if (!session) {
-    const callbackUrl = encodeURIComponent(context.resolvedUrl || "/");
-    return {
-      redirect: { destination: `/register?callbackUrl=${callbackUrl}`, permanent: false },
-    };
-  }
-  return { props: {} };
+type PathCard = {
+  title: string;
+  body: string;
+  href: string;
+  cta: string;
+  icon: string;
+  badge?: string;
 };
 
-const fetcher = (u: string) => fetch(u).then((r) => r.json());
-
-function getWeek(): Date[] {
-  const today = new Date();
-  const day = today.getDay();
-  const diffToMon = (day + 6) % 7;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - diffToMon);
-  monday.setHours(0, 0, 0, 0);
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    return d;
-  });
-}
-function formatYMD(d: Date) {
-  return d.toLocaleDateString("en-CA");
-}
-function isSameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-function startOfAlignedWeek(d: Date) {
-  const day = d.getDay();
-  const diffToMon = (day + 6) % 7;
-  const s = new Date(d);
-  s.setDate(d.getDate() - diffToMon);
-  s.setHours(0, 0, 0, 0);
-  return s;
-}
-function endOfAlignedWeek(d: Date) {
-  const s = startOfAlignedWeek(d);
-  const e = new Date(s);
-  e.setDate(s.getDate() + 6);
-  e.setHours(23, 59, 59, 999);
-  return e;
-}
-function fridayOfWeek(d: Date) {
-  const s = startOfAlignedWeek(d);
-  const f = new Date(s);
-  f.setDate(s.getDate() + 4);
-  f.setHours(0, 0, 0, 0);
-  return f;
-}
-function round2(n: number | undefined | null): number {
-  const v = typeof n === "number" ? n : 0;
-  return Number(v.toFixed(2));
-}
-
-type SimpleWorkoutRef = { id: string; name?: string };
-
-type ApiDay = {
-  dateKey: string;
-  hasWorkout?: boolean;
-  workoutDone?: boolean;
-  nutritionLogged?: boolean;
-  habitAllDone?: boolean;
-  isFriday?: boolean;
-  checkinComplete?: boolean;
-
-  nutritionSummary?: { calories: number; protein: number };
-  workoutSummary?: { calories: number; duration: number; weightUsed?: string };
-  habitSummary?: { completed: number; total: number };
-  checkinSummary?: { weight: number; body_fat_pct: number; weightChange?: number; bfChange?: number };
-  workoutIds?: string[];
-
-  // From /api/weekly/overview
-  hasRecurringToday?: boolean;
-  recurringDone?: boolean;
-  recurringWorkouts?: SimpleWorkoutRef[];
-  optionalWorkouts?: SimpleWorkoutRef[];
+type SocialLink = {
+  label: string;
+  href: string;
+  icon: string;
 };
 
-type DayStatus = {
-  dateKey: string;
-  hasWorkout: boolean;
-  workoutDone: boolean;
-  nutritionLogged: boolean;
-  habitAllDone: boolean;
-  isFriday: boolean;
-  checkinComplete: boolean;
-  allDone: boolean;
-  workoutIds: string[];
-};
+const PATH_CARDS: PathCard[] = [
+  {
+    title: "Iron Acre App",
+    body: "Training, tracking and digital coaching built for real progress.",
+    href: "/app-signup",
+    icon: "fa-mobile-alt",
+    badge: "Coming soon",
+  },
+  {
+    title: "Iron Acre Gym",
+    body: "Outdoor strength and conditioning with a different kind of atmosphere.",
+    href: "/founders",
+    cta: "Register interest",
+    icon: "fa-dumbbell",
+    badge: "Founding Members",
+  },
+  {
+    title: "Iron Acre Podcast",
+    body: "Training, mindset, consistency and building something different.",
+    href: "https://www.youtube.com/",
+    cta: "Watch on YouTube",
+    icon: "fa-podcast",
+    badge: "Placeholder",
+  },
+];
 
-type UserAccess = {
-  subscription_status?: string | null;
-  membership_status?: string | null;
-};
+const SOCIALS: SocialLink[] = [
+  { label: "Instagram", href: "#", icon: "fa-instagram" },
+  { label: "YouTube", href: "https://www.youtube.com/", icon: "fa-youtube" },
+  { label: "Facebook", href: "#", icon: "fa-facebook-f" },
+  { label: "TikTok", href: "#", icon: "fa-tiktok" },
+];
 
-type Completion = {
-  id?: string;
-  workout_id?: string;
-  is_freestyle?: boolean;
-  activity_type?: string | null;
-  duration_minutes?: number | null;
-  duration?: number | null;
-  calories_burned?: number | null;
-  weight_completed_with?: number | null;
-  completed_date?: any;
-  date_completed?: any;
-};
+const FAQS = [
+  {
+    q: "Is Iron Acre a gym or an app?",
+    a: "Iron Acre is the wider brand. Iron Acre Gym is the in-person training arm and the app is the digital arm, so people can connect with the brand in the way that suits them best.",
+  },
+  {
+    q: "Can I join before launch?",
+    a: "Yes. The Founding Members page is the best place to register interest, shape the timetable and access early launch offers.",
+  },
+  {
+    q: "Will the app work without joining the gym?",
+    a: "Yes. The long-term aim is for Iron Acre App users to get value whether they train with us in person or not.",
+  },
+  {
+    q: "What kind of training does Iron Acre focus on?",
+    a: "Strength, conditioning, kettlebells, outdoor sessions, consistency and proper long-term progress rather than gimmicks.",
+  },
+];
 
-type OnboardingStatus = {
-  complete: boolean;
-  missing: string[];
-  outstanding: { id: string; key: string; title: string; description: string; targetPath: string }[];
-  profile?: any;
-};
-
-type DaySummaryRes = {
-  date?: string;
-  user_email?: string;
-  planned?: {
-    workout_id: string | null;
-    done: boolean;
-  };
-  freestyle?: {
-    logged: boolean;
-    summary?: {
-      activity_type?: string | null;
-      duration?: number | null;
-      calories_burned?: number | null;
-      weight_completed_with?: number | null;
-    } | null;
-  };
-};
-
-// ---- Robust Firestore Timestamp parser (supports toDate() and {_seconds,_nanoseconds}) ----
-function toDateAny(v: any): Date | null {
-  try {
-    if (!v) return null;
-    if (typeof v?.toDate === "function") return v.toDate();
-    if (typeof v === "object" && typeof v._seconds === "number") {
-      const ms = v._seconds * 1000 + (typeof v._nanoseconds === "number" ? v._nanoseconds / 1e6 : 0);
-      return new Date(ms);
-    }
-    const d = new Date(v);
-    return isNaN(d.getTime()) ? null : d;
-  } catch {
-    return null;
-  }
+function SectionHeader({
+  kicker,
+  title,
+  subtitle,
+}: {
+  kicker: string;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="ia-section-header">
+      <div className="ia-kicker">
+        <i className="fas fa-circle-notch ia-kicker-dot" />
+        {kicker}
+      </div>
+      <h2 className="ia-section-title">{title}</h2>
+      {subtitle ? <p className="ia-section-subtitle">{subtitle}</p> : null}
+    </div>
+  );
 }
 
-export default function Home() {
-  const { data: session, status } = useSession();
-
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  const [timeGreeting, setTimeGreeting] = useState<string>("");
-  useEffect(() => {
-    const h = new Date().getHours();
-    setTimeGreeting(h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening");
-  }, []);
-
-  const weekDays = useMemo(() => (mounted ? getWeek() : []), [mounted]);
-  const [selectedDay, setSelectedDay] = useState<Date>(new Date());
-
-  const selectedDateKey = formatYMD(selectedDay);
-  const weekStart = useMemo(() => (mounted ? startOfAlignedWeek(new Date()) : null), [mounted]);
-  const weekEnd = useMemo(() => (mounted ? endOfAlignedWeek(new Date()) : null), [mounted]);
-  const weekStartKey = useMemo(() => (weekStart ? formatYMD(weekStart) : ""), [weekStart]);
-  const weekEndKey = useMemo(() => (weekEnd ? formatYMD(weekEnd) : ""), [weekEnd]);
-
-  const { data: weeklyOverview, isLoading: overviewLoading } = useSWR(
-    weekStartKey ? `/api/weekly/overview?week=${weekStartKey}` : null,
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+function PathCardItem({ card }: { card: PathCard }) {
+  const isExternal = card.href.startsWith("http");
+  const content = (
+    <div className="ia-brand-path-card">
+      <div className="ia-brand-path-top">
+        <div className="ia-brand-icon-wrap">
+          <i className={`fas ${card.icon}`} />
+        </div>
+        {card.badge ? <span className="ia-brand-badge">{card.badge}</span> : null}
+      </div>
+      <div className="ia-brand-path-title">{card.title}</div>
+      <div className="ia-brand-path-body">{card.body}</div>
+      <div className="ia-brand-path-link">
+        {card.cta}
+        <i className="fas fa-arrow-right" />
+      </div>
+    </div>
   );
 
-  const profileKey =
-    mounted && session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email)}` : null;
-  const { data: profile } = useSWR<UserAccess>(profileKey, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 60_000,
-  });
+  if (isExternal) {
+    return (
+      <a
+        href={card.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="ia-link-no-underline"
+      >
+        {content}
+      </a>
+    );
+  }
 
-  const onboardingKey = mounted && session?.user?.email ? "/api/onboarding/status" : null;
-  const { data: onboarding } = useSWR<OnboardingStatus>(onboardingKey, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 60_000,
-  });
-
-  const [weekStatus, setWeekStatus] = useState<Record<string, DayStatus>>({});
-  const [weekLoading, setWeekLoading] = useState(false);
-
-  const deriveDayBooleans = (o: any) => {
-    const isFriday = Boolean(o.isFriday ?? new Date(o.dateKey + "T00:00:00").getDay() === 5);
-    const hasWorkout =
-      Boolean(o.hasWorkout) ||
-      Boolean(o.hasRecurringToday) ||
-      Boolean(o.recurringWorkouts?.length) ||
-      Boolean(o.workoutIds?.length) ||
-      Boolean(o.workoutSummary);
-
-    const hasSummary =
-      Boolean(o.workoutSummary && (o.workoutSummary.calories || o.workoutSummary.duration || o.workoutSummary.weightUsed));
-
-    const workoutDone = Boolean(o.workoutDone) || Boolean(o.recurringDone) || hasSummary;
-    const nutritionLogged = Boolean(o.nutritionLogged);
-    const habitAllDone =
-      Boolean(o.habitAllDone) ||
-      (o.habitSummary ? o.habitSummary.completed >= o.habitSummary.total && o.habitSummary.total > 0 : false);
-    const checkinComplete = Boolean(o.checkinComplete) || Boolean(o.checkinSummary);
-
-    const allDone =
-      (!hasWorkout || workoutDone) && nutritionLogged && habitAllDone && (!isFriday || checkinComplete);
-
-    return { isFriday, hasWorkout, workoutDone, nutritionLogged, habitAllDone, checkinComplete, allDone };
-  };
-
-  useEffect(() => {
-    if (!weeklyOverview?.days?.length) return;
-    setWeekLoading(true);
-    const statuses: Record<string, DayStatus> = {};
-    for (const o of weeklyOverview.days as ApiDay[]) {
-      const b = deriveDayBooleans(o);
-      statuses[o.dateKey] = {
-        dateKey: o.dateKey,
-        hasWorkout: b.hasWorkout,
-        workoutDone: b.workoutDone,
-        nutritionLogged: b.nutritionLogged,
-        habitAllDone: b.habitAllDone,
-        isFriday: b.isFriday,
-        checkinComplete: b.checkinComplete,
-        allDone: b.allDone,
-        workoutIds: Array.isArray(o.workoutIds) ? o.workoutIds : [],
-      };
-    }
-    setWeekStatus(statuses);
-    setWeekLoading(false);
-  }, [weeklyOverview]);
-
-  const derivedWeeklyTotals = useMemo(() => {
-    const days = (weeklyOverview?.days as any[]) || [];
-    let totalTasks = 0;
-    let completedTasks = 0;
-    for (const o of days) {
-      const { isFriday, hasWorkout, workoutDone, nutritionLogged, habitAllDone, checkinComplete } = deriveDayBooleans(o);
-      totalTasks += 1 + 1 + (hasWorkout ? 1 : 0) + (isFriday ? 1 : 0);
-      completedTasks +=
-        (nutritionLogged ? 1 : 0) +
-        (habitAllDone ? 1 : 0) +
-        (hasWorkout && workoutDone ? 1 : 0) +
-        (isFriday && checkinComplete ? 1 : 0);
-    }
-    return { totalTasks, completedTasks };
-  }, [weeklyOverview]);
-
-  const selectedDayData: ApiDay | undefined = useMemo(() => {
-    if (!weeklyOverview?.days) return undefined;
-    return (weeklyOverview.days as ApiDay[]).find((d) => d.dateKey === selectedDateKey);
-  }, [weeklyOverview, selectedDateKey]);
-
-  const checkinSummaryNormalized = useMemo(() => {
-    const s = selectedDayData?.checkinSummary as
-      | { weight?: number; body_fat_pct?: number; bodyFat?: number; weightChange?: number; bfChange?: number }
-      | undefined;
-    if (!s) return undefined;
-    const body_fat_pct =
-      typeof s.body_fat_pct === "number"
-        ? s.body_fat_pct
-        : typeof (s as any).bodyFat === "number"
-        ? (s as any).bodyFat
-        : 0;
-    return { ...s, body_fat_pct, bodyFat: (s as any).bodyFat ?? body_fat_pct };
-  }, [selectedDayData]);
-
-  const selectedStatus = weekStatus[selectedDateKey] || ({} as DayStatus);
-
-  const hasWorkoutToday = Boolean(selectedStatus.hasWorkout);
-  const workoutIds = selectedStatus.workoutIds || [];
-  const hasWorkoutId = Array.isArray(workoutIds) && workoutIds.length > 0 && typeof workoutIds[0] === "string";
-
-  const nutritionHref = `/nutrition?date=${selectedDateKey}`;
-  const habitHrefBase = `/habit?date=${selectedDateKey}`;
-
-  const selectedFridayYMD = formatYMD(fridayOfWeek(selectedDay));
-  const checkinHref = `/checkin?date=${encodeURIComponent(selectedFridayYMD)}`;
-
-  const isPremium = Boolean(
-    (profile?.subscription_status === "active" || profile?.subscription_status === "trialing") ||
-      profile?.membership_status === "gym_member"
+  return (
+    <Link href={card.href} className="ia-link-no-underline">
+      {content}
+    </Link>
   );
+}
 
-  const weekday = selectedDay.getDay();
-  const isWedOrFri = weekday === 3 || weekday === 5;
-
-  const workoutLocked = !isPremium && isWedOrFri;
-  const habitsLocked = !isPremium;
-
-  const bxkrHref = hasWorkoutToday && hasWorkoutId ? `/workout/${encodeURIComponent(workoutIds[0])}` : "#";
-  const workoutHref = workoutLocked ? "#" : bxkrHref;
-  const habitHref = habitsLocked ? "#" : habitHrefBase;
-
-  const firstRecurring = selectedDayData?.recurringWorkouts?.[0];
-  const firstOptional = selectedDayData?.optionalWorkouts?.[0];
-
-  const recurringHref =
-    selectedDayData?.hasRecurringToday && firstRecurring ? `/gymworkout/${encodeURIComponent(firstRecurring.id)}` : "#";
-
-  const optionalWorkoutHref = firstOptional ? `/workout/${encodeURIComponent(firstOptional.id)}` : "#";
-
-  const roundedNutrition = selectedDayData?.nutritionSummary
-    ? {
-        calories: round2(selectedDayData.nutritionSummary.calories),
-        protein: round2(selectedDayData.nutritionSummary.protein),
-      }
-    : undefined;
-
-  const showLoadingBar = status === "loading" || !mounted;
-
-  const dayStreak = useMemo(() => {
-    let streak = 0;
-    for (const d of weekDays) {
-      const st = weekStatus[formatYMD(d)];
-      if (!st) break;
-      if (d < selectedDay && st.allDone) streak++;
-      else if (d < selectedDay && !st.allDone) streak = 0;
-      if (isSameDay(d, selectedDay)) break;
-    }
-    return streak;
-  }, [weekDays, weekStatus, selectedDay]);
-
-  const weeklyProgressPercent = useMemo(() => {
-    const { totalTasks, completedTasks } = derivedWeeklyTotals;
-    if (!totalTasks) return 0;
-    return Math.round((completedTasks / totalTasks) * 100);
-  }, [derivedWeeklyTotals]);
-
-  const weeklyWorkoutsCompleted = useMemo(() => {
-    const completedFromTotals = Number(weeklyOverview?.weeklyTotals?.totalWorkoutsCompleted ?? 0);
-    if (Number.isFinite(completedFromTotals)) return Math.max(0, Math.min(3, completedFromTotals));
-    const days = (weeklyOverview?.days as ApiDay[]) || [];
-    const count = days.reduce((acc, d) => acc + (d?.workoutDone ? 1 : 0), 0);
-    return Math.max(0, Math.min(3, count));
-  }, [weeklyOverview]);
-
-  // ------- Weekly completions (Mon..Sun) for robust matching by workout_id -------
-  const weekCompletionsKey = useMemo(() => {
-    if (!mounted || !weekStartKey || !weekEndKey) return null;
-    const params = new URLSearchParams();
-    params.set("from", weekStartKey);
-    params.set("to", weekEndKey);
-    if (session?.user?.email) params.set("user_email", session.user.email);
-    return `/api/completions?${params.toString()}`;
-  }, [mounted, weekStartKey, weekEndKey, session?.user?.email]);
-
-  const { data: weekCompletions } = useSWR<{
-    results?: Completion[];
-    items?: Completion[];
-    completions?: Completion[];
-    data?: Completion[];
-  }>(weekCompletionsKey, fetcher, { revalidateOnFocus: false, dedupingInterval: 30_000 });
-
-  type LatestRow = { calories?: number; duration?: number; weight?: number; at?: number };
-  const { weekDoneIds, weekLatestById } = useMemo(() => {
-    const list: Completion[] =
-      (weekCompletions?.results as Completion[]) ||
-      (weekCompletions?.items as Completion[]) ||
-      (weekCompletions?.completions as Completion[]) ||
-      (weekCompletions?.data as Completion[]) ||
-      [];
-
-    const weekDoneIds = new Set<string>();
-    const weekLatestById = new Map<string, LatestRow>();
-
-    for (const c of list) {
-      const wid = String(c.workout_id || "").trim();
-      if (!wid) continue;
-
-      const dt =
-        toDateAny((c as any).completed_date) ||
-        toDateAny((c as any).date_completed);
-      if (!dt) continue;
-
-      weekDoneIds.add(wid);
-
-      const calories = typeof c.calories_burned === "number" ? c.calories_burned : undefined;
-      const duration =
-        typeof c.duration === "number" ? c.duration :
-        typeof c.duration_minutes === "number" ? c.duration_minutes : undefined;
-      const weight = typeof c.weight_completed_with === "number" ? c.weight_completed_with : undefined;
-      const at = dt.getTime();
-
-      const prev = weekLatestById.get(wid);
-      if (!prev || (at > (prev.at || 0))) {
-        weekLatestById.set(wid, { calories, duration, weight, at });
-      }
-    }
-
-    return { weekDoneIds, weekLatestById };
-  }, [weekCompletions]);
-
-  // ---------- Resolve optional & recurring states for the selected day (WEEK-level for both) ----------
-  const recurringIds: string[] = (selectedDayData?.recurringWorkouts || []).map((w) => String(w.id));
-  const optionalIds: string[] = (selectedDayData?.optionalWorkouts || []).map((w) => String(w.id));
-
-  const recurringDoneFromWeek = useMemo(() => {
-    if (!recurringIds.length) return false;
-    return recurringIds.some((id) => weekDoneIds.has(id));
-  }, [recurringIds, weekDoneIds]);
-
-  const optionalDoneFromWeek = useMemo(() => {
-    if (!optionalIds.length) return false;
-    return optionalIds.some((id) => weekDoneIds.has(id));
-  }, [optionalIds, weekDoneIds]);
-
-  // Card summaries via week-latest
-  const recurringSummaryForCard = useMemo(() => {
-    if (!selectedDayData?.hasRecurringToday || !recurringIds.length) return undefined;
-    let latest: LatestRow | undefined;
-    for (const id of recurringIds) {
-      const row = weekLatestById.get(id);
-      if (row && (!latest || (row.at || 0) > (latest.at || 0))) latest = row;
-    }
-    return latest
-      ? {
-          calories: round2(latest.calories ?? 0),
-          duration: round2(latest.duration ?? 0),
-          weightUsed: typeof latest.weight === "number" ? `${Math.round(latest.weight)} kg` : undefined,
-        }
-      : undefined;
-  }, [selectedDayData?.hasRecurringToday, recurringIds, weekLatestById]);
-
-  const optionalSummaryForCard = useMemo(() => {
-    if (!selectedDayData?.hasRecurringToday || !optionalIds.length) return undefined;
-    let latest: LatestRow | undefined;
-    for (const id of optionalIds) {
-      const row = weekLatestById.get(id);
-      if (row && (!latest || (row.at || 0) > (latest.at || 0))) latest = row;
-    }
-    return latest
-      ? {
-          calories: round2(latest.calories ?? 0),
-          duration: round2(latest.duration ?? 0),
-          weightUsed: typeof latest.weight === "number" ? `${Math.round(latest.weight)} kg` : undefined,
-        }
-      : undefined;
-  }, [selectedDayData?.hasRecurringToday, optionalIds, weekLatestById]);
-
-  // Main card “workoutSummary” shows the mandatory track (recurring on recurring days; else programmed/overview)
-  const workoutSummaryForCard = useMemo(() => {
-    return selectedDayData?.hasRecurringToday
-      ? recurringSummaryForCard
-      : selectedDayData?.workoutSummary;
-  }, [selectedDayData?.hasRecurringToday, recurringSummaryForCard, selectedDayData?.workoutSummary]);
-
-  // Booleans for the card
-  const recurringDoneResolved = Boolean(selectedDayData?.recurringDone) || recurringDoneFromWeek;
-  const optionalDoneResolved = optionalDoneFromWeek;
-
-  // Workout “done” for the selected day → mandatory on recurring days; planned otherwise
-  const workoutDoneResolved = useMemo(() => {
-    if (Boolean(selectedDayData?.hasRecurringToday)) {
-      return recurringDoneResolved;
-    }
-    return Boolean(selectedStatus.workoutDone);
-  }, [selectedDayData?.hasRecurringToday, recurringDoneResolved, selectedStatus.workoutDone]);
-
-  // All‑done for the selected day (UI override for the selected pill)
-  const allDoneResolved = useMemo(() => {
-    const isFriday = new Date(selectedDateKey + "T00:00:00").getDay() === 5;
-    const nutritionLogged = Boolean(selectedStatus.nutritionLogged);
-    const habitsDone = Boolean(selectedStatus.habitAllDone);
-    const checkInDone = isFriday ? Boolean(selectedStatus.checkinComplete) : true;
-    return (!Boolean(selectedStatus.hasWorkout) || workoutDoneResolved) && nutritionLogged && habitsDone && checkInDone;
-  }, [
-    selectedStatus.hasWorkout,
-    workoutDoneResolved,
-    selectedStatus.nutritionLogged,
-    selectedStatus.habitAllDone,
-    selectedStatus.checkinComplete,
-    selectedDateKey,
-  ]);
-
-  const hrefs = {
-    nutrition: `${nutritionHref}`,
-    workout: workoutHref,
-    habit: habitHref,
-    checkin: `${checkinHref}`,
-    freestyle: "/workouts/freestyle",
-    recurring: recurringHref,
-    optionalWorkout: optionalWorkoutHref,
-  };
-
+export default function IronAcreLandingPage() {
   return (
     <>
       <Head>
-        <title>BXKR</title>
+        <title>Iron Acre</title>
+        <meta
+          name="description"
+          content="Iron Acre is a modern strength brand combining outdoor training, digital coaching, content and community."
+        />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="mobile-web-app-capable" content="yes" />
       </Head>
 
-      <main className="container py-2" style={{ paddingBottom: "70px", color: "#fff" }}>
-        {/* Header */}
-        <div className="d-flex justify-content-between mb-2 align-items-center">
-          <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
-            {session?.user?.image && (
-              <img
-                src={session.user.image}
-                alt=""
-                className="rounded-circle"
-                style={{ width: 36, height: 36, objectFit: "cover" }}
-              />
-            )}
-            {(status === "loading" || !mounted || weekLoading || overviewLoading) && <div className="inline-spinner" />}
-            <div
-              style={{
-                color: "#fff",
-                fontWeight: 600,
-                fontSize: "0.95rem",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                maxWidth: "70vw",
-              }}
-              aria-label="Greeting"
-            >
-              {mounted ? timeGreeting : ""}
-            </div>
-          </div>
-
-          <div className="d-flex align-items-center gap-2">
-            {status === "authenticated" ? (
-              <button className="btn btn-link text-light p-0" onClick={() => signOut()}>
-                Sign out
-              </button>
-            ) : (
-              <button
-                className="btn btn-link text-light p-0"
-                onClick={() => signIn("google")}
-                style={{ background: "transparent", border: "none", textDecoration: "underline" }}
-              >
-                Sign in
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Notifications */}
-        <section style={{ marginBottom: 10 }}>
-          <NotificationsBanner />
-        </section>
-
-        {/* Weekly Circles */}
-        {weeklyOverview?.days && mounted && (
-          <div style={{ marginBottom: 12 }}>
-            <WeeklyCircles
-              weeklyProgressPercent={weeklyProgressPercent}
-              weeklyWorkoutsCompleted={weeklyWorkoutsCompleted}
-              dayStreak={dayStreak}
-            />
-          </div>
-        )}
-
-        {/* Calendar */}
-        {mounted && (
-          <div className="d-flex justify-content-between text-center mb-3" style={{ gap: 8 }}>
-            {weekDays.map((d, i) => {
-              const isSelected = isSameDay(d, selectedDay);
-              const dk = formatYMD(d);
-              const st = weekStatus[dk];
-
-              if (!st) {
-                return (
-                  <div key={i} style={{ width: 44 }}>
-                    <div style={{ fontSize: "0.8rem", opacity: 0.6, fontWeight: 500 }}>
-                      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
-                    </div>
-                    <div className="bxkr-day-pill" style={{ opacity: 0.5 }}>
-                      <span style={{ fontWeight: 500 }}>{d.getDate()}</span>
-                    </div>
-                  </div>
-                );
-              }
-
-              // Override only for the selected day
-              const stAllDone = isSelected ? allDoneResolved : st.allDone;
-              const ringColor = stAllDone ? "#64c37a" : isSelected ? "#ff8a2a" : "rgba(255,255,255,0.3)";
-              const boxShadow = isSelected ? `0 0 8px ${ringColor}` : stAllDone ? `0 0 3px ${ringColor}` : "none";
-
-              return (
-                <div key={i} style={{ width: 44, cursor: "pointer" }} onClick={() => setSelectedDay(d)}>
-                  <div style={{ fontSize: "0.8rem", color: "#fff", opacity: 0.85, marginBottom: 4, fontWeight: 500 }}>
-                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
-                  </div>
-                  <div
-                    className={`bxkr-day-pill ${stAllDone ? "completed" : ""}`}
-                    style={{ boxShadow, fontWeight: isSelected ? 600 : 500, borderColor: stAllDone ? undefined : ringColor }}
-                  >
-                    <span
-                      className={`bxkr-day-content ${stAllDone ? (isSelected ? "state-num" : "state-flame") : "state-num"}`}
-                      style={{ fontWeight: 500 }}
-                    >
-                      {stAllDone && !isSelected ? (
-                        <i
-                          className="fas fa-fire"
-                          style={{
-                            color: "#64c37a",
-                            textShadow: `0 0 8px #64c37a`,
-                            fontSize: "1rem",
-                            lineHeight: 1,
-                          }}
-                        />
-                      ) : (
-                        d.getDate()
-                      )}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Daily Tasks */}
-        {mounted && selectedDayData && (
-          <DailyTasksCard
-            dayLabel={`${selectedDay.toLocaleDateString(undefined, { weekday: "long" })}, ${selectedDay.toLocaleDateString(undefined, {
-              day: "numeric",
-              month: "short",
-            })}`}
-            nutritionSummary={roundedNutrition}
-            nutritionLogged={Boolean(selectedStatus.nutritionLogged)}
-            workoutSummary={workoutSummaryForCard}
-            hasWorkout={Boolean(selectedStatus.hasWorkout)}
-            workoutDone={workoutDoneResolved}
-            hasRecurringToday={Boolean(selectedDayData.hasRecurringToday)}
-            recurringDone={recurringDoneResolved}
-            recurringWorkouts={selectedDayData.recurringWorkouts || []}
-            optionalWorkouts={selectedDayData.optionalWorkouts || []}
-            optionalDone={optionalDoneResolved}
-            optionalSummary={optionalSummaryForCard}
-            hrefs={hrefs}
-            habitSummary={selectedDayData.habitSummary}
-            habitAllDone={Boolean(selectedStatus.habitAllDone)}
-            checkinSummary={checkinSummaryNormalized as any}
-            checkinComplete={Boolean(selectedStatus.checkinComplete)}
-            freestyleLogged={false}
-            freestyleSummary={undefined}
-          />
-        )}
-
-        {mounted && hasWorkoutToday && !hasWorkoutId && (
-          <div className="text-center" style={{ opacity: 0.8, fontSize: "0.9rem", marginTop: 8 }}>
-            Loading workout details… <span className="inline-spinner" />
-          </div>
-        )}
-
-        {/* Onboarding blocking modal */}
-        {mounted && onboarding && onboarding.complete === false && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="onboarding-title"
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.6)",
-              backdropFilter: "blur(6px)",
-              zIndex: 3000,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 16,
-            }}
-          >
-            <div
-              className="futuristic-card"
-              style={{
-                width: "min(520px, 92vw)",
-                padding: 20,
-                borderRadius: 16,
-                color: "#fff",
-                textAlign: "left",
-              }}
-            >
-              <div className="d-flex align-items-center gap-2 mb-2">
-                <i className="fas fa-user-check" style={{ color: "#ff8a2a" }} />
-                <h2 id="onboarding-title" className="h5 m-0" style={{ fontWeight: 800 }}>
-                  Let’s finish your setup
-                </h2>
-              </div>
-
-              <p style={{ opacity: 0.9 }}>
-                To unlock your personalised BXKR experience, please complete onboarding.
+      <main className="container py-3 ia-brand-page">
+        <section className="ia-brand-hero">
+          <div className="ia-brand-hero-grid">
+            <div className="ia-brand-hero-copy">
+              <div className="ia-brand-pretitle">IRON ACRE</div>
+              <h1 className="ia-brand-hero-title">Strength. Conditioning. Community. Built different.</h1>
+              <p className="ia-brand-hero-subtitle">
+                A modern strength brand combining outdoor training, digital coaching, content and a
+                different kind of community.
               </p>
 
-              {Array.isArray(onboarding.missing) && onboarding.missing.length > 0 ? (
-                <>
-                  <div className="small text-dim mb-2">Missing:</div>
-                  <ul className="small" style={{ lineHeight: 1.6, marginBottom: 0 }}>
-                    {onboarding.missing.map((k) => (
-                      <li key={k}>{k.replaceAll("_", " ")}</li>
-                    ))}
-                  </ul>
-                </>
-              ) : null}
+              <div className="ia-brand-hero-ctas">
+                <Link href="/app-signup" className="ia-btn ia-btn-primary">
+                  Get the app
+                </Link>
 
-              <div className="mt-3 d-flex gap-2">
+                <Link href="/founders" className="ia-btn ia-btn-muted">
+                  Explore the gym
+                </Link>
+
                 <a
-                  href="/onboarding"
-                  className="btn btn-bxkr"
-                  style={{ borderRadius: 24 }}
-                  aria-label="Continue onboarding"
+                  href="https://www.youtube.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ia-btn ia-btn-outline"
                 >
-                  Continue onboarding
+                  Watch the podcast
                 </a>
-                <a
-                  href="/landing"
-                  className="btn btn-outline-light"
-                  style={{ borderRadius: 24 }}
-                  aria-label="Learn more about BXKR"
-                >
-                  Learn more
-                </a>
+              </div>
+
+              <div className="ia-brand-hero-meta">
+                <div className="ia-brand-meta-pill">Outdoor training</div>
+                <div className="ia-brand-meta-pill">Digital coaching</div>
+                <div className="ia-brand-meta-pill">Founding members open</div>
+              </div>
+            </div>
+
+            <div className="ia-brand-hero-panel">
+              <div className="ia-brand-panel-card">
+                <div className="ia-brand-panel-kicker">Built for people who want more than a normal gym</div>
+                <div className="ia-brand-panel-copy">
+                  Iron Acre exists for people who want real training, real progression and a stronger
+                  connection to the way they move, train and live.
+                </div>
+
+                <div className="ia-brand-panel-stats">
+                  <div className="ia-brand-mini-stat">
+                    <div className="ia-brand-mini-stat-value">App</div>
+                    <div className="ia-brand-mini-stat-label">Digital training</div>
+                  </div>
+                  <div className="ia-brand-mini-stat">
+                    <div className="ia-brand-mini-stat-value">Gym</div>
+                    <div className="ia-brand-mini-stat-label">Outdoor sessions</div>
+                  </div>
+                  <div className="ia-brand-mini-stat">
+                    <div className="ia-brand-mini-stat-value">Podcast</div>
+                    <div className="ia-brand-mini-stat-label">Content + community</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        )}
+        </section>
+
+        <section className="ia-tile ia-tile-pad mb-3">
+          <SectionHeader
+            kicker="Choose your path"
+            title="Start where it makes sense for you"
+            subtitle="Iron Acre is bigger than one product. Choose the way in that fits you best."
+          />
+
+          <div className="row g-3 mt-1">
+            {PATH_CARDS.map((card) => (
+              <div key={card.title} className="col-12 col-lg-4">
+                <PathCardItem card={card} />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="ia-tile ia-tile-pad mb-3">
+          <SectionHeader
+            kicker="What Iron Acre is"
+            title="Built for people who want more than average"
+            subtitle="Iron Acre is about better training, clearer progress and a stronger connection to how you live."
+          />
+
+          <div className="row g-3 mt-1">
+            <div className="col-12 col-md-4">
+              <div className="ia-value-card">
+                <div className="ia-value-title">Train hard</div>
+                <div className="ia-value-copy">
+                  Strength, conditioning and proper sessions that feel purposeful, not generic.
+                </div>
+              </div>
+            </div>
+            <div className="col-12 col-md-4">
+              <div className="ia-value-card">
+                <div className="ia-value-title">Track progress</div>
+                <div className="ia-value-copy">
+                  Training is better when you can see momentum, structure and long-term improvement.
+                </div>
+              </div>
+            </div>
+            <div className="col-12 col-md-4">
+              <div className="ia-value-card">
+                <div className="ia-value-title">Build consistency</div>
+                <div className="ia-value-copy">
+                  The aim is not noise. The aim is showing up, improving and building something that lasts.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="ia-tile ia-tile-pad mb-3">
+          <div className="row g-3 align-items-stretch">
+            <div className="col-12 col-lg-6">
+              <div className="ia-feature-block h-100">
+                <div className="ia-kicker">
+                  <i className="fas fa-mobile-alt" />
+                  Iron Acre App
+                </div>
+                <div className="ia-feature-title">Training, tracking and digital coaching in one place</div>
+                <div className="ia-feature-copy">
+                  Follow your training, log sessions, track progress and stay connected to the Iron Acre
+                  way of training from your phone.
+                </div>
+
+                <div className="ia-feature-list">
+                  <span>Workout logging</span>
+                  <span>Progress tracking</span>
+                  <span>Plans and structure</span>
+                  <span>Member experience</span>
+                </div>
+
+                <div className="mt-3">
+                  <Link href="/app-signup" className="ia-btn ia-btn-primary">
+                    Join app waitlist
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-12 col-lg-6">
+              <div className="ia-feature-block h-100 ia-feature-block-accent">
+                <div className="ia-kicker">
+                  <i className="fas fa-tree" />
+                  Iron Acre Gym
+                </div>
+                <div className="ia-feature-title">Outdoor strength and conditioning with a different atmosphere</div>
+                <div className="ia-feature-copy">
+                  A more focused, more personal and more real training environment built around strength,
+                  conditioning, kettlebells, boxing conditioning and proper community.
+                </div>
+
+                <div className="ia-feature-list">
+                  <span>Farm Strength</span>
+                  <span>Hybrid Fit</span>
+                  <span>Kettlebells</span>
+                  <span>Boxing Conditioning</span>
+                </div>
+
+                <div className="mt-3 d-flex gap-2 flex-wrap">
+                  <Link href="/founders" className="ia-btn ia-btn-primary">
+                    Join founding members
+                  </Link>
+                  <Link href="/founders" className="ia-btn ia-btn-muted">
+                    Register interest
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="ia-tile ia-tile-pad mb-3 ia-founders-offer-band">
+          <div className="row g-3 align-items-center">
+            <div className="col-12 col-lg-8">
+              <div className="ia-card-title-compact">Founding Members now open</div>
+              <div className="text-dim small mt-2">
+                Help shape Iron Acre before launch, influence the timetable and access early member offers.
+              </div>
+              <div className="text-dim small mt-2">
+                Refer a friend and if they join as a Founding Member, both of you get your first 2 months at 50% off.
+              </div>
+            </div>
+
+            <div className="col-12 col-lg-4 d-flex justify-content-lg-end">
+              <Link href="/founders" className="ia-btn ia-btn-primary">
+                Go to founders page
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <section className="ia-tile ia-tile-pad mb-3">
+          <div className="row g-3 align-items-stretch">
+            <div className="col-12 col-lg-7">
+              <div className="ia-feature-block h-100">
+                <div className="ia-kicker">
+                  <i className="fas fa-podcast" />
+                  Iron Acre Podcast
+                </div>
+                <div className="ia-feature-title">Training, mindset and building something different</div>
+                <div className="ia-feature-copy">
+                  The podcast is where training, discipline, consistency, recovery, business and the wider
+                  Iron Acre mindset will come together.
+                </div>
+
+                <div className="ia-podcast-placeholder mt-3">
+                  <div className="ia-podcast-thumb">
+                    <i className="fab fa-youtube" />
+                  </div>
+                  <div>
+                    <div className="ia-podcast-title">Podcast placeholder</div>
+                    <div className="text-dim small mt-1">
+                      Featured episode block ready for YouTube embed or latest episode link.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <a
+                    href="https://www.youtube.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ia-btn ia-btn-outline"
+                  >
+                    Watch on YouTube
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-12 col-lg-5">
+              <div className="ia-feature-block h-100">
+                <div className="ia-kicker">
+                  <i className="fas fa-share-alt" />
+                  Follow Iron Acre
+                </div>
+                <div className="ia-feature-title">Training clips, launch updates and behind the scenes</div>
+                <div className="ia-feature-copy">
+                  Follow the journey as Iron Acre grows across the app, the gym, the podcast and the wider brand.
+                </div>
+
+                <div className="ia-social-grid mt-3">
+                  {SOCIALS.map((social) => (
+                    <a
+                      key={social.label}
+                      href={social.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ia-social-card"
+                    >
+                      <i className={`fab ${social.icon}`} />
+                      <span>{social.label}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="ia-tile ia-tile-pad mb-3">
+          <SectionHeader
+            kicker="Founders"
+            title="Built by Rob and Nik"
+            subtitle="Iron Acre is being built intentionally — not just as a place to train, but as a brand people want to be part of."
+          />
+
+          <div className="row g-3 mt-1">
+            <div className="col-12 col-lg-6">
+              <div className="ia-founder-card">
+                <div className="ia-founder-name">Rob</div>
+                <div className="ia-founder-role">Product, systems and digital build</div>
+                <div className="ia-founder-copy">
+                  Focused on the member experience, app, automation, progress tracking and building a premium,
+                  modern strength brand from the ground up.
+                </div>
+              </div>
+            </div>
+
+            <div className="col-12 col-lg-6">
+              <div className="ia-founder-card">
+                <div className="ia-founder-name">Nik</div>
+                <div className="ia-founder-role">Coaching, training and real-world delivery</div>
+                <div className="ia-founder-copy">
+                  Focused on coaching, session quality, atmosphere and creating the kind of gym experience
+                  people actually want to come back to.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="ia-tile ia-tile-pad mb-3">
+          <SectionHeader
+            kicker="Early credibility"
+            title="Why people are interested"
+            subtitle="Iron Acre is already resonating because it offers something more deliberate and more real."
+          />
+
+          <div className="row g-3 mt-1">
+            <div className="col-12 col-md-4">
+              <div className="ia-quote-card">
+                <div className="ia-quote-mark">“</div>
+                <div className="ia-quote-copy">
+                  Something different from a normal gym.
+                </div>
+              </div>
+            </div>
+            <div className="col-12 col-md-4">
+              <div className="ia-quote-card">
+                <div className="ia-quote-mark">“</div>
+                <div className="ia-quote-copy">
+                  Outdoor strength and a better atmosphere.
+                </div>
+              </div>
+            </div>
+            <div className="col-12 col-md-4">
+              <div className="ia-quote-card">
+                <div className="ia-quote-mark">“</div>
+                <div className="ia-quote-copy">
+                  Training that feels more purposeful.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="ia-tile ia-tile-pad mb-3">
+          <SectionHeader
+            kicker="FAQ"
+            title="A few things people will want to know"
+          />
+
+          <div className="ia-faq-list mt-2">
+            {FAQS.map((faq) => (
+              <div key={faq.q} className="ia-faq-item">
+                <div className="ia-faq-q">{faq.q}</div>
+                <div className="ia-faq-a">{faq.a}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <footer className="ia-brand-footer">
+          <div className="ia-brand-footer-top">
+            <div>
+              <div className="ia-brand-footer-title">Iron Acre</div>
+              <div className="text-dim small mt-1">
+                Strength brand, outdoor training, digital coaching and content.
+              </div>
+            </div>
+
+            <div className="ia-brand-footer-links">
+              <Link href="/app-signup">App</Link>
+              <Link href="/founders">Gym</Link>
+              <Link href="/founders">Founders</Link>
+              <a href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">
+                Podcast
+              </a>
+              <a href="#">Instagram</a>
+            </div>
+          </div>
+        </footer>
       </main>
 
-      {mounted && onboarding?.complete === true && <AddToHomeScreen />}
-      <BottomNav />
+      <style jsx>{`
+        .ia-brand-page {
+          padding-bottom: 48px;
+        }
+
+        .ia-brand-hero {
+          margin-bottom: 16px;
+          border-radius: 28px;
+          overflow: hidden;
+          background:
+            radial-gradient(circle at top right, rgba(35, 255, 150, 0.14), transparent 26%),
+            linear-gradient(180deg, rgba(8, 12, 18, 0.98) 0%, rgba(4, 8, 13, 1) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+        }
+
+        .ia-brand-hero-grid {
+          display: grid;
+          grid-template-columns: 1.25fr 0.95fr;
+          gap: 20px;
+          padding: 28px;
+        }
+
+        .ia-brand-hero-copy {
+          min-width: 0;
+        }
+
+        .ia-brand-pretitle {
+          display: inline-block;
+          color: var(--ia-neon, #23ff96);
+          font-size: 0.82rem;
+          font-weight: 800;
+          letter-spacing: 0.12em;
+        }
+
+        .ia-brand-hero-title {
+          margin: 14px 0 0;
+          font-size: clamp(2.2rem, 5vw, 4rem);
+          line-height: 0.98;
+          letter-spacing: -0.04em;
+          font-weight: 900;
+          color: #ffffff;
+        }
+
+        .ia-brand-hero-subtitle {
+          margin: 16px 0 0;
+          max-width: 620px;
+          font-size: 1rem;
+          line-height: 1.6;
+          color: rgba(255, 255, 255, 0.82);
+        }
+
+        .ia-brand-hero-ctas {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-top: 22px;
+        }
+
+        .ia-brand-hero-meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 18px;
+        }
+
+        .ia-brand-meta-pill {
+          display: inline-flex;
+          align-items: center;
+          min-height: 32px;
+          padding: 0 12px;
+          border-radius: 999px;
+          font-size: 0.8rem;
+          font-weight: 700;
+          color: rgba(255, 255, 255, 0.86);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.04);
+        }
+
+        .ia-brand-hero-panel {
+          display: flex;
+          align-items: stretch;
+        }
+
+        .ia-brand-panel-card {
+          width: 100%;
+          border-radius: 22px;
+          padding: 18px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+        }
+
+        .ia-brand-panel-kicker {
+          color: var(--ia-neon, #23ff96);
+          font-size: 0.78rem;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+        }
+
+        .ia-brand-panel-copy {
+          margin-top: 12px;
+          color: rgba(255, 255, 255, 0.88);
+          line-height: 1.6;
+          font-size: 0.96rem;
+        }
+
+        .ia-brand-panel-stats {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+          margin-top: 18px;
+        }
+
+        .ia-brand-mini-stat {
+          border-radius: 16px;
+          padding: 12px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .ia-brand-mini-stat-value {
+          color: #ffffff;
+          font-weight: 800;
+          font-size: 0.92rem;
+        }
+
+        .ia-brand-mini-stat-label {
+          margin-top: 6px;
+          color: rgba(255, 255, 255, 0.62);
+          font-size: 0.78rem;
+          line-height: 1.35;
+        }
+
+        .ia-section-header {
+          margin-bottom: 8px;
+        }
+
+        .ia-section-title {
+          margin: 10px 0 0;
+          color: #ffffff;
+          font-size: clamp(1.5rem, 2.6vw, 2.2rem);
+          line-height: 1.05;
+          letter-spacing: -0.03em;
+          font-weight: 900;
+        }
+
+        .ia-section-subtitle {
+          margin: 10px 0 0;
+          color: rgba(255, 255, 255, 0.72);
+          line-height: 1.6;
+          max-width: 780px;
+        }
+
+        .ia-kicker-dot {
+          font-size: 0.55rem;
+          color: var(--ia-neon, #23ff96);
+        }
+
+        .ia-brand-path-card {
+          height: 100%;
+          border-radius: 20px;
+          padding: 16px;
+          background:
+            linear-gradient(180deg, rgba(10, 14, 20, 0.94) 0%, rgba(7, 11, 17, 0.98) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+          transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .ia-brand-path-card:hover {
+          transform: translateY(-2px);
+          border-color: rgba(35, 255, 150, 0.2);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.04),
+            0 14px 30px rgba(0, 0, 0, 0.18);
+        }
+
+        .ia-brand-path-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .ia-brand-icon-wrap {
+          width: 42px;
+          height: 42px;
+          border-radius: 14px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(35, 255, 150, 0.1);
+          border: 1px solid rgba(35, 255, 150, 0.16);
+          color: var(--ia-neon, #23ff96);
+          font-size: 1rem;
+        }
+
+        .ia-brand-badge {
+          display: inline-flex;
+          align-items: center;
+          min-height: 28px;
+          padding: 0 10px;
+          border-radius: 999px;
+          background: rgba(191, 227, 255, 0.1);
+          color: var(--ia-info-text, #bfe3ff);
+          border: 1px solid rgba(191, 227, 255, 0.16);
+          font-size: 0.74rem;
+          font-weight: 700;
+        }
+
+        .ia-brand-path-title {
+          margin-top: 16px;
+          color: #ffffff;
+          font-size: 1.08rem;
+          line-height: 1.2;
+          font-weight: 800;
+        }
+
+        .ia-brand-path-body {
+          margin-top: 10px;
+          color: rgba(255, 255, 255, 0.72);
+          line-height: 1.5;
+          font-size: 0.92rem;
+        }
+
+        .ia-brand-path-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 16px;
+          color: var(--ia-neon, #23ff96);
+          font-weight: 700;
+          font-size: 0.88rem;
+        }
+
+        .ia-value-card,
+        .ia-quote-card,
+        .ia-founder-card,
+        .ia-feature-block {
+          height: 100%;
+          border-radius: 18px;
+          padding: 16px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .ia-value-title,
+        .ia-feature-title,
+        .ia-founder-name {
+          color: #ffffff;
+          font-weight: 800;
+          letter-spacing: -0.01em;
+        }
+
+        .ia-value-title {
+          font-size: 1rem;
+        }
+
+        .ia-value-copy,
+        .ia-feature-copy,
+        .ia-founder-copy,
+        .ia-faq-a,
+        .ia-quote-copy {
+          margin-top: 10px;
+          color: rgba(255, 255, 255, 0.72);
+          line-height: 1.6;
+          font-size: 0.92rem;
+        }
+
+        .ia-feature-block-accent {
+          background:
+            radial-gradient(circle at top right, rgba(35, 255, 150, 0.08), transparent 34%),
+            rgba(255, 255, 255, 0.04);
+        }
+
+        .ia-feature-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 14px;
+        }
+
+        .ia-feature-list span {
+          display: inline-flex;
+          align-items: center;
+          min-height: 30px;
+          padding: 0 10px;
+          border-radius: 999px;
+          font-size: 0.8rem;
+          font-weight: 700;
+          color: rgba(255, 255, 255, 0.86);
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .ia-founders-offer-band {
+          border: 1px solid rgba(35, 255, 150, 0.16);
+          background:
+            linear-gradient(180deg, rgba(11, 17, 21, 0.98) 0%, rgba(7, 12, 16, 1) 100%);
+          box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
+        }
+
+        .ia-podcast-placeholder {
+          display: flex;
+          gap: 14px;
+          align-items: center;
+          border-radius: 16px;
+          padding: 12px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .ia-podcast-thumb {
+          width: 76px;
+          height: 76px;
+          border-radius: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(255, 255, 255, 0.05);
+          color: #ff4040;
+          font-size: 1.9rem;
+          flex-shrink: 0;
+        }
+
+        .ia-podcast-title {
+          color: #ffffff;
+          font-weight: 800;
+          font-size: 1rem;
+        }
+
+        .ia-social-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+
+        .ia-social-card {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          min-height: 48px;
+          padding: 0 14px;
+          border-radius: 14px;
+          text-decoration: none;
+          color: #ffffff;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          transition: border-color 0.16s ease, transform 0.16s ease;
+        }
+
+        .ia-social-card:hover {
+          transform: translateY(-1px);
+          border-color: rgba(35, 255, 150, 0.18);
+        }
+
+        .ia-social-card i {
+          color: var(--ia-neon, #23ff96);
+          width: 18px;
+          text-align: center;
+        }
+
+        .ia-founder-role {
+          margin-top: 6px;
+          color: var(--ia-neon, #23ff96);
+          font-size: 0.82rem;
+          font-weight: 700;
+          letter-spacing: 0.02em;
+        }
+
+        .ia-quote-card {
+          position: relative;
+        }
+
+        .ia-quote-mark {
+          color: rgba(35, 255, 150, 0.35);
+          font-size: 2rem;
+          font-weight: 900;
+          line-height: 1;
+        }
+
+        .ia-faq-list {
+          display: grid;
+          gap: 12px;
+        }
+
+        .ia-faq-item {
+          border-radius: 16px;
+          padding: 14px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .ia-faq-q {
+          color: #ffffff;
+          font-weight: 800;
+          font-size: 0.96rem;
+        }
+
+        .ia-brand-footer {
+          margin-top: 20px;
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          padding: 18px 4px 0;
+        }
+
+        .ia-brand-footer-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 18px;
+          flex-wrap: wrap;
+        }
+
+        .ia-brand-footer-title {
+          color: #ffffff;
+          font-weight: 900;
+          letter-spacing: -0.02em;
+          font-size: 1rem;
+        }
+
+        .ia-brand-footer-links {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 14px;
+        }
+
+        .ia-brand-footer-links :global(a) {
+          color: rgba(255, 255, 255, 0.72);
+          text-decoration: none;
+          font-size: 0.9rem;
+          font-weight: 600;
+        }
+
+        .ia-brand-footer-links :global(a:hover) {
+          color: var(--ia-neon, #23ff96);
+        }
+
+        @media (max-width: 991px) {
+          .ia-brand-hero-grid {
+            grid-template-columns: 1fr;
+            padding: 22px;
+          }
+
+          .ia-brand-panel-stats {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 767px) {
+          .ia-brand-hero {
+            border-radius: 22px;
+          }
+
+          .ia-brand-hero-grid {
+            padding: 18px;
+          }
+
+          .ia-brand-hero-title {
+            font-size: 2.4rem;
+          }
+
+          .ia-social-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </>
   );
 }
