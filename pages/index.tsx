@@ -1,4 +1,3 @@
-// pages/index.tsx
 "use client";
 
 import Head from "next/head";
@@ -24,6 +23,7 @@ const PATH_CARDS: PathCard[] = [
     title: "Iron Acre App",
     body: "Training, tracking and digital coaching built for real progress.",
     href: "/app-signup",
+    cta: "App sign up",
     icon: "fa-mobile-alt",
     badge: "Coming soon",
   },
@@ -93,7 +93,6 @@ function SectionHeader({
 }
 
 function PathCardItem({ card }: { card: PathCard }) {
-  const isExternal = card.href.startsWith("http");
   const content = (
     <div className="ia-brand-path-card">
       <div className="ia-brand-path-top">
@@ -102,8 +101,10 @@ function PathCardItem({ card }: { card: PathCard }) {
         </div>
         {card.badge ? <span className="ia-brand-badge">{card.badge}</span> : null}
       </div>
+
       <div className="ia-brand-path-title">{card.title}</div>
       <div className="ia-brand-path-body">{card.body}</div>
+
       <div className="ia-brand-path-link">
         {card.cta}
         <i className="fas fa-arrow-right" />
@@ -111,21 +112,16 @@ function PathCardItem({ card }: { card: PathCard }) {
     </div>
   );
 
-  if (isExternal) {
+  if (card.href.startsWith("http")) {
     return (
-      <a
-        href={card.href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="ia-link-no-underline"
-      >
+      {card.href}
         {content}
       </a>
     );
   }
 
   return (
-    <Link href={card.href} className="ia-link-no-underline">
+    {card.href}
       {content}
     </Link>
   );
@@ -148,27 +144,24 @@ export default function IronAcreLandingPage() {
           <div className="ia-brand-hero-grid">
             <div className="ia-brand-hero-copy">
               <div className="ia-brand-pretitle">IRON ACRE</div>
-              <h1 className="ia-brand-hero-title">Strength. Conditioning. Community. Built different.</h1>
+              <h1 className="ia-brand-hero-title">
+                Strength. Conditioning. Community. Built different.
+              </h1>
               <p className="ia-brand-hero-subtitle">
                 A modern strength brand combining outdoor training, digital coaching, content and a
                 different kind of community.
               </p>
 
               <div className="ia-brand-hero-ctas">
-                <Link href="/app-signup" className="ia-btn ia-btn-primary">
+                /app-signup
                   Get the app
                 </Link>
 
-                <Link href="/founders" className="ia-btn ia-btn-muted">
+                /founders
                   Explore the gym
                 </Link>
 
-                <a
-                  href="https://www.youtube.com/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ia-btn ia-btn-outline"
-                >
+                https://www.youtube.com/
                   Watch the podcast
                 </a>
               </div>
@@ -182,7 +175,9 @@ export default function IronAcreLandingPage() {
 
             <div className="ia-brand-hero-panel">
               <div className="ia-brand-panel-card">
-                <div className="ia-brand-panel-kicker">Built for people who want more than a normal gym</div>
+                <div className="ia-brand-panel-kicker">
+                  Built for people who want more than a normal gym
+                </div>
                 <div className="ia-brand-panel-copy">
                   Iron Acre exists for people who want real training, real progression and a stronger
                   connection to the way they move, train and live.
@@ -239,6 +234,7 @@ export default function IronAcreLandingPage() {
                 </div>
               </div>
             </div>
+
             <div className="col-12 col-md-4">
               <div className="ia-value-card">
                 <div className="ia-value-title">Track progress</div>
@@ -247,6 +243,7 @@ export default function IronAcreLandingPage() {
                 </div>
               </div>
             </div>
+
             <div className="col-12 col-md-4">
               <div className="ia-value-card">
                 <div className="ia-value-title">Build consistency</div>
@@ -266,7 +263,9 @@ export default function IronAcreLandingPage() {
                   <i className="fas fa-mobile-alt" />
                   Iron Acre App
                 </div>
-                <div className="ia-feature-title">Training, tracking and digital coaching in one place</div>
+                <div className="ia-feature-title">
+                  Training, tracking and digital coaching in one place
+                </div>
                 <div className="ia-feature-copy">
                   Follow your training, log sessions, track progress and stay connected to the Iron Acre
                   way of training from your phone.
@@ -280,7 +279,7 @@ export default function IronAcreLandingPage() {
                 </div>
 
                 <div className="mt-3">
-                  <Link href="/app-signup" className="ia-btn ia-btn-primary">
+                  /app-signup
                     Join app waitlist
                   </Link>
                 </div>
@@ -293,7 +292,9 @@ export default function IronAcreLandingPage() {
                   <i className="fas fa-tree" />
                   Iron Acre Gym
                 </div>
-                <div className="ia-feature-title">Outdoor strength and conditioning with a different atmosphere</div>
+                <div className="ia-feature-title">
+                  Outdoor strength and conditioning with a different atmosphere
+                </div>
                 <div className="ia-feature-copy">
                   A more focused, more personal and more real training environment built around strength,
                   conditioning, kettlebells, boxing conditioning and proper community.
@@ -307,10 +308,10 @@ export default function IronAcreLandingPage() {
                 </div>
 
                 <div className="mt-3 d-flex gap-2 flex-wrap">
-                  <Link href="/founders" className="ia-btn ia-btn-primary">
+                  /founders
                     Join founding members
                   </Link>
-                  <Link href="/founders" className="ia-btn ia-btn-muted">
+                  /founders
                     Register interest
                   </Link>
                 </div>
@@ -332,7 +333,7 @@ export default function IronAcreLandingPage() {
             </div>
 
             <div className="col-12 col-lg-4 d-flex justify-content-lg-end">
-              <Link href="/founders" className="ia-btn ia-btn-primary">
+              /founders
                 Go to founders page
               </Link>
             </div>
@@ -347,7 +348,9 @@ export default function IronAcreLandingPage() {
                   <i className="fas fa-podcast" />
                   Iron Acre Podcast
                 </div>
-                <div className="ia-feature-title">Training, mindset and building something different</div>
+                <div className="ia-feature-title">
+                  Training, mindset and building something different
+                </div>
                 <div className="ia-feature-copy">
                   The podcast is where training, discipline, consistency, recovery, business and the wider
                   Iron Acre mindset will come together.
@@ -366,12 +369,7 @@ export default function IronAcreLandingPage() {
                 </div>
 
                 <div className="mt-3">
-                  <a
-                    href="https://www.youtube.com/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ia-btn ia-btn-outline"
-                  >
+                  https://www.youtube.com/
                     Watch on YouTube
                   </a>
                 </div>
@@ -384,19 +382,17 @@ export default function IronAcreLandingPage() {
                   <i className="fas fa-share-alt" />
                   Follow Iron Acre
                 </div>
-                <div className="ia-feature-title">Training clips, launch updates and behind the scenes</div>
+                <div className="ia-feature-title">
+                  Training clips, launch updates and behind the scenes
+                </div>
                 <div className="ia-feature-copy">
                   Follow the journey as Iron Acre grows across the app, the gym, the podcast and the wider brand.
                 </div>
 
                 <div className="ia-social-grid mt-3">
                   {SOCIALS.map((social) => (
-                    <a
-                      key={social.label}
-                      href={social.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ia-social-card"
+                    {social.href} ? "_blank" : undefined}
+                      rel={social.href.startsWith("http") ? "noopener noreferrer" : undefined}
                     >
                       <i className={`fab ${social.icon}`} />
                       <span>{social.label}</span>
@@ -456,6 +452,7 @@ export default function IronAcreLandingPage() {
                 </div>
               </div>
             </div>
+
             <div className="col-12 col-md-4">
               <div className="ia-quote-card">
                 <div className="ia-quote-mark">“</div>
@@ -464,6 +461,7 @@ export default function IronAcreLandingPage() {
                 </div>
               </div>
             </div>
+
             <div className="col-12 col-md-4">
               <div className="ia-quote-card">
                 <div className="ia-quote-mark">“</div>
@@ -476,10 +474,7 @@ export default function IronAcreLandingPage() {
         </section>
 
         <section className="ia-tile ia-tile-pad mb-3">
-          <SectionHeader
-            kicker="FAQ"
-            title="A few things people will want to know"
-          />
+          <SectionHeader kicker="FAQ" title="A few things people will want to know" />
 
           <div className="ia-faq-list mt-2">
             {FAQS.map((faq) => (
@@ -501,13 +496,13 @@ export default function IronAcreLandingPage() {
             </div>
 
             <div className="ia-brand-footer-links">
-              <Link href="/app-signup">App</Link>
-              <Link href="/founders">Gym</Link>
-              <Link href="/founders">Founders</Link>
-              <a href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">
+              /app-signupApp</Link>
+              /foundersGym</Link>
+              /foundersFounders</Link>
+              https://www.youtube.com/
                 Podcast
               </a>
-              <a href="#">Instagram</a>
+              #Instagram</a>
             </div>
           </div>
         </footer>
