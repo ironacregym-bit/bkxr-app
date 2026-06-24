@@ -1,12 +1,11 @@
+// pages/founders.tsx
 "use client";
-
-import Head from "next/head";
 import Link from "next/link";
-import {_OPTIONS = [import { useMemo, useState } from "react";
-
+import { useMemo, useState } from "react";
 
 type FormState = {
-  name: string;
+
+  name: string;import Head from "next/head";
   email: string;
   phone: string;
   interested_classes: string[];
@@ -25,7 +24,7 @@ const CLASS_OPTIONS = [
   "Boxing Conditioning",
 ] as const;
 
-const TIME_OPTIONS
+const TIME_OPTIONS = [
   "Early Morning",
   "Midday",
   "Evening",
@@ -81,6 +80,7 @@ export default function FoundersPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setSubmitted(false);
 
     if (!canSubmit) {
       setError("Please complete the required fields before submitting.");
@@ -92,7 +92,9 @@ export default function FoundersPage() {
 
       const res = await fetch("/api/founders/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(form),
       });
 
@@ -295,7 +297,7 @@ export default function FoundersPage() {
                 className="form-control"
                 value={form.referral_name}
                 onChange={(e) => setForm((p) => ({ ...p, referral_name: e.target.value }))}
-                placeholder="Friend’s name"
+                placeholder="Friend's name"
               />
             </div>
 
