@@ -272,7 +272,7 @@ export default function IronAcreLandingPage() {
                 </div>
 
                 <div className="mt-3">
-                  /app-signup
+                  <Link href="/app-signup">
                     Join app waitlist
                   </Link>
                 </div>
@@ -326,7 +326,7 @@ export default function IronAcreLandingPage() {
             </div>
 
             <div className="col-12 col-lg-4 d-flex justify-content-lg-end">
-              /founders
+              <Link href="/waitist">
                 Go to founders page
               </Link>
             </div>
@@ -491,7 +491,7 @@ export default function IronAcreLandingPage() {
             <div className="ia-brand-footer-links">
               <Link href="/app-signupApp"></Link>
               <Link href="/foundersGym"></Link>
-              <Link href="/foundersFounders"></Link>
+              <Link href="/founders"></Link>
               <Link href="https://www.youtube.com/"></Link>
                 Podcast
               </a>
