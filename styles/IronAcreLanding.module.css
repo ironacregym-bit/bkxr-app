@@ -15,6 +15,14 @@
   --ia-text-soft: rgba(245, 245, 245, 0.74);
   --ia-text-muted: rgba(245, 245, 245, 0.56);
 }
+.sectionTitle {
+  margin: 10px 0 0;
+  color: #ffffff;
+  font-size: clamp(1.5rem, 2.6vw, 2.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-weight: 900;
+}
 .sectionSubtitle {
   margin: 10px 0 0;
   color: var(--ia-text-soft);
