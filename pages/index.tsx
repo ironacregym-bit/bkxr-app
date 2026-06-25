@@ -520,7 +520,7 @@ export default function IronAcreLandingPage() {
   <a href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">
     Podcast
   </a>
-  #Instagram</a>
+  <a href="#Instagram"></a>
 </div>
           </div>
         </footer>
