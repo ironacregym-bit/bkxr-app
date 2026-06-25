@@ -269,31 +269,6 @@ export default function IronAcreLandingPage() {
               </Link>
             </div>
           </section>
-
-          <section className={styles.imageBreak} aria-label="Iron Acre setting">
-            <div className={styles.imageBreakMedia} aria-hidden="true">
-              <Image
-                src={conceptImageSrc}
-                alt=""
-                fill
-                sizes="100vw"
-                className={styles.conceptImage}
-              />
-            </div>
-
-            <div className={styles.imageBreakOverlay} aria-hidden="true" />
-
-            <div className={styles.imageBreakContent}>
-              <div className={styles.sectionEyebrow}>THE ENVIRONMENT</div>
-              <h2>Outside changes the session.</h2>
-              <p>
-                Meadow, woodland, fresh air, early mornings and earned evenings.
-                Iron Acre is designed to feel different before the first rep
-                even starts.
-              </p>
-            </div>
-          </section>
-
           <section className={styles.foundersSection}>
             <div className={styles.foundersContent}>
               <div className={styles.orangeEyebrow}>FOUNDERS</div>
