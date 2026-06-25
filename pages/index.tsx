@@ -21,10 +21,10 @@ export default function IronAcreLandingPage() {
           <div className={styles.logo}>Iron Acre</div>
 
           <nav className={styles.nav}>
-            /appApp</Link>
-            /gymGym</Link>
-            /podcastPodcast</Link>
-            /work-with-usWork With Us</Link>
+            <Link href="/app">App</Link>
+            <Link href="/gym">Gym</Link>
+            <Link href="/podcast">Podcast</Link>
+            <Link href="/work-with-us">Work With Us</Link>
           </nav>
         </header>
 
