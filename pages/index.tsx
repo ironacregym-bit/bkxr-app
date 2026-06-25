@@ -1,7 +1,7 @@
 // File: pages/index.tsx//
 
 import Image from "next/image";
-import Head frmo "next/head";
+import Head from "next/head";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/router";
