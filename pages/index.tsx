@@ -12,24 +12,36 @@ export default function IronAcreLandingPage() {
     <>
       <Head>
         <title>Iron Acre</title>
-        <meta
-          name="description"
-          content="Iron Acre is a modern strength brand combining outdoor training, digital coaching, community and content."
-        />
       </Head>
 
       <div className={styles.page}>
+
+        {/* HEADER */}
+        <header className={styles.header}>
+          <div className={styles.logo}>Iron Acre</div>
+
+          <nav className={styles.nav}>
+            /appApp</Link>
+            /gymGym</Link>
+            /podcastPodcast</Link>
+            /work-with-usWork With Us</Link>
+          </nav>
+        </header>
+
         <main>
 
           {/* HERO */}
           <section className={styles.hero}>
             <div className={styles.container}>
               <h1 className={styles.heroBrand}>Iron Acre</h1>
-              <h2 className={styles.heroTitle}>Find Your Fire</h2>
+
+              <h2 className={styles.heroTitle}>
+                Find Your <span className={styles.orange}>Fire</span>
+              </h2>
 
               <p className={styles.heroSubtitle}>
-                A modern strength brand built around training, environment,
-                community and progress.
+                A modern strength brand combining training, environment,
+                community and real progression.
               </p>
             </div>
           </section>
@@ -45,15 +57,15 @@ export default function IronAcreLandingPage() {
               </h2>
 
               <p className={styles.sectionText}>
-                Iron Acre brings together outdoor training, a digital coaching
-                app, a podcast and a wider community into one system designed
-                to help people train consistently and get stronger over time.
+                Iron Acre brings together outdoor training, a digital platform,
+                a podcast and a growing community into one system designed
+                for long-term progress.
               </p>
             </div>
           </section>
 
 
-          {/* BEHIND */}
+          {/* PEOPLE */}
           <section className={styles.section}>
             <div className={styles.container}>
               <div className={styles.eyebrow}>BEHIND IRON ACRE</div>
@@ -62,11 +74,17 @@ export default function IronAcreLandingPage() {
                 <div className={styles.person}>
                   <div className={styles.avatar}></div>
                   <div className={styles.personName}>Rob</div>
+                  <p className={styles.personText}>
+                    Coaching, product and building the Iron Acre system.
+                  </p>
                 </div>
 
                 <div className={styles.person}>
                   <div className={styles.avatar}></div>
                   <div className={styles.personName}>Nick</div>
+                  <p className={styles.personText}>
+                    Training, community and the experience behind the gym.
+                  </p>
                 </div>
               </div>
             </div>
@@ -77,49 +95,44 @@ export default function IronAcreLandingPage() {
           <section className={styles.section}>
             <div className={styles.container}>
               <div className={styles.eyebrow}>CHOOSE YOUR PATH</div>
-
-              <h2 className={styles.sectionTitle}>Enter the Tribe</h2>
+              <h2 className={styles.sectionTitle}>Choose Your Direction</h2>
 
               <div className={styles.pathGrid}>
 
-                <div className={styles.pathCard}>
+                {/* APP */}
+                <div className={styles.card}>
+                  <div className={styles.image}></div>
+                  <i className="fa-solid fa-mobile-screen-button"></i>
+                  <h4 className={styles.green}>Training App</h4>
+                  <p>Structured training, tracking and progression.</p>
+                  /appEnter</Link>
+                </div>
+
+                {/* GYM */}
+                <div className={styles.card}>
                   <div className={styles.image}></div>
                   <i className="fa-solid fa-dumbbell"></i>
-                  <h4>Iron Acre App</h4>
-
-                  <Link href="/app" className={styles.button}>
-                    Enter
-                  </Link>
+                  <h4 className={styles.green}>Iron Acre Gym</h4>
+                  <p>Outdoor strength training built around progression.</p>
+                  /gymEnter</Link>
                 </div>
 
-                <div className={styles.pathCard}>
-                  <div className={styles.image}></div>
-                  <i className="fa-solid fa-tree"></i>
-                  <h4>Iron Acre Gym</h4>
-
-                  <Link href="/gym" className={styles.button}>
-                    Enter
-                  </Link>
-                </div>
-
-                <div className={styles.pathCard}>
+                {/* PODCAST */}
+                <div className={styles.card}>
                   <div className={styles.image}></div>
                   <i className="fa-solid fa-fire"></i>
-                  <h4>Round The Fire</h4>
-
-                  <Link href="/podcast" className={styles.button}>
-                    Listen
-                  </Link>
+                  <h4 className={styles.orange}>Round The Fire</h4>
+                  <p>Conversations and ideas behind the brand.</p>
+                  /podcastListen</Link>
                 </div>
 
-                <div className={styles.pathCard}>
+                {/* WORK */}
+                <div className={styles.card}>
                   <div className={styles.image}></div>
                   <i className="fa-solid fa-handshake"></i>
-                  <h4>Work With Us</h4>
-
-                  <Link href="/work-with-us" className={styles.button}>
-                    Explore
-                  </Link>
+                  <h4 className={styles.orange}>Work With Us</h4>
+                  <p>Coaching, collaboration and building together.</p>
+                  /work-with-usExplore</Link>
                 </div>
 
               </div>
@@ -132,18 +145,19 @@ export default function IronAcreLandingPage() {
             <div className={styles.container}>
               <h2 className={styles.sectionTitle}>Stay Updated</h2>
 
+              <p className={styles.sectionText}>
+                Get updates on the app, gym, podcast and everything happening
+                inside Iron Acre.
+              </p>
+
               <div className={styles.form}>
                 <input
-                  type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Email address"
                   className="form-control"
                 />
-
-                <button className="ia-btn ia-btn-primary">
-                  Join
-                </button>
+                <button className="ia-btn ia-btn-primary">Join</button>
               </div>
             </div>
           </section>
@@ -155,9 +169,9 @@ export default function IronAcreLandingPage() {
               <div className={styles.eyebrow}>FOLLOW</div>
 
               <div className={styles.socials}>
-                <a href="#" className={styles.social}>Instagram</a>
-                <a href="#" className={styles.social}>YouTube</a>
-                <a href="#" className={styles.social}>TikTok</a>
+                #Instagram</a>
+                #YouTube</a>
+                #TikTok</a>
               </div>
             </div>
           </section>
