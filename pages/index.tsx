@@ -1,8 +1,6 @@
 import Head from "next/head";
 import Link from "next/link";
-import PathCardItem from "../components/landing/PathCardItem";
 import SectionHeader from "../components/landing/SectionHeader";
-import { FAQS, PATH_CARDS, SOCIALS } from "../lib/landing/ironAcreLandingContent";
 import { IRON_ACRE_LINKS } from "../lib/links/ironAcreLinks";
 import styles from "../styles/IronAcreLanding.module.css";
 
