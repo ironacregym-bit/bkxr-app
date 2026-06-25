@@ -19,6 +19,7 @@ export default function IronAcreLandingPage() {
     </Head>
 
       <main className={`container py-3 ${styles.page}`}>
+        <section className={styles.hero}>
           <div className={styles.heroGrid}>
             <div className={styles.heroCopy}>
               <div className={styles.heroPretitle}>IRON ACRE</div>
