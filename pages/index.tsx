@@ -93,10 +93,7 @@ function SectionHeader({
 }
 
 function PathCardItem({ card }: { card: PathCard }) {
-  const content = (
-    <div className="ia-brand-path-card">
-      <div className="ia-brand-path-top">
-        <div className="ia-brand-icon-wrap">
+  const content="ia-brand-icon-wrap">  const content = (
           <i className={`fas ${card.icon}`} />
         </div>
         {card.badge ? <span className="ia-brand-badge">{card.badge}</span> : null}
@@ -124,13 +121,13 @@ function PathCardItem({ card }: { card: PathCard }) {
       </a>
     );
   }
-  
+
   return (
     <Link href={card.href} className="ia-link-no-underline">
       {content}
     </Link>
   );
-
+}
 export default function IronAcreLandingPage() {
   return (
     <>
