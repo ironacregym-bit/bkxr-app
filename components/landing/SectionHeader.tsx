@@ -1,14 +1,13 @@
-// components/iron-acre/SectionHeader.tsx
+// components/landing/SectionHeader.tsx
 import styles from "../../styles/IronAcreLanding.module.css";
-export default function SectionHeader({
-  kicker,
-  title,
-  subtitle,
-}: {
+
+type Props = {
   kicker: string;
   title: string;
   subtitle?: string;
-}) {
+};
+
+export default function SectionHeader({ kicker, title, subtitle }: Props) {
   return (
     <div className={styles.sectionHeader}>
       <div className="ia-kicker">
