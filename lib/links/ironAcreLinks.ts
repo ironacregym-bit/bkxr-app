@@ -1,8 +1,9 @@
-// lib/ironAcreLinks.ts
+// lib/links/ironAcreLinks.ts
 export const IRON_ACRE_LINKS = {
   appSignup: "/app-signup",
   founders: "/founders",
   gymInterest: "/founders",
+  waitlist: "/founders",
   podcast: "https://www.youtube.com/",
   socials: {
     instagram: "#",
