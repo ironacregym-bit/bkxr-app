@@ -3,12 +3,18 @@
 .page {
   padding-bottom: 48px;
   --ia-green: #18ff9a;
- .5rem, 2.6vw, 2.2rem);  --ia-green-2: #00d97a;
-  line-height: 1.05;
-  letter-spacing: -0.03em;
-  font-weight: 900;
+  --ia-green-2: #00d97a;
+  --ia-green-glow: rgba(24, 255, 154, 0.25);
+  --ia-orange: #ff9e57;
+  --ia-orange-2: #ff7a3d;
+  --ia-orange-glow: rgba(255, 158, 87, 0.25);
+  --ia-surface: rgba(255, 255, 255, 0.04);
+  --ia-surface-2: rgba(255, 255, 255, 0.06);
+  --ia-border: rgba(255, 255, 255, 0.08);
+  --ia-text: #f5f5f5;
+  --ia-text-soft: rgba(245, 245, 245, 0.74);
+  --ia-text-muted: rgba(245, 245, 245, 0.56);
 }
-
 .sectionSubtitle {
   margin: 10px 0 0;
   color: var(--ia-text-soft);
