@@ -78,18 +78,21 @@ export default function IronAcreLandingPage() {
       const data = (await resp.json().catch(() => null)) as ApiResp | null;
 
       if (!resp.ok || !data || data.ok !== true) {
-        const err = (data as ApiResp | null)?.ok === false ? data.error : "";
-
+        let err = "";
+      
+        if (data && data.ok === false) {
+          err = data.error;
+        }
+      
         setError(
           err === "RATE_LIMITED"
             ? "Too many attempts. Try again in a few minutes."
             : "Could not join. Try again."
         );
-
+      
         setLoading(false);
         return;
-      }
-
+}
       router.push(`/waitlist/thanks?email=${encodeURIComponent(e)}&founders=0`);
     } catch {
       setError("Could not join. Try again.");
