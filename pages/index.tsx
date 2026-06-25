@@ -105,7 +105,7 @@ export default function IronAcreLandingPage() {
                   <i className="fa-solid fa-mobile-screen-button"></i>
                   <h4 className={styles.green}>Training App</h4>
                   <p>Structured training, tracking and progression.</p>
-                  /appEnter</Link>
+                  <Link href="/app">Enter</Link>
                 </div>
 
                 {/* GYM */}
@@ -114,7 +114,7 @@ export default function IronAcreLandingPage() {
                   <i className="fa-solid fa-dumbbell"></i>
                   <h4 className={styles.green}>Iron Acre Gym</h4>
                   <p>Outdoor strength training built around progression.</p>
-                  /gymEnter</Link>
+                  <Link href="/gym">Enter</Link>
                 </div>
 
                 {/* PODCAST */}
@@ -123,7 +123,7 @@ export default function IronAcreLandingPage() {
                   <i className="fa-solid fa-fire"></i>
                   <h4 className={styles.orange}>Round The Fire</h4>
                   <p>Conversations and ideas behind the brand.</p>
-                  /podcastListen</Link>
+                  <Link href="/podcast">Listen</Link>
                 </div>
 
                 {/* WORK */}
@@ -132,7 +132,7 @@ export default function IronAcreLandingPage() {
                   <i className="fa-solid fa-handshake"></i>
                   <h4 className={styles.orange}>Work With Us</h4>
                   <p>Coaching, collaboration and building together.</p>
-                  /work-with-usExplore</Link>
+                  <Link href="/work-with-us">Explore</Link>
                 </div>
 
               </div>
