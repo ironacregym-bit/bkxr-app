@@ -112,13 +112,24 @@ function PathCardItem({ card }: { card: PathCard }) {
     </div>
   );
 
-if (card.href.startsWith("http")) {
+  if (card.href.startsWith("http")) {
+    return (
+      <a
+        href={card.href}
+        className="ia-link-no-underline"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {content}
+      </a>
+    );
+  }
+  
   return (
-    <Link href="{card.href}">
+    <Link href={card.href} className="ia-link-no-underline">
       {content}
     </Link>
   );
-}
 
 export default function IronAcreLandingPage() {
   return (
@@ -154,9 +165,14 @@ export default function IronAcreLandingPage() {
                   Explore the gym
                 </Link>
 
-                <Link href="https://www.youtube.com/">
-                  Watch the podcast
-                </Link>
+              <a
+                href="https://www.youtube.com/"
+                className="ia-btn ia-btn-outline"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Watch the podcast
+              </a>
               </div>
 
               <div className="ia-brand-hero-meta">
@@ -362,9 +378,14 @@ export default function IronAcreLandingPage() {
                 </div>
 
                 <div className="mt-3">
-                  <Link href="https://www.youtube.com/">
+                  <a
+                    href="https://www.youtube.com/"
+                    className="ia-btn ia-btn-primary"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     Watch on YouTube
-                  </Link>
+                  </a>
                 </div>
               </div>
             </div>
@@ -384,7 +405,11 @@ export default function IronAcreLandingPage() {
 
                 <div className="ia-social-grid mt-3">
                   {SOCIALS.map((social) => (
-                    {social.href} ? "_blank" : undefined}
+                    <a
+                      key={social.label}
+                      href={social.href}
+                      className="ia-social-card"
+                      target={social.href.startsWith("http") ? "_blank" : undefined}
                       rel={social.href.startsWith("http") ? "noopener noreferrer" : undefined}
                     >
                       <i className={`fab ${social.icon}`} />
@@ -488,15 +513,15 @@ export default function IronAcreLandingPage() {
               </div>
             </div>
 
-            <div className="ia-brand-footer-links">
-              <Link href="/app-signupApp"></Link>
-              <Link href="/foundersGym"></Link>
-              <Link href="/founders"></Link>
-              <Link href="https://www.youtube.com/"></Link>
-                Podcast
-              </a>
-              #Instagram</a>
-            </div>
+<div className="ia-brand-footer-links">
+  <Link href="/app-signupApp"></Link>
+  <Link href="/foundersGym"></Link>
+  <Link href="/foundersFounders"></Link>
+  <a href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">
+    Podcast
+  </a>
+  #Instagram</a>
+</div>
           </div>
         </footer>
       </main>
