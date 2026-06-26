@@ -18,8 +18,8 @@ export default function IronAcreLandingPage() {
             <Image
               src="/IronAcreNoBG.png"
               alt="Iron Acre"
-              width={60}
-              height={60}
+              width={50}
+              height={50}
             />
           </Link>
 
@@ -82,61 +82,39 @@ export default function IronAcreLandingPage() {
           </section>
 
           {/* PATHS */}
-          <section className={styles.section}>
-            <div className={styles.container}>
-              <div className={styles.sectionHeader}>
-                <span className={styles.line} />
-                <span className={styles.label}>WHERE DO YOU START</span>
-              </div>
-
-              <div className={styles.paths}>
-
-                <div className={styles.pathItem}>
-                  <div className={styles.pathTitle}>
-                    <i className="fa-solid fa-mobile-screen-button"></i>
-                    <span className={styles.green}>APP</span>
-                  </div>
-                  <p>Train anywhere. Track everything.</p>
-                  <Link href="/app" className={styles.btnGreen}>
-                    ENTER
-                  </Link>
-                </div>
-
-                <div className={styles.pathItem}>
-                  <div className={styles.pathTitle}>
-                    <i className="fa-solid fa-dumbbell"></i>
-                    <span className={styles.green}>GYM</span>
-                  </div>
-                  <p>Outdoor strength training.</p>
-                  <Link href="/gym" className={styles.btnGreen}>
-                    ENTER
-                  </Link>
-                </div>
-
-                <div className={styles.pathItem}>
-                  <div className={styles.pathTitle}>
-                    <i className="fa-solid fa-fire orange"></i>
-                    <span className={styles.orange}>PODCAST</span>
-                  </div>
-                  <p>Ideas and conversations.</p>
-                  <Link href="/podcast" className={styles.btnOrange}>
-                    LISTEN
-                  </Link>
-                </div>
-
-                <div className={styles.pathItem}>
-                  <div className={styles.pathTitle}>
-                    <i className="fa-solid fa-handshake orange"></i>
-                    <span className={styles.orange}>WORK WITH US</span>
-                  </div>
-                  <p>Build with Iron Acre.</p>
-                  <Link href="/work-with-us" className={styles.btnOrange}>
-                    EXPLORE
-                  </Link>
-                </div>
-
-              </div>
+          <section className={styles.pathScroll}>
+          
+            <div className={styles.pathStep}>
+              <h3><i className="fa-solid fa-mobile-screen-button" /> APP</h3>
+              <p>Train anywhere. Track everything. Follow structured programming.</p>
+              <Link href="/app" className={styles.btnGreen}>ENTER</Link>
             </div>
+          
+            <div className={styles.pathStep}>
+              <h3><i className="fa-solid fa-dumbbell" /> GYM</h3>
+              <p>Outdoor strength training built around real progression.</p>
+              <Link href="/gym" className={styles.btnGreen}>ENTER</Link>
+            </div>
+          
+            <div className={styles.pathStep}>
+              <h3><i className="fa-solid fa-fire" /> PODCAST</h3>
+              <p>Ideas, conversations and mindset behind Iron Acre.</p>
+              <Link href="/podcast" className={styles.btnOrange}>LISTEN</Link>
+            </div>
+          
+            <div className={styles.pathStep}>
+              <h3><i className="fa-solid fa-handshake" /> WORK WITH US</h3>
+              <p>Coaching, partnerships and building something together.</p>
+              <Link href="/work-with-us" className={styles.btnOrange}>EXPLORE</Link>
+            </div>
+          
+            <div className={styles.timeline}>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          
           </section>
 
           {/* FOLLOW */}
