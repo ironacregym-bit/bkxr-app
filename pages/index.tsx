@@ -2,8 +2,30 @@ import Head from "next/head";
 import Link from "next/link";
 import Image from "next/image";
 import styles from "../styles/IronAcreLanding.module.css";
+import { useEffect, useState } from "react";
 
 export default function IronAcreLandingPage() {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const section = document.getElementById("path-section");
+      if (!section) return;
+  
+      const rect = section.getBoundingClientRect();
+      const height = window.innerHeight;
+  
+      if (rect.top <= 0 && rect.bottom >= height) {
+        const progress = Math.abs(rect.top) / height;
+        const newStep = Math.min(3, Math.floor(progress));
+        setStep(newStep);
+      }
+    };
+  
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
     <>
       <Head>
@@ -82,33 +104,76 @@ export default function IronAcreLandingPage() {
           </section>
 
           {/* PATHS */}
-          <section className={styles.pathScroll}>
-
+          <section id="path-section" className={styles.pathScroll}>
+          
             <div className={styles.pathSticky}>
           
               <div className={styles.pathInner}>
           
-                {/* LEFT */}
+                {/* LEFT CONTENT */}
                 <div className={styles.pathContent}>
-                  <h4 className={styles.stepNumber}>01</h4>
-                  <h2 className={styles.stepTitle}>
-                    <i className="fa-solid fa-mobile-screen-button"></i>
-                    TRAINING APP
-                  </h2>
           
-                  <p>
-                    Structured weeks, not random sessions. Build training around your schedule
-                    and stay consistent even when life moves.
-                  </p>
+                  {step === 0 && (
+                    <>
+                      <h2 className={styles.stepTitle}>
+                        <i className="fa-solid fa-mobile-screen-button" />
+                        <span className={styles.green}>APP</span>
+                      </h2>
+                      <p>Structured weeks. Track everything. Train anywhere.</p>
           
-                  <Link href="/app" className={styles.btnGreen}>
-                    ENTER APP
-                  </Link>
+                      <Link href="/app" className={styles.btnGreen}>
+                        ENTER
+                      </Link>
+                    </>
+                  )}
+          
+                  {step === 1 && (
+                    <>
+                      <h2 className={styles.stepTitle}>
+                        <i className="fa-solid fa-dumbbell" />
+                        <span className={styles.green}>GYM</span>
+                      </h2>
+                      <p>Outdoor strength training built for progression.</p>
+          
+                      <Link href="/gym" className={styles.btnGreen}>
+                        ENTER
+                      </Link>
+                    </>
+                  )}
+          
+                  {step === 2 && (
+                    <>
+                      <h2 className={styles.stepTitle}>
+                        <i className="fa-solid fa-fire" />
+                        <span className={styles.orange}>PODCAST</span>
+                      </h2>
+                      <p>Ideas, mindset and conversations.</p>
+          
+                      <Link href="/podcast" className={styles.btnOrange}>
+                        LISTEN
+                      </Link>
+                    </>
+                  )}
+          
+                  {step === 3 && (
+                    <>
+                      <h2 className={styles.stepTitle}>
+                        <i className="fa-solid fa-handshake" />
+                        <span className={styles.orange}>WORK WITH US</span>
+                      </h2>
+                      <p>Coaching, collaboration and building together.</p>
+          
+                      <Link href="/work-with-us" className={styles.btnOrange}>
+                        EXPLORE
+                      </Link>
+                    </>
+                  )}
+          
                 </div>
           
-                {/* RIGHT */}
+                {/* RIGHT VISUAL */}
                 <div className={styles.pathVisual}>
-                  <div className={styles.deviceMock}></div>
+                  <div className={styles.mockPhone}></div>
                 </div>
           
               </div>
