@@ -4,7 +4,7 @@ import Image from "next/image";
 import styles from "../styles/IronAcreLanding.module.css";
 import { useEffect, useState } from "react";
 
-export default function IronAcreLandingPage() {
+export default function IronAcreLandingPage() { 
 
 const [step, setStep] = useState(0);const [step, setStep] = useStateEffect(() => {
   const handleScroll = () => {
