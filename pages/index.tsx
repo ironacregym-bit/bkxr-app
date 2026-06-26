@@ -9,29 +9,38 @@ export default function IronAcreLandingPage() {
 const [step, setStep] = useState(0);
 
 useEffect(() => {
-  const handleScroll = () => {
-    const section = document.getElementById("path-section");
-    if (!section) return;
+  const section = document.getElementById("path-section");
+  if (!section) return;
 
-    const rect = section.getBoundingClientRect();
-    const scrollTop = -rect.top; // how far into section we are
-    const sectionHeight = section.offsetHeight - window.innerHeight;
+  let isActive = false;
 
-    // Only run when section is in view
-    if (rect.top <= 0 && rect.bottom >= window.innerHeight) {
-      const progress = scrollTop / sectionHeight;
+  const onScroll = (e: WheelEvent) => {
+    if (!isActive) return;
 
-      const newStep = Math.min(
-        3,
-        Math.floor(progress * 4) // 4 steps
-      );
-
-      setStep(newStep);
+    if (e.deltaY > 0) {
+      setStep((prev) => Math.min(prev + 1, 3));
+    } else {
+      setStep((prev) => Math.max(prev - 1, 0));
     }
+
+    e.preventDefault();
   };
 
-  window.addEventListener("scroll", handleScroll);
-  return () => window.removeEventListener("scroll", handleScroll);
+  const observer = new IntersectionObserver(
+    ([entry]) => {
+      isActive = entry.isIntersecting;
+    },
+    { threshold: 0.6 }
+  );
+
+  observer.observe(section);
+
+  window.addEventListener("wheel", onScroll, { passive: false });
+
+  return () => {
+    observer.disconnect();
+    window.removeEventListener("wheel", onScroll);
+  };
 }, []);
 
 
