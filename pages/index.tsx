@@ -115,7 +115,7 @@ export default function IronAcreLandingPage() {
 
                 <div className={styles.pathItem}>
                   <div className={styles.pathTitle}>
-                    <i className="fa-solid fa-fire" {styles.orange}></i>
+                    <i className="fa-solid fa-fire orange"></i>
                     <span className={styles.orange}>PODCAST</span>
                   </div>
                   <p>Ideas and conversations.</p>
@@ -126,7 +126,7 @@ export default function IronAcreLandingPage() {
 
                 <div className={styles.pathItem}>
                   <div className={styles.pathTitle}>
-                    <i className="fa-solid fa-handshake" {styles.orange}></i>
+                    <i className="fa-solid fa-handshake orange"></i>
                     <span className={styles.orange}>WORK WITH US</span>
                   </div>
                   <p>Build with Iron Acre.</p>
