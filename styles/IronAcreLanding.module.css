@@ -291,3 +291,82 @@
   background: rgba(255,255,255,0.3);
   border-radius: 50%;
 }
+
+/* SCROLL SECTION */
+
+.pathScroll {
+  height: 400vh; /* ✅ total scroll length */
+  position: relative;
+}
+
+.pathSticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+}
+
+.pathInner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  gap: 40px;
+  padding: 0 20px;
+}
+
+
+
+/* LEFT CONTENT */
+
+.pathContent {
+  max-width: 500px;
+}
+
+.stepNumber {
+  font-size: 14px;
+  color: var(--ia-green);
+  margin-bottom: 10px;
+}
+
+.stepTitle {
+  font-size: 36px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stepTitle i {
+  font-size: 22px;
+}
+
+/* right colors */
+.stepTitle .fa-mobile-screen-button,
+.stepTitle .fa-dumbbell {
+  color: #18ff9a;
+}
+
+.stepTitle .fa-fire,
+.stepTitle .fa-handshake {
+  color: #CC5A1A;
+}
+
+
+
+/* RIGHT VISUAL */
+
+.pathVisual {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.deviceMock {
+  width: 280px;
+  height: 520px;
+  border-radius: 20px;
+  background: #111;
+  box-shadow: 0 0 40px rgba(0,0,0,0.6);
+}
