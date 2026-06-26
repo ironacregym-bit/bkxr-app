@@ -1,188 +1,145 @@
-/* File: styles/IronAcreLanding.module.css */
-
 .page {
   background: #1F1F21;
-  color: #f5f5f5;
-  min-height: 100vh;
+  color: #fff;
+}
+
+/* HEADER */
+.header {
+  position: absolute;
+  width: 100%;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  z-index: 10;
+}
+
+.nav a {
+  margin-left: 20px;
+  color: #fff;
+  text-decoration: none;
+}
+
+/* HERO */
+.hero {
+  position: relative;
+  height: 100vh;
+}
+
+.heroImage {
+  object-fit: cover;
+}
+
+.heroOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+}
+
+.heroContent {
+  position: relative;
+  z-index: 2;
+  padding: 120px 20px;
+}
+
+.heroBrand {
+  font-size: 70px;
+}
+
+.heroTitle {
+  font-size: 44px;
+}
+
+.heroTitle span {
+  color: #CC5A1A;
+}
+
+/* SECTION */
+.section {
+  padding: 60px 0;
 }
 
 .container {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 0 20px;
 }
 
-
-
-/* HEADER */
-
-.header {
+.sectionHeader {
   display: flex;
-  justify-content: space-between;
-  padding: 16px 20px;
+  gap: 10px;
+  align-items: center;
 }
 
-.logo {
-  font-weight: 700;
+.line {
+  width: 40px;
+  height: 2px;
+  background: #CC5A1A;
 }
 
-.nav {
-  display: flex;
-  gap: 12px;
-}
-
-.nav a {
-  color: rgba(255,255,255,0.7);
-  text-decoration: none;
-}
-
-
-
-/* HERO */
-
-.hero {
-  padding: 80px 0;
-}
-
-.heroBrand {
-  font-size: 64px;
-}
-
-.heroTitle {
-  font-size: 40px;
-}
-
-.orange {
+.label {
   color: #CC5A1A;
-}
-
-.heroSubtitle {
-  margin-top: 10px;
-  color: rgba(255,255,255,0.7);
-}
-
-
-
-/* SECTION */
-
-.section {
-  padding: 50px 0;
-}
-
-.eyebrow {
   font-size: 12px;
-  color: #18ff9a;
+  letter-spacing: 0.2em;
 }
 
-.sectionTitle {
-  font-size: 32px;
-  margin-top: 6px;
+.statement {
+  margin-top: 20px;
+  font-size: 48px;
 }
 
-.sectionText {
-  margin-top: 10px;
-  color: rgba(255,255,255,0.7);
+.text {
+  margin-top: 14px;
+  max-width: 600px;
 }
-
-
 
 /* PEOPLE */
-
 .people {
   display: flex;
   gap: 40px;
-  margin-top: 20px;
 }
 
-.avatar {
-  width: 80px;
-  height: 80px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 50%;
-}
-
-.personText {
-  font-size: 14px;
-  color: rgba(255,255,255,0.7);
-}
-
-
-
-/* CARDS */
-
-.pathGrid {
+/* PATHS */
+.paths {
   display: grid;
-  grid-template-columns: repeat(2,1fr);
-  gap: 20px;
-  margin-top: 20px;
+  grid-template-columns: repeat(4,1fr);
+  gap: 30px;
 }
 
-.card {
-  border: 1px solid rgba(255,255,255,0.08);
-  padding: 16px;
-  border-radius: 12px;
+.pathTitle {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
-.image {
-  height: 120px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 8px;
-  margin-bottom: 10px;
-}
-
-.green {
-  color: #18ff9a;
-}
-
-.orange {
-  color: #CC5A1A;
-}
-
-
+.green { color: #18ff9a; }
+.orange { color: #CC5A1A; }
 
 /* BUTTONS */
-
 .btnGreen {
   display: inline-block;
   margin-top: 10px;
   padding: 8px 14px;
   background: linear-gradient(135deg,#18ff9a,#00d97a);
   color: black;
-  border-radius: 6px;
-  text-decoration: none;
+  border-radius: 4px;
 }
 
 .btnOrange {
   display: inline-block;
   margin-top: 10px;
   padding: 8px 14px;
-  background: linear-gradient(135deg,#ff9e57,#ff7a3d);
+  background: linear-gradient(135deg,#CC5A1A,#ff7a3d);
   color: black;
-  border-radius: 6px;
-  text-decoration: none;
+  border-radius: 4px;
 }
-
-
-
-/* FORM */
-
-.form {
-  margin-top: 16px;
-  display: flex;
-  gap: 10px;
-}
-
-
 
 /* SOCIAL */
-
 .socials {
-  margin-top: 16px;
   display: flex;
-  gap: 16px;
+  gap: 20px;
+  margin-top: 20px;
 }
 
-.socials a {
-  color: rgba(255,255,255,0.7);
-  text-decoration: none;
+.footer {
+  padding: 40px;
+  text-align: centre;
 }
