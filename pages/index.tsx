@@ -89,9 +89,9 @@ useEffect(() => {
               </h2>
 
               <p className={styles.text}>
-                Most gyms give you equipement and leave you to it. 
+                Most gyms give you equipment and leave you to it. 
                 Iron Acre gives you a community. We train outdoors. 
-                We hather around the fire. We talk about stuff that matters - performance, purpose, belonging.
+                We gather around the fire. We talk about stuff that matters - performance, purpose, belonging.
               </p>
 
               <p className={styles.text}>
