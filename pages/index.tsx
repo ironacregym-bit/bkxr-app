@@ -101,73 +101,100 @@ useEffect(() => {
           </section>
 
           {/* PATHS */}
-          <section className={styles.pillars}>
-          
-            <div className={styles.pillar}>
-              <div className={styles.progress}></div>
-          
-              <h3>
-                <i className="fa-solid fa-mobile-screen-button" />
-                THE APP
-              </h3>
-          
-              <p>
-                Structured training, progression tracking and a system that keeps you
-                consistent wherever you train.
-              </p>
-          
-              <Link href="/app" className={styles.btnOutline}>ENTER</Link>
-            </div>
-          
-          
-            <div className={styles.pillar}>
-              <div className={styles.progress}></div>
-          
-              <h3>
-                <i className="fa-solid fa-dumbbell" />
-                THE GYM
-              </h3>
-          
-              <p>
-                Outdoor strength training built around progression, environment and real effort.
-              </p>
-          
-              <Link href="/gym" className={styles.btnOutline}>ENTER</Link>
-            </div>
-          
-          
-            <div className={styles.pillar}>
-              <div className={styles.progress}></div>
-          
-              <h3>
-                <i className="fa-solid fa-fire" />
-                THE PODCAST
-              </h3>
-          
-              <p>
-                Conversations, ideas and mindset behind building strength and living properly.
-              </p>
-          
-              <Link href="/podcast" className={styles.btnOutline}>LISTEN</Link>
-            </div>
-          
-          
-              <div className={styles.pillar}>
-              <div className={styles.progress}></div>
-          
-              <h3>
-                <i className="fa-solid fa-handshake" />
-                WORK WITH US
-              </h3>
-          
-              <p>
-                Coaching, partnerships and opportunities to build something bigger with Iron Acre.
-              </p>
-          
-              <Link href="/work-with-us" className={styles.btnOutline}>EXPLORE</Link>
-            </div>
-          
-          </section>  
+<section className={styles.pillars}>
+
+  <div className={styles.pillar}>
+    <div className={styles.pillarContent}>
+
+      <div className={styles.progress}></div>
+
+      <h3>
+        <i className="fa-solid fa-mobile-screen-button" />
+        THE APP
+      </h3>
+
+      <p>
+        Structured training, progression tracking and a system that keeps you
+        consistent wherever you train.
+      </p>
+
+      <Link href="/app" className={styles.btnOutline}>
+        ENTER
+      </Link>
+
+    </div>
+  </div>
+
+
+  <div className={styles.pillar}>
+    <div className={styles.pillarContent}>
+
+      <div className={styles.progress}></div>
+
+      <h3>
+        <i className="fa-solid fa-dumbbell" />
+        THE GYM
+      </h3>
+
+      <p>
+        Outdoor strength training built around progression, environment and real
+        effort.
+      </p>
+
+      <Link href="/gym" className={styles.btnOutline}>
+        ENTER
+      </Link>
+
+    </div>
+  </div>
+
+
+  <div className={styles.pillar}>
+    <div className={styles.pillarContent}>
+
+      <div className={styles.progress}></div>
+
+      <h3>
+        <i className="fa-solid fa-fire" />
+        THE PODCAST
+      </h3>
+
+      <p>
+        Conversations, ideas and mindset behind building strength and living
+        properly.
+      </p>
+
+      <Link href="/podcast" className={styles.btnOutline}>
+        LISTEN
+      </Link>
+
+    </div>
+  </div>
+
+
+  <div className={styles.pillar}>
+    <div className={styles.pillarContent}>
+
+      <div className={styles.progress}></div>
+
+      <h3>
+        <i className="fa-solid fa-handshake" />
+        WORK WITH US
+      </h3>
+
+      <p>
+        Coaching, partnerships and opportunities to build something bigger
+        with Iron Acre.
+      </p>
+
+      <Link href="/work-with-us" className={styles.btnOutline}>
+        EXPLORE
+      </Link>
+
+    </div>
+  </div>
+
+</section>
 
           {/* FOLLOW */}
           <section className={styles.section}>
