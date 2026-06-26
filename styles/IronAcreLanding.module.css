@@ -124,7 +124,6 @@
 
 .pillar {
   aspect-ratio: 1 / 1;       /* ✅ makes it square */
-  margin-bottom: 40px;
 
   background: #1F1F21;       /* ✅ card background */
   border: 1px solid rgba(255,255,255,0.06);
@@ -219,10 +218,6 @@
   .pillar {
     aspect-ratio: auto;  /* ✅ squares don’t work well on small screens */
     min-height: 300px;
-  }
-
-  .pillarsOuter {
-    padding: 60px 16px;
   }
 
 }
