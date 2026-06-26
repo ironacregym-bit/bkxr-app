@@ -42,16 +42,18 @@ export default function IronAcreLandingPage() {
               priority
               className={styles.heroImg}
             />
-
+          
             <div className={styles.heroOverlay} />
-
+          
             <div className={styles.heroContent}>
-              <Image
-                src="/IronAcreNoBG.png"
-                alt="Iron Acre logo"
-                width={250}
-                height={250}
-              />
+              <div className={styles.heroLogoWrap}>
+                <Image
+                  src="/IronAcreNoBG.png"
+                  alt="Iron Acre logo"
+                  width={220}
+                  height={220}
+                />
+              </div>
             </div>
           </section>
 
