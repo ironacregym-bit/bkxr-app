@@ -101,8 +101,8 @@ useEffect(() => {
           </section>
 
           {/* PATHS */}
-<section className={styles.pillars}>
-
+<section className={styles.pillarsOuter}>
+<div className={styles.pillars}>
   <div className={styles.pillar}>
     <div className={styles.pillarContent}>
 
@@ -193,7 +193,7 @@ useEffect(() => {
 
     </div>
   </div>
-
+</div>
 </section>
 
           {/* FOLLOW */}
