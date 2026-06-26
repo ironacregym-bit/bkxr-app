@@ -329,7 +329,26 @@
   display: inline-block;
   color: black;
 }
+.stepBlock {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%) translateY(40px);
+  opacity: 0;
+  transition: all 0.5s ease;
+  pointer-events: none;
+}
 
+.stepBlock.active {
+  opacity: 1;
+  transform: translateY(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+/* make container relative so stacking works */
+.pathContent {
+  position: relative;
+  height: 300px;
+}
 /* MOBILE */
 
 @media (max-width: 768px) {
