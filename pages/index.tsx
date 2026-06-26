@@ -6,44 +6,6 @@ import { useEffect, useState } from "react";
 
 export default function IronAcreLandingPage() { 
 
-const [step, setStep] = useState(0);
-
-useEffect(() => {
-  const section = document.getElementById("path-section");
-  if (!section) return;
-
-  let isActive = false;
-
-  const onScroll = (e: WheelEvent) => {
-    if (!isActive) return;
-
-    if (e.deltaY > 0) {
-      setStep((prev) => Math.min(prev + 1, 3));
-    } else {
-      setStep((prev) => Math.max(prev - 1, 0));
-    }
-
-    e.preventDefault();
-  };
-
-  const observer = new IntersectionObserver(
-    ([entry]) => {
-      isActive = entry.isIntersecting;
-    },
-    { threshold: 0.6 }
-  );
-
-  observer.observe(section);
-
-  window.addEventListener("wheel", onScroll, { passive: false });
-
-  return () => {
-    observer.disconnect();
-    window.removeEventListener("wheel", onScroll);
-  };
-}, []);
-
-
   return (
     <>
       <Head>
@@ -122,69 +84,73 @@ useEffect(() => {
           </section>
 
           {/* PATHS */}
-       <section className={styles.pillars}>
-
-        <div className={styles.pillarsInner}>
-      
-          <div className={styles.pillar}>
-            <h3>
-              <i className="fa-solid fa-mobile-screen-button" />
-              THE APP
-            </h3>
-            <p>
-              Structured programming, progress tracking, and a system that keeps you
-              consistent wherever you train.
-            </p>
-            <Link href="/app" className={styles.btnOutline}>
-              ENTER
-            </Link>
-          </div>
-      
-          <div className={styles.pillar}>
-            <h3>
-              <i className="fa-solid fa-dumbbell" />
-              THE GYM
-            </h3>
-            <p>
-              Outdoor strength training built around progression, environment and
-              real effort.
-            </p>
-            <Link href="/gym" className={styles.btnOutline}>
-              ENTER
-            </Link>
-          </div>
-      
-          <div className={styles.pillar}>
-            <h3>
-              <i className="fa-solid fa-fire" />
-              THE PODCAST
-            </h3>
-            <p>
-              Conversations, ideas and mindset behind building strength and living
-              properly.
-            </p>
-            <Link href="/podcast" className={styles.btnOutline}>
-              LISTEN
-            </Link>
-          </div>
-      
-          <div className={styles.pillar}>
-            <h3>
-              <i className="fa-solid fa-handshake" />
-              WORK WITH US
-            </h3>
-            <p>
-              Coaching, partnerships and opportunities to build something bigger
-              with Iron Acre.
-            </p>
-            <Link href="/work-with-us" className={styles.btnOutline}>
-              EXPLORE
-            </Link>
-          </div>
-      
-        </div>
-      
-      </section>
+          <section className={styles.pillars}>
+          
+            <div className={styles.pillar}>
+              <div className={styles.progress}></div>
+          
+              <h3>
+                <i className="fa-solid fa-mobile-screen-button" />
+                THE APP
+              </h3>
+          
+              <p>
+                Structured training, progression tracking and a system that keeps you
+                consistent wherever you train.
+              </p>
+          
+              <Link href="/app" className={styles.btnOutline}>ENTER</Link>
+            </div>
+          
+          
+            <div className={styles.pillar}>
+              <div className={styles.progress}></div>
+          
+              <h3>
+                <i className="fa-solid fa-dumbbell" />
+                THE GYM
+              </h3>
+          
+              <p>
+                Outdoor strength training built around progression, environment and real effort.
+              </p>
+          
+              <Link href="/gym" className={styles.btnOutline}>ENTER</Link>
+            </div>
+          
+          
+            <div className={styles.pillar}>
+              <div className={styles.progress}></div>
+          
+              <h3>
+                <i className="fa-solid fa-fire" />
+                THE PODCAST
+              </h3>
+          
+              <p>
+                Conversations, ideas and mindset behind building strength and living properly.
+              </p>
+          
+              <Link href="/podcast" className={styles.btnOutline}>LISTEN</Link>
+            </div>
+          
+          
+              <div className={styles.pillar}>
+              <div className={styles.progress}></div>
+          
+              <h3>
+                <i className="fa-solid fa-handshake" />
+                WORK WITH US
+              </h3>
+          
+              <p>
+                Coaching, partnerships and opportunities to build something bigger with Iron Acre.
+              </p>
+          
+              <Link href="/work-with-us" className={styles.btnOutline}>EXPLORE</Link>
+            </div>
+          
+          </section>  
 
           {/* FOLLOW */}
           <section className={styles.section}>
