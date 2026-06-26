@@ -18,8 +18,8 @@ export default function IronAcreLandingPage() {
             <Image
               src="/IronAcreNoBG.png"
               alt="Iron Acre"
-              width={70}
-              height={70}
+              width={60}
+              height={60}
             />
           </Link>
 
@@ -66,9 +66,7 @@ export default function IronAcreLandingPage() {
               </div>
 
               <h2 className={styles.statement}>
-                BUILT DIFFERENT.
-                <br />
-                ON PURPOSE.
+              FIND YOUR <span className={styles.orange}>FIRE</span>
               </h2>
 
               <p className={styles.text}>
@@ -117,7 +115,7 @@ export default function IronAcreLandingPage() {
 
                 <div className={styles.pathItem}>
                   <div className={styles.pathTitle}>
-                    <i className="fa-solid fa-fire"></i>
+                    <i className="fa-solid fa-fire" {styles.orange}></i>
                     <span className={styles.orange}>PODCAST</span>
                   </div>
                   <p>Ideas and conversations.</p>
@@ -128,7 +126,7 @@ export default function IronAcreLandingPage() {
 
                 <div className={styles.pathItem}>
                   <div className={styles.pathTitle}>
-                    <i className="fa-solid fa-handshake"></i>
+                    <i className="fa-solid fa-handshake" {styles.orange}></i>
                     <span className={styles.orange}>WORK WITH US</span>
                   </div>
                   <p>Build with Iron Acre.</p>
