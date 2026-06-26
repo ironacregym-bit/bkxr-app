@@ -21,10 +21,10 @@ export default function IronAcreLandingPage() {
           <div className={styles.logo}>IRON ACRE</div>
 
           <nav className={styles.nav}>
-            <Link href="/app">APP</Link>
-            <Link href="/gym">GYM</Link>
-            <Link href="/podcast">PODCAST</Link>
-            <Link href="/work-with-us">WORK WITH US</Link>
+            /appApp</Link>
+            /gymGym</Link>
+            /podcastPodcast</Link>
+            /work-with-usWork With Us</Link>
           </nav>
         </header>
 
@@ -33,10 +33,10 @@ export default function IronAcreLandingPage() {
           {/* HERO */}
           <section className={styles.hero}>
             <div className={styles.container}>
-              <h1 className={styles.heroBrand}>IRON ACRE</h1>
+              <h1 className={styles.heroBrand}>Iron Acre</h1>
 
               <h2 className={styles.heroTitle}>
-                FIND YOUR <span className={styles.orange}>FIRE</span>
+                Find Your <span className={styles.orange}>Fire</span>
               </h2>
 
               <p className={styles.heroSubtitle}>
@@ -46,109 +46,150 @@ export default function IronAcreLandingPage() {
             </div>
           </section>
 
-          {/* WHAT IS IRON ACRE */}
+
+          {/* WHAT */}
           <section className={styles.section}>
             <div className={styles.container}>
-              <div className={styles.sectionHeader}>
-                <div className={styles.sectionLine}></div>
-                <div className={styles.sectionLabel}>WHAT IS IRON ACRE</div>
-              </div>
+              <div className={styles.eyebrow}>THE BRAND</div>
 
-              <h2 className={styles.bigStatement}>
-                BUILT DIFFERENT.
-                <br />
-                ON PURPOSE.
+              <h2 className={styles.sectionTitle}>
+                More than a gym. More than an app.
               </h2>
 
               <p className={styles.sectionText}>
-                Iron Acre is a brand built around a simple idea: training should
-                mean something. It should challenge you, shape you, and become
-                part of your life — not something you dip in and out of.
-              </p>
-
-              <p className={styles.sectionText}>
-                Everything we build sits under make you                Everything we build sits under that idea. The gym. The app.
-                better over time.
+                Iron Acre brings together outdoor training, a digital platform,
+                a podcast and a growing community into one system designed
+                for consistent progress over time.
               </p>
             </div>
           </section>
+
 
           {/* PEOPLE */}
           <section className={styles.section}>
             <div className={styles.container}>
-              <div className={styles.sectionHeader}>
-                <div className={styles.sectionLine}></div>
-                <div className={styles.sectionLabel}>BEHIND IRON ACRE</div>
-              </div>
+              <div className={styles.eyebrow}>BUILT BY</div>
 
               <div className={styles.people}>
                 <div className={styles.person}>
                   <div className={styles.avatar}></div>
-                  <div className={styles.personName}>ROB</div>
+                  <div className={styles.personName}>Rob</div>
                   <p className={styles.personText}>
-                    Focused on building the system. Programming, product and the
-                    long-term direction behind Iron Acre.
+                    Builds the systems, the product and the structure behind Iron Acre.
                   </p>
                 </div>
 
                 <div className={styles.person}>
                   <div className={styles.avatar}></div>
-                  <div className={styles.personName}>NICK</div>
+                  <div className={styles.personName}>Nick</div>
                   <p className={styles.personText}>
-                    Focused on the experience. Coaching, training and building
-                    the environment people want to be part of.
+                    Focused on training, experience and building the community.
                   </p>
                 </div>
               </div>
             </div>
           </section>
 
+
           {/* PATHS */}
           <section className={styles.section}>
             <div className={styles.container}>
-              <div className={styles.sectionHeader}>
-                <div className={styles.sectionLine}></div>
-                <div className={styles.sectionLabel}>CHOOSE YOUR PATH</div>
-              </div>
+              <div className={styles.eyebrow}>CHOOSE YOUR PATH</div>
 
               <h2 className={styles.sectionTitle}>
-                WHERE DO YOU START?
+                Where do you start?
               </h2>
 
               <div className={styles.pathGrid}>
 
+                {/* APP */}
                 <div className={styles.card}>
                   <div className={styles.image}></div>
                   <i className="fa-solid fa-mobile-screen-button"></i>
-                  <h4 className={styles.green}>TRAINING APP</h4>
-                  <p>Structured programming and progression tracking.</p>
-                  <Link href="/app" className={styles.btnGreen}>ENTER</Link>
+                  <h4 className={styles.green}>Training App</h4>
+                  <p>Structured programming, tracking and digital coaching.</p>
+
+                  <Link href="/app">
+                    Enter
+                  </Link>
                 </div>
 
+                {/* GYM */}
                 <div className={styles.card}>
                   <div className={styles.image}></div>
                   <i className="fa-solid fa-dumbbell"></i>
-                  <h4 className={styles.green}>IRON ACRE GYM</h4>
+                  <h4 className={styles.green}>Iron Acre Gym</h4>
                   <p>Outdoor strength training built around progression.</p>
-                  <Link href="/gym" className={styles.btnGreen}>ENTER</Link>
+
+                  <Link href="/gym">
+                    Enter
+                  </Link>
                 </div>
 
+                {/* PODCAST */}
                 <div className={styles.card}>
                   <div className={styles.image}></div>
                   <i className="fa-solid fa-fire"></i>
-                  <h4 className={styles.orange}>ROUND THE FIRE</h4>
-                  <p>Ideas, conversations and the mindset behind the brand.</p>
-                  <Link href="/podcast" className={styles.btnOrange}>LISTEN</Link>
+                  <h4 className={styles.orange}>Round The Fire</h4>
+                  <p>Conversations, ideas and the story behind the brand.</p>
+
+                  <Link href="/podcast">
+                    Listen
+                  </Link>
                 </div>
 
+                {/* WORK */}
                 <div className={styles.card}>
                   <div className={styles.image}></div>
                   <i className="fa-solid fa-handshake"></i>
-                  <h4 className={styles.orange}>WORK WITH US</h4>
-                  <p>Collaborate, coach or build with Iron Acre.</p>
-                  <Link href="/work-with-us" className={styles.btnOrange}>EXPLORE</Link>
+                  <h4 className={styles.orange}>Work With Us</h4>
+                  <p>Coaching, collaboration and building with Iron Acre.</p>
+
+                  <Link href="/work-with-us">
+                    Explore
+                  </Link>
                 </div>
 
+              </div>
+            </div>
+          </section>
+
+
+          {/* EMAIL */}
+          <section className={styles.section}>
+            <div className={styles.container}>
+              <h2 className={styles.sectionTitle}>Stay Updated</h2>
+
+              <p className={styles.sectionText}>
+                Get updates on the gym, the app, the podcast and everything
+                happening inside Iron Acre.
+              </p>
+
+              <div className={styles.form}>
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email address"
+                  className="form-control"
+                />
+
+                <button className="ia-btn ia-btn-primary">
+                  Join
+                </button>
+              </div>
+            </div>
+          </section>
+
+
+          {/* SOCIAL */}
+          <section className={styles.section}>
+            <div className={styles.container}>
+              <div className={styles.eyebrow}>FOLLOW</div>
+
+              <div className={styles.socials}>
+                <a href="#Instagram"></a>
+                <a href="#YouTube"></a>
+                <a href="#TikTok"></a>
               </div>
             </div>
           </section>
