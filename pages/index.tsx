@@ -7,24 +7,34 @@ import { useEffect, useState } from "react";
 export default function IronAcreLandingPage() {
   const [step, setStep] = useState(0);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      const section = document.getElementById("path-section");
-      if (!section) return;
-  
-      const rect = section.getBoundingClientRect();
-      const height = window.innerHeight;
-  
-      if (rect.top <= 0 && rect.bottom >= height) {
-        const progress = Math.abs(rect.top) / height;
-        const newStep = Math.min(3, Math.floor(progress));
-        setStep(newStep);
-      }
-    };
-  
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+const [step, setStep] = useState(0);const [step, setStep] = useStateEffect(() => {
+  const handleScroll = () => {
+    const section = document.getElementById("path-section");
+    if (!section) return;
+
+    const rect = section.getBoundingClientRect();
+    const viewport = window.innerHeight;
+
+    // Only run when section is active
+    if (rect.top <= 0 && rect.bottom >= viewport) {
+      const scrollInside = Math.abs(rect.top);
+
+      const sectionHeight = section.offsetHeight;
+      const progress = scrollInside / sectionHeight;
+
+      const steps = 4;
+      const newStep = Math.min(
+        steps - 1,
+        Math.floor(progress * steps)
+      );
+
+      setStep(newStep);
+    }
+  };
+
+  window.addEventListener("scroll", handleScroll);
+  return () => window.removeEventListener("scroll", handleScroll);
+}, []);
 
   return (
     <>
