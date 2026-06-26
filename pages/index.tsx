@@ -83,36 +83,36 @@ export default function IronAcreLandingPage() {
 
           {/* PATHS */}
           <section className={styles.pathScroll}>
+
+            <div className={styles.pathSticky}>
           
-            <div className={styles.pathStep}>
-              <h3><i className="fa-solid fa-mobile-screen-button" /> APP</h3>
-              <p>Train anywhere. Track everything. Follow structured programming.</p>
-              <Link href="/app" className={styles.btnGreen}>ENTER</Link>
-            </div>
+              <div className={styles.pathInner}>
           
-            <div className={styles.pathStep}>
-              <h3><i className="fa-solid fa-dumbbell" /> GYM</h3>
-              <p>Outdoor strength training built around real progression.</p>
-              <Link href="/gym" className={styles.btnGreen}>ENTER</Link>
-            </div>
+                {/* LEFT */}
+                <div className={styles.pathContent}>
+                  <h4 className={styles.stepNumber}>01</h4>
+                  <h2 className={styles.stepTitle}>
+                    <i className="fa-solid fa-mobile-screen-button"></i>
+                    TRAINING APP
+                  </h2>
           
-            <div className={styles.pathStep}>
-              <h3><i className="fa-solid fa-fire" /> PODCAST</h3>
-              <p>Ideas, conversations and mindset behind Iron Acre.</p>
-              <Link href="/podcast" className={styles.btnOrange}>LISTEN</Link>
-            </div>
+                  <p>
+                    Structured weeks, not random sessions. Build training around your schedule
+                    and stay consistent even when life moves.
+                  </p>
           
-            <div className={styles.pathStep}>
-              <h3><i className="fa-solid fa-handshake" /> WORK WITH US</h3>
-              <p>Coaching, partnerships and building something together.</p>
-              <Link href="/work-with-us" className={styles.btnOrange}>EXPLORE</Link>
-            </div>
+                  <Link href="/app" className={styles.btnGreen}>
+                    ENTER APP
+                  </Link>
+                </div>
           
-            <div className={styles.timeline}>
-              <span></span>
-              <span></span>
-              <span></span>
-              <span></span>
+                {/* RIGHT */}
+                <div className={styles.pathVisual}>
+                  <div className={styles.deviceMock}></div>
+                </div>
+          
+              </div>
+          
             </div>
           
           </section>
