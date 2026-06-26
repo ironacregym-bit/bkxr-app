@@ -239,3 +239,55 @@
   }
 
 }
+.pathScroll {
+  position: relative;
+}
+
+.pathStep {
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 20px 0 60px;
+  border-left: 2px solid rgba(255,255,255,0.08);
+}
+
+.pathStep h3 {
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pathStep i {
+  font-size: 20px;
+}
+
+/* color inheritance */
+.pathStep .fa-mobile-screen-button,
+.pathStep .fa-dumbbell {
+  color: #18ff9a;
+}
+
+.pathStep .fa-fire,
+.pathStep .fa-handshake {
+  color: #CC5A1A;
+}
+
+/* timeline dots */
+.timeline {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.timeline span {
+  width: 8px;
+  height: 8px;
+  background: rgba(255,255,255,0.3);
+  border-radius: 50%;
+}
