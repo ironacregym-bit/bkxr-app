@@ -239,63 +239,10 @@
   }
 
 }
-.pathScroll {
-  position: relative;
-}
-
-.pathStep {
-  min-height: 70vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0 20px 0 60px;
-  border-left: 2px solid rgba(255,255,255,0.08);
-}
-
-.pathStep h3 {
-  font-size: 28px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.pathStep i {
-  font-size: 20px;
-}
-
-/* color inheritance */
-.pathStep .fa-mobile-screen-button,
-.pathStep .fa-dumbbell {
-  color: #18ff9a;
-}
-
-.pathStep .fa-fire,
-.pathStep .fa-handshake {
-  color: #CC5A1A;
-}
-
-/* timeline dots */
-.timeline {
-  position: fixed;
-  right: 20px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.timeline span {
-  width: 8px;
-  height: 8px;
-  background: rgba(255,255,255,0.3);
-  border-radius: 50%;
-}
-
 /* SCROLL SECTION */
 
 .pathScroll {
-  height: 400vh; /* ✅ total scroll length */
+  height: 400vh;
   position: relative;
 }
 
@@ -303,6 +250,8 @@
   position: sticky;
   top: 0;
   height: 100vh;
+  display: flex;
+  align-items: center;
 }
 
 .pathInner {
@@ -315,33 +264,27 @@
   padding: 0 20px;
 }
 
-
-
-/* LEFT CONTENT */
+/* LEFT */
 
 .pathContent {
-  max-width: 500px;
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-
-.stepNumber {
-  font-size: 14px;
-  color: var(--ia-green);
-  margin-bottom: 10px;
+  max-width: 460px;
 }
 
 .stepTitle {
-  font-size: 36px;
+  font-size: 34px;
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: centre;
+  gap: 10px;
 }
 
 .stepTitle i {
   font-size: 22px;
 }
 
-/* right colors */
+/* COLOURS */
+.green { color: #18ff9a; }
+.orange { color: #CC5A1A; }
+
 .stepTitle .fa-mobile-screen-button,
 .stepTitle .fa-dumbbell {
   color: #18ff9a;
@@ -352,9 +295,7 @@
   color: #CC5A1A;
 }
 
-
-
-/* RIGHT VISUAL */
+/* RIGHT */
 
 .pathVisual {
   display: flex;
@@ -362,10 +303,41 @@
   align-items: center;
 }
 
-.deviceMock {
-  width: 280px;
+.mockPhone {
+  width: 260px;
   height: 520px;
-  border-radius: 20px;
+  border-radius: 24px;
   background: #111;
-  box-shadow: 0 0 40px rgba(0,0,0,0.6);
+}
+
+/* BUTTONS */
+
+.btnGreen {
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg,#18ff9a,#00d97a);
+  border-radius: 6px;
+  display: inline-block;
+  color: black;
+}
+
+.btnOrange {
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg,#CC5A1A,#ff7a3d);
+  border-radius: 6px;
+  display: inline-block;
+  color: black;
+}
+
+/* MOBILE */
+
+@media (max-width: 768px) {
+  .pathInner {
+    grid-template-columns: 1fr;
+  }
+
+  .pathScroll {
+    height: 300vh;
+  }
 }
