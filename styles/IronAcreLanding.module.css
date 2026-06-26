@@ -106,6 +106,17 @@
 }
 
 /* ================= PILLARS ================= */
+/* OUTER WRAPPER (this creates the spacing around) */
+.pillarsOuter {
+  background: #1C1C1C;
+  padding: 80px 0;   /* ✅ top + bottom spacing */
+}
+
+/* INNER CONTAINER */
+.pillars {
+  max-width: 700px;  /* ✅ controls width of the whole block */
+  margin: 0 auto;    /* ✅ centers everything */
+}
 
 .pillars {
   display: flex;
