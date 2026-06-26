@@ -110,7 +110,7 @@
 
 .pillarsOuter {
   background: #1C1C1C;       /* ✅ page background */
-  padding: 80px 20px;        /* ✅ space above & below */
+  padding: 40px 40px;        /* ✅ space above & below */
 }
 
 /* inner centred block */
@@ -127,7 +127,8 @@
 
   background: #1F1F21;       /* ✅ card background */
   border: 1px solid rgba(255,255,255,0.06);
-
+  padding-left: 15px;
+  padding-right: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
