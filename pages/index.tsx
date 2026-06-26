@@ -5,7 +5,24 @@ import styles from "../styles/IronAcreLanding.module.css";
 import { useEffect, useState } from "react";
 
 export default function IronAcreLandingPage() { 
+useEffect(() => {
+  const sections = document.querySelectorAll(`.${styles.pillar}`);
 
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add(styles.active);
+        }
+      });
+    },
+    { threshold: 0.6 }
+  );
+
+  sections.forEach((section) => observer.observe(section));
+
+  return () => observer.disconnect();
+}, []);
   return (
     <>
       <Head>
