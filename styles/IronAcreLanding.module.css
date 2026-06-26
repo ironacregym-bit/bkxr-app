@@ -1,72 +1,86 @@
 .page {
   background: #1F1F21;
   color: #fff;
+  overflow-x: hidden; /* ✅ fixes mobile right-side gap */
 }
 
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 20px; /* ✅ adds left spacing globally */
+}
+
+
+
 /* HEADER */
+
 .header {
   position: absolute;
   width: 100%;
-  padding: 20px;
+  padding: 16px 20px;
   display: flex;
   justify-content: space-between;
   z-index: 10;
 }
 
-.nav a {
-  margin-left: 20px;
-  color: #fff;
-  text-decoration: none;
+.nav {
+  display: flex;
+  gap: 14px;
+  flex-wrap: nowrap;
 }
 
+.nav a {
+  color: #fff;
+  text-decoration: none;
+  font-size: 12px; /* ✅ stops wrapping */
+  white-space: nowrap; /* ✅ keeps WORK WITH US on one line */
+}
+
+
+
 /* HERO */
+
 .hero {
   position: relative;
   height: 100vh;
 }
 
-.heroImage {
+.heroImg {
   object-fit: cover;
 }
 
 .heroOverlay {
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0,0,0,0.55);
 }
 
 .heroContent {
   position: relative;
   z-index: 2;
-  padding: 120px 20px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* ✅ centers logo */
 }
 
-.heroBrand {
-  font-size: 70px;
+.heroLogoWrap {
+  text-align: center;
 }
 
-.heroTitle {
-  font-size: 44px;
-}
 
-.heroTitle span {
-  color: #CC5A1A;
-}
 
 /* SECTION */
+
 .section {
   padding: 60px 0;
 }
 
-.container {
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
 .sectionHeader {
   display: flex;
-  gap: 10px;
   align-items: center;
+  gap: 10px;
+  padding-left: 20px; /* ✅ stops text hugging edge */
 }
 
 .line {
@@ -84,43 +98,86 @@
 .statement {
   margin-top: 20px;
   font-size: 48px;
+  padding-left: 20px;
 }
 
 .text {
   margin-top: 14px;
   max-width: 600px;
+  padding-left: 20px;
 }
 
-/* PEOPLE */
-.people {
-  display: flex;
-  gap: 40px;
-}
 
-/* PATHS */
+
+/* PATHS → TIMELINE STYLE */
+
 .paths {
-  display: grid;
-  grid-template-columns: repeat(4,1fr);
+  display: flex;
+  flex-direction: column;
+  margin-top: 30px;
+  padding-left: 20px;
   gap: 30px;
+}
+
+.pathItem {
+  border-left: 2px solid rgba(255,255,255,0.1);
+  padding-left: 20px;
+  position: relative;
+}
+
+.pathItem::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 6px;
+  width: 10px;
+  height: 10px;
+  background: #CC5A1A;
+  border-radius: 50%;
 }
 
 .pathTitle {
   display: flex;
-  gap: 10px;
   align-items: center;
+  gap: 10px;
+  font-weight: 700;
 }
 
-.green { color: #18ff9a; }
-.orange { color: #CC5A1A; }
+.pathTitle i {
+  font-size: 16px;
+}
+
+/* icons match colour of titles */
+.green {
+  color: #18ff9a;
+}
+
+.orange {
+  color: #CC5A1A;
+}
+
+.pathTitle .fa-mobile-screen-button,
+.pathTitle .fa-dumbbell {
+  color: #18ff9a;
+}
+
+.pathTitle .fa-fire,
+.pathTitle .fa-handshake {
+  color: #CC5A1A;
+}
+
+
 
 /* BUTTONS */
+
 .btnGreen {
   display: inline-block;
   margin-top: 10px;
   padding: 8px 14px;
   background: linear-gradient(135deg,#18ff9a,#00d97a);
   color: black;
-  border-radius: 4px;
+  border-radius: 6px;
+  text-decoration: none;
 }
 
 .btnOrange {
@@ -129,17 +186,56 @@
   padding: 8px 14px;
   background: linear-gradient(135deg,#CC5A1A,#ff7a3d);
   color: black;
-  border-radius: 4px;
+  border-radius: 6px;
+  text-decoration: none;
 }
 
+
+
 /* SOCIAL */
+
 .socials {
   display: flex;
   gap: 20px;
   margin-top: 20px;
+  padding-left: 20px;
 }
 
+.socials a {
+  color: rgba(255,255,255,0.7);
+  text-decoration: none;
+}
+
+
+
+/* FOOTER */
+
 .footer {
-  padding: 40px;
-  text-align: centre;
+  padding: 40px 0;
+  text-align: center;
+}
+
+
+
+/* ✅ MOBILE FIXES */
+
+@media (max-width: 768px) {
+
+  .hero {
+    height: 60vh; /* ✅ halves hero on mobile */
+  }
+
+  .heroLogoWrap img {
+    width: 160px;
+    height: auto;
+  }
+
+  .nav {
+    gap: 10px;
+  }
+
+  .nav a {
+    font-size: 11px;
+  }
+
 }
