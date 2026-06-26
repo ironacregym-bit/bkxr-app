@@ -49,13 +49,9 @@ export default function IronAcreLandingPage() {
               <Image
                 src="/IronAcreNoBG.png"
                 alt="Iron Acre logo"
-                width={180}
-                height={180}
+                width={250}
+                height={250}
               />
-
-              <h2 className={styles.heroTitle}>
-                FIND YOUR <span>FIRE</span>
-              </h2>
             </div>
           </section>
 
