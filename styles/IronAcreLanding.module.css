@@ -303,8 +303,6 @@
   position: sticky;
   top: 0;
   height: 100vh;
-  display: flex;
-  align-items: center;
 }
 
 .pathInner {
@@ -323,6 +321,7 @@
 
 .pathContent {
   max-width: 500px;
+  transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
 .stepNumber {
