@@ -122,63 +122,69 @@ useEffect(() => {
           </section>
 
           {/* PATHS */}
-          <section id="path-section" className={styles.pathScroll}>
-          
-            <div className={styles.pathSticky}>
-          
-              <div className={styles.pathInner}>
-          
-                {/* LEFT CONTENT */}
-               <div className={styles.pathContent}>
+       <section className={styles.pillars}>
 
-                <div className={`${styles.stepBlock} ${step === 0 ? styles.active : ""}`}>
-                  <h2 className={styles.stepTitle}>
-                    <i className="fa-solid fa-mobile-screen-button" />
-                    <span className={styles.green}>APP</span>
-                  </h2>
-                  <p>Structured weeks. Track everything. Train anywhere.</p>
-                  <Link href="/app" className={styles.btnGreen}>ENTER</Link>
-                </div>
-              
-                <div className={`${styles.stepBlock} ${step === 1 ? styles.active : ""}`}>
-                  <h2 className={styles.stepTitle}>
-                    <i className="fa-solid fa-dumbbell" />
-                    <span className={styles.green}>GYM</span>
-                  </h2>
-                  <p>Outdoor strength training built around progression.</p>
-                  <Link href="/gym" className={styles.btnGreen}>ENTER</Link>
-                </div>
-              
-                <div className={`${styles.stepBlock} ${step === 2 ? styles.active : ""}`}>
-                  <h2 className={styles.stepTitle}>
-                    <i className="fa-solid fa-fire" />
-                    <span className={styles.orange}>PODCAST</span>
-                  </h2>
-                  <p>Ideas, mindset and conversations.</p>
-                  <Link href="/podcast" className={styles.btnOrange}>LISTEN</Link>
-                </div>
-              
-                <div className={`${styles.stepBlock} ${step === 3 ? styles.active : ""}`}>
-                  <h2 className={styles.stepTitle}>
-                    <i className="fa-solid fa-handshake" />
-                    <span className={styles.orange}>WORK WITH US</span>
-                  </h2>
-                  <p>Build something bigger.</p>
-                  <Link href="/work-with-us" className={styles.btnOrange}>EXPLORE</Link>
-                </div>
-              
-              </div>
-          
-                {/* RIGHT VISUAL */}
-                <div className={styles.pathVisual}>
-                  <div className={styles.mockPhone}></div>
-                </div>
-          
-              </div>
-          
-            </div>
-          
-          </section>
+        <div className={styles.pillarsInner}>
+      
+          <div className={styles.pillar}>
+            <h3>
+              <i className="fa-solid fa-mobile-screen-button" />
+              THE APP
+            </h3>
+            <p>
+              Structured programming, progress tracking, and a system that keeps you
+              consistent wherever you train.
+            </p>
+            <Link href="/app" className={styles.btnOutline}>
+              ENTER
+            </Link>
+          </div>
+      
+          <div className={styles.pillar}>
+            <h3>
+              <i className="fa-solid fa-dumbbell" />
+              THE GYM
+            </h3>
+            <p>
+              Outdoor strength training built around progression, environment and
+              real effort.
+            </p>
+            <Link href="/gym" className={styles.btnOutline}>
+              ENTER
+            </Link>
+          </div>
+      
+          <div className={styles.pillar}>
+            <h3>
+              <i className="fa-solid fa-fire" />
+              THE PODCAST
+            </h3>
+            <p>
+              Conversations, ideas and mindset behind building strength and living
+              properly.
+            </p>
+            <Link href="/podcast" className={styles.btnOutline}>
+              LISTEN
+            </Link>
+          </div>
+      
+          <div className={styles.pillar}>
+            <h3>
+              <i className="fa-solid fa-handshake" />
+              WORK WITH US
+            </h3>
+            <p>
+              Coaching, partnerships and opportunities to build something bigger
+              with Iron Acre.
+            </p>
+            <Link href="/work-with-us" className={styles.btnOutline}>
+              EXPLORE
+            </Link>
+          </div>
+      
+        </div>
+      
+      </section>
 
           {/* FOLLOW */}
           <section className={styles.section}>
