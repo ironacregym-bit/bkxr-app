@@ -120,65 +120,45 @@ useEffect(() => {
               <div className={styles.pathInner}>
           
                 {/* LEFT CONTENT */}
-                <div className={styles.pathContent}>
-          
-                  {step === 0 && (
-                    <>
-                      <h2 className={styles.stepTitle}>
-                        <i className="fa-solid fa-mobile-screen-button" />
-                        <span className={styles.green}>APP</span>
-                      </h2>
-                      <p>Structured weeks. Track everything. Train anywhere.</p>
-          
-                      <Link href="/app" className={styles.btnGreen}>
-                        ENTER
-                      </Link>
-                    </>
-                  )}
-          
-                  {step === 1 && (
-                    <>
-                      <h2 className={styles.stepTitle}>
-                        <i className="fa-solid fa-dumbbell" />
-                        <span className={styles.green}>GYM</span>
-                      </h2>
-                      <p>Outdoor strength training built for progression.</p>
-          
-                      <Link href="/gym" className={styles.btnGreen}>
-                        ENTER
-                      </Link>
-                    </>
-                  )}
-          
-                  {step === 2 && (
-                    <>
-                      <h2 className={styles.stepTitle}>
-                        <i className="fa-solid fa-fire" />
-                        <span className={styles.orange}>PODCAST</span>
-                      </h2>
-                      <p>Ideas, mindset and conversations.</p>
-          
-                      <Link href="/podcast" className={styles.btnOrange}>
-                        LISTEN
-                      </Link>
-                    </>
-                  )}
-          
-                  {step === 3 && (
-                    <>
-                      <h2 className={styles.stepTitle}>
-                        <i className="fa-solid fa-handshake" />
-                        <span className={styles.orange}>WORK WITH US</span>
-                      </h2>
-                      <p>Coaching, collaboration and building together.</p>
-          
-                      <Link href="/work-with-us" className={styles.btnOrange}>
-                        EXPLORE
-                      </Link>
-                    </>
-                  )}
-          
+               <div className={styles.pathContent}>
+
+                <div className={`${styles.stepBlock} ${step === 0 ? styles.active : ""}`}>
+                  <h2 className={styles.stepTitle}>
+                    <i className="fa-solid fa-mobile-screen-button" />
+                    <span className={styles.green}>APP</span>
+                  </h2>
+                  <p>Structured weeks. Track everything. Train anywhere.</p>
+                  <Link href="/app" className={styles.btnGreen}>ENTER</Link>
                 </div>
+              
+                <div className={`${styles.stepBlock} ${step === 1 ? styles.active : ""}`}>
+                  <h2 className={styles.stepTitle}>
+                    <i className="fa-solid fa-dumbbell" />
+                    <span className={styles.green}>GYM</span>
+                  </h2>
+                  <p>Outdoor strength training built around progression.</p>
+                  <Link href="/gym" className={styles.btnGreen}>ENTER</Link>
+                </div>
+              
+                <div className={`${styles.stepBlock} ${step === 2 ? styles.active : ""}`}>
+                  <h2 className={styles.stepTitle}>
+                    <i className="fa-solid fa-fire" />
+                    <span className={styles.orange}>PODCAST</span>
+                  </h2>
+                  <p>Ideas, mindset and conversations.</p>
+                  <Link href="/podcast" className={styles.btnOrange}>LISTEN</Link>
+                </div>
+              
+                <div className={`${styles.stepBlock} ${step === 3 ? styles.active : ""}`}>
+                  <h2 className={styles.stepTitle}>
+                    <i className="fa-solid fa-handshake" />
+                    <span className={styles.orange}>WORK WITH US</span>
+                  </h2>
+                  <p>Build something bigger.</p>
+                  <Link href="/work-with-us" className={styles.btnOrange}>EXPLORE</Link>
+                </div>
+              
+              </div>
           
                 {/* RIGHT VISUAL */}
                 <div className={styles.pathVisual}>
