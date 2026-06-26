@@ -102,98 +102,127 @@ useEffect(() => {
 
           {/* PATHS */}
 <section className={styles.pillarsOuter}>
-<div className={styles.pillars}>
-  <div className={styles.pillar}>
-    <div className={styles.pillarContent}>
 
-      <div className={styles.progress}></div>
+  <div className={styles.container}>
 
-      <h3>
-        <i className="fa-solid fa-mobile-screen-button" />
-        THE APP
-      </h3>
-
-      <p>
-        Structured training, progression tracking and a system that keeps you
-        consistent wherever you train.
-      </p>
-
-      <Link href="/app" className={styles.btnOutline}>
-        ENTER
-      </Link>
-
+    {/* ✅ YOUR EXISTING TITLE FORMAT */}
+    <div className={styles.sectionHeader}>
+      <span className={styles.line} />
+      <span className={styles.label}>WHAT IS IRON ACRE</span>
     </div>
+
+    <h2 className={styles.statement}>
+      FIND YOUR <span className={styles.orange}>FIRE</span>
+    </h2>
+
+    <p className={styles.text}>
+      Iron Acre is a system designed for real progression.
+      Not short bursts. Not noise. Something that compounds over time.
+    </p>
+
+    <p className={styles.text}>
+      The gym, the app, the conversations and the people —
+      all built to move you forward.
+    </p>
+
   </div>
 
 
-  <div className={styles.pillar}>
-    <div className={styles.pillarContent}>
+  {/* ✅ CARDS (SEPARATE FROM TITLE) */}
+  <div className={styles.pillars}>
 
-      <div className={styles.progress}></div>
+    <div className={styles.pillar}>
+      <div className={styles.pillarContent}>
 
-      <h3>
-        <i className="fa-solid fa-dumbbell" />
-        THE GYM
-      </h3>
+        <div className={styles.progress}></div>
 
-      <p>
-        Outdoor strength training built around progression, environment and real
-        effort.
-      </p>
+        <h3>
+          <i className="fa-solid fa-mobile-screen-button" />
+          THE APP
+        </h3>
 
-      <Link href="/gym" className={styles.btnOutline}>
-        ENTER
-      </Link>
+        <p>
+          Structured training, progression tracking and a system that keeps you
+          consistent wherever you train.
+        </p>
 
+        <a href="/app" className={styles.btnOutline}>
+          ENTER
+        </a>
+
+      </div>
     </div>
+
+
+    <div className={styles.pillar}>
+      <div className={styles.pillarContent}>
+
+        <div className={styles.progress}></div>
+
+        <h3>
+          <i className="fa-solid fa-dumbbell" />
+          THE GYM
+        </h3>
+
+        <p>
+          Outdoor strength training built around progression and real effort.
+        </p>
+
+        <a href="/gym" className={styles.btnOutline}>
+          ENTER
+        </a>
+
+      </div>
+    </div>
+
+
+    <div className={styles.pillar}>
+      <div className={styles.pillarContent}>
+
+        <div className={styles.progress}></div>
+
+        <h3>
+          <i className="fa-solid fa-fire" />
+          THE PODCAST
+        </h3>
+
+        <p>
+          Conversations, ideas and mindset behind building strength and living
+          properly.
+        </p>
+
+        <a href="/podcast" className={styles.btnOutline}>
+          LISTEN
+        </a>
+
+      </div>
+    </div>
+
+
+    <div className={styles.pillar}>
+      <div className={styles.pillarContent}>
+
+        <div className={styles.progress}></div>
+
+        <h3>
+          <i className="fa-solid fa-handshake" />
+          WORK WITH US
+        </h3>
+
+        <p>
+          Coaching, partnerships and opportunities to build something bigger
+          with Iron Acre.
+        </p>
+
+        <a href="/work-with-us" className={styles.btnOutline}>
+          EXPLORE
+        </a>
+
+      </div>
+    </div>
+
   </div>
 
-
-  <div className={styles.pillar}>
-    <div className={styles.pillarContent}>
-
-      <div className={styles.progress}></div>
-
-      <h3>
-        <i className="fa-solid fa-fire" />
-        THE PODCAST
-      </h3>
-
-      <p>
-        Conversations, ideas and mindset behind building strength and living
-        properly.
-      </p>
-
-      <Link href="/podcast" className={styles.btnOutline}>
-        LISTEN
-      </Link>
-
-    </div>
-  </div>
-
-
-  <div className={styles.pillar}>
-    <div className={styles.pillarContent}>
-
-      <div className={styles.progress}></div>
-
-      <h3>
-        <i className="fa-solid fa-handshake" />
-        WORK WITH US
-      </h3>
-
-      <p>
-        Coaching, partnerships and opportunities to build something bigger
-        with Iron Acre.
-      </p>
-
-      <Link href="/work-with-us" className={styles.btnOutline}>
-        EXPLORE
-      </Link>
-
-    </div>
-  </div>
-</div>
 </section>
 
           {/* FOLLOW */}
