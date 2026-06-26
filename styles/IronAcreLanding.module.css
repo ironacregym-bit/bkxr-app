@@ -112,7 +112,6 @@
   flex-direction: column;
 }
 
-/* FULL HEIGHT SECTIONS */
 .pillar {
   min-height: 85vh;
   padding: 60px 20px;
@@ -120,10 +119,14 @@
   background: #1F1F21;
 
   display: flex;
-  flex-direction: column;
-  justify-content: center;
+  justify-content: center;   
+  align-items: center;       
 
   position: relative;
+}
+.pillarContent {
+  .pillar-width: 520px;   /* ✅ this creates the centred box */
+  width: 100%;
 }
 
 /* progress bar */
@@ -168,9 +171,12 @@
 
 /* BUTTON */
 .btnOutline {
+  display: inline-flex; 
+  align-items: center;
+  justify-content: center;
+
   margin-top: 16px;
-  display: inline-block;
-  padding: 10px 16px;
+  padding: 10px 18px;
 
   border: 1px solid #CC5A1A;
   color: #CC5A1A;
@@ -179,6 +185,12 @@
   font-size: 12px;
   letter-spacing: 0.08em;
 }
+
+.btnOutline:hover {
+  background: #CC5A1A;
+  color: #000;
+}
+
 
 .btnOutline:hover {
   background: #CC5A1A;
