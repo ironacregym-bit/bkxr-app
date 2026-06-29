@@ -3,7 +3,7 @@
   "name": "Iron Acre Gym",
   "short_name": "Iron Acre",
   "description": "Training & Booking App",
-  "start_url": "/",
+  "start_url": "/iron-acre",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
