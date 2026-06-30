@@ -15,26 +15,18 @@ type Resp =
       error: string;
     };
 
-function getUserId(session: any): string {
-  const raw =
-    String(session?.user?.uid || "").trim() ||
-    String(session?.user?.id || "").trim() ||
-    String(session?.user?.email || "").trim().toLowerCase();
-
-  return raw;
+function getNotificationUserId(session: any): string {
+  return String(session?.user?.email || "").trim().toLowerCase();
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<Resp>
-) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse<Resp>) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   const session = await getServerSession(req, res, authOptions).catch(() => null);
-  const userId = getUserId(session);
+  const userId = getNotificationUserId(session);
 
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -43,9 +35,9 @@ export default async function handler(
   try {
     const itemsRef = firestore.collection("user_notifications").doc(userId).collection("items");
 
-    const unreadSnap = await itemsRef.where("read_at", "==", null).get();
+    const snap = await itemsRef.orderBy("created_at", "desc").limit(200).get();
 
-    if (unreadSnap.empty) {
+    if (snap.empty) {
       return res.status(200).json({
         ok: true,
         user_id: userId,
@@ -56,7 +48,14 @@ export default async function handler(
     const now = Timestamp.now();
     const batch = firestore.batch();
 
-    unreadSnap.docs.forEach((doc) => {
+    let updated = 0;
+
+    snap.docs.forEach((doc) => {
+      const data = doc.data() || {};
+
+      if (data.dismissed_at) return;
+      if (data.read_at) return;
+
       batch.set(
         doc.ref,
         {
@@ -65,14 +64,18 @@ export default async function handler(
         },
         { merge: true }
       );
+
+      updated += 1;
     });
 
-    await batch.commit();
+    if (updated > 0) {
+      await batch.commit();
+    }
 
     return res.status(200).json({
       ok: true,
       user_id: userId,
-      updated: unreadSnap.size,
+      updated,
     });
   } catch (err: any) {
     console.error("[notifications/mark-all-read] error:", err?.message || err);
