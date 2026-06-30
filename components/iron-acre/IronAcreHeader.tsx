@@ -1,6 +1,8 @@
 // components/iron-acre/IronAcreHeader.tsx
 "use client";
 
+import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 
@@ -26,6 +28,7 @@ type NotificationsFeedResp = {
 
 const TIME_UPDATE_MS = 30_000;
 const DROPDOWN_MAX_WIDTH = 420;
+const PROFILE_DROPDOWN_WIDTH = 260;
 const FEED_KEY = "/api/notifications/feed?limit=20";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
@@ -42,6 +45,23 @@ function formatHHMM(d: Date): string {
   return `${hh}:${mm}`;
 }
 
+function getInitials(name: string): string {
+  const cleaned = String(name || "").trim();
+
+  if (!cleaned) return "IA";
+
+  const parts = cleaned
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 2) {
+    return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+  }
+
+  return cleaned.slice(0, 2).toUpperCase();
+}
+
 export default function IronAcreHeader({
   userName,
   dateLabel,
@@ -49,21 +69,30 @@ export default function IronAcreHeader({
 }: IronAcreHeaderProps) {
   const [timeText, setTimeText] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+
   const [dropdownPos, setDropdownPos] = useState<DropdownPosition>({
     top: 78,
     right: 12,
     width: DROPDOWN_MAX_WIDTH,
   });
 
+  const [profileDropdownPos, setProfileDropdownPos] = useState<DropdownPosition>({
+    top: 78,
+    right: 12,
+    width: PROFILE_DROPDOWN_WIDTH,
+  });
+
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
-  const greeting = useMemo(() => greetingForHour(new Date().getHours()), []);
+  const profileButtonRef = useRef<HTMLButtonElement | null>(null);
+  const profileDropdownRef = useRef<HTMLDivElement | null>(null);
 
-  const {
-    data: feed,
-    mutate,
-  } = useSWR<NotificationsFeedResp>(FEED_KEY, fetcher, {
+  const greeting = useMemo(() => greetingForHour(new Date().getHours()), []);
+  const initials = useMemo(() => getInitials(userName), [userName]);
+
+  const { data: feed, mutate } = useSWR<NotificationsFeedResp>(FEED_KEY, fetcher, {
     revalidateOnFocus: true,
     dedupingInterval: 10_000,
   });
@@ -89,6 +118,7 @@ export default function IronAcreHeader({
     };
 
     window.addEventListener("notifications:changed", onNotificationsChanged as EventListener);
+
     return () => {
       window.removeEventListener("notifications:changed", onNotificationsChanged as EventListener);
     };
@@ -118,23 +148,54 @@ export default function IronAcreHeader({
   }, [notificationsOpen]);
 
   useEffect(() => {
-    if (!notificationsOpen) return;
+    if (!profileOpen) return;
+
+    const updatePosition = () => {
+      const rect = profileButtonRef.current?.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const width = Math.min(PROFILE_DROPDOWN_WIDTH, viewportWidth - 24);
+      const right = rect ? Math.max(12, viewportWidth - rect.right) : 12;
+      const top = rect ? rect.bottom + 10 : 78;
+
+      setProfileDropdownPos({ top, right, width });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [profileOpen]);
+
+  useEffect(() => {
+    if (!notificationsOpen && !profileOpen) return;
 
     const onMouseDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
 
-      const clickedButton = buttonRef.current?.contains(target);
-      const clickedDropdown = dropdownRef.current?.contains(target);
+      const clickedNotificationButton = buttonRef.current?.contains(target);
+      const clickedNotificationDropdown = dropdownRef.current?.contains(target);
 
-      if (!clickedButton && !clickedDropdown) {
+      const clickedProfileButton = profileButtonRef.current?.contains(target);
+      const clickedProfileDropdown = profileDropdownRef.current?.contains(target);
+
+      if (!clickedNotificationButton && !clickedNotificationDropdown) {
         setNotificationsOpen(false);
+      }
+
+      if (!clickedProfileButton && !clickedProfileDropdown) {
+        setProfileOpen(false);
       }
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setNotificationsOpen(false);
+        setProfileOpen(false);
       }
     };
 
@@ -145,7 +206,11 @@ export default function IronAcreHeader({
       document.removeEventListener("mousedown", onMouseDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [notificationsOpen]);
+  }, [notificationsOpen, profileOpen]);
+
+  async function handleSignOut() {
+    await signOut({ callbackUrl: "/register" });
+  }
 
   return (
     <>
@@ -173,74 +238,113 @@ export default function IronAcreHeader({
             <div className="ia-page-subtitle">Iron Acre performance dashboard</div>
           </div>
 
-          <button
-            ref={buttonRef}
-            type="button"
-            className="btn"
-            title="Notifications"
-            aria-label="Open notifications"
-            aria-expanded={notificationsOpen}
-            aria-haspopup="dialog"
-            onClick={() => setNotificationsOpen((prev) => !prev)}
-            style={{
-              width: 46,
-              height: 46,
-              padding: 0,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 999,
-              border: bellHasUnread
-                ? "1px solid rgba(22, 219, 170, 0.34)"
-                : notificationsOpen
-                ? "1px solid rgba(22, 219, 170, 0.24)"
-                : "1px solid rgba(255,255,255,0.10)",
-              background: bellHasUnread
-                ? "rgba(22, 219, 170, 0.12)"
-                : notificationsOpen
-                ? "rgba(22, 219, 170, 0.08)"
-                : "rgba(255,255,255,0.05)",
-              color: bellHasUnread || notificationsOpen ? "#16dbaa" : "#fff",
-              boxShadow: bellHasUnread
-                ? "0 0 18px rgba(22, 219, 170, 0.18)"
-                : notificationsOpen
-                ? "0 0 12px rgba(22, 219, 170, 0.12)"
-                : "none",
-              transition: "all 0.2s ease",
-              flex: "0 0 auto",
-              position: "relative",
-              animation:
-                bellHasUnread && !notificationsOpen
-                  ? "iaBellPulse 1.8s ease-in-out infinite"
+          <div className="d-flex align-items-center gap-2" style={{ flex: "0 0 auto" }}>
+            <button
+              ref={buttonRef}
+              type="button"
+              className="btn"
+              title="Notifications"
+              aria-label="Open notifications"
+              aria-expanded={notificationsOpen}
+              aria-haspopup="dialog"
+              onClick={() => {
+                setProfileOpen(false);
+                setNotificationsOpen((prev) => !prev);
+              }}
+              style={{
+                width: 46,
+                height: 46,
+                padding: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 999,
+                border: bellHasUnread
+                  ? "1px solid rgba(22, 219, 170, 0.34)"
+                  : notificationsOpen
+                  ? "1px solid rgba(22, 219, 170, 0.24)"
+                  : "1px solid rgba(255,255,255,0.10)",
+                background: bellHasUnread
+                  ? "rgba(22, 219, 170, 0.12)"
+                  : notificationsOpen
+                  ? "rgba(22, 219, 170, 0.08)"
+                  : "rgba(255,255,255,0.05)",
+                color: bellHasUnread || notificationsOpen ? "#16dbaa" : "#fff",
+                boxShadow: bellHasUnread
+                  ? "0 0 18px rgba(22, 219, 170, 0.18)"
+                  : notificationsOpen
+                  ? "0 0 12px rgba(22, 219, 170, 0.12)"
                   : "none",
-            }}
-          >
-            <i className="fas fa-bell" />
+                transition: "all 0.2s ease",
+                position: "relative",
+                animation:
+                  bellHasUnread && !notificationsOpen
+                    ? "iaBellPulse 1.8s ease-in-out infinite"
+                    : "none",
+              }}
+            >
+              <i className="fas fa-bell" />
 
-            {unreadCount > 0 ? (
-              <span
-                style={{
-                  position: "absolute",
-                  top: -4,
-                  right: -4,
-                  minWidth: 20,
-                  height: 20,
-                  padding: "0 6px",
-                  borderRadius: 999,
-                  background: "#16dbaa",
-                  color: "#062820",
-                  fontSize: 11,
-                  fontWeight: 800,
-                  lineHeight: "20px",
-                  textAlign: "center",
-                  boxShadow:
-                    "0 0 0 2px rgba(10,14,20,0.95), 0 0 12px rgba(22, 219, 170, 0.28)",
-                }}
-              >
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            ) : null}
-          </button>
+              {unreadCount > 0 ? (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -4,
+                    right: -4,
+                    minWidth: 20,
+                    height: 20,
+                    padding: "0 6px",
+                    borderRadius: 999,
+                    background: "#16dbaa",
+                    color: "#062820",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    lineHeight: "20px",
+                    textAlign: "center",
+                    boxShadow:
+                      "0 0 0 2px rgba(10,14,20,0.95), 0 0 12px rgba(22, 219, 170, 0.28)",
+                  }}
+                >
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              ) : null}
+            </button>
+
+            <button
+              ref={profileButtonRef}
+              type="button"
+              className="btn"
+              title="Profile"
+              aria-label="Open profile menu"
+              aria-expanded={profileOpen}
+              aria-haspopup="menu"
+              onClick={() => {
+                setNotificationsOpen(false);
+                setProfileOpen((prev) => !prev);
+              }}
+              style={{
+                width: 46,
+                height: 46,
+                padding: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 999,
+                border: profileOpen
+                  ? "1px solid rgba(22, 219, 170, 0.28)"
+                  : "1px solid rgba(255,255,255,0.10)",
+                background: profileOpen ? "rgba(22, 219, 170, 0.08)" : "rgba(255,255,255,0.05)",
+                color: profileOpen ? "#16dbaa" : "#fff",
+                boxShadow: profileOpen ? "0 0 12px rgba(22, 219, 170, 0.12)" : "none",
+                transition: "all 0.2s ease",
+                fontSize: 13,
+                fontWeight: 800,
+                letterSpacing: "0.04em",
+              }}
+            >
+              {initials}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -269,6 +373,110 @@ export default function IronAcreHeader({
           }}
         >
           {notificationsContent || <div className="text-dim small">No notifications available.</div>}
+        </div>
+      ) : null}
+
+      {profileOpen ? (
+        <div
+          ref={profileDropdownRef}
+          role="menu"
+          aria-label="Profile menu"
+          className="ia-tile"
+          style={{
+            position: "fixed",
+            top: profileDropdownPos.top,
+            right: profileDropdownPos.right,
+            width: profileDropdownPos.width,
+            zIndex: 1050,
+            padding: 14,
+            borderRadius: 22,
+            background:
+              "linear-gradient(180deg, rgba(14,18,24,0.98) 0%, rgba(10,14,20,0.98) 100%)",
+            border: "1px solid rgba(255,255,255,0.10)",
+            boxShadow: "0 18px 48px rgba(0,0,0,0.45)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+          }}
+        >
+          <div
+            style={{
+              padding: "4px 4px 12px",
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              marginBottom: 10,
+            }}
+          >
+            <div style={{ color: "#fff", fontWeight: 800, lineHeight: 1.2 }}>{userName}</div>
+            <div className="text-dim small mt-1">Iron Acre account</div>
+          </div>
+
+          <div style={{ display: "grid", gap: 6 }}>
+            <Link
+              href="/profile"
+              role="menuitem"
+              className="text-decoration-none"
+              onClick={() => setProfileOpen(false)}
+              style={{
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 10px",
+                borderRadius: 14,
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                fontSize: 14,
+                fontWeight: 700,
+              }}
+            >
+              <i className="fas fa-user" style={{ color: "#16dbaa", width: 16 }} />
+              Profile
+            </Link>
+
+            <Link
+              href="/onboarding?returnTo=%2Firon-acre"
+              role="menuitem"
+              className="text-decoration-none"
+              onClick={() => setProfileOpen(false)}
+              style={{
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 10px",
+                borderRadius: 14,
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                fontSize: 14,
+                fontWeight: 700,
+              }}
+            >
+              <i className="fas fa-rotate-right" style={{ color: "#16dbaa", width: 16 }} />
+              Redo onboarding
+            </Link>
+
+            <button
+              type="button"
+              role="menuitem"
+              onClick={handleSignOut}
+              style={{
+                color: "rgba(255,255,255,0.86)",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 10px",
+                borderRadius: 14,
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                fontSize: 14,
+                fontWeight: 700,
+                textAlign: "left",
+                width: "100%",
+              }}
+            >
+              <i className="fas fa-right-from-bracket" style={{ color: "#ffb3b3", width: 16 }} />
+              Sign out
+            </button>
+          </div>
         </div>
       ) : null}
 
