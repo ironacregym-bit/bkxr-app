@@ -19,26 +19,18 @@ type Body = {
   id?: string;
 };
 
-function getUserId(session: any): string {
-  const raw =
-    String(session?.user?.uid || "").trim() ||
-    String(session?.user?.id || "").trim() ||
-    String(session?.user?.email || "").trim().toLowerCase();
-
-  return raw;
+function getNotificationUserId(session: any): string {
+  return String(session?.user?.email || "").trim().toLowerCase();
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<Resp>
-) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse<Resp>) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   const session = await getServerSession(req, res, authOptions).catch(() => null);
-  const userId = getUserId(session);
+  const userId = getNotificationUserId(session);
 
   if (!userId) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -52,11 +44,7 @@ export default async function handler(
       return res.status(400).json({ error: "Notification id is required" });
     }
 
-    const ref = firestore
-      .collection("user_notifications")
-      .doc(userId)
-      .collection("items")
-      .doc(id);
+    const ref = firestore.collection("user_notifications").doc(userId).collection("items").doc(id);
 
     const snap = await ref.get();
 
