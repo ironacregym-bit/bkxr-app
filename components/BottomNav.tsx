@@ -14,7 +14,7 @@ export default function BottomNav() {
 
   const navItems = useMemo(
     () => [
-      { href: "/", icon: "fa-home", label: "Home" },
+      { href: "/iron-acre", icon: "fa-home", label: "Home" },
       { href: "/workout", icon: "fa-dumbbell", label: "Train" },
       { href: "/nutrition-home", icon: "fa-utensils", label: "Nutrition" },
       { href: "/progress", icon: "fa-chart-line", label: "Progress" },
