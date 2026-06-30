@@ -298,7 +298,7 @@ export default function ProfilePage() {
           <div className="ia-profile-topline">
             <Link href="/iron-acre" className="ia-profile-back">
               <i className="fas fa-chevron-left" />
-              Dashboard
+               Dashboard
             </Link>
 
             <span className={`ia-profile-status ia-profile-status-${subStatus}`}>
@@ -317,7 +317,7 @@ export default function ProfilePage() {
 
             <div className="ia-profile-name-block">
               <div className="ia-profile-kicker">Iron Acre account</div>
-              <h1>{displayName}</h1>
+              <h1 className="ia-page-title">{displayName}</h1>
               <p>{displayEmail}</p>
             </div>
           </div>
@@ -345,7 +345,7 @@ export default function ProfilePage() {
               <i className="fas fa-rotate-right" />
             </span>
             <span>
-              <strong>Redo onboarding</strong>
+              <strong>Redo onboarding </strong>
               <small>Update goals, body data and setup details.</small>
             </span>
           </Link>
@@ -355,8 +355,8 @@ export default function ProfilePage() {
               <i className="fas fa-bowl-food" />
             </span>
             <span>
-              <strong>Nutrition goal</strong>
-              <small>Change bulk, cut or maintenance settings.</small>
+              <strong>Nutrition goal </strong>
+              <small>Change To Your Own Macros</small>
             </span>
           </Link>
 
@@ -365,7 +365,7 @@ export default function ProfilePage() {
               <i className="fas fa-dumbbell" />
             </span>
             <span>
-              <strong>Training programme</strong>
+              <strong >Training programme </strong>
               <small>Switch your current workout programme.</small>
             </span>
           </Link>
@@ -375,7 +375,7 @@ export default function ProfilePage() {
           <div className="ia-profile-section-head">
             <div>
               <div className="ia-profile-kicker">Personal</div>
-              <h2>Your details</h2>
+              <h2 className="ia-page-title">Your details</h2>
             </div>
             <span className="ia-profile-mini-note">Used to personalise your app experience</span>
           </div>
@@ -463,7 +463,7 @@ export default function ProfilePage() {
             <div className="ia-profile-section-head">
               <div>
                 <div className="ia-profile-kicker">Metrics</div>
-                <h2>Body data</h2>
+                <h2 className="ia-page-title">Body data</h2>
               </div>
               <span className="ia-profile-mini-note">Keeps nutrition targets accurate</span>
             </div>
