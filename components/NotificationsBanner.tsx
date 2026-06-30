@@ -24,6 +24,7 @@ type FeedResp = {
 
 function formatCreatedAt(value?: string | null) {
   if (!value) return "";
+
   try {
     return new Date(value).toLocaleDateString("en-GB", {
       day: "numeric",
@@ -63,7 +64,8 @@ export default function NotificationsBanner() {
     return items.filter((item) => !item.read_at).length;
   }, [items]);
 
-  const { supported, subscribed, permission, busy, error: pushError } = usePushNotifications();
+  const { supported, subscribed, permission, busy, error: pushError } =
+    usePushNotifications();
 
   const [workingId, setWorkingId] = useState<string | null>(null);
   const [clearingAll, setClearingAll] = useState(false);
@@ -121,7 +123,10 @@ export default function NotificationsBanner() {
       });
 
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(String(json?.error || "Failed to clear notifications"));
+
+      if (!res.ok) {
+        throw new Error(String(json?.error || "Failed to clear notifications"));
+      }
 
       await mutate({ items: [] }, false);
       notifyNotificationsChanged();
@@ -145,11 +150,15 @@ export default function NotificationsBanner() {
       });
 
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(String(json?.error || "Failed to dismiss notification"));
+
+      if (!res.ok) {
+        throw new Error(String(json?.error || "Failed to dismiss notification"));
+      }
 
       await mutate(
         (current) => {
           const currentItems = Array.isArray(current?.items) ? current.items : [];
+
           return {
             items: currentItems.filter((item) => item.id !== id),
           };
@@ -166,71 +175,30 @@ export default function NotificationsBanner() {
   }
 
   return (
-    <div>
-      <div className="d-flex align-items-center justify-content-between gap-2 mb-3">
+    <div className="ia-notifications">
+      <div className="ia-notifications-header">
         <div>
-          <div
-            className="text-dim small"
-            style={{ letterSpacing: "0.08em", textTransform: "uppercase" }}
-          >
-            Updates
-          </div>
-
-          <div style={{ fontSize: "1.05rem", fontWeight: 700, color: "#fff" }}>
-            Notifications
-          </div>
+          <div className="ia-notifications-kicker">Updates</div>
+          <div className="ia-notifications-title">Notifications</div>
         </div>
 
-        <div className="d-flex align-items-center gap-2">
+        <div className="ia-notifications-header-actions">
           {unreadCount > 0 ? (
-            <span
-              className="ia-badge"
-              style={{
-                background: "rgba(22, 219, 170, 0.12)",
-                border: "1px solid rgba(22, 219, 170, 0.28)",
-                color: "#d9fff5",
-                minWidth: 30,
-                justifyContent: "center",
-              }}
-            >
-              {unreadCount}
-            </span>
+            <span className="ia-badge ia-notifications-count">{unreadCount}</span>
           ) : null}
 
           {supported ? (
             subscribed ? (
-              <div
-                className="ia-badge"
-                style={{
-                  background: "rgba(22, 219, 170, 0.12)",
-                  border: "1px solid rgba(22, 219, 170, 0.28)",
-                  color: "#d9fff5",
-                  boxShadow: "0 0 0 1px rgba(255,255,255,0.02) inset",
-                }}
-              >
+              <div className="ia-badge ia-notifications-push ia-notifications-push-enabled">
                 Push enabled
               </div>
             ) : (
-              <div
-                className="ia-badge"
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.10)",
-                  color: "rgba(255,255,255,0.82)",
-                }}
-              >
+              <div className="ia-badge ia-notifications-push ia-notifications-push-off">
                 Push off
               </div>
             )
           ) : (
-            <div
-              className="ia-badge"
-              style={{
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.10)",
-                color: "rgba(255,255,255,0.60)",
-              }}
-            >
+            <div className="ia-badge ia-notifications-push ia-notifications-push-unsupported">
               Unsupported
             </div>
           )}
@@ -238,7 +206,7 @@ export default function NotificationsBanner() {
       </div>
 
       {items.length > 0 ? (
-        <div className="d-flex justify-content-end mb-3">
+        <div className="ia-notifications-clear-row">
           <button
             type="button"
             className="ia-btn ia-btn-outline"
@@ -251,140 +219,52 @@ export default function NotificationsBanner() {
       ) : null}
 
       {supported && !subscribed ? (
-        <div
-          className="mb-3"
-          style={{
-            borderRadius: 18,
-            padding: 14,
-            background: "rgba(22, 219, 170, 0.08)",
-            border: "1px solid rgba(22, 219, 170, 0.18)",
-            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.03)",
-          }}
-        >
-          <div style={{ fontWeight: 700, color: "#fff", marginBottom: 6 }}>
-            Turn on push notifications
-          </div>
+        <div className="ia-notifications-push-card">
+          <div className="ia-notifications-push-title">Turn on push notifications</div>
 
-          <div
-            style={{
-              color: "rgba(255,255,255,0.78)",
-              fontSize: 14,
-              lineHeight: 1.45,
-              marginBottom: 12,
-            }}
-          >
+          <div className="ia-notifications-push-copy">
             Get workout reminders, class updates and important gym alerts straight to your device.
           </div>
 
           {permission === "denied" ? (
-            <div
-              style={{
-                color: "#ffb3b3",
-                fontSize: 13,
-                lineHeight: 1.45,
-                marginBottom: 10,
-              }}
-            >
+            <div className="ia-notifications-error-copy">
               Notifications are currently blocked in your browser settings.
             </div>
           ) : null}
 
           {!!pushError ? (
-            <div
-              style={{
-                color: "#ffb3b3",
-                fontSize: 13,
-                lineHeight: 1.45,
-                marginBottom: 10,
-              }}
-            >
-              {pushError}
-            </div>
+            <div className="ia-notifications-error-copy">{pushError}</div>
           ) : null}
 
-          <PushSubscribeButton
-            className="ia-btn ia-btn-primary"
-            style={{
-              borderRadius: 999,
-              whiteSpace: "nowrap",
-              minHeight: 40,
-              width: "100%",
-              justifyContent: "center",
-            }}
-          >
+          <PushSubscribeButton className="ia-btn ia-btn-primary ia-notifications-push-button">
             {busy ? "Enabling..." : "Enable push notifications"}
           </PushSubscribeButton>
         </div>
       ) : null}
 
       {error ? (
-        <div
-          style={{
-            borderRadius: 16,
-            padding: 14,
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            color: "rgba(255,255,255,0.72)",
-            fontSize: 14,
-          }}
-        >
+        <div className="ia-notifications-state">
           Unable to load notifications right now.
         </div>
       ) : isLoading ? (
-        <div style={{ display: "grid", gap: 10 }}>
+        <div className="ia-notifications-loading-list">
           {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              style={{
-                borderRadius: 16,
-                padding: "12px 14px",
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <div
-                style={{
-                  width: "38%",
-                  height: 12,
-                  borderRadius: 999,
-                  background: "rgba(255,255,255,0.12)",
-                  marginBottom: 8,
-                }}
-              />
-
-              <div
-                style={{
-                  width: "78%",
-                  height: 10,
-                  borderRadius: 999,
-                  background: "rgba(255,255,255,0.08)",
-                }}
-              />
+            <div key={i} className="ia-notifications-skeleton-card">
+              <div className="ia-notifications-skeleton-title" />
+              <div className="ia-notifications-skeleton-line" />
             </div>
           ))}
         </div>
       ) : items.length ? (
-        <div style={{ display: "grid", gap: 10 }}>
+        <div className="ia-notifications-list">
           {items.map((item) => {
             const unread = !item.read_at;
 
             const content = (
               <div
-                style={{
-                  borderRadius: 16,
-                  padding: "12px 14px",
-                  background: unread
-                    ? "linear-gradient(180deg, rgba(14, 44, 36, 0.82) 0%, rgba(10, 28, 24, 0.88) 100%)"
-                    : "rgba(255,255,255,0.03)",
-                  border: unread
-                    ? "1px solid rgba(22, 219, 170, 0.24)"
-                    : "1px solid rgba(255,255,255,0.08)",
-                  boxShadow: unread
-                    ? "0 0 0 1px rgba(255,255,255,0.02) inset, 0 8px 22px rgba(0,0,0,0.18)"
-                    : "none",
-                  transition: "all 0.2s ease",
-                  position: "relative",
-                }}
+                className={`ia-notification-card ${
+                  unread ? "ia-notification-card-unread" : "ia-notification-card-read"
+                }`}
               >
                 <button
                   type="button"
@@ -395,62 +275,27 @@ export default function NotificationsBanner() {
                   }}
                   disabled={workingId === item.id}
                   aria-label="Dismiss notification"
-                  style={{
-                    position: "absolute",
-                    top: 10,
-                    right: 10,
-                    width: 24,
-                    height: 24,
-                    borderRadius: 999,
-                    border: "1px solid rgba(255,255,255,0.10)",
-                    background: "rgba(255,255,255,0.04)",
-                    color: "rgba(255,255,255,0.78)",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: 0,
-                    cursor: "pointer",
-                  }}
+                  className="ia-notification-dismiss"
                 >
                   {workingId === item.id ? "…" : "×"}
                 </button>
 
-                <div
-                  className="d-flex align-items-start justify-content-between gap-2"
-                  style={{ paddingRight: 30 }}
-                >
-                  <div className="d-flex align-items-start gap-2" style={{ minWidth: 0 }}>
+                <div className="ia-notification-layout">
+                  <div className="ia-notification-main">
                     <div
-                      style={{
-                        width: 9,
-                        height: 9,
-                        borderRadius: "50%",
-                        marginTop: 6,
-                        flex: "0 0 auto",
-                        background: unread ? "#16dbaa" : "rgba(255,255,255,0.25)",
-                        boxShadow: unread ? "0 0 0 4px rgba(22, 219, 170, 0.12)" : "none",
-                      }}
+                      className={`ia-notification-dot ${
+                        unread ? "ia-notification-dot-unread" : "ia-notification-dot-read"
+                      }`}
                     />
 
-                    <div style={{ minWidth: 0 }}>
+                    <div className="ia-notification-copy">
+                      <div className="ia-notification-title">{item.title}</div>
                       <div
-                        style={{
-                          fontWeight: 700,
-                          fontSize: 15,
-                          lineHeight: 1.25,
-                          color: "#fff",
-                          marginBottom: 4,
-                        }}
-                      >
-                        {item.title}
-                      </div>
-
-                      <div
-                        style={{
-                          fontSize: 13,
-                          lineHeight: 1.45,
-                          color: unread ? "rgba(235,255,249,0.88)" : "rgba(255,255,255,0.82)",
-                        }}
+                        className={`ia-notification-message ${
+                          unread
+                            ? "ia-notification-message-unread"
+                            : "ia-notification-message-read"
+                        }`}
                       >
                         {item.message}
                       </div>
@@ -458,12 +303,9 @@ export default function NotificationsBanner() {
                   </div>
 
                   <div
-                    style={{
-                      fontSize: 11,
-                      color: unread ? "rgba(195, 255, 240, 0.62)" : "rgba(255,255,255,0.55)",
-                      whiteSpace: "nowrap",
-                      flex: "0 0 auto",
-                    }}
+                    className={`ia-notification-date ${
+                      unread ? "ia-notification-date-unread" : "ia-notification-date-read"
+                    }`}
                   >
                     {formatCreatedAt(item.created_at)}
                   </div>
@@ -473,7 +315,11 @@ export default function NotificationsBanner() {
 
             if (isInternalHref(item.href)) {
               return (
-                {item.href
+                <Link
+                  key={item.id}
+                  href={item.href || "/"}
+                  className="ia-notification-link"
+                >
                   {content}
                 </Link>
               );
@@ -481,7 +327,13 @@ export default function NotificationsBanner() {
 
             if (item.href) {
               return (
-                {item.href}
+                <a
+                  key={item.id}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ia-notification-link"
+                >
                   {content}
                 </a>
               );
@@ -491,19 +343,7 @@ export default function NotificationsBanner() {
           })}
         </div>
       ) : (
-        <div
-          style={{
-            borderRadius: 16,
-            padding: 14,
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            color: "rgba(255,255,255,0.72)",
-            fontSize: 14,
-            lineHeight: 1.45,
-          }}
-        >
-          No notifications yet.
-        </div>
+        <div className="ia-notifications-state">No notifications yet.</div>
       )}
     </div>
   );
