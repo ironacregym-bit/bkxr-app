@@ -558,10 +558,18 @@ export default function ProfilePage() {
               </div>
               <span className="ia-profile-mini-note">Read-only</span>
             </div>
-
+        
             <div className="ia-profile-system-list">
-                     </div>
-
+              <div>
+                <span>Email</span>
+                <strong>{email || "Not available"}</strong>
+              </div>
+        
+              <div>
+                <span>Created</span>
+                <strong>{formData.created_at || "Not available"}</strong>
+              </div>
+        
               <div>
                 <span>Last login</span>
                 <strong>{formData.last_login_at || "Not available"}</strong>
