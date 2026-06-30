@@ -34,14 +34,28 @@ function formatCreatedAt(value?: string | null) {
   }
 }
 
+function notifyNotificationsChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("notifications:changed"));
+}
+
+function isInternalHref(href?: string | null) {
+  const value = String(href || "").trim();
+  return value.startsWith("/") && !value.startsWith("//");
+}
+
 export default function NotificationsBanner() {
-  const { data, error, isLoading, mutate } = useSWR<FeedResp>("/api/notifications/feed?limit=8", fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 30_000,
-  });
+  const { data, error, isLoading, mutate } = useSWR<FeedResp>(
+    "/api/notifications/feed?limit=8",
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30_000,
+    }
+  );
 
   const items = useMemo(() => {
-    const raw = Array.isArray(data?.items) ? data!.items! : [];
+    const raw = Array.isArray(data?.items) ? data.items : [];
     return raw.filter((item) => !item.dismissed_at);
   }, [data]);
 
@@ -52,7 +66,7 @@ export default function NotificationsBanner() {
   const { supported, subscribed, permission, busy, error: pushError } = usePushNotifications();
 
   const [workingId, setWorkingId] = useState<string | null>(null);
-  const [markingAll, setMarkingAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
   const openedOnceRef = useRef(false);
 
   useEffect(() => {
@@ -71,60 +85,50 @@ export default function NotificationsBanner() {
 
         await mutate(
           (current) => {
-            const currentItems = Array.isArray(current?.items) ? current!.items! : [];
+            const currentItems = Array.isArray(current?.items) ? current.items : [];
+            const nowIso = new Date().toISOString();
+
             return {
               items: currentItems.map((item) =>
                 item.read_at
                   ? item
                   : {
                       ...item,
-                      read_at: new Date().toISOString(),
+                      read_at: nowIso,
                     }
               ),
             };
           },
           false
         );
+
+        notifyNotificationsChanged();
       } catch {
         // no-op
       }
     })();
   }, [items.length, unreadCount, mutate]);
 
-  async function handleMarkAllRead() {
-    if (!unreadCount) return;
+  async function handleClearAll() {
+    if (!items.length) return;
 
     try {
-      setMarkingAll(true);
+      setClearingAll(true);
 
-      const res = await fetch("/api/notifications/mark-all-read", {
+      const res = await fetch("/api/notifications/clear-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
 
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(String(json?.error || "Failed to mark all as read"));
+      if (!res.ok) throw new Error(String(json?.error || "Failed to clear notifications"));
 
-      await mutate(
-        (current) => {
-          const currentItems = Array.isArray(current?.items) ? current!.items! : [];
-          return {
-            items: currentItems.map((item) =>
-              item.read_at
-                ? item
-                : {
-                    ...item,
-                    read_at: new Date().toISOString(),
-                  }
-            ),
-          };
-        },
-        false
-      );
+      await mutate({ items: [] }, false);
+      notifyNotificationsChanged();
     } catch {
       // no-op
     } finally {
-      setMarkingAll(false);
+      setClearingAll(false);
     }
   }
 
@@ -145,13 +149,15 @@ export default function NotificationsBanner() {
 
       await mutate(
         (current) => {
-          const currentItems = Array.isArray(current?.items) ? current!.items! : [];
+          const currentItems = Array.isArray(current?.items) ? current.items : [];
           return {
             items: currentItems.filter((item) => item.id !== id),
           };
         },
         false
       );
+
+      notifyNotificationsChanged();
     } catch {
       // no-op
     } finally {
@@ -231,15 +237,15 @@ export default function NotificationsBanner() {
         </div>
       </div>
 
-      {unreadCount > 0 ? (
+      {items.length > 0 ? (
         <div className="d-flex justify-content-end mb-3">
           <button
             type="button"
             className="ia-btn ia-btn-outline"
-            onClick={handleMarkAllRead}
-            disabled={markingAll}
+            onClick={handleClearAll}
+            disabled={clearingAll}
           >
-            {markingAll ? "Marking…" : "Mark all as read"}
+            {clearingAll ? "Clearing…" : "Clear all"}
           </button>
         </div>
       ) : null}
@@ -409,7 +415,10 @@ export default function NotificationsBanner() {
                   {workingId === item.id ? "…" : "×"}
                 </button>
 
-                <div className="d-flex align-items-start justify-content-between gap-2" style={{ paddingRight: 30 }}>
+                <div
+                  className="d-flex align-items-start justify-content-between gap-2"
+                  style={{ paddingRight: 30 }}
+                >
                   <div className="d-flex align-items-start gap-2" style={{ minWidth: 0 }}>
                     <div
                       style={{
@@ -462,16 +471,19 @@ export default function NotificationsBanner() {
               </div>
             );
 
-            if (item.href) {
+            if (isInternalHref(item.href)) {
               return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  className="text-decoration-none"
-                  style={{ color: "inherit" }}
-                >
+                {item.href
                   {content}
                 </Link>
+              );
+            }
+
+            if (item.href) {
+              return (
+                {item.href}
+                  {content}
+                </a>
               );
             }
 
