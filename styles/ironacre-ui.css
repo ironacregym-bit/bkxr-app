@@ -1962,3 +1962,319 @@ a {
     inset 0 1px 0 rgba(255,255,255,0.03),
     0 0 0 1px rgba(35, 255, 150, 0.05);
 }
+/* ─────────────────────────
+   Notifications dropdown/feed
+───────────────────────── */
+
+.ia-notifications {
+  width: 100%;
+}
+
+.ia-notifications-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ia-notifications-kicker {
+  color: var(--ia-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.ia-notifications-title {
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.ia-notifications-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.ia-notifications-count {
+  min-width: 30px;
+  justify-content: center;
+  background: rgba(22, 219, 170, 0.12);
+  border: 1px solid rgba(22, 219, 170, 0.28);
+  color: #d9fff5;
+}
+
+.ia-notifications-push {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+}
+
+.ia-notifications-push-enabled {
+  background: rgba(22, 219, 170, 0.12);
+  border: 1px solid rgba(22, 219, 170, 0.28);
+  color: #d9fff5;
+}
+
+.ia-notifications-push-off {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.ia-notifications-push-unsupported {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.60);
+}
+
+.ia-notifications-clear-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.ia-notifications-push-card {
+  margin-bottom: 12px;
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(22, 219, 170, 0.08);
+  border: 1px solid rgba(22, 219, 170, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.ia-notifications-push-title {
+  color: #fff;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.ia-notifications-push-copy {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+.ia-notifications-error-copy {
+  color: #ffb3b3;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+
+.ia-notifications-push-button {
+  width: 100%;
+  min-height: 40px !important;
+  border-radius: 999px !important;
+  white-space: nowrap;
+}
+
+.ia-notifications-state {
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.ia-notifications-loading-list,
+.ia-notifications-list {
+  display: grid;
+  gap: 10px;
+}
+
+.ia-notifications-skeleton-card {
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ia-notifications-skeleton-title {
+  width: 38%;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  margin-bottom: 8px;
+}
+
+.ia-notifications-skeleton-line {
+  width: 78%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ia-notification-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.ia-notification-link:hover {
+  color: inherit;
+}
+
+.ia-notification-card {
+  position: relative;
+  border-radius: 16px;
+  padding: 12px 14px;
+  transition: all 0.2s ease;
+}
+
+.ia-notification-card-unread {
+  background: linear-gradient(180deg, rgba(14, 44, 36, 0.82) 0%, rgba(10, 28, 24, 0.88) 100%);
+  border: 1px solid rgba(22, 219, 170, 0.24);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+    0 8px 22px rgba(0, 0, 0, 0.18);
+}
+
+.ia-notification-card-read {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+
+.ia-notification-link:hover .ia-notification-card,
+.ia-notification-card:hover {
+  border-color: rgba(22, 219, 170, 0.24);
+  background: rgba(22, 219, 170, 0.06);
+}
+
+.ia-notification-dismiss {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.ia-notification-dismiss:hover,
+.ia-notification-dismiss:focus {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.ia-notification-dismiss:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ia-notification-layout {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding-right: 30px;
+}
+
+.ia-notification-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ia-notification-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 6px;
+  flex: 0 0 auto;
+}
+
+.ia-notification-dot-unread {
+  background: #16dbaa;
+  box-shadow: 0 0 0 4px rgba(22, 219, 170, 0.12);
+}
+
+.ia-notification-dot-read {
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: none;
+}
+
+.ia-notification-copy {
+  min-width: 0;
+}
+
+.ia-notification-title {
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  line-height: 1.25;
+  margin-bottom: 4px;
+}
+
+.ia-notification-message {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.ia-notification-message-unread {
+  color: rgba(235, 255, 249, 0.88);
+}
+
+.ia-notification-message-read {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.ia-notification-date {
+  font-size: 0.6875rem;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.ia-notification-date-unread {
+  color: rgba(195, 255, 240, 0.62);
+}
+
+.ia-notification-date-read {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+@media (max-width: 640px) {
+  .ia-notifications-header {
+    gap: 8px;
+  }
+
+  .ia-notifications-header-actions {
+    gap: 6px;
+  }
+
+  .ia-notifications-push {
+    font-size: 0.62rem;
+  }
+
+  .ia-notification-card {
+    padding: 11px 12px;
+  }
+
+  .ia-notification-layout {
+    gap: 7px;
+  }
+
+  .ia-notification-title {
+    font-size: 0.9rem;
+  }
+
+  .ia-notification-message {
+    font-size: 0.79rem;
+  }
+}
