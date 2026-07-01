@@ -13,7 +13,9 @@ const fetcher = (u: string) => fetch(u).then((r) => r.json());
 type Sex = "male" | "female" | "other" | null;
 type GoalPrimary = "lose" | "tone" | "gain" | null;
 type JobType = "desk" | "mixed" | "manual" | "athlete" | null;
-type StepKey = "metrics" | "goal" | "finish";
+type UserType = "gym" | "online" | null;
+type MembershipStatus = "gym_member" | "online_user" | "none" | "trial" | "cancelled" | string | null;
+type StepKey = "metrics" | "goal" | "program" | "finish";
 
 type UsersDoc = {
   email?: string;
@@ -31,6 +33,9 @@ type UsersDoc = {
   fat_target?: number | null;
   goal_primary?: GoalPrimary;
   workout_type?: string | null;
+  program_id?: string | null;
+  user_type?: UserType;
+  membership_status?: MembershipStatus;
   subscription_status?: string | null;
   trial_end?: string | null;
   gym_id?: string | null;
@@ -39,6 +44,18 @@ type UsersDoc = {
   onboarding_complete?: boolean | null;
   onboarding_started_at?: string | null;
   onboarding_completed_at?: string | null;
+};
+
+type ProgramOption = {
+  id: string;
+  title: string;
+  subtitle: string;
+};
+
+type GymOption = {
+  id: string;
+  title: string;
+  subtitle: string;
 };
 
 const STEPS: Array<{ key: StepKey; title: string; subtitle: string }> = [
@@ -51,6 +68,11 @@ const STEPS: Array<{ key: StepKey; title: string; subtitle: string }> = [
     key: "goal",
     title: "Goal and activity",
     subtitle: "Tell us what you want to achieve and how active you are day to day.",
+  },
+  {
+    key: "program",
+    title: "Training setup",
+    subtitle: "Choose your programme and tell us how you’ll use Iron Acre.",
   },
   {
     key: "finish",
@@ -91,6 +113,32 @@ const ACTIVITY_OPTIONS: Array<{
   },
 ];
 
+const PROGRAM_OPTIONS: ProgramOption[] = [
+  {
+    id: "farm-strength",
+    title: "Farm Strength",
+    subtitle: "Strength-focused training built around compound lifts, conditioning and progress.",
+  },
+  {
+    id: "fat-loss-engine",
+    title: "Fat Loss Engine",
+    subtitle: "Structured training for calorie burn, consistency and sustainable body composition.",
+  },
+  {
+    id: "hybrid-athlete",
+    title: "Hybrid Athlete",
+    subtitle: "A balanced plan combining strength, fitness and conditioning.",
+  },
+];
+
+const GYM_OPTIONS: GymOption[] = [
+  {
+    id: "iron-acre-gym",
+    title: "Iron Acre Gym",
+    subtitle: "Get class updates, gym sessions and member-focused training through the app.",
+  },
+];
+
 const ONBOARDING_FIELD_KEYS: Array<keyof UsersDoc> = [
   "sex",
   "DOB",
@@ -100,6 +148,10 @@ const ONBOARDING_FIELD_KEYS: Array<keyof UsersDoc> = [
   "job_type",
   "activity_factor",
   "goal_primary",
+  "program_id",
+  "user_type",
+  "membership_status",
+  "gym_id",
 ];
 
 function stepIndex(key: StepKey) {
@@ -152,6 +204,17 @@ function getJobTypeFromActivityFactor(activityFactor: number | null | undefined)
   return null;
 }
 
+function getProgramTitle(programId?: string | null) {
+  if (!programId) return "—";
+  return PROGRAM_OPTIONS.find((program) => program.id === programId)?.title || programId;
+}
+
+function getUserTypeTitle(userType?: UserType) {
+  if (userType === "gym") return "Iron Acre Gym";
+  if (userType === "online") return "Online user";
+  return "—";
+}
+
 function LoadingState() {
   return (
     <main className="container py-3" style={{ paddingBottom: 90, color: "#fff" }}>
@@ -199,6 +262,9 @@ export default function OnboardingPage() {
     fat_target: null,
     goal_primary: null,
     workout_type: null,
+    program_id: null,
+    user_type: null,
+    membership_status: null,
     subscription_status: null,
     trial_end: null,
     gym_id: null,
@@ -232,6 +298,10 @@ export default function OnboardingPage() {
         data?.job_type ??
         prev.job_type ??
         getJobTypeFromActivityFactor(Number(data?.activity_factor ?? 1.2)),
+      user_type: (data?.user_type as UserType) ?? prev.user_type ?? null,
+      membership_status: data?.membership_status ?? prev.membership_status ?? null,
+      program_id: data?.program_id ?? prev.program_id ?? null,
+      gym_id: data?.gym_id ?? prev.gym_id ?? null,
     }));
 
     setDirty(false);
@@ -329,7 +399,7 @@ export default function OnboardingPage() {
     !!profile.goal_primary &&
     Number(profile.activity_factor ?? 0) > 0;
 
-  const currentStepMeta = STEPS[stepIndex(step)];
+  const currentStepMeta = STEPS[stepIndex(step)] || STEPS[0];
   const progressPct = ((stepIndex(step) + 1) / STEPS.length) * 100;
   const isFirstStep = step === "metrics";
   const isLastStep = step === "finish";
@@ -369,6 +439,12 @@ export default function OnboardingPage() {
       if (!(Number(profile.activity_factor ?? 0) > 0)) return "Activity factor is required.";
     }
 
+    if (targetStep === "program") {
+      if (!profile.program_id) return "Please choose a training programme.";
+      if (!profile.user_type) return "Please choose whether you are joining the gym or training online.";
+      if (profile.user_type === "gym" && !profile.gym_id) return "Please choose a gym.";
+    }
+
     return null;
   }
 
@@ -377,23 +453,31 @@ export default function OnboardingPage() {
       email,
     };
 
-    const addDirtyField = (key: keyof UsersDoc, value: unknown) => {
-      if (!dirtyFields.has(key)) return;
+    const isCompleting = complete === true;
+
+    const addField = (key: keyof UsersDoc, value: unknown) => {
       if (value === undefined) return;
-      payload[key] = value;
+
+      if (isCompleting || dirtyFields.has(key)) {
+        payload[key] = value;
+      }
     };
 
-    addDirtyField("sex", profile.sex ?? null);
-    addDirtyField("DOB", profile.DOB ?? null);
-    addDirtyField("height_cm", profile.height_cm != null ? Number(profile.height_cm) : null);
-    addDirtyField("weight_kg", profile.weight_kg != null ? Number(profile.weight_kg) : null);
-    addDirtyField("bodyfat_pct", profile.bodyfat_pct != null ? Number(profile.bodyfat_pct) : null);
-    addDirtyField("job_type", profile.job_type ?? null);
-    addDirtyField("activity_factor", profile.activity_factor != null ? Number(profile.activity_factor) : null);
-    addDirtyField("goal_primary", profile.goal_primary ?? null);
+    addField("sex", profile.sex ?? null);
+    addField("DOB", profile.DOB ?? null);
+    addField("height_cm", profile.height_cm != null ? Number(profile.height_cm) : null);
+    addField("weight_kg", profile.weight_kg != null ? Number(profile.weight_kg) : null);
+    addField("bodyfat_pct", profile.bodyfat_pct != null ? Number(profile.bodyfat_pct) : null);
+    addField("job_type", profile.job_type ?? null);
+    addField("activity_factor", profile.activity_factor != null ? Number(profile.activity_factor) : null);
+    addField("goal_primary", profile.goal_primary ?? null);
+    addField("program_id", profile.program_id ?? null);
+    addField("user_type", profile.user_type ?? null);
+    addField("membership_status", profile.membership_status ?? null);
+    addField("gym_id", profile.gym_id ?? null);
 
     const shouldWriteTargets =
-      complete === true ||
+      isCompleting ||
       dirtyFields.has("sex") ||
       dirtyFields.has("DOB") ||
       dirtyFields.has("height_cm") ||
@@ -420,7 +504,7 @@ export default function OnboardingPage() {
       payload.fat_target = targets.fat_target;
     }
 
-    if (complete === true) {
+    if (isCompleting) {
       payload.onboarding_complete = true;
       payload.onboarding_completed_at = new Date().toISOString();
     }
@@ -456,6 +540,7 @@ export default function OnboardingPage() {
 
       setProfileState((prev) => ({
         ...prev,
+        ...payload,
         caloric_target: targets.caloric_target ?? prev.caloric_target,
         calorie_target: targets.caloric_target ?? prev.calorie_target,
         protein_target: targets.protein_target ?? prev.protein_target,
@@ -504,6 +589,11 @@ export default function OnboardingPage() {
     }
 
     if (step === "goal") {
+      saveProfile("program");
+      return;
+    }
+
+    if (step === "program") {
       saveProfile("finish");
     }
   }
@@ -516,8 +606,13 @@ export default function OnboardingPage() {
       return;
     }
 
-    if (step === "finish") {
+    if (step === "program") {
       setStep("goal");
+      return;
+    }
+
+    if (step === "finish") {
+      setStep("program");
     }
   }
 
@@ -596,7 +691,7 @@ export default function OnboardingPage() {
               </div>
               <div className="ia-page-title">Let’s tailor Iron Acre to you</div>
               <div className="ia-page-subtitle">
-                Step {stepIndex(step) + 1} of {STEPS.length}. Complete your profile so we can set better calories and macros.
+                Step {stepIndex(step) + 1} of {STEPS.length}. Complete your profile so we can set better calories, macros and training.
               </div>
             </div>
 
@@ -822,6 +917,95 @@ export default function OnboardingPage() {
           </>
         ) : null}
 
+        {step === "program" ? (
+          <>
+            <section className="ia-tile ia-tile-pad mb-3">
+              <div className="mb-3">
+                <div className="ia-card-title-compact">Choose your programme</div>
+                <div className="text-dim small mt-1">
+                  Pick the plan you want Iron Acre to build your training around.
+                </div>
+              </div>
+
+              <div className="d-grid gap-2">
+                {PROGRAM_OPTIONS.map((program) => {
+                  const selected = profile.program_id === program.id;
+
+                  return (
+                    <button
+                      key={program.id}
+                      type="button"
+                      className={selected ? "ia-onb-choice ia-onb-choice-selected" : "ia-onb-choice"}
+                      onClick={() =>
+                        setProfile((prev) => ({
+                          ...prev,
+                          program_id: program.id,
+                          workout_type: program.id,
+                        }))
+                      }
+                    >
+                      <span className="ia-onb-choice-title">{program.title}</span>
+                      <span className="ia-onb-choice-subtitle">{program.subtitle}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="ia-tile ia-tile-pad mb-3">
+              <div className="mb-3">
+                <div className="ia-card-title-compact">How will you use Iron Acre?</div>
+                <div className="text-dim small mt-1">
+                  Choose whether you want gym updates and class access, or online training only.
+                </div>
+              </div>
+
+              <div className="d-grid gap-2">
+                {GYM_OPTIONS.map((gym) => {
+                  const selected = profile.user_type === "gym" && profile.gym_id === gym.id;
+
+                  return (
+                    <button
+                      key={gym.id}
+                      type="button"
+                      className={selected ? "ia-onb-choice ia-onb-choice-selected" : "ia-onb-choice"}
+                      onClick={() =>
+                        setProfile((prev) => ({
+                          ...prev,
+                          user_type: "gym",
+                          membership_status: "gym_member",
+                          gym_id: gym.id,
+                        }))
+                      }
+                    >
+                      <span className="ia-onb-choice-title">{gym.title}</span>
+                      <span className="ia-onb-choice-subtitle">{gym.subtitle}</span>
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  className={profile.user_type === "online" ? "ia-onb-choice ia-onb-choice-selected" : "ia-onb-choice"}
+                  onClick={() =>
+                    setProfile((prev) => ({
+                      ...prev,
+                      user_type: "online",
+                      membership_status: "online_user",
+                      gym_id: null,
+                    }))
+                  }
+                >
+                  <span className="ia-onb-choice-title">Online user</span>
+                  <span className="ia-onb-choice-subtitle">
+                    Use Iron Acre for digital coaching, workouts and nutrition without gym class updates.
+                  </span>
+                </button>
+              </div>
+            </section>
+          </>
+        ) : null}
+
         {step === "finish" ? (
           <section className="ia-tile ia-tile-pad mb-3">
             <div className="ia-kicker">
@@ -888,6 +1072,20 @@ export default function OnboardingPage() {
                   <div className="ia-summary-value">
                     {ACTIVITY_OPTIONS.find((x) => x.job_type === profile.job_type)?.title || "—"}
                   </div>
+                </div>
+              </div>
+
+              <div className="col-12 col-md-6">
+                <div className="ia-summary-card">
+                  <div className="ia-summary-label">Programme</div>
+                  <div className="ia-summary-value">{getProgramTitle(profile.program_id)}</div>
+                </div>
+              </div>
+
+              <div className="col-12 col-md-6">
+                <div className="ia-summary-card">
+                  <div className="ia-summary-label">Access</div>
+                  <div className="ia-summary-value">{getUserTypeTitle(profile.user_type)}</div>
                 </div>
               </div>
             </div>
