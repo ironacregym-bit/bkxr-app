@@ -1,4 +1,4 @@
-// File: components/nutrition/AddFoodSheet.tsx
+// components/nutrition/AddFoodSheet.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -6,28 +6,59 @@ import FoodEditor, { Food } from "./FoodEditor";
 import BarcodeScannerGate from "./BarcodeScannerGate";
 import { NUTRITION_ACCENT as ACCENT, NUTRITION_COLORS as COLORS } from "./nutritionTheme";
 
+type SavedMealItem = {
+  food: Food;
+  grams?: number | null;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+};
+
+type SavedMeal = {
+  id: string;
+  name: string;
+  source_meal?: string;
+  item_count?: number;
+  totals?: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  items: SavedMealItem[];
+  created_at?: string;
+  updated_at?: string;
+  last_used_at?: string | null;
+};
+
 function parseServingGrams(servingSize?: string | null): number | null {
   if (!servingSize) return null;
-  const m = servingSize.match(/(\d+(\.\d+)?)\s*g/i);
-  if (!m) return null;
-  const n = Number(m[1]);
+
+  const match = servingSize.match(/(\d+(\.\d+)?)\s*g/i);
+  if (!match) return null;
+
+  const n = Number(match[1]);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-function fmt0(n: any) {
+function fmt0(n: unknown) {
   const v = Number(n);
-  return Number.isFinite(v) ? String(Math.round(v)) : "-";
+  return Number.isFinite(v) ? String(Math.round(v)) : "0";
 }
 
-function stop(e: any) {
+function stop(e: React.MouseEvent) {
   e.preventDefault();
   e.stopPropagation();
 }
 
 function clampGrams(n: number) {
   if (!Number.isFinite(n)) return 0;
-  // reasonable bounds to stop nonsense and reduce loops
   return Math.max(0, Math.min(5000, Math.round(n)));
+}
+
+function normaliseSearch(value: string) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 export default function AddFoodSheet({
@@ -38,6 +69,10 @@ export default function AddFoodSheet({
   results,
   loading,
   favourites,
+  savedMeals = [],
+  loadingSavedMeals = false,
+  addingSavedMealId = null,
+  onAddSavedMeal,
   onSelectFood,
   onCreateManual,
   onClose,
@@ -58,6 +93,12 @@ export default function AddFoodSheet({
   results: Food[];
   loading: boolean;
   favourites: Food[];
+
+  savedMeals?: SavedMeal[];
+  loadingSavedMeals?: boolean;
+  addingSavedMealId?: string | null;
+  onAddSavedMeal?: (meal: string, savedMeal: SavedMeal) => void;
+
   onSelectFood: (food: Food) => void;
   onCreateManual: () => void;
   onClose: () => void;
@@ -72,47 +113,73 @@ export default function AddFoodSheet({
   isFavourite: (food: Food | null) => boolean;
   onChangeFood: (patch: Partial<Food>) => void;
 }) {
-  // ✅ Use a single number source of truth
   const [grams, setGrams] = useState<number>(100);
-
-  // ✅ Track whether user has intentionally changed grams in this sheet session
-  // When true, we stop auto-resetting grams due to selection changes or FoodEditor normalisation.
   const [gramsTouched, setGramsTouched] = useState(false);
+  const [showAllFavs, setShowAllFavs] = useState(false);
+  const [showAllSavedMeals, setShowAllSavedMeals] = useState(false);
 
   const lastFoodKeyRef = useRef<string | null>(null);
   const lastAcceptedGramsRef = useRef<number>(100);
 
-  const [showAllFavs, setShowAllFavs] = useState(false);
-
   const qTrim = query.trim();
+  const qNorm = normaliseSearch(query);
   const inSearchMode = qTrim.length >= 1;
+
+  const filteredSavedMeals = useMemo(() => {
+    const list = Array.isArray(savedMeals) ? savedMeals : [];
+
+    const filtered = qNorm
+      ? list.filter((savedMeal) => {
+          const haystack = [
+            savedMeal.name,
+            savedMeal.source_meal,
+            savedMeal.item_count,
+            savedMeal.totals?.calories,
+            savedMeal.totals?.protein,
+            savedMeal.totals?.carbs,
+            savedMeal.totals?.fat,
+          ]
+            .join(" ")
+            .toLowerCase();
+
+          return haystack.includes(qNorm);
+        })
+      : list;
+
+    return filtered.slice(0, showAllSavedMeals ? 50 : 8);
+  }, [savedMeals, qNorm, showAllSavedMeals]);
 
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
+
+    const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = previous;
     };
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
     };
+
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+
+    return () => {
+      window.removeEventListener("keydown", onKey);
+    };
   }, [open, onClose]);
 
-  // ✅ Initialise grams once per selected food (do not keep forcing it)
   useEffect(() => {
     if (!selectedFood) return;
 
     const foodKey = String(selectedFood.id || selectedFood.code || selectedFood.name || "");
     if (!foodKey) return;
 
-    // When switching to a new food, reset gramsTouched and pick a sensible default
     if (lastFoodKeyRef.current !== foodKey) {
       lastFoodKeyRef.current = foodKey;
       setGramsTouched(false);
@@ -123,15 +190,19 @@ export default function AddFoodSheet({
         return;
       }
 
-      const g = parseServingGrams(selectedFood.servingSize);
-      const next = clampGrams(g && g > 0 ? g : 100);
+      const servingGrams = parseServingGrams(selectedFood.servingSize);
+      const next = clampGrams(servingGrams && servingGrams > 0 ? servingGrams : 100);
+
       setGrams(next);
       lastAcceptedGramsRef.current = next;
     }
   }, [selectedFood]);
 
   useEffect(() => {
-    if (inSearchMode) setShowAllFavs(false);
+    if (inSearchMode) {
+      setShowAllFavs(false);
+      setShowAllSavedMeals(false);
+    }
   }, [inSearchMode]);
 
   const servingG = useMemo(() => {
@@ -140,26 +211,22 @@ export default function AddFoodSheet({
   }, [selectedFood]);
 
   const chips = useMemo(() => [25, 50, 75, 100], []);
-  const sheetTitle = meal ? `Add food to ${meal}` : "Add food";
+  const sheetTitle = meal ? `Add to ${meal}` : "Add food";
 
   const favsCompact = useMemo(() => favourites.slice(0, 10), [favourites]);
   const favsToShow = showAllFavs ? favourites : favsCompact;
 
   const isManual = Boolean(selectedFood && String(selectedFood.id || "").startsWith("manual-"));
 
-  // ✅ Central setter to avoid loops / flicker
   function setGramsSafe(next: number, source: "chip" | "editor" | "init") {
-    const v = clampGrams(next);
+    const value = clampGrams(next);
 
-    // ignore no-op updates
-    if (v === grams) return;
+    if (value === grams) return;
 
-    // If FoodEditor is firing normalisation updates repeatedly (common cause of flicker),
-    // only accept them if user hasn't actively set grams.
     if (source === "editor" && gramsTouched) return;
 
-    setGrams(v);
-    lastAcceptedGramsRef.current = v;
+    setGrams(value);
+    lastAcceptedGramsRef.current = value;
 
     if (source === "chip" || source === "editor") {
       setGramsTouched(true);
@@ -190,7 +257,6 @@ export default function AddFoodSheet({
           WebkitOverflowScrolling: "touch",
         }}
       >
-        {/* ✅ Fully opaque surface for readability */}
         <div
           className="ia-tile ia-tile-pad"
           style={{
@@ -201,7 +267,12 @@ export default function AddFoodSheet({
           }}
         >
           <div className="d-flex justify-content-between align-items-center mb-2">
-            <div className="ia-tile-title">{sheetTitle}</div>
+            <div style={{ minWidth: 0 }}>
+              <div className="ia-tile-title">{sheetTitle}</div>
+              <div className="text-dim small">
+                Search foods or add one of your saved meals.
+              </div>
+            </div>
 
             <button
               className="ia-btn ia-btn-outline"
@@ -216,8 +287,7 @@ export default function AddFoodSheet({
 
           {selectedFood ? (
             <>
-              {/* Grams chips (non-manual only) */}
-              {!isManual && (
+              {!isManual ? (
                 <div className="mb-2">
                   <div className="ia-kicker mb-1">Amount</div>
 
@@ -226,7 +296,11 @@ export default function AddFoodSheet({
                       <button
                         key={g}
                         type="button"
-                        className={Math.round(grams) === g ? "ia-btn ia-btn-primary" : "ia-btn ia-btn-outline"}
+                        className={
+                          Math.round(grams) === g
+                            ? "ia-btn ia-btn-primary"
+                            : "ia-btn ia-btn-outline"
+                        }
                         style={{ borderRadius: 999, minHeight: 40, padding: "8px 12px" }}
                         onClick={() => setGramsSafe(g, "chip")}
                       >
@@ -250,15 +324,15 @@ export default function AddFoodSheet({
                       </button>
                     ) : null}
 
-                    {/* Optional subtle “Custom” indicator when user typed something that doesn't match a chip */}
-                    {!chips.includes(Math.round(grams)) && (!servingG || Math.round(grams) !== Math.round(servingG)) ? (
+                    {!chips.includes(Math.round(grams)) &&
+                    (!servingG || Math.round(grams) !== Math.round(servingG)) ? (
                       <span className="text-dim small" style={{ alignSelf: "center", paddingLeft: 6 }}>
                         Custom
                       </span>
                     ) : null}
                   </div>
                 </div>
-              )}
+              ) : null}
 
               <FoodEditor
                 meal={meal}
@@ -277,14 +351,18 @@ export default function AddFoodSheet({
             </>
           ) : (
             <>
-              {/* Search row */}
               <div className="d-flex gap-2 mb-2">
                 <input
                   className="form-control"
-                  placeholder="Search foods…"
+                  placeholder="Search foods or saved meals…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  style={{ minHeight: 44, background: "#0b0f14", color: "#fff", borderColor: "rgba(255,255,255,0.1)" }}
+                  style={{
+                    minHeight: 44,
+                    background: "#0b0f14",
+                    color: "#fff",
+                    borderColor: "rgba(255,255,255,0.1)",
+                  }}
                   autoFocus
                 />
 
@@ -304,8 +382,109 @@ export default function AddFoodSheet({
                 </button>
               </div>
 
-              {/* Favourites */}
-              {!inSearchMode && favourites.length > 0 && (
+              {(filteredSavedMeals.length > 0 || loadingSavedMeals) ? (
+                <div className="mb-3">
+                  <div className="d-flex justify-content-between align-items-center mb-1">
+                    <div className="ia-kicker">Your saved meals</div>
+
+                    {!inSearchMode && savedMeals.length > 8 ? (
+                      <button
+                        type="button"
+                        className="ia-btn"
+                        style={{ padding: "6px 10px", background: "transparent" }}
+                        onClick={() => setShowAllSavedMeals((v) => !v)}
+                      >
+                        <span style={{ color: ACCENT }}>
+                          {showAllSavedMeals ? "Less" : "More"}
+                        </span>
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {loadingSavedMeals ? (
+                    <div className="text-dim small">Loading saved meals…</div>
+                  ) : (
+                    <div className="d-flex flex-column" style={{ gap: 8 }}>
+                      {filteredSavedMeals.map((savedMeal) => {
+                        const totals = savedMeal.totals || {
+                          calories: 0,
+                          protein: 0,
+                          carbs: 0,
+                          fat: 0,
+                        };
+
+                        const isAdding = addingSavedMealId === savedMeal.id;
+
+                        return (
+                          <button
+                            key={savedMeal.id}
+                            type="button"
+                            className="ia-tile"
+                            disabled={isAdding}
+                            onClick={() => {
+                              if (!onAddSavedMeal) return;
+                              onAddSavedMeal(meal, savedMeal);
+                            }}
+                            style={{
+                              borderRadius: 14,
+                              padding: 12,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 10,
+                              background: "rgba(255,255,255,0.04)",
+                              border: "1px solid rgba(255,255,255,0.07)",
+                              color: "#fff",
+                              textAlign: "left",
+                              opacity: isAdding ? 0.7 : 1,
+                            }}
+                          >
+                            <div style={{ minWidth: 0 }}>
+                              <div
+                                className="ia-tile-title"
+                                style={{
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}
+                              >
+                                {savedMeal.name}
+                              </div>
+
+                              <div className="small text-dim" style={{ lineHeight: 1.25 }}>
+                                {savedMeal.item_count || savedMeal.items?.length || 0} items{" "}
+                                <span className="text-dim">•</span>{" "}
+                                <span style={{ color: COLORS.calories }}>
+                                  {fmt0(totals.calories)} kcal
+                                </span>{" "}
+                                <span className="text-dim">•</span>{" "}
+                                <span style={{ color: COLORS.protein }}>
+                                  P {fmt0(totals.protein)}
+                                </span>{" "}
+                                <span style={{ color: COLORS.carbs }}>
+                                  C {fmt0(totals.carbs)}
+                                </span>{" "}
+                                <span style={{ color: COLORS.fat }}>
+                                  F {fmt0(totals.fat)}
+                                </span>
+                              </div>
+                            </div>
+
+                            <span
+                              className={isAdding ? "ia-btn ia-btn-muted" : "ia-btn ia-btn-primary"}
+                              style={{ minHeight: 34, flex: "0 0 auto" }}
+                            >
+                              {isAdding ? "Adding…" : "+ Add"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {!inSearchMode && favourites.length > 0 ? (
                 <div className="mb-3">
                   <div className="d-flex justify-content-between align-items-center mb-1">
                     <div className="ia-kicker">Favourites</div>
@@ -373,13 +552,12 @@ export default function AddFoodSheet({
                     </div>
                   )}
                 </div>
-              )}
+              ) : null}
 
-              {/* Results */}
-              {qTrim.length >= 2 && (
+              {qTrim.length >= 2 ? (
                 <div className="mb-2">
                   {loading ? (
-                    <div className="text-dim small">Searching…</div>
+                    <div className="text-dim small">Searching foods…</div>
                   ) : results.length === 0 ? (
                     <div className="text-dim small">No foods found</div>
                   ) : (
@@ -430,7 +608,9 @@ export default function AddFoodSheet({
 
                               <div className="small text-dim" style={{ lineHeight: 1.2 }}>
                                 {brand ? <span style={{ marginRight: 10 }}>{brand}</span> : null}
-                                <span style={{ color: COLORS.calories }}>{fmt0(food.calories)} kcal</span>
+                                <span style={{ color: COLORS.calories }}>
+                                  {fmt0(food.calories)} kcal
+                                </span>
                                 <span className="text-dim"> /100g</span>
                               </div>
                             </button>
@@ -438,7 +618,12 @@ export default function AddFoodSheet({
                             <button
                               type="button"
                               className="ia-btn ia-btn-outline"
-                              style={{ borderRadius: 999, minHeight: 40, minWidth: 40, padding: 0 }}
+                              style={{
+                                borderRadius: 999,
+                                minHeight: 40,
+                                minWidth: 40,
+                                padding: 0,
+                              }}
                               onClick={(e) => {
                                 stop(e);
                                 toggleFavourite(food);
@@ -454,7 +639,7 @@ export default function AddFoodSheet({
                     </div>
                   )}
                 </div>
-              )}
+              ) : null}
 
               <BarcodeScannerGate isPremium={isPremium} onScanRequested={onScanRequested} />
             </>
