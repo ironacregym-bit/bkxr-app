@@ -1,4 +1,4 @@
-// File: components/nutrition/NutritionMealsCard.tsx
+// components/nutrition/NutritionMealsCard.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -41,6 +41,8 @@ export default function NutritionMealsCard({
   meals,
   entries,
   onAddFood,
+  onSaveMeal,
+  savingMealName,
   onEditEntry,
   onRemoveEntry,
   collapsible = true,
@@ -49,6 +51,8 @@ export default function NutritionMealsCard({
   meals: readonly string[];
   entries: NutritionEntry[];
   onAddFood: (meal: string) => void;
+  onSaveMeal: (meal: string) => void;
+  savingMealName?: string | null;
   onEditEntry: (entry: NutritionEntry) => void;
   onRemoveEntry: (id: string) => void;
   collapsible?: boolean;
@@ -56,12 +60,17 @@ export default function NutritionMealsCard({
 }) {
   const byMeal = useMemo(() => {
     const map = new Map<string, NutritionEntry[]>();
+
     for (const m of meals) map.set(m, []);
+
     for (const e of entries || []) {
       const key = e.meal || "Other";
+
       if (!map.has(key)) map.set(key, []);
+
       map.get(key)!.push(e);
     }
+
     return map;
   }, [entries, meals]);
 
@@ -69,10 +78,12 @@ export default function NutritionMealsCard({
 
   useEffect(() => {
     const next: Record<string, boolean> = {};
+
     for (const m of meals) {
       const list = byMeal.get(m) || [];
       next[m] = defaultCollapsedEmpty ? list.length === 0 : false;
     }
+
     setCollapsed((prev) => (Object.keys(prev).length ? prev : next));
   }, [meals, byMeal, defaultCollapsedEmpty]);
 
@@ -91,10 +102,15 @@ export default function NutritionMealsCard({
         const mealEntries = byMeal.get(meal) || [];
         const t = totalsFor(mealEntries);
         const isCollapsed = Boolean(collapsed[meal]);
+        const canSaveMeal = mealEntries.length > 0;
+        const isSaving = savingMealName === meal;
 
         return (
           <div key={meal}>
-            <div className="d-flex justify-content-between align-items-center" style={{ paddingTop: idx === 0 ? 0 : 14 }}>
+            <div
+              className="d-flex justify-content-between align-items-center"
+              style={{ paddingTop: idx === 0 ? 0 : 14 }}
+            >
               <button
                 type="button"
                 className="btn btn-link p-0 text-start"
@@ -114,12 +130,33 @@ export default function NutritionMealsCard({
                     {isCollapsed ? "▸" : "▾"}
                   </span>
                 ) : null}
-                <span className="fw-semibold">{meal}</span>
+
+                <span className="ia-tile-title">{meal}</span>
               </button>
 
-              <button type="button" className="ia-btn ia-btn-outline" onClick={() => onAddFood(meal)} style={{ minHeight: 40 }}>
-                + Add
-              </button>
+              <div className="d-flex align-items-center gap-2">
+                {canSaveMeal ? (
+                  <button
+                    type="button"
+                    className="ia-btn ia-btn-muted"
+                    onClick={() => onSaveMeal(meal)}
+                    disabled={isSaving}
+                    style={{ minHeight: 40 }}
+                    title={`Save ${meal} as a reusable meal`}
+                  >
+                    {isSaving ? "Saving…" : "Save meal"}
+                  </button>
+                ) : null}
+
+                <button
+                  type="button"
+                  className="ia-btn ia-btn-outline"
+                  onClick={() => onAddFood(meal)}
+                  style={{ minHeight: 40 }}
+                >
+                  + Add
+                </button>
+              </div>
             </div>
 
             <div className="small text-dim" style={{ lineHeight: 1.2, marginTop: 2 }}>
@@ -160,7 +197,8 @@ export default function NutritionMealsCard({
                             justifyContent: "space-between",
                             gap: 10,
                             padding: "10px 12px",
-                            borderTop: rowIdx === 0 ? "none" : "1px solid rgba(255,255,255,0.06)",
+                            borderTop:
+                              rowIdx === 0 ? "none" : "1px solid rgba(255,255,255,0.06)",
                           }}
                         >
                           <button
@@ -190,7 +228,9 @@ export default function NutritionMealsCard({
 
                             <div className="small text-dim" style={{ lineHeight: 1.2 }}>
                               {brand ? <span style={{ marginRight: 10 }}>{brand}</span> : null}
-                              <span style={{ color: COLORS.calories }}>{fmt0(e.calories)} kcal</span>{" "}
+                              <span style={{ color: COLORS.calories }}>
+                                {fmt0(e.calories)} kcal
+                              </span>{" "}
                               <span className="text-dim">•</span>{" "}
                               <span style={{ color: COLORS.protein }}>P {fmt0(e.protein)}</span>{" "}
                               <span style={{ color: COLORS.carbs }}>C {fmt0(e.carbs)}</span>{" "}
@@ -207,7 +247,12 @@ export default function NutritionMealsCard({
                             }}
                             title="Remove"
                             aria-label="Remove"
-                            style={{ borderRadius: 999, minHeight: 40, minWidth: 40, padding: 0 }}
+                            style={{
+                              borderRadius: 999,
+                              minHeight: 40,
+                              minWidth: 40,
+                              padding: 0,
+                            }}
                           >
                             ✕
                           </button>
@@ -222,7 +267,8 @@ export default function NutritionMealsCard({
             <div
               style={{
                 marginTop: 14,
-                borderBottom: idx === meals.length - 1 ? "none" : "1px solid rgba(255,255,255,0.08)",
+                borderBottom:
+                  idx === meals.length - 1 ? "none" : "1px solid rgba(255,255,255,0.08)",
               }}
             />
           </div>
