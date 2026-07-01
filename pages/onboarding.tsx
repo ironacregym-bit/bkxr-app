@@ -91,6 +91,17 @@ const ACTIVITY_OPTIONS: Array<{
   },
 ];
 
+const ONBOARDING_FIELD_KEYS: Array<keyof UsersDoc> = [
+  "sex",
+  "DOB",
+  "height_cm",
+  "weight_kg",
+  "bodyfat_pct",
+  "job_type",
+  "activity_factor",
+  "goal_primary",
+];
+
 function stepIndex(key: StepKey) {
   return STEPS.findIndex((s) => s.key === key);
 }
@@ -130,6 +141,17 @@ function formatNumber(value: number | null | undefined) {
   return String(Math.round(value));
 }
 
+function getJobTypeFromActivityFactor(activityFactor: number | null | undefined): JobType {
+  const af = Number(activityFactor ?? 1.2);
+
+  if (Math.abs(af - 1.2) < 0.01) return "desk";
+  if (Math.abs(af - 1.375) < 0.01) return "mixed";
+  if (Math.abs(af - 1.55) < 0.01) return "manual";
+  if (Math.abs(af - 1.9) < 0.01) return "athlete";
+
+  return null;
+}
+
 function LoadingState() {
   return (
     <main className="container py-3" style={{ paddingBottom: 90, color: "#fff" }}>
@@ -151,8 +173,10 @@ export default function OnboardingPage() {
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [dirtyFields, setDirtyFields] = useState<Set<keyof UsersDoc>>(new Set());
 
   const email = String(session?.user?.email || "").trim().toLowerCase();
+
   const returnTo = useMemo(() => {
     const q = router.query.returnTo;
     if (typeof q === "string" && q.trim()) return q;
@@ -190,6 +214,7 @@ export default function OnboardingPage() {
   }, []);
 
   const profileKey = mounted && email ? `/api/profile?email=${encodeURIComponent(email)}` : null;
+
   const { data, error } = useSWR<UsersDoc>(profileKey, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
@@ -206,15 +231,11 @@ export default function OnboardingPage() {
       job_type:
         data?.job_type ??
         prev.job_type ??
-        (() => {
-          const af = Number(data?.activity_factor ?? 1.2);
-          if (Math.abs(af - 1.2) < 0.01) return "desk";
-          if (Math.abs(af - 1.375) < 0.01) return "mixed";
-          if (Math.abs(af - 1.55) < 0.01) return "manual";
-          if (Math.abs(af - 1.9) < 0.01) return "athlete";
-          return null;
-        })(),
+        getJobTypeFromActivityFactor(Number(data?.activity_factor ?? 1.2)),
     }));
+
+    setDirty(false);
+    setDirtyFields(new Set());
   }, [data, email]);
 
   useEffect(() => {
@@ -314,10 +335,24 @@ export default function OnboardingPage() {
   const isLastStep = step === "finish";
 
   const setProfile = (updater: (prev: UsersDoc) => UsersDoc) => {
-    setProfileState((prev) => updater(prev));
-    setDirty(true);
-    setSavedMsg(null);
-    setErrorMsg(null);
+    setProfileState((prev) => {
+      const next = updater(prev);
+      const changedKeys = ONBOARDING_FIELD_KEYS.filter((key) => !Object.is(prev[key], next[key]));
+
+      if (changedKeys.length) {
+        setDirtyFields((old) => {
+          const updated = new Set(old);
+          changedKeys.forEach((key) => updated.add(key));
+          return updated;
+        });
+
+        setDirty(true);
+        setSavedMsg(null);
+        setErrorMsg(null);
+      }
+
+      return next;
+    });
   };
 
   function validateStep(targetStep: StepKey) {
@@ -337,6 +372,62 @@ export default function OnboardingPage() {
     return null;
   }
 
+  function buildSafeOnboardingPayload(complete?: boolean) {
+    const payload: Record<string, unknown> = {
+      email,
+    };
+
+    const addDirtyField = (key: keyof UsersDoc, value: unknown) => {
+      if (!dirtyFields.has(key)) return;
+      if (value === undefined) return;
+      payload[key] = value;
+    };
+
+    addDirtyField("sex", profile.sex ?? null);
+    addDirtyField("DOB", profile.DOB ?? null);
+    addDirtyField("height_cm", profile.height_cm != null ? Number(profile.height_cm) : null);
+    addDirtyField("weight_kg", profile.weight_kg != null ? Number(profile.weight_kg) : null);
+    addDirtyField("bodyfat_pct", profile.bodyfat_pct != null ? Number(profile.bodyfat_pct) : null);
+    addDirtyField("job_type", profile.job_type ?? null);
+    addDirtyField("activity_factor", profile.activity_factor != null ? Number(profile.activity_factor) : null);
+    addDirtyField("goal_primary", profile.goal_primary ?? null);
+
+    const shouldWriteTargets =
+      complete === true ||
+      dirtyFields.has("sex") ||
+      dirtyFields.has("DOB") ||
+      dirtyFields.has("height_cm") ||
+      dirtyFields.has("weight_kg") ||
+      dirtyFields.has("bodyfat_pct") ||
+      dirtyFields.has("job_type") ||
+      dirtyFields.has("activity_factor") ||
+      dirtyFields.has("goal_primary");
+
+    if (shouldWriteTargets && targets.caloric_target != null) {
+      payload.caloric_target = targets.caloric_target;
+      payload.calorie_target = targets.caloric_target;
+    }
+
+    if (shouldWriteTargets && targets.protein_target != null) {
+      payload.protein_target = targets.protein_target;
+    }
+
+    if (shouldWriteTargets && targets.carb_target != null) {
+      payload.carb_target = targets.carb_target;
+    }
+
+    if (shouldWriteTargets && targets.fat_target != null) {
+      payload.fat_target = targets.fat_target;
+    }
+
+    if (complete === true) {
+      payload.onboarding_complete = true;
+      payload.onboarding_completed_at = new Date().toISOString();
+    }
+
+    return payload;
+  }
+
   async function saveProfile(nextStep?: StepKey, complete?: boolean) {
     if (!email) {
       signIn("google");
@@ -347,34 +438,14 @@ export default function OnboardingPage() {
     setErrorMsg(null);
 
     try {
-      const completedAt = complete === true ? new Date().toISOString() : undefined;
+      const payload = buildSafeOnboardingPayload(complete);
 
       const res = await fetch("/api/onboarding/save", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          email,
-          sex: profile.sex ?? null,
-          DOB: profile.DOB ?? null,
-          height_cm: profile.height_cm ?? null,
-          weight_kg: profile.weight_kg ?? null,
-          bodyfat_pct: profile.bodyfat_pct ?? null,
-          job_type: profile.job_type ?? null,
-          activity_factor: profile.activity_factor ?? 1.2,
-          goal_primary: profile.goal_primary ?? null,
-          caloric_target: targets.caloric_target,
-          calorie_target: targets.caloric_target,
-          protein_target: targets.protein_target,
-          carb_target: targets.carb_target,
-          fat_target: targets.fat_target,
-          gym_id: profile.gym_id ?? null,
-          location: profile.location ?? null,
-          role: profile.role ?? null,
-          onboarding_complete: complete === true ? true : undefined,
-          onboarding_completed_at: completedAt,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const json = await res.json().catch(() => ({}));
@@ -385,17 +456,20 @@ export default function OnboardingPage() {
 
       setProfileState((prev) => ({
         ...prev,
-        caloric_target: targets.caloric_target,
-        calorie_target: targets.caloric_target,
-        protein_target: targets.protein_target,
-        carb_target: targets.carb_target,
-        fat_target: targets.fat_target,
+        caloric_target: targets.caloric_target ?? prev.caloric_target,
+        calorie_target: targets.caloric_target ?? prev.calorie_target,
+        protein_target: targets.protein_target ?? prev.protein_target,
+        carb_target: targets.carb_target ?? prev.carb_target,
+        fat_target: targets.fat_target ?? prev.fat_target,
         onboarding_complete: complete === true ? true : prev.onboarding_complete,
         onboarding_completed_at:
-          complete === true ? completedAt || prev.onboarding_completed_at : prev.onboarding_completed_at,
+          complete === true
+            ? String(payload.onboarding_completed_at || prev.onboarding_completed_at || "")
+            : prev.onboarding_completed_at,
       }));
 
       setDirty(false);
+      setDirtyFields(new Set());
       setSavedMsg("Saved ✅");
 
       if (profileKey) {
@@ -418,6 +492,7 @@ export default function OnboardingPage() {
 
   function handleNext() {
     const validationError = validateStep(step);
+
     if (validationError) {
       setErrorMsg(validationError);
       return;
@@ -726,7 +801,7 @@ export default function OnboardingPage() {
 
                   return (
                     <button
-                      key={opt.job_type}
+                      key={opt.job_type || opt.title}
                       type="button"
                       className={selected ? "ia-onb-choice ia-onb-choice-selected" : "ia-onb-choice"}
                       onClick={() =>
