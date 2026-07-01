@@ -1,4 +1,4 @@
-// File: pages/nutrition.tsx
+// pages/nutrition.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -25,11 +25,13 @@ const meals = ["Breakfast", "Lunch", "Dinner", "Snack"] as const;
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
 }
+
 function dayMinus(d: Date, days: number) {
   const x = new Date(d);
   x.setDate(d.getDate() - days);
   return x;
 }
+
 function dayPlus(d: Date, days: number) {
   const x = new Date(d);
   x.setDate(d.getDate() + days);
@@ -38,6 +40,10 @@ function dayPlus(d: Date, days: number) {
 
 function normaliseQuery(q: string) {
   return String(q || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function fmt0(n: number | undefined | null) {
+  return Number.isFinite(Number(n)) ? String(Math.round(Number(n))) : "0";
 }
 
 type NutritionEntry = {
@@ -52,7 +58,10 @@ type NutritionEntry = {
   carbs: number;
   fat: number;
 };
-type LogsResponse = { entries: NutritionEntry[] };
+
+type LogsResponse = {
+  entries: NutritionEntry[];
+};
 
 type UserProfile = {
   caloric_target?: number;
@@ -71,14 +80,41 @@ type UserProfile = {
   email?: string;
 };
 
+export type SavedMealItem = {
+  food: Food;
+  grams?: number | null;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+};
+
+export type SavedMeal = {
+  id: string;
+  name: string;
+  source_meal?: string;
+  item_count?: number;
+  totals?: MacroTotals;
+  items: SavedMealItem[];
+  created_at?: string;
+  updated_at?: string;
+  last_used_at?: string | null;
+};
+
+type SavedMealsResponse = {
+  meals?: SavedMeal[];
+};
+
 export default function NutritionPage() {
   const { data: session } = useSession();
   const router = useRouter();
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
   useEffect(() => {
     const q = router.query.date;
     if (!q) return;
+
     const parsed = new Date(String(q));
     if (!isNaN(parsed.getTime())) setSelectedDate(parsed);
   }, [router.query.date]);
@@ -93,11 +129,33 @@ export default function NutritionPage() {
     setSelectedDate((d) => dayPlus(d, 1));
   };
 
-  const swrKey = session?.user?.email ? `/api/nutrition/logs?date=${formattedDate}` : null;
+  const swrKey = session?.user?.email
+    ? `/api/nutrition/logs?date=${formattedDate}`
+    : null;
+
   const { data: logsData } = useSWR<LogsResponse>(swrKey, fetcher);
 
+  const savedMealsKey = session?.user?.email
+    ? "/api/nutrition/saved-meals?limit=50"
+    : null;
+
+  const {
+    data: savedMealsData,
+    mutate: mutateSavedMeals,
+    isLoading: savedMealsLoading,
+  } = useSWR<SavedMealsResponse>(savedMealsKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30_000,
+  });
+
+  const savedMeals = useMemo(() => {
+    return Array.isArray(savedMealsData?.meals) ? savedMealsData.meals : [];
+  }, [savedMealsData]);
+
   const { data: profile } = useSWR<UserProfile>(
-    session?.user?.email ? `/api/profile?email=${encodeURIComponent(session.user.email as string)}` : null,
+    session?.user?.email
+      ? `/api/profile?email=${encodeURIComponent(session.user.email as string)}`
+      : null,
     fetcher
   );
 
@@ -115,6 +173,7 @@ export default function NutritionPage() {
 
   const totals: MacroTotals = useMemo(() => {
     const entries = logsData?.entries || [];
+
     return entries.reduce(
       (acc: MacroTotals, e: NutritionEntry) => {
         acc.calories += e.calories || 0;
@@ -135,15 +194,22 @@ export default function NutritionPage() {
   };
 
   const [favourites, setFavourites] = useState<Food[]>([]);
+
   const favKey = useMemo(
-    () => (session?.user?.email ? `bxkr:favs:${session.user.email as string}` : `bxkr:favs:anon`),
+    () =>
+      session?.user?.email
+        ? `bxkr:favs:${session.user.email as string}`
+        : "bxkr:favs:anon",
     [session?.user?.email]
   );
 
   const [mounted, setMounted] = useState(false);
+
   useEffect(() => setMounted(true), []);
+
   useEffect(() => {
     if (!mounted) return;
+
     try {
       const existing = localStorage.getItem(favKey);
       const parsed: Food[] = existing ? JSON.parse(existing) : [];
@@ -151,18 +217,22 @@ export default function NutritionPage() {
       const legacyKey = "bxkr:favs";
       const legacyRaw = localStorage.getItem(legacyKey);
       const legacy: Food[] = legacyRaw ? JSON.parse(legacyRaw) : [];
+
       let merged = parsed;
 
       if (legacy.length) {
         const sig = (f: Food) => f.id || f.code || f.name || "";
         const seen = new Set(parsed.map(sig));
         const additions = legacy.filter((f) => !seen.has(sig(f)));
+
         if (additions.length) {
           merged = [...additions, ...parsed].slice(0, 50);
+
           try {
             localStorage.setItem(favKey, JSON.stringify(merged));
           } catch {}
         }
+
         try {
           localStorage.removeItem(legacyKey);
         } catch {}
@@ -181,6 +251,7 @@ export default function NutritionPage() {
 
   const saveFavourites = (arr: Food[]) => {
     setFavourites(arr);
+
     try {
       localStorage.setItem(favKey, JSON.stringify(arr));
     } catch {}
@@ -188,9 +259,11 @@ export default function NutritionPage() {
 
   const toggleFavourite = (food: Food) => {
     const exists = isFavourite(food);
+
     const next = exists
       ? favourites.filter((f) => f.id !== food.id && f.code !== food.code)
       : [{ ...food }, ...favourites].slice(0, 30);
+
     saveFavourites(next);
   };
 
@@ -202,21 +275,22 @@ export default function NutritionPage() {
   const [results, setResults] = useState<Food[]>([]);
   const [loadingSearch, setLoadingSearch] = useState<boolean>(false);
 
-  // ✅ Search cancellation + stale guards + client cache
+  const [savingMealName, setSavingMealName] = useState<string | null>(null);
+  const [addingSavedMealId, setAddingSavedMealId] = useState<string | null>(null);
+
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchReqIdRef = useRef(0);
   const searchCacheRef = useRef<Map<string, Food[]>>(new Map());
   const lastCompletedQueryRef = useRef<string>("");
 
-  // Cancel any in-flight search (used when closing sheet / selecting food / query changes)
   function cancelSearch() {
     try {
       searchAbortRef.current?.abort();
     } catch {}
+
     searchAbortRef.current = null;
   }
 
-  // Cancel searches when sheet closes or user selects a food (no need to keep searching)
   useEffect(() => {
     if (!sheetMeal) {
       cancelSearch();
@@ -235,7 +309,6 @@ export default function NutritionPage() {
   useEffect(() => {
     const qNorm = normaliseQuery(query);
 
-    // Clear results if query too short
     if (!qNorm || qNorm.length < 2) {
       cancelSearch();
       setResults([]);
@@ -244,21 +317,19 @@ export default function NutritionPage() {
       return;
     }
 
-    // Debounce typing
     const reqId = ++searchReqIdRef.current;
 
     const t = setTimeout(async () => {
-      // If we already have cached results for this exact query, show them immediately
       const cached = searchCacheRef.current.get(qNorm);
+
       if (cached) {
         setResults(cached);
       } else {
-        // prevent “No foods found” flash by showing searching state (results cleared)
         setResults([]);
       }
 
-      // Start fresh request, abort previous
       cancelSearch();
+
       const ctrl = new AbortController();
       searchAbortRef.current = ctrl;
 
@@ -267,20 +338,17 @@ export default function NutritionPage() {
       try {
         const res = await fetch(`/api/foods/search?query=${encodeURIComponent(qNorm)}`, {
           signal: ctrl.signal,
-          headers: { "Accept": "application/json" },
+          headers: { Accept: "application/json" },
         });
 
         const json = await res.json().catch(() => ({} as any));
         const foods = (json.foods || []) as Food[];
 
-        // Ignore stale responses
         if (reqId !== searchReqIdRef.current) return;
-
-        // If aborted, do nothing
         if (ctrl.signal.aborted) return;
 
-        // If the API indicates a timeout and there are no results, don’t poison cache
         const timedOut = Boolean(json?.meta?.timedOut);
+
         if (!timedOut) {
           searchCacheRef.current.set(qNorm, foods);
         }
@@ -347,6 +415,7 @@ export default function NutritionPage() {
         created_at: new Date().toISOString(),
         ...payload,
       };
+
       mutate(
         swrKey,
         (data: LogsResponse | undefined) => ({
@@ -362,9 +431,10 @@ export default function NutritionPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
       if (!res.ok) throw new Error("Failed to save");
     } catch {
-      // If it fails, revalidate to correct optimistic UI
+      // Revalidate below.
     } finally {
       if (swrKey) mutate(swrKey);
     }
@@ -376,9 +446,149 @@ export default function NutritionPage() {
     setSheetMeal(null);
   };
 
+  async function addSavedMealToLog(targetMeal: string, savedMeal: SavedMeal) {
+    if (!session?.user?.email) return signIn("google");
+    if (!savedMeal?.items?.length) return;
+
+    setAddingSavedMealId(savedMeal.id);
+
+    try {
+      const createdAt = new Date().toISOString();
+
+      if (swrKey) {
+        const optimisticEntries = savedMeal.items.map((item, idx) => ({
+          id: `saved-temp-${savedMeal.id}-${Date.now()}-${idx}`,
+          created_at: createdAt,
+          date: formattedDate,
+          meal: targetMeal,
+          food: item.food,
+          grams: item.grams ?? null,
+          calories: Number(item.calories || 0),
+          protein: Number(item.protein || 0),
+          carbs: Number(item.carbs || 0),
+          fat: Number(item.fat || 0),
+        })) as NutritionEntry[];
+
+        mutate(
+          swrKey,
+          (data: LogsResponse | undefined) => ({
+            entries: [...optimisticEntries, ...(data?.entries || [])],
+          }),
+          false
+        );
+      }
+
+      for (const item of savedMeal.items) {
+        const payload = {
+          date: formattedDate,
+          meal: targetMeal,
+          food: item.food,
+          grams: item.grams ?? null,
+          calories: Number(item.calories || 0),
+          protein: Number(item.protein || 0),
+          carbs: Number(item.carbs || 0),
+          fat: Number(item.fat || 0),
+        };
+
+        const res = await fetch("/api/nutrition/logs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to add saved meal");
+        }
+      }
+
+      await fetch(`/api/nutrition/saved-meals?id=${encodeURIComponent(savedMeal.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      }).catch(() => null);
+
+      await Promise.allSettled([
+        swrKey ? mutate(swrKey) : Promise.resolve(),
+        mutateSavedMeals(),
+      ]);
+
+      setSelectedFood(null);
+      setQuery("");
+      setResults([]);
+      setUsingServing("per100");
+      setSheetMeal(null);
+    } catch (err: any) {
+      console.error("[nutrition/add-saved-meal]", err?.message || err);
+      alert("Failed to add saved meal. Please try again.");
+
+      if (swrKey) mutate(swrKey);
+    } finally {
+      setAddingSavedMealId(null);
+    }
+  }
+
+  async function saveMealAsSavedMeal(meal: string) {
+    if (!session?.user?.email) return signIn("google");
+
+    const mealEntries = (logsData?.entries || []).filter((entry) => entry.meal === meal);
+
+    if (!mealEntries.length) {
+      alert(`Add some foods to ${meal} before saving it as a meal.`);
+      return;
+    }
+
+    const defaultName = `${meal} - ${formattedDate}`;
+    const name = window.prompt("Name this saved meal", defaultName);
+
+    if (name === null) return;
+
+    const cleanName = String(name || "").trim() || defaultName;
+
+    setSavingMealName(meal);
+
+    try {
+      const items: SavedMealItem[] = mealEntries.map((entry) => ({
+        food: entry.food,
+        grams: entry.grams ?? null,
+        calories: Number(entry.calories || 0),
+        protein: Number(entry.protein || 0),
+        carbs: Number(entry.carbs || 0),
+        fat: Number(entry.fat || 0),
+      }));
+
+      const res = await fetch("/api/nutrition/saved-meals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: cleanName,
+          source_meal: meal,
+          items,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(json?.error || "Failed to save meal");
+      }
+
+      await mutateSavedMeals();
+
+      alert(`Saved "${cleanName}" as a meal.`);
+    } catch (err: any) {
+      console.error("[nutrition/save-meal]", err?.message || err);
+      alert(err?.message || "Failed to save meal.");
+    } finally {
+      setSavingMealName(null);
+    }
+  }
+
   const removeEntry = async (id: string) => {
     if (!confirm("Remove this entry?")) return;
-    await fetch(`/api/nutrition/logs?id=${encodeURIComponent(id)}&date=${formattedDate}`, { method: "DELETE" });
+
+    await fetch(`/api/nutrition/logs?id=${encodeURIComponent(id)}&date=${formattedDate}`, {
+      method: "DELETE",
+    });
+
     if (swrKey) mutate(swrKey);
   };
 
@@ -386,16 +596,14 @@ export default function NutritionPage() {
     <>
       <GlobalNumericFocus />
 
-      <main className="container py-3" style={{ paddingBottom: "90px", color: "#fff" }}>
+      <main className="container py-3 ia-nutrition-page">
         <div className="d-flex justify-content-between align-items-center mb-3">
           <button className="btn btn-bxkr-outline" onClick={goPrevDay}>
             ← Previous
           </button>
 
           <div className="text-center">
-            <div className="fw-bold" style={{ lineHeight: 1.1 }}>
-              Nutrition
-            </div>
+            <div className="ia-page-title">Nutrition</div>
             <div className="text-dim small">{formattedDate}</div>
           </div>
 
@@ -420,6 +628,8 @@ export default function NutritionPage() {
             setQuery("");
             setResults([]);
           }}
+          onSaveMeal={saveMealAsSavedMeal}
+          savingMealName={savingMealName}
           onEditEntry={(entry) => {
             setSheetMeal(entry.meal);
             setSelectedFood(entry.food);
@@ -436,6 +646,12 @@ export default function NutritionPage() {
         results={results}
         loading={loadingSearch}
         favourites={favourites}
+        savedMeals={savedMeals}
+        loadingSavedMeals={savedMealsLoading}
+        addingSavedMealId={addingSavedMealId}
+        onAddSavedMeal={(targetMeal, savedMeal) => {
+          void addSavedMealToLog(targetMeal, savedMeal);
+        }}
         onSelectFood={(food) => {
           cancelSearch();
           setSelectedFood(food);
@@ -470,7 +686,9 @@ export default function NutritionPage() {
         onFoundFood={(food) => {
           setScannerOpen(false);
           setSelectedFood(food);
+
           if (!sheetMeal) setSheetMeal("Breakfast");
+
           setQuery(food.name || food.code || "");
         }}
         onLookupBarcode={async (code: string) => {
