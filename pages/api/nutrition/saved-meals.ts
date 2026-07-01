@@ -7,7 +7,7 @@ import firestore from "../../../lib/firestoreClient";
 
 type SavedMealItem = {
   food: any;
-  grams?: number | null;
+  grams?: number | string | null;
   calories: number;
   protein: number;
   carbs: number;
@@ -24,9 +24,17 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function cleanNumber(value: any) {
+function cleanNumber(value: unknown) {
   const n = Number(value || 0);
   return Number.isFinite(n) ? n : 0;
+}
+
+function cleanNullableNumber(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 function getTotals(items: SavedMealItem[]) {
@@ -93,12 +101,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .filter((item) => item && item.food)
         .map((item) => ({
           food: item.food,
-          grams:
-            item.grams == null || item.grams === ""
-              ? null
-              : Number.isFinite(Number(item.grams))
-              ? Number(item.grams)
-              : null,
+          grams: cleanNullableNumber(item.grams),
           calories: cleanNumber(item.calories),
           protein: cleanNumber(item.protein),
           carbs: cleanNumber(item.carbs),
@@ -151,10 +154,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(404).json({ error: "Saved meal not found" });
       }
 
+      const timestamp = nowIso();
+
       await ref.set(
         {
-          last_used_at: nowIso(),
-          updated_at: nowIso(),
+          last_used_at: timestamp,
+          updated_at: timestamp,
         },
         { merge: true }
       );
