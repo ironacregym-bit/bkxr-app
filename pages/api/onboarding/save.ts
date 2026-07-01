@@ -1,122 +1,309 @@
 // pages/api/onboarding/save.ts
+
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import firestore from "../../../lib/firestoreClient";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+type ApiResponse =
+  | {
+      ok: true;
+      user_email: string;
+      wrote: number;
+      keys: string[];
+    }
+  | {
+      error: string;
+      details?: string;
+    };
+
+type UserType = "gym" | "online";
+type MembershipStatus = "gym_member" | "online_user" | "none" | "trial" | "cancelled";
+
+const ALLOWED_STRING_FIELDS = new Set([
+  "sex",
+  "DOB",
+  "job_type",
+  "goal_primary",
+  "goal_intensity",
+  "program_id",
+  "user_type",
+  "membership_status",
+  "gym_id",
+  "location",
+  "role",
+  "onboarding_started_at",
+  "onboarding_completed_at",
+]);
+
+const ALLOWED_NUMBER_FIELDS = new Set([
+  "height_cm",
+  "weight_kg",
+  "bodyfat_pct",
+  "activity_factor",
+  "caloric_target",
+  "calorie_target",
+  "protein_target",
+  "carb_target",
+  "fat_target",
+]);
+
+const ALLOWED_OBJECT_FIELDS = new Set(["equipment", "preferences"]);
+
+function hasOwn(body: Record<string, unknown>, key: string) {
+  return Object.prototype.hasOwnProperty.call(body, key);
+}
+
+function cleanNullableString(value: unknown): string | null {
+  if (value === null) return null;
+  if (value === undefined) return null;
+
+  const text = String(value).trim();
+  return text ? text : null;
+}
+
+function cleanNullableNumber(value: unknown): number | null {
+  if (value === null) return null;
+  if (value === undefined) return null;
+
+  if (typeof value === "string" && value.trim() === "") {
+    return null;
+  }
+
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function cleanNullableBoolean(value: unknown): boolean | null {
+  if (value === null) return null;
+  if (typeof value === "boolean") return value;
+  return null;
+}
+
+function normaliseUserType(value: unknown): UserType | null {
+  const cleaned = cleanNullableString(value);
+
+  if (cleaned === "gym") return "gym";
+  if (cleaned === "online") return "online";
+
+  return cleaned ? (cleaned as UserType) : null;
+}
+
+function normaliseMembershipStatus(value: unknown): MembershipStatus | null {
+  const cleaned = cleanNullableString(value);
+
+  if (cleaned === "gym_member") return "gym_member";
+  if (cleaned === "online_user") return "online_user";
+  if (cleaned === "none") return "none";
+  if (cleaned === "trial") return "trial";
+  if (cleaned === "cancelled") return "cancelled";
+
+  return cleaned ? (cleaned as MembershipStatus) : null;
+}
+
+function addStringFieldIfPresent(
+  body: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  key: string
+) {
+  if (!hasOwn(body, key)) return;
+  if (!ALLOWED_STRING_FIELDS.has(key)) return;
+
+  if (key === "user_type") {
+    payload[key] = normaliseUserType(body[key]);
+    return;
+  }
+
+  if (key === "membership_status") {
+    payload[key] = normaliseMembershipStatus(body[key]);
+    return;
+  }
+
+  payload[key] = cleanNullableString(body[key]);
+}
+
+function addNumberFieldIfPresent(
+  body: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  key: string
+) {
+  if (!hasOwn(body, key)) return;
+  if (!ALLOWED_NUMBER_FIELDS.has(key)) return;
+
+  payload[key] = cleanNullableNumber(body[key]);
+}
+
+function addObjectFieldIfPresent(
+  body: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  key: string
+) {
+  if (!hasOwn(body, key)) return;
+  if (!ALLOWED_OBJECT_FIELDS.has(key)) return;
+
+  const value = body[key];
+
+  if (value === undefined) return;
+
+  payload[key] = value ?? null;
+}
+
+function addBooleanFieldIfPresent(
+  body: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  key: string
+) {
+  if (!hasOwn(body, key)) return;
+
+  const cleaned = cleanNullableBoolean(body[key]);
+
+  if (cleaned !== null) {
+    payload[key] = cleaned;
+  }
+}
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse<ApiResponse>
+) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
-    return res.status(405).end(`Method ${req.method} Not Allowed`);
+    return res.status(405).json({
+      error: `Method ${req.method} Not Allowed`,
+    });
   }
 
   const session = await getServerSession(req, res, authOptions);
+
   if (!session?.user?.email) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const {
-    email,
+  const body = (req.body || {}) as Record<string, unknown>;
 
-    // metrics
-    sex,
-    height_cm,
-    weight_kg,
-    bodyfat_pct,
-    DOB,
+  const sessionEmail = String(session.user.email || "").trim().toLowerCase();
+  const bodyEmail = String(body.email || "").trim().toLowerCase();
 
-    // activity + targets
-    activity_factor,
-    caloric_target,
-    calorie_target,
-    protein_target,
-    carb_target,
-    fat_target,
-
-    // goals
-    goal_primary,
-    goal_intensity,
-
-    // context
-    gym_id,
-    location,
-    role,
-
-    // extras
-    equipment,
-    preferences,
-
-    // optional marker
-    onboarding_started_at,
-  } = (req.body || {}) as Record<string, unknown>;
-
-  const userEmail = String(email || session.user.email).trim().toLowerCase();
-  if (!userEmail) {
-    return res.status(400).json({ error: "Missing email" });
+  if (!sessionEmail) {
+    return res.status(401).json({ error: "Unauthorized" });
   }
+
+  if (bodyEmail && bodyEmail !== sessionEmail) {
+    return res.status(403).json({
+      error: "Email mismatch",
+    });
+  }
+
+  const userEmail = sessionEmail;
 
   try {
     const usersRef = firestore.collection("users").doc(userEmail);
     const snap = await usersRef.get();
     const nowIso = new Date().toISOString();
 
-    function addIfDefined(obj: Record<string, unknown>, key: string, val: unknown) {
-      if (val !== undefined) {
-        obj[key] = val;
-      }
-    }
-
-    const payload: Record<string, unknown> = {};
-
-    payload.email = userEmail;
-    payload.last_login_at = nowIso;
-    payload.updated_at = nowIso;
+    const payload: Record<string, unknown> = {
+      email: userEmail,
+      updated_at: nowIso,
+      last_login_at: nowIso,
+    };
 
     if (!snap.exists) {
       payload.created_at = nowIso;
     }
 
-    // metrics
-    addIfDefined(payload, "sex", sex ?? null);
-    addIfDefined(payload, "height_cm", height_cm != null ? Number(height_cm) : null);
-    addIfDefined(payload, "weight_kg", weight_kg != null ? Number(weight_kg) : null);
-    addIfDefined(payload, "bodyfat_pct", bodyfat_pct != null ? Number(bodyfat_pct) : null);
-    addIfDefined(payload, "DOB", DOB ?? null);
+    // Metrics
+    addStringFieldIfPresent(body, payload, "sex");
+    addStringFieldIfPresent(body, payload, "DOB");
+    addNumberFieldIfPresent(body, payload, "height_cm");
+    addNumberFieldIfPresent(body, payload, "weight_kg");
+    addNumberFieldIfPresent(body, payload, "bodyfat_pct");
 
-    // activity + targets
-    const resolvedCaloric =
-      caloric_target != null
-        ? Number(caloric_target)
-        : calorie_target != null
-        ? Number(calorie_target)
-        : undefined;
+    // Activity
+    addStringFieldIfPresent(body, payload, "job_type");
+    addNumberFieldIfPresent(body, payload, "activity_factor");
 
-    addIfDefined(payload, "activity_factor", activity_factor != null ? Number(activity_factor) : null);
-    addIfDefined(payload, "caloric_target", resolvedCaloric);
-    addIfDefined(payload, "calorie_target", resolvedCaloric);
-    addIfDefined(payload, "protein_target", protein_target != null ? Number(protein_target) : null);
-    addIfDefined(payload, "carb_target", carb_target != null ? Number(carb_target) : null);
-    addIfDefined(payload, "fat_target", fat_target != null ? Number(fat_target) : null);
+    // Goals
+    addStringFieldIfPresent(body, payload, "goal_primary");
+    addStringFieldIfPresent(body, payload, "goal_intensity");
 
-    // goals
-    addIfDefined(payload, "goal_primary", goal_primary ?? null);
-    addIfDefined(payload, "goal_intensity", goal_intensity ?? null);
+    // Program selection
+    addStringFieldIfPresent(body, payload, "program_id");
 
-    // context
-    addIfDefined(payload, "gym_id", gym_id ?? null);
-    addIfDefined(payload, "location", location ?? null);
-    addIfDefined(payload, "role", role ?? null);
+    // Gym / online selection
+    addStringFieldIfPresent(body, payload, "user_type");
+    addStringFieldIfPresent(body, payload, "membership_status");
 
-    // extras
-    addIfDefined(payload, "equipment", equipment ?? null);
-    addIfDefined(payload, "preferences", preferences ?? null);
+    // Nutrition targets
+    const hasCaloricTarget = hasOwn(body, "caloric_target");
+    const hasCalorieTarget = hasOwn(body, "calorie_target");
 
-    // optional start marker only
-    addIfDefined(payload, "onboarding_started_at", onboarding_started_at ?? undefined);
+    const resolvedCalorieTarget = hasCaloricTarget
+      ? cleanNullableNumber(body.caloric_target)
+      : hasCalorieTarget
+      ? cleanNullableNumber(body.calorie_target)
+      : undefined;
+
+    if (resolvedCalorieTarget !== undefined) {
+      payload.caloric_target = resolvedCalorieTarget;
+      payload.calorie_target = resolvedCalorieTarget;
+    }
+
+    addNumberFieldIfPresent(body, payload, "protein_target");
+    addNumberFieldIfPresent(body, payload, "carb_target");
+    addNumberFieldIfPresent(body, payload, "fat_target");
+
+    // Context fields
+    addStringFieldIfPresent(body, payload, "gym_id");
+    addStringFieldIfPresent(body, payload, "location");
+    addStringFieldIfPresent(body, payload, "role");
+
+    // Extras
+    addObjectFieldIfPresent(body, payload, "equipment");
+    addObjectFieldIfPresent(body, payload, "preferences");
+
+    // Onboarding markers
+    addStringFieldIfPresent(body, payload, "onboarding_started_at");
+    addBooleanFieldIfPresent(body, payload, "onboarding_complete");
+
+    if (hasOwn(body, "onboarding_completed_at")) {
+      const completedAt = cleanNullableString(body.onboarding_completed_at);
+      if (completedAt) {
+        payload.onboarding_completed_at = completedAt;
+      }
+    } else if (body.onboarding_complete === true) {
+      payload.onboarding_completed_at = nowIso;
+    }
+
+    /**
+     * If the user selects online training and no explicit membership_status is sent,
+     * set a safe default.
+     *
+     * If the user selects gym training and no explicit membership_status is sent,
+     * set gym_member so gym/class/dashboard access works.
+     *
+     * This only happens when user_type is explicitly present in the request.
+     */
+    if (hasOwn(body, "user_type") && !hasOwn(body, "membership_status")) {
+      const userType = normaliseUserType(body.user_type);
+
+      if (userType === "gym") {
+        payload.membership_status = "gym_member";
+      }
+
+      if (userType === "online") {
+        payload.membership_status = "online_user";
+      }
+    }
 
     const writeKeys = Object.keys(payload);
+
     if (writeKeys.length === 0) {
-      return res.status(200).json({ ok: true, wrote: 0 });
+      return res.status(200).json({
+        ok: true,
+        user_email: userEmail,
+        wrote: 0,
+        keys: [],
+      });
     }
 
     await usersRef.set(payload, { merge: true });
@@ -127,11 +314,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       ok: true,
+      user_email: userEmail,
       wrote: writeKeys.length,
       keys: writeKeys,
     });
   } catch (err: any) {
     console.error("[onboarding/save] error:", err?.message || err);
-    return res.status(500).json({ error: "Failed to save onboarding" });
+
+    return res.status(500).json({
+      error: "Failed to save onboarding",
+      details: err?.message || "Unknown error",
+    });
   }
 }
