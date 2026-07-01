@@ -18,6 +18,7 @@ import NutritionMealsCard from "../components/nutrition/NutritionMealsCard";
 import AddFoodSheet from "../components/nutrition/AddFoodSheet";
 import BarcodeScannerClient from "../components/nutrition/BarcodeScannerClient";
 import type { Food } from "../components/nutrition/FoodEditor";
+import { NUTRITION_COLORS as COLORS } from "../components/nutrition/nutritionTheme";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const meals = ["Breakfast", "Lunch", "Dinner", "Snack"] as const;
@@ -105,6 +106,12 @@ type SavedMealsResponse = {
   meals?: SavedMeal[];
 };
 
+type SaveMealModalState = {
+  open: boolean;
+  meal: string | null;
+  name: string;
+};
+
 export default function NutritionPage() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -124,6 +131,7 @@ export default function NutritionPage() {
   const canGoNext = formattedDate < todayKey;
 
   const goPrevDay = () => setSelectedDate((d) => dayMinus(d, 1));
+
   const goNextDay = () => {
     if (!canGoNext) return;
     setSelectedDate((d) => dayPlus(d, 1));
@@ -277,6 +285,13 @@ export default function NutritionPage() {
 
   const [savingMealName, setSavingMealName] = useState<string | null>(null);
   const [addingSavedMealId, setAddingSavedMealId] = useState<string | null>(null);
+
+  const [saveMealModal, setSaveMealModal] = useState<SaveMealModalState>({
+    open: false,
+    meal: null,
+    name: "",
+  });
+  const [saveMealError, setSaveMealError] = useState<string | null>(null);
 
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchReqIdRef = useRef(0);
@@ -526,8 +541,11 @@ export default function NutritionPage() {
     }
   }
 
-  async function saveMealAsSavedMeal(meal: string) {
-    if (!session?.user?.email) return signIn("google");
+  function openSaveMealModal(meal: string) {
+    if (!session?.user?.email) {
+      void signIn("google");
+      return;
+    }
 
     const mealEntries = (logsData?.entries || []).filter((entry) => entry.meal === meal);
 
@@ -536,13 +554,75 @@ export default function NutritionPage() {
       return;
     }
 
-    const defaultName = `${meal} - ${formattedDate}`;
-    const name = window.prompt("Name this saved meal", defaultName);
+    setSaveMealError(null);
+    setSaveMealModal({
+      open: true,
+      meal,
+      name: `${meal} - ${formattedDate}`,
+    });
+  }
 
-    if (name === null) return;
+  function closeSaveMealModal() {
+    if (savingMealName) return;
 
-    const cleanName = String(name || "").trim() || defaultName;
+    setSaveMealModal({
+      open: false,
+      meal: null,
+      name: "",
+    });
+    setSaveMealError(null);
+  }
 
+  const saveMealPreview = useMemo(() => {
+    if (!saveMealModal.meal) {
+      return {
+        entries: [] as NutritionEntry[],
+        totals: { calories: 0, protein: 0, carbs: 0, fat: 0 } as MacroTotals,
+      };
+    }
+
+    const entries = (logsData?.entries || []).filter(
+      (entry) => entry.meal === saveMealModal.meal
+    );
+
+    const previewTotals = entries.reduce(
+      (acc: MacroTotals, entry: NutritionEntry) => {
+        acc.calories += Number(entry.calories || 0);
+        acc.protein += Number(entry.protein || 0);
+        acc.carbs += Number(entry.carbs || 0);
+        acc.fat += Number(entry.fat || 0);
+        return acc;
+      },
+      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+
+    return {
+      entries,
+      totals: previewTotals,
+    };
+  }, [logsData?.entries, saveMealModal.meal]);
+
+  async function confirmSaveMeal() {
+    if (!session?.user?.email) return signIn("google");
+
+    const meal = saveMealModal.meal;
+    const cleanName = String(saveMealModal.name || "").trim();
+
+    if (!meal) return;
+
+    if (!cleanName) {
+      setSaveMealError("Give this saved meal a name.");
+      return;
+    }
+
+    const mealEntries = (logsData?.entries || []).filter((entry) => entry.meal === meal);
+
+    if (!mealEntries.length) {
+      setSaveMealError(`Add some foods to ${meal} before saving it as a meal.`);
+      return;
+    }
+
+    setSaveMealError(null);
     setSavingMealName(meal);
 
     try {
@@ -573,10 +653,15 @@ export default function NutritionPage() {
 
       await mutateSavedMeals();
 
-      alert(`Saved "${cleanName}" as a meal.`);
+      setSaveMealModal({
+        open: false,
+        meal: null,
+        name: "",
+      });
+      setSaveMealError(null);
     } catch (err: any) {
       console.error("[nutrition/save-meal]", err?.message || err);
-      alert(err?.message || "Failed to save meal.");
+      setSaveMealError(err?.message || "Failed to save meal.");
     } finally {
       setSavingMealName(null);
     }
@@ -628,7 +713,7 @@ export default function NutritionPage() {
             setQuery("");
             setResults([]);
           }}
-          onSaveMeal={saveMealAsSavedMeal}
+          onSaveMeal={openSaveMealModal}
           savingMealName={savingMealName}
           onEditEntry={(entry) => {
             setSheetMeal(entry.meal);
@@ -698,6 +783,155 @@ export default function NutritionPage() {
           return found;
         }}
       />
+
+      {saveMealModal.open ? (
+        <div className="ia-modal-backdrop" role="dialog" aria-modal="true" aria-label="Save meal">
+          <div className="ia-modal-card" style={{ maxWidth: 520 }}>
+            <div className="d-flex justify-content-between align-items-start gap-3 mb-3">
+              <div style={{ minWidth: 0 }}>
+                <div className="ia-kicker mb-1">Saved meal</div>
+                <div className="ia-tile-title">Save {saveMealModal.meal}</div>
+                <div className="text-dim small mt-1">
+                  Turn this {String(saveMealModal.meal || "meal").toLowerCase()} into a reusable meal.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="ia-btn ia-btn-outline"
+                onClick={closeSaveMealModal}
+                disabled={Boolean(savingMealName)}
+                aria-label="Close save meal modal"
+                style={{ minWidth: 40, minHeight: 40, padding: 0, borderRadius: 999 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-3">
+              <label className="form-label small text-dim mb-1">Meal name</label>
+              <input
+                className="form-control"
+                value={saveMealModal.name}
+                onChange={(event) => {
+                  setSaveMealModal((prev) => ({
+                    ...prev,
+                    name: event.target.value,
+                  }));
+                  setSaveMealError(null);
+                }}
+                placeholder="e.g. High protein breakfast"
+                autoFocus
+                style={{
+                  minHeight: 44,
+                  background: "#0b0f14",
+                  color: "#fff",
+                  borderColor: "rgba(255,255,255,0.1)",
+                }}
+              />
+            </div>
+
+            <div
+              className="mb-3"
+              style={{
+                borderRadius: 14,
+                padding: 12,
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <div className="d-flex justify-content-between align-items-center gap-2 mb-2">
+                <div className="ia-kicker">Meal preview</div>
+                <div className="text-dim small">
+                  {saveMealPreview.entries.length} item
+                  {saveMealPreview.entries.length === 1 ? "" : "s"}
+                </div>
+              </div>
+
+              <div className="small text-dim" style={{ lineHeight: 1.35 }}>
+                <span style={{ color: COLORS.calories }}>
+                  {fmt0(saveMealPreview.totals.calories)} kcal
+                </span>{" "}
+                <span className="text-dim">•</span>{" "}
+                <span style={{ color: COLORS.protein }}>
+                  P {fmt0(saveMealPreview.totals.protein)}
+                </span>{" "}
+                <span className="text-dim">•</span>{" "}
+                <span style={{ color: COLORS.carbs }}>
+                  C {fmt0(saveMealPreview.totals.carbs)}
+                </span>{" "}
+                <span className="text-dim">•</span>{" "}
+                <span style={{ color: COLORS.fat }}>
+                  F {fmt0(saveMealPreview.totals.fat)}
+                </span>
+              </div>
+
+              {saveMealPreview.entries.length > 0 ? (
+                <div className="mt-2" style={{ display: "grid", gap: 6 }}>
+                  {saveMealPreview.entries.slice(0, 4).map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="small"
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        color: "rgba(255,255,255,0.82)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          minWidth: 0,
+                          overflow: "hidden",
+                          whiteSpace: "nowrap",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {entry.food?.name || "Food"}
+                      </span>
+                      <span style={{ color: COLORS.calories, flex: "0 0 auto" }}>
+                        {fmt0(entry.calories)} kcal
+                      </span>
+                    </div>
+                  ))}
+
+                  {saveMealPreview.entries.length > 4 ? (
+                    <div className="text-dim small">
+                      +{saveMealPreview.entries.length - 4} more
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            {saveMealError ? (
+              <div className="ia-inline-note-error mb-3">{saveMealError}</div>
+            ) : null}
+
+            <div className="d-flex justify-content-end gap-2">
+              <button
+                type="button"
+                className="ia-btn ia-btn-outline"
+                onClick={closeSaveMealModal}
+                disabled={Boolean(savingMealName)}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="ia-btn ia-btn-primary"
+                onClick={() => {
+                  void confirmSaveMeal();
+                }}
+                disabled={Boolean(savingMealName) || !saveMealModal.name.trim()}
+              >
+                {savingMealName ? "Saving…" : "Save meal"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <BottomNav />
     </>
