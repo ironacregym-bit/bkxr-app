@@ -16,7 +16,8 @@ export default function MorePage() {
   const role: string | undefined = mounted
     ? ((session?.user as any)?.role as string | undefined)
     : undefined;
-  const isGym = role === "gym";
+  
+  const isAdmin = role === "admin";
 
   // -------- Base menu (shown to all users) --------
   const baseMenu = useMemo(
@@ -31,7 +32,7 @@ export default function MorePage() {
       { href: "/referrals", label: "Referrals" },
 
       {
-        href: `https://wa.me/${process.env.NEXT_PUBLIC_TRAINER_PHONE}?text=Hi%20Coach%20I%27m%20doing%20BXKR`,
+        href: `https://wa.me/${process.env.NEXT_PUBLIC_TRAINER_PHONE}?text=Hi%20Coach`,
         label: "Chat",
         external: true,
       },
@@ -42,20 +43,14 @@ export default function MorePage() {
   // -------- Add Admin link only if the user has role "gym" --------
   const menuItems = useMemo(() => {
     if (!mounted) return baseMenu;
-    return isGym ? [...baseMenu, { href: "/admin", label: "Admin" }] : baseMenu;
-  }, [mounted, isGym, baseMenu]);
+  
+    return isAdmin
+      ? [...baseMenu, { href: "/admin", label: "Admin" }]
+      : baseMenu;
+  }, [mounted, isAdmin, baseMenu]);
 
   return (
     <>
-      <Head>
-        <title>BXKR</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link
-          rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-        />
-      </Head>
-
       <main className="container py-3">
         {/* Profile Header */}
         <div className="text-center mb-4">
