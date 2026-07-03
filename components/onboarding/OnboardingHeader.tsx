@@ -1,6 +1,5 @@
-// OnboardingHeader.tsx
-import { STEPS, stepIndex } from "./onboardingUtils";
 import type { StepKey } from "./onboardingTypes";
+import { STEPS, stepIndex } from "./onboardingUtils";
 
 export default function OnboardingHeader({
   step,
@@ -26,7 +25,7 @@ export default function OnboardingHeader({
             <div className="ia-page-title">Let’s tailor Iron Acre to you</div>
 
             <div className="ia-page-subtitle">
-              Step {stepIndex(step) + 1} of {STEPS.length}. Complete your profile so we can set better calories, macros and training.
+              Step {stepIndex(step) + 1} of {STEPS.length}. Complete your setup so we can personalise training, nutrition and access.
             </div>
           </div>
 
