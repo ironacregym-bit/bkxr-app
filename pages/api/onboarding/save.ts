@@ -1,5 +1,3 @@
-// pages/api/onboarding/save.ts
-
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
@@ -27,11 +25,19 @@ const ALLOWED_STRING_FIELDS = new Set([
   "goal_primary",
   "goal_intensity",
   "program_id",
+  "program_name",
+  "workout_type",
   "user_type",
   "membership_status",
   "gym_id",
+  "gym_name",
   "location",
   "role",
+  "billing_plan",
+  "payment_method_type",
+  "direct_debit_status",
+  "parq_status",
+  "parq_completed_at",
   "onboarding_started_at",
   "onboarding_completed_at",
 ]);
@@ -86,7 +92,7 @@ function normaliseUserType(value: unknown): UserType | null {
   if (cleaned === "gym") return "gym";
   if (cleaned === "online") return "online";
 
-  return cleaned ? (cleaned as UserType) : null;
+  return null;
 }
 
 function normaliseMembershipStatus(value: unknown): MembershipStatus | null {
@@ -98,7 +104,7 @@ function normaliseMembershipStatus(value: unknown): MembershipStatus | null {
   if (cleaned === "trial") return "trial";
   if (cleaned === "cancelled") return "cancelled";
 
-  return cleaned ? (cleaned as MembershipStatus) : null;
+  return null;
 }
 
 function addStringFieldIfPresent(
@@ -142,7 +148,6 @@ function addObjectFieldIfPresent(
   if (!ALLOWED_OBJECT_FIELDS.has(key)) return;
 
   const value = body[key];
-
   if (value === undefined) return;
 
   payload[key] = value ?? null;
@@ -211,29 +216,31 @@ export default async function handler(
       payload.created_at = nowIso;
     }
 
-    // Metrics
     addStringFieldIfPresent(body, payload, "sex");
     addStringFieldIfPresent(body, payload, "DOB");
     addNumberFieldIfPresent(body, payload, "height_cm");
     addNumberFieldIfPresent(body, payload, "weight_kg");
     addNumberFieldIfPresent(body, payload, "bodyfat_pct");
 
-    // Activity
     addStringFieldIfPresent(body, payload, "job_type");
     addNumberFieldIfPresent(body, payload, "activity_factor");
 
-    // Goals
     addStringFieldIfPresent(body, payload, "goal_primary");
     addStringFieldIfPresent(body, payload, "goal_intensity");
 
-    // Program selection
     addStringFieldIfPresent(body, payload, "program_id");
+    addStringFieldIfPresent(body, payload, "program_name");
+    addStringFieldIfPresent(body, payload, "workout_type");
 
-    // Gym / online selection
     addStringFieldIfPresent(body, payload, "user_type");
     addStringFieldIfPresent(body, payload, "membership_status");
+    addStringFieldIfPresent(body, payload, "gym_id");
+    addStringFieldIfPresent(body, payload, "gym_name");
 
-    // Nutrition targets
+    addStringFieldIfPresent(body, payload, "billing_plan");
+    addStringFieldIfPresent(body, payload, "payment_method_type");
+    addStringFieldIfPresent(body, payload, "direct_debit_status");
+
     const hasCaloricTarget = hasOwn(body, "caloric_target");
     const hasCalorieTarget = hasOwn(body, "calorie_target");
 
@@ -252,16 +259,15 @@ export default async function handler(
     addNumberFieldIfPresent(body, payload, "carb_target");
     addNumberFieldIfPresent(body, payload, "fat_target");
 
-    // Context fields
-    addStringFieldIfPresent(body, payload, "gym_id");
     addStringFieldIfPresent(body, payload, "location");
     addStringFieldIfPresent(body, payload, "role");
 
-    // Extras
     addObjectFieldIfPresent(body, payload, "equipment");
     addObjectFieldIfPresent(body, payload, "preferences");
 
-    // Onboarding markers
+    addStringFieldIfPresent(body, payload, "parq_status");
+    addStringFieldIfPresent(body, payload, "parq_completed_at");
+
     addStringFieldIfPresent(body, payload, "onboarding_started_at");
     addBooleanFieldIfPresent(body, payload, "onboarding_complete");
 
@@ -274,15 +280,6 @@ export default async function handler(
       payload.onboarding_completed_at = nowIso;
     }
 
-    /**
-     * If the user selects online training and no explicit membership_status is sent,
-     * set a safe default.
-     *
-     * If the user selects gym training and no explicit membership_status is sent,
-     * set gym_member so gym/class/dashboard access works.
-     *
-     * This only happens when user_type is explicitly present in the request.
-     */
     if (hasOwn(body, "user_type") && !hasOwn(body, "membership_status")) {
       const userType = normaliseUserType(body.user_type);
 
