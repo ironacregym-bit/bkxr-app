@@ -1,13 +1,15 @@
-// onboardingUtils.ts
 import type {
+  BillingPlan,
   GoalPrimary,
   JobType,
   MacroTargets,
+  PaymentMethodType,
   Sex,
+  StepKey,
   UsersDoc,
 } from "./onboardingTypes";
 
-export const STEPS = [
+export const STEPS: Array<{ key: StepKey; title: string; subtitle: string }> = [
   {
     key: "metrics",
     title: "Your metrics",
@@ -19,16 +21,21 @@ export const STEPS = [
     subtitle: "Tell us what you want to achieve and how active you are day to day.",
   },
   {
-    key: "program",
-    title: "Training setup",
-    subtitle: "Choose your programme and tell us how you’ll use Iron Acre.",
+    key: "programme_access",
+    title: "Programme and access",
+    subtitle: "Choose your programme and how you’ll use Iron Acre.",
+  },
+  {
+    key: "parq_billing",
+    title: "PAR-Q and billing",
+    subtitle: "Complete the required setup for gym access and payments.",
   },
   {
     key: "finish",
     title: "Review and finish",
     subtitle: "Check your setup, save it and continue into Iron Acre.",
   },
-] as const;
+];
 
 export const ACTIVITY_OPTIONS: Array<{
   job_type: JobType;
@@ -78,28 +85,47 @@ export const ONBOARDING_FIELD_KEYS: Array<keyof UsersDoc> = [
   "membership_status",
   "gym_id",
   "gym_name",
+  "billing_plan",
+  "payment_method_type",
+  "direct_debit_status",
+  "direct_debit_provider",
+  "direct_debit_setup_url",
+  "parq_status",
+  "parq_completed_at",
 ];
 
-export function stepIndex(key: string) {
+export function stepIndex(key: StepKey) {
   return STEPS.findIndex((s) => s.key === key);
 }
 
 export function isValidDob(value: string | null | undefined) {
   const v = String(value || "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    return false;
+  }
 
   const d = new Date(`${v}T00:00:00`);
-  if (isNaN(d.getTime())) return false;
+
+  if (isNaN(d.getTime())) {
+    return false;
+  }
 
   const now = new Date();
-  if (d > now) return false;
+
+  if (d > now) {
+    return false;
+  }
 
   return true;
 }
 
 export function calculateAge(dob: string | null | undefined) {
   const v = String(dob || "").trim();
-  if (!isValidDob(v)) return 30;
+
+  if (!isValidDob(v)) {
+    return 30;
+  }
 
   const birth = new Date(`${v}T00:00:00`);
   const now = new Date();
@@ -115,11 +141,16 @@ export function calculateAge(dob: string | null | undefined) {
 }
 
 export function formatNumber(value: number | null | undefined) {
-  if (value == null || Number.isNaN(value)) return "—";
+  if (value == null || Number.isNaN(value)) {
+    return "—";
+  }
+
   return String(Math.round(value));
 }
 
-export function getJobTypeFromActivityFactor(activityFactor: number | null | undefined): JobType {
+export function getJobTypeFromActivityFactor(
+  activityFactor: number | null | undefined
+): JobType {
   const af = Number(activityFactor ?? 1.2);
 
   if (Math.abs(af - 1.2) < 0.01) return "desk";
@@ -147,7 +178,8 @@ export function calculateTargets(profile: UsersDoc, age: number): MacroTargets {
     };
   }
 
-  const leanMass = bodyFat > 0 && bodyFat < 70 ? weight * (1 - bodyFat / 100) : null;
+  const leanMass =
+    bodyFat > 0 && bodyFat < 70 ? weight * (1 - bodyFat / 100) : null;
 
   const bmr =
     sex === "male"
@@ -160,16 +192,21 @@ export function calculateTargets(profile: UsersDoc, age: number): MacroTargets {
 
   if (goal === "lose") {
     tdee *= 0.85;
-  } else if (goal === "tone") {
+  }
+
+  if (goal === "tone") {
     tdee *= 1.0;
-  } else if (goal === "gain") {
+  }
+
+  if (goal === "gain") {
     tdee *= 1.1;
   }
 
   const proteinBase = leanMass && leanMass > 0 ? leanMass : weight;
-  const proteinMultiplier = goal === "lose" ? 2.1 : goal === "gain" ? 1.9 : 1.8;
+  const proteinMultiplier =
+    goal === "lose" ? 2.1 : goal === "gain" ? 1.9 : 1.8;
 
-  const proteinG = Math.max(90, Math.round(proteinBase * proteinMultiplier));
+  const proteinG = Math.max(90, Math.round proteinBase * proteinMultiplier);
   const fatG = Math.round(Math.min(120, Math.max(45, 0.8 * weight)));
   const kcalAfterProteinAndFat = tdee - (proteinG * 4 + fatG * 9);
   const carbsG = Math.max(0, Math.round(kcalAfterProteinAndFat / 4));
@@ -182,15 +219,49 @@ export function calculateTargets(profile: UsersDoc, age: number): MacroTargets {
   };
 }
 
-export function getGoalLabel(goal?: GoalPrimary) {
+export function goalLabel(goal: GoalPrimary) {
   if (goal === "lose") return "Lose weight";
   if (goal === "tone") return "Maintain / tone";
   if (goal === "gain") return "Gain muscle";
+
   return "—";
 }
 
-export function getUserTypeTitle(userType?: string | null, gymName?: string | null) {
-  if (userType === "gym") return gymName || "Gym member";
-  if (userType === "online") return "Online user";
+export function accessLabel(profile: UsersDoc) {
+  if (profile.user_type === "gym") {
+    return profile.gym_name || "Gym member";
+  }
+
+  if (profile.user_type === "online") {
+    return "Online user";
+  }
+
+  return "—";
+}
+
+export function billingLabel(profile: UsersDoc) {
+  const billingPlan = profile.billing_plan as BillingPlan;
+  const paymentType = profile.payment_method_type as PaymentMethodType;
+
+  if (billingPlan === "gym_monthly" && paymentType === "direct_debit") {
+    return "Gym monthly • Direct Debit";
+  }
+
+  if (billingPlan === "online_monthly" && paymentType === "stripe") {
+    return "Online monthly • Stripe";
+  }
+
+  if (billingPlan === "pay_as_you_go" && paymentType === "cash") {
+    return "Pay as you go • Cash on day";
+  }
+
+  if (billingPlan === "pay_in_advance" && paymentType === "advance") {
+    return "Paid in advance";
+  }
+
+  if (billingPlan === "founders") {
+    return "Founders membership";
+  }
+
   return "—";
 }
