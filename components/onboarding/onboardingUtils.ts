@@ -206,7 +206,7 @@ export function calculateTargets(profile: UsersDoc, age: number): MacroTargets {
   const proteinMultiplier =
     goal === "lose" ? 2.1 : goal === "gain" ? 1.9 : 1.8;
 
-  const proteinG = Math.max(90, Math.round proteinBase * proteinMultiplier);
+  const proteinG = Math.max(90, Math.round( proteinBase * proteinMultiplier));
   const fatG = Math.round(Math.min(120, Math.max(45, 0.8 * weight)));
   const kcalAfterProteinAndFat = tdee - (proteinG * 4 + fatG * 9);
   const carbsG = Math.max(0, Math.round(kcalAfterProteinAndFat / 4));
