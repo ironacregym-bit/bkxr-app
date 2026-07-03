@@ -1,4 +1,3 @@
-// onboardingTypes.ts
 export type Sex = "male" | "female" | null;
 export type GoalPrimary = "lose" | "tone" | "gain" | null;
 export type JobType = "desk" | "mixed" | "manual" | "athlete" | null;
@@ -13,7 +12,36 @@ export type MembershipStatus =
   | string
   | null;
 
-export type StepKey = "metrics" | "goal" | "program" | "finish";
+export type BillingPlan =
+  | "gym_monthly"
+  | "online_monthly"
+  | "pay_as_you_go"
+  | "pay_in_advance"
+  | "founders"
+  | null;
+
+export type PaymentMethodType =
+  | "stripe"
+  | "direct_debit"
+  | "cash"
+  | "advance"
+  | null;
+
+export type DirectDebitStatus =
+  | "not_started"
+  | "pending"
+  | "active"
+  | "failed"
+  | null;
+
+export type ParqStatus = "not_started" | "completed" | null;
+
+export type StepKey =
+  | "metrics"
+  | "goal"
+  | "programme_access"
+  | "parq_billing"
+  | "finish";
 
 export type UsersDoc = {
   email?: string;
@@ -46,17 +74,23 @@ export type UsersDoc = {
   gym_id?: string | null;
   gym_name?: string | null;
 
-  billing_plan?: string | null;
-  payment_method_type?: string | null;
-  direct_debit_status?: string | null;
+  billing_plan?: BillingPlan;
+  payment_method_type?: PaymentMethodType;
 
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
   subscription_status?: string | null;
   trial_end?: string | null;
+
+  direct_debit_status?: DirectDebitStatus;
+  direct_debit_provider?: string | null;
+  direct_debit_setup_url?: string | null;
+
+  parq_status?: ParqStatus;
+  parq_completed_at?: string | null;
+
   location?: string | null;
   role?: string | null;
-
-  parq_status?: string | null;
-  parq_completed_at?: string | null;
 
   onboarding_complete?: boolean | null;
   onboarding_started_at?: string | null;
@@ -84,3 +118,5 @@ export type MacroTargets = {
   carb_target: number | null;
   fat_target: number | null;
 };
+
+export type SetProfile = (updater: (prev: UsersDoc) => UsersDoc) => void;
