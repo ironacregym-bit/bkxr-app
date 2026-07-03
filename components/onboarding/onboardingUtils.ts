@@ -166,7 +166,7 @@ export function calculateTargets(profile: UsersDoc, age: number): MacroTargets {
   const height = Number(profile.height_cm ?? 0);
   const bodyFat = Number(profile.bodyfat_pct ?? 0);
   const af = Number(profile.activity_factor ?? 1.2);
-  const sex: Sex = profile.sex ?? "other";
+  const sex: Sex = profile.sex ;
   const goal: GoalPrimary = profile.goal_primary ?? null;
 
   if (!(weight > 0 && height > 0 && af > 0) || !goal) {
