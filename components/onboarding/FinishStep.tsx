@@ -45,23 +45,42 @@ export default function FinishStep({
       </div>
 
       <div className="ia-card-title-compact mt-2">Your setup is nearly done</div>
+
       <div className="text-dim small mt-1">
         Review the details below and save your onboarding to continue into the app.
       </div>
 
       <div className="row g-2 mt-2">
         <SummaryCard label="Sex" value={profile.sex || "—"} />
+
         <SummaryCard label="Age" value={profile.DOB ? String(age) : "—"} />
-        <SummaryCard label="Height" value={profile.height_cm ? `${formatNumber(profile.height_cm)} cm` : "—"} />
-        <SummaryCard label="Weight" value={profile.weight_kg ? `${formatNumber(profile.weight_kg)} kg` : "—"} />
-        <SummaryCard label="Goal" value={goalLabel(profile.goal_primary)} />
+
+        <SummaryCard
+          label="Height"
+          value={profile.height_cm ? `${formatNumber(profile.height_cm)} cm` : "—"}
+        />
+
+        <SummaryCard
+          label="Weight"
+          value={profile.weight_kg ? `${formatNumber(profile.weight_kg)} kg` : "—"}
+        />
+
+        <SummaryCard label="Goal" value={goalLabel(profile.goal_primary ?? null)} />
+
         <SummaryCard
           label="Activity"
           value={ACTIVITY_OPTIONS.find((x) => x.job_type === profile.job_type)?.title || "—"}
         />
-        <SummaryCard label="Programme" value={profile.program_name || profile.program_id || "—"} />
+
+        <SummaryCard
+          label="Programme"
+          value={profile.program_name || profile.program_id || "—"}
+        />
+
         <SummaryCard label="Access" value={accessLabel(profile)} />
+
         <SummaryCard label="Billing" value={billingLabel(profile)} />
+
         <SummaryCard
           label="PAR-Q"
           value={
@@ -86,10 +105,29 @@ export default function FinishStep({
           </div>
         ) : (
           <div className="row g-2 mt-2">
-            <SummaryCard label="Calories" value={formatNumber(targets.caloric_target)} small />
-            <SummaryCard label="Protein" value={`${formatNumber(targets.protein_target)}g`} small />
-            <SummaryCard label="Carbs" value={`${formatNumber(targets.carb_target)}g`} small />
-            <SummaryCard label="Fats" value={`${formatNumber(targets.fat_target)}g`} small />
+            <SummaryCard
+              label="Calories"
+              value={formatNumber(targets.caloric_target)}
+              small
+            />
+
+            <SummaryCard
+              label="Protein"
+              value={`${formatNumber(targets.protein_target)}g`}
+              small
+            />
+
+            <SummaryCard
+              label="Carbs"
+              value={`${formatNumber(targets.carb_target)}g`}
+              small
+            />
+
+            <SummaryCard
+              label="Fats"
+              value={`${formatNumber(targets.fat_target)}g`}
+              small
+            />
           </div>
         )}
       </div>
