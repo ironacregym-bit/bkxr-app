@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import firestore from "../../../lib/firestoreClient"; // ✅ your Firestore client
+import { adminDb as db } from "../../../lib/firebaseAdmin";
 
 type ApiError = { error: string; where?: string; details?: string };
 
