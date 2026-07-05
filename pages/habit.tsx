@@ -175,7 +175,7 @@ export default function HabitsPage() {
   function onToggle(key: string) {
     setForm((prev) => ({
       ...prev,
-      !prev[key],
+      [key]: !prev[key],
     }));
   }
 
