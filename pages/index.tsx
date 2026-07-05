@@ -5,14 +5,14 @@ import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import BottomNav from "../../components/BottomNav";
-import PushSubscribeButton from "../../components/PushSubscribeButton";
-import NotificationsBanner from "../../components/NotificationsBanner";
-import IronAcreHeader from "../../components/iron-acre/IronAcreHeader";
-import IronAcreWorkoutCard from "../../components/iron-acre/IronAcreWorkoutCard";
-import IronAcreNutritionCard from "../../components/iron-acre/IronAcreNutritionCard";
-import IronAcreStrengthSummary from "../../components/iron-acre/IronAcreStrengthSummary";
-import IronAcreClassesList from "../../components/iron-acre/IronAcreClassesList";
+import BottomNav from "../components/BottomNav";
+import PushSubscribeButton from "../components/PushSubscribeButton";
+import NotificationsBanner from "../components/NotificationsBanner";
+import IronAcreHeader from "../components/iron-acre/IronAcreHeader";
+import IronAcreWorkoutCard from "../components/iron-acre/IronAcreWorkoutCard";
+import IronAcreNutritionCard from "../components/iron-acre/IronAcreNutritionCard";
+import IronAcreStrengthSummary from "../components/iron-acre/IronAcreStrengthSummary";
+import IronAcreClassesList from "../components/iron-acre/IronAcreClassesList";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -496,7 +496,7 @@ export default function IronAcreHome() {
     if (!profileLoaded) return;
 
     if (!onboardingComplete) {
-      router.replace(`/onboarding?returnTo=${encodeURIComponent("/iron-acre")}`);
+      router.replace(`/onboarding?returnTo=${encodeURIComponent("/")}`);
     }
   }, [mounted, status, session, profileLoaded, onboardingComplete, router]);
 
@@ -624,7 +624,7 @@ export default function IronAcreHome() {
   }
 
   if (!session) {
-    const cb = encodeURIComponent("/iron-acre");
+    const cb = encodeURIComponent("/");
 
     return (
       <>
