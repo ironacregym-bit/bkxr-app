@@ -32,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const body = (req.body || {}) as Body;
 
     const userEmail = String(body.user_email || "").trim().toLowerCase();
-    const gymId = String(body.gym_id || "").trim();
+    const gymId = String(body.gym_id || "").trim() || "g1";
     const programId = String(body.program_id || "").trim();
     const startDate = String(body.start_date || "").trim();
     const note = body.note != null ? String(body.note) : null;
@@ -68,6 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(201).json(result);
   } catch (err: any) {
     console.error("[admin/members/programs/assign] error:", err?.message || err);
+
     return res.status(500).json({
       error: err?.message || "Failed to assign program",
     });
