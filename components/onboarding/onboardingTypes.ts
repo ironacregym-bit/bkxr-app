@@ -1,7 +1,8 @@
-export type Sex = "male" | "female" | null;
+export type Sex = "male" | "female" | "other" | null;
 export type GoalPrimary = "lose" | "tone" | "gain" | null;
 export type JobType = "desk" | "mixed" | "manual" | "athlete" | null;
 export type UserType = "gym" | "online" | null;
+export type ProgramStartMode = "today" | "next_monday";
 
 export type MembershipStatus =
   | "gym_member"
@@ -67,6 +68,7 @@ export type UsersDoc = {
   workout_type?: string | null;
   program_id?: string | null;
   program_name?: string | null;
+  program_start_mode?: ProgramStartMode | null;
 
   user_type?: UserType;
   membership_status?: MembershipStatus;
