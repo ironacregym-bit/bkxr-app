@@ -55,40 +55,54 @@ function LoadingState() {
 function createInitialProfile(email?: string): UsersDoc {
   return {
     email: email || undefined,
+
     height_cm: null,
     weight_kg: null,
     bodyfat_pct: null,
     DOB: null,
     sex: null,
+
     job_type: null,
     activity_factor: 1.2,
+
     caloric_target: null,
     calorie_target: null,
     protein_target: null,
     carb_target: null,
     fat_target: null,
+
     goal_primary: null,
     goal_intensity: null,
+
     workout_type: null,
     program_id: null,
     program_name: null,
+    program_start_mode: "next_monday",
+
     user_type: null,
     membership_status: null,
+
     gym_id: null,
     gym_name: null,
+
     billing_plan: null,
     payment_method_type: null,
+
     direct_debit_status: null,
     direct_debit_provider: null,
     direct_debit_setup_url: null,
+
     subscription_status: null,
     trial_end: null,
     stripe_customer_id: null,
     stripe_subscription_id: null,
+
     parq_status: null,
     parq_completed_at: null,
+
     location: null,
     role: null,
+
     onboarding_complete: null,
     onboarding_started_at: null,
     onboarding_completed_at: null,
@@ -139,14 +153,10 @@ export default function OnboardingPage() {
     }
   );
 
-  const { data: gymsData, isLoading: gymsLoading } = useSWR<GymsResponse>(
-    gymsKey,
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 60_000,
-    }
-  );
+  const { data: gymsData, isLoading: gymsLoading } = useSWR<GymsResponse>(gymsKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60_000,
+  });
 
   const programs = useMemo(
     () => (Array.isArray(programsData?.items) ? programsData.items : []),
@@ -165,22 +175,31 @@ export default function OnboardingPage() {
       ...prev,
       ...data,
       email,
+
       activity_factor: Number(data?.activity_factor ?? prev.activity_factor ?? 1.2),
       job_type:
         data?.job_type ??
         prev.job_type ??
         getJobTypeFromActivityFactor(Number(data?.activity_factor ?? 1.2)),
+
       user_type: data?.user_type ?? prev.user_type ?? null,
       membership_status: data?.membership_status ?? prev.membership_status ?? null,
+
       program_id: data?.program_id ?? prev.program_id ?? null,
       program_name: data?.program_name ?? prev.program_name ?? null,
+      program_start_mode: data?.program_start_mode ?? prev.program_start_mode ?? "next_monday",
+
       gym_id: data?.gym_id ?? prev.gym_id ?? null,
       gym_name: data?.gym_name ?? prev.gym_name ?? null,
+
       billing_plan: data?.billing_plan ?? prev.billing_plan ?? null,
       payment_method_type: data?.payment_method_type ?? prev.payment_method_type ?? null,
+
       direct_debit_status: data?.direct_debit_status ?? prev.direct_debit_status ?? null,
       direct_debit_provider: data?.direct_debit_provider ?? prev.direct_debit_provider ?? null,
-      direct_debit_setup_url: data?.direct_debit_setup_url ?? prev.direct_debit_setup_url ?? null,
+      direct_debit_setup_url:
+        data?.direct_debit_setup_url ?? prev.direct_debit_setup_url ?? null,
+
       parq_status: data?.parq_status ?? prev.parq_status ?? "not_started",
       parq_completed_at: data?.parq_completed_at ?? prev.parq_completed_at ?? null,
     }));
@@ -269,7 +288,10 @@ export default function OnboardingPage() {
 
     if (targetStep === "programme_access") {
       if (!profile.program_id) return "Please choose a training programme.";
-      if (!profile.user_type) return "Please choose whether you are joining the gym or training online.";
+      if (!profile.program_start_mode) return "Please choose when the programme should start.";
+      if (!profile.user_type) {
+        return "Please choose whether you are joining the gym or training online.";
+      }
       if (profile.user_type === "gym" && !profile.gym_id) return "Please choose a gym.";
     }
 
@@ -307,11 +329,15 @@ export default function OnboardingPage() {
     addField("bodyfat_pct", profile.bodyfat_pct != null ? Number(profile.bodyfat_pct) : null);
 
     addField("job_type", profile.job_type ?? null);
-    addField("activity_factor", profile.activity_factor != null ? Number(profile.activity_factor) : null);
+    addField(
+      "activity_factor",
+      profile.activity_factor != null ? Number(profile.activity_factor) : null
+    );
     addField("goal_primary", profile.goal_primary ?? null);
 
     addField("program_id", profile.program_id ?? null);
     addField("program_name", profile.program_name ?? null);
+    addField("program_start_mode", profile.program_start_mode || "next_monday");
     addField("workout_type", profile.workout_type ?? null);
 
     addField("user_type", profile.user_type ?? null);
@@ -366,7 +392,9 @@ export default function OnboardingPage() {
 
   async function saveProfile(nextStep?: StepKey, complete?: boolean) {
     if (!email) {
-      signIn("google");
+      signIn("google", {
+        callbackUrl: "/onboarding",
+      });
       return;
     }
 
@@ -410,7 +438,9 @@ export default function OnboardingPage() {
       setSavedMsg("Saved ✅");
 
       if (profileKey) {
-        await mutate(profileKey, undefined, { revalidate: true });
+        await mutate(profileKey, undefined, {
+          revalidate: true,
+        });
       }
 
       if (nextStep) {
@@ -493,7 +523,14 @@ export default function OnboardingPage() {
             </div>
 
             <div className="mt-3">
-              <button className="ia-btn ia-btn-primary" onClick={() => signIn("google")}>
+              <button
+                className="ia-btn ia-btn-primary"
+                onClick={() =>
+                  signIn("google", {
+                    callbackUrl: "/onboarding",
+                  })
+                }
+              >
                 Sign in with Google
               </button>
             </div>
