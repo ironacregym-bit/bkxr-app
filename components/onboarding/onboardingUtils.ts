@@ -92,6 +92,7 @@ export const ONBOARDING_FIELD_KEYS: Array<keyof UsersDoc> = [
   "direct_debit_setup_url",
   "parq_status",
   "parq_completed_at",
+  "program_start_mode",
 ];
 
 export function stepIndex(key: StepKey) {
