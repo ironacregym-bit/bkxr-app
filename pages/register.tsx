@@ -283,7 +283,7 @@ export default function RegisterPage() {
 
         <footer className="text-center small text-dim mt-4">
           © {new Date().getFullYear()} Iron Acre Gym ·{" "}
-          /privacyPrivacy</Link> · /termsTerms</Link>
+          <Link href="/privacy">Privacy</Link> · <Link href="/terms">Terms</Link>
         </footer>
 
         <style jsx>{`
