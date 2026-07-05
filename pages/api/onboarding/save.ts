@@ -18,7 +18,12 @@ type ApiResponse =
     };
 
 type UserType = "gym" | "online";
-type MembershipStatus = "gym_member" | "online_user" | "none" | "trial" | "cancelled";
+type MembershipStatus =
+  | "gym_member"
+  | "online_user"
+  | "none"
+  | "trial"
+  | "cancelled";
 
 const ALLOWED_STRING_FIELDS = new Set([
   "sex",
@@ -26,27 +31,21 @@ const ALLOWED_STRING_FIELDS = new Set([
   "job_type",
   "goal_primary",
   "goal_intensity",
-
   "program_id",
   "program_name",
   "workout_type",
-
   "user_type",
   "membership_status",
   "gym_id",
   "gym_name",
-
   "location",
-
   "billing_plan",
   "payment_method_type",
   "direct_debit_status",
   "direct_debit_provider",
   "direct_debit_setup_url",
-
   "parq_status",
   "parq_completed_at",
-
   "onboarding_started_at",
   "onboarding_completed_at",
 ]);
@@ -56,7 +55,6 @@ const ALLOWED_NUMBER_FIELDS = new Set([
   "weight_kg",
   "bodyfat_pct",
   "activity_factor",
-
   "caloric_target",
   "calorie_target",
   "protein_target",
@@ -219,7 +217,6 @@ export default async function handler(
   try {
     const usersRef = firestore.collection("users").doc(userEmail);
     const snap = await usersRef.get();
-    const existingUserData = snap.exists ? ((snap.data() || {}) as any) : {};
     const nowIso = new Date().toISOString();
 
     const payload: Record<string, unknown> = {
@@ -232,40 +229,33 @@ export default async function handler(
       payload.created_at = nowIso;
     }
 
-    // Metrics
     addStringFieldIfPresent(body, payload, "sex");
     addStringFieldIfPresent(body, payload, "DOB");
     addNumberFieldIfPresent(body, payload, "height_cm");
     addNumberFieldIfPresent(body, payload, "weight_kg");
     addNumberFieldIfPresent(body, payload, "bodyfat_pct");
 
-    // Activity
     addStringFieldIfPresent(body, payload, "job_type");
     addNumberFieldIfPresent(body, payload, "activity_factor");
 
-    // Goals
     addStringFieldIfPresent(body, payload, "goal_primary");
     addStringFieldIfPresent(body, payload, "goal_intensity");
 
-    // Program selection
     addStringFieldIfPresent(body, payload, "program_id");
     addStringFieldIfPresent(body, payload, "program_name");
     addStringFieldIfPresent(body, payload, "workout_type");
 
-    // Gym / online selection
     addStringFieldIfPresent(body, payload, "user_type");
     addStringFieldIfPresent(body, payload, "membership_status");
     addStringFieldIfPresent(body, payload, "gym_id");
     addStringFieldIfPresent(body, payload, "gym_name");
 
-    // Billing / payment setup
     addStringFieldIfPresent(body, payload, "billing_plan");
     addStringFieldIfPresent(body, payload, "payment_method_type");
     addStringFieldIfPresent(body, payload, "direct_debit_status");
     addStringFieldIfPresent(body, payload, "direct_debit_provider");
     addStringFieldIfPresent(body, payload, "direct_debit_setup_url");
 
-    // Nutrition targets
     const hasCaloricTarget = hasOwn(body, "caloric_target");
     const hasCalorieTarget = hasOwn(body, "calorie_target");
 
@@ -284,18 +274,14 @@ export default async function handler(
     addNumberFieldIfPresent(body, payload, "carb_target");
     addNumberFieldIfPresent(body, payload, "fat_target");
 
-    // Context fields
     addStringFieldIfPresent(body, payload, "location");
 
-    // Extras
     addObjectFieldIfPresent(body, payload, "equipment");
     addObjectFieldIfPresent(body, payload, "preferences");
 
-    // PAR-Q
     addStringFieldIfPresent(body, payload, "parq_status");
     addStringFieldIfPresent(body, payload, "parq_completed_at");
 
-    // Onboarding markers
     addStringFieldIfPresent(body, payload, "onboarding_started_at");
     addBooleanFieldIfPresent(body, payload, "onboarding_complete");
 
@@ -309,10 +295,6 @@ export default async function handler(
       payload.onboarding_completed_at = nowIso;
     }
 
-    /**
-     * Default membership status only when user_type is explicitly sent and
-     * membership_status is not explicitly sent.
-     */
     if (hasOwn(body, "user_type") && !hasOwn(body, "membership_status")) {
       const userType = normaliseUserType(body.user_type);
 
@@ -343,35 +325,29 @@ export default async function handler(
       const selectedGymId =
         typeof body.gym_id === "string" && body.gym_id.trim()
           ? body.gym_id.trim()
-          : typeof existingUserData?.gym_id === "string" && existingUserData.gym_id.trim()
-          ? existingUserData.gym_id.trim()
           : "g1";
 
-      const activeProgramId = String(existingUserData?.active_program_id || "").trim();
+      try {
+        programAssignmentResult = await assignProgramToMember({
+          userEmail,
+          gymId: selectedGymId,
+          programId: selectedProgramId,
+          startDate: new Date(),
+          note: "Assigned automatically from onboarding",
+          createdBy: userEmail,
+          sendNotification: false,
+          skipIfAlreadyActive: true,
+        });
+      } catch (assignmentErr: any) {
+        console.error(
+          "[onboarding/save] program assignment error:",
+          assignmentErr?.message || assignmentErr
+        );
 
-      if (selectedProgramId && selectedProgramId !== activeProgramId) {
-        try {
-          programAssignmentResult = await assignProgramToMember({
-            userEmail,
-            gymId: selectedGymId,
-            programId: selectedProgramId,
-            startDate: new Date(),
-            note: "Assigned automatically from onboarding",
-            createdBy: userEmail,
-            sendNotification: false,
-            skipIfAlreadyActive: true,
-          });
-        } catch (assignmentErr: any) {
-          console.error(
-            "[onboarding/save] program assignment error:",
-            assignmentErr?.message || assignmentErr
-          );
-
-          return res.status(500).json({
-            error: "Onboarding saved, but failed to assign program",
-            details: assignmentErr?.message || "Unknown assignment error",
-          });
-        }
+        return res.status(500).json({
+          error: "Onboarding saved, but failed to assign program",
+          details: assignmentErr?.message || "Unknown assignment error",
+        });
       }
     }
 
