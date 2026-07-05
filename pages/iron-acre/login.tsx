@@ -10,7 +10,7 @@ export default function IronAcreLoginPage() {
     const next =
       typeof router.query.callbackUrl === "string" && router.query.callbackUrl.trim()
         ? router.query.callbackUrl.trim()
-        : "/iron-acre";
+        : "/";
 
     const ref =
       typeof router.query.ref === "string" && router.query.ref.trim()
