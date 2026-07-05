@@ -259,7 +259,7 @@ export default function RegisterPage() {
   }, [answers]);
 
   const allParqAnswered = useMemo(() => {
-    return Object.values(answers).every((a) => a === "yes" || a === "no");
+    return Object.values(answers).every((answer) => answer === "yes" || answer === "no");
   }, [answers]);
 
   const currentStepMeta = STEPS[stepIndex(step)];
@@ -591,7 +591,7 @@ export default function RegisterPage() {
         <div className="d-flex justify-content-between align-items-center mb-3">
           <div className="d-flex align-items-center gap-2">
             /IronAcreLogoNoBG.png => {
-                (e.currentTarget as HTMLImageElement).src = "/IronAcreLogoNoBG.jpg";
+                e.currentTarget.src = "/IronAcreLogoNoBG.jpg";
               }}
             />
           </div>
