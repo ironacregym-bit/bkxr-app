@@ -13,7 +13,7 @@ type AssignProgramInput = {
   skipIfAlreadyActive?: boolean;
 };
 
-type AssignProgramResult = {
+export type AssignProgramResult = {
   ok: true;
   unchanged: boolean;
   assignment_id: string | null;
@@ -80,6 +80,31 @@ function formatDateOnly(value: Date): string {
   }
 }
 
+/**
+ * Week should be based on full 7-day blocks from the assigned start date.
+ *
+ * Example:
+ * Start Friday:
+ * - Friday = Week 1
+ * - Saturday/Sunday = Week 1
+ * - Following Monday = Week 1
+ * - Next Friday after 7 days = Week 2
+ */
+export function calculateProgramWeekFromStart(
+  startDateInput: Date | string | null | undefined,
+  atInput: Date | string = new Date()
+) {
+  const startDate = parseDateInput(startDateInput || null);
+  const atDate = parseDateInput(atInput);
+
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const elapsedDays = Math.floor((atDate.getTime() - startDate.getTime()) / oneDayMs);
+
+  if (elapsedDays < 0) return 1;
+
+  return Math.floor(elapsedDays / 7) + 1;
+}
+
 async function getProgramSnap(programId: string) {
   const directRef = firestore.collection("programs").doc(programId);
   const directSnap = await directRef.get();
@@ -97,11 +122,27 @@ async function getProgramSnap(programId: string) {
   return querySnap.docs[0] || null;
 }
 
+async function isCurrentAssignmentActuallyActive(assignmentId: string | null) {
+  if (!assignmentId) return false;
+
+  try {
+    const snap = await firestore.collection("program_assignments").doc(assignmentId).get();
+
+    if (!snap.exists) return false;
+
+    const data = snap.data() as any;
+
+    return String(data?.status || "").toLowerCase() === "active";
+  } catch {
+    return false;
+  }
+}
+
 export async function assignProgramToMember(
   input: AssignProgramInput
 ): Promise<AssignProgramResult> {
   const userEmail = String(input.userEmail || "").trim().toLowerCase();
-  const programId = String(input.programId || "").trim();
+  const requestedProgramId = String(input.programId || "").trim();
   const gymId = String(input.gymId || "g1").trim() || "g1";
   const note = input.note != null ? String(input.note) : null;
   const createdBy = input.createdBy ? String(input.createdBy).trim().toLowerCase() : null;
@@ -112,7 +153,7 @@ export async function assignProgramToMember(
     throw new Error("Invalid user_email");
   }
 
-  if (!programId) {
+  if (!requestedProgramId) {
     throw new Error("program_id is required");
   }
 
@@ -126,7 +167,7 @@ export async function assignProgramToMember(
   const [userSnap, gymSnap, programSnap] = await Promise.all([
     userRef.get(),
     gymRef.get(),
-    getProgramSnap(programId),
+    getProgramSnap(requestedProgramId),
   ]);
 
   if (!userSnap.exists) {
@@ -152,13 +193,27 @@ export async function assignProgramToMember(
     throw new Error("Program has invalid weeks value");
   }
 
-  const currentActiveProgramId = String(userData?.active_program_id || userData?.program_id || "").trim();
+  const activeProgramId = String(userData?.active_program_id || "").trim();
+  const activeAssignmentId = userData?.active_program_assignment_id
+    ? String(userData.active_program_assignment_id)
+    : null;
 
-  if (skipIfAlreadyActive && currentActiveProgramId === resolvedProgramId) {
-    const activeAssignmentId = userData?.active_program_assignment_id
-      ? String(userData.active_program_assignment_id)
-      : null;
+  const currentAssignmentIsActive = await isCurrentAssignmentActuallyActive(activeAssignmentId);
 
+  /**
+   * Only skip if:
+   * - same selected program
+   * - active assignment id exists
+   * - active assignment document is actually active
+   *
+   * This prevents a stale user.active_program_id from blocking reassignment.
+   */
+  if (
+    skipIfAlreadyActive &&
+    activeProgramId === resolvedProgramId &&
+    activeAssignmentId &&
+    currentAssignmentIsActive
+  ) {
     return {
       ok: true,
       unchanged: true,
@@ -198,8 +253,14 @@ export async function assignProgramToMember(
       tx.set(
         doc.ref,
         {
-          status: "completed",
+          status: "overwritten",
+          is_active: false,
           updated_at: now,
+          overwritten_at: now,
+          overwritten_by_assignment_id: assignmentRef.id,
+          overwritten_by_program_id: resolvedProgramId,
+          overwritten_by_program_name: programName,
+          overwritten_reason: "Program reassigned",
           ended_by_reassignment: true,
         },
         { merge: true }
@@ -212,10 +273,16 @@ export async function assignProgramToMember(
       gym_id: gymId,
       program_id: resolvedProgramId,
       program_name: programName,
+
       start_date: Timestamp.fromDate(startDate),
       end_date: Timestamp.fromDate(endDate),
       weeks,
+
+      week_calculation: "elapsed_days_from_start",
+      current_week: 1,
+
       status: "active",
+      is_active: true,
       created_at: now,
       updated_at: now,
       created_by: createdBy,
@@ -226,15 +293,21 @@ export async function assignProgramToMember(
       userRef,
       {
         gym_id: gymId,
+
         program_id: resolvedProgramId,
         program_name: programName,
         workout_type: resolvedProgramId,
+
         active_program_assignment_id: assignmentRef.id,
         active_program_id: resolvedProgramId,
         active_program_name: programName,
         active_program_status: "active",
         active_program_start_date: Timestamp.fromDate(startDate),
         active_program_end_date: Timestamp.fromDate(endDate),
+
+        active_program_week_calculation: "elapsed_days_from_start",
+        active_program_current_week: 1,
+
         updated_at: now,
       },
       { merge: true }
