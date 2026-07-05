@@ -2,7 +2,6 @@
 "use client";
 
 import Head from "next/head";
-import Image from "next/image";
 import Link from "next/link";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/router";
@@ -15,6 +14,15 @@ function normaliseQueryString(value: string | string[] | undefined): string {
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function safeCallbackUrl(value: string) {
+  const cleaned = String(value || "").trim();
+
+  if (!cleaned) return "/";
+  if (cleaned.startsWith("/")) return cleaned;
+
+  return "/";
 }
 
 export default function RegisterPage() {
@@ -39,29 +47,26 @@ export default function RegisterPage() {
   const queryRef = normaliseQueryString(router.query.ref);
 
   const callbackUrl = useMemo(() => {
-    if (queryCallbackUrl) return queryCallbackUrl;
-    return "/";
+    return safeCallbackUrl(queryCallbackUrl || "/");
   }, [queryCallbackUrl]);
 
   const gymIdToJoin = useMemo(() => {
-    if (queryGymId) return queryGymId;
-    return "g1";
+    return queryGymId || "g1";
   }, [queryGymId]);
 
   useEffect(() => {
     if (!mounted) return;
+    if (typeof window === "undefined") return;
 
-    if (queryRef && typeof window !== "undefined") {
+    localStorage.setItem("app_brand", "iron-acre");
+    localStorage.setItem("post_login_callback", callbackUrl);
+    localStorage.setItem("pending_gym_id", gymIdToJoin);
+
+    if (queryRef) {
       localStorage.setItem("iron_acre_ref", queryRef);
       localStorage.setItem("bxkr_ref", queryRef);
     }
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("app_brand", "iron-acre");
-      localStorage.setItem("post_login_callback", callbackUrl);
-      localStorage.setItem("pending_gym_id", gymIdToJoin);
-    }
-  }, [mounted, queryRef, callbackUrl, gymIdToJoin]);
+  }, [mounted, callbackUrl, gymIdToJoin, queryRef]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -129,23 +134,25 @@ export default function RegisterPage() {
       if (res && !res.error) {
         setSent(true);
       } else {
-        setError(res?.error || "Something went wrong sending your magic link.");
+        setError(res?.error || "Something went wrong sending your sign-in link.");
       }
     } catch {
-      setError("Failed to send magic link. Please try again.");
+      setError("Failed to send sign-in link. Please try again.");
     } finally {
       setBusyEmail(false);
     }
   }
 
+  const loading = status === "loading" || linkingGym;
+
   return (
     <>
       <Head>
-        <title>Join Iron Acre Gym</title>
+        <title>Sign in • Iron Acre Gym</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta
           name="description"
-          content="Join Iron Acre Gym and access your training, nutrition, progress tracking and member dashboard."
+          content="Sign in to Iron Acre Gym to access your training, nutrition, progress tracking and member dashboard."
         />
       </Head>
 
@@ -160,21 +167,17 @@ export default function RegisterPage() {
         }}
       >
         <header className="d-flex justify-content-between align-items-center mb-3">
-          /
-            /IronAcreLogoNoBG.png
+          <Link href="/">
+            <img src ="/iron_acre_logo_transparent.png"></img>
 
-            <span className="fw-bold">Iron Acre</span>
-          </Link>
-
-          /
-            Back
+            <span className="fw-bold text-white">Iron Acre</span>
           </Link>
         </header>
 
         <section className="ia-tile ia-tile-pad mb-3">
           <div className="ia-kicker">
             <i className="fas fa-fire" />
-            start here
+            member access
           </div>
 
           <h1
@@ -186,11 +189,12 @@ export default function RegisterPage() {
               letterSpacing: "-0.04em",
             }}
           >
-            Join{" "}
+            Sign in to{" "}
             <span
               style={{
                 color: "var(--ia-neon)",
                 textShadow: "0 0 18px rgba(24,255,154,0.18)",
+                whiteSpace: "nowrap",
               }}
             >
               Iron Acre
@@ -198,40 +202,16 @@ export default function RegisterPage() {
           </h1>
 
           <p className="ia-page-subtitle mt-2">
-            Create your account to access training, class updates, onboarding, nutrition targets and
-            your Iron Acre member dashboard.
+            Continue with Google or request a secure sign-in link. Your account is created
+            automatically the first time you sign in.
           </p>
-
-          <div className="ia-stats-row mt-3">
-            <div className="ia-stat">
-              <div className="ia-stat-value">
-                <i className="fas fa-dumbbell" />
-              </div>
-              <div className="ia-stat-label">Train</div>
-            </div>
-
-            <div className="ia-stat">
-              <div className="ia-stat-value">
-                <i className="fas fa-chart-line" />
-              </div>
-              <div className="ia-stat-label">Track</div>
-            </div>
-
-            <div className="ia-stat">
-              <div className="ia-stat-value">
-                <i className="fas fa-fire" />
-              </div>
-              <div className="ia-stat-label">Progress</div>
-            </div>
-          </div>
         </section>
 
         <section className="ia-tile ia-tile-pad mb-3">
-          <div className="ia-card-title-compact">Create your account</div>
+          <div className="ia-card-title-compact">Member sign in</div>
 
           <div className="text-dim small mt-1">
-            Continue with Google or use a secure magic link. After sign-in, we’ll take you through
-            the right onboarding flow.
+            New members will be taken through onboarding after logging in.
           </div>
 
           <div className="d-grid gap-2 mt-3">
@@ -239,13 +219,13 @@ export default function RegisterPage() {
               type="button"
               className="ia-btn ia-btn-primary w-100"
               onClick={handleGoogleSignIn}
-              disabled={status === "loading" || linkingGym}
+              disabled={loading}
               style={{
                 minHeight: 44,
               }}
             >
               <i className="fab fa-google" />
-              {linkingGym ? "Preparing your gym account..." : "Continue with Google"}
+              {linkingGym ? "Preparing your account..." : "Continue with Google"}
             </button>
 
             <div className="text-center text-dim small">or</div>
@@ -270,7 +250,7 @@ export default function RegisterPage() {
                 }}
               >
                 <i className="fas fa-envelope" />
-                {busyEmail ? "Sending magic link..." : "Send magic link"}
+                {busyEmail ? "Sending sign-in link..." : "Email me a sign-in link"}
               </button>
             </form>
 
@@ -283,60 +263,27 @@ export default function RegisterPage() {
             {sent ? (
               <div className="ia-inline-note-success mt-1" aria-live="polite">
                 <i className="fas fa-check-circle me-2" />
-                Magic link sent — check your inbox.
+                Sign-in link sent — check your inbox.
               </div>
             ) : null}
           </div>
         </section>
 
-        <section className="ia-tile ia-tile-pad mb-3">
+        <section className="ia-tile ia-tile-pad">
           <div className="ia-kicker">
-            <i className="fas fa-clipboard-check" />
-            what happens next
+            <i className="fas fa-route" />
+            after sign in
           </div>
 
-          <div className="d-grid gap-2 mt-3">
-            <div className="ia-task-card ia-task-card--highlight">
-              <div className="ia-task-card__main">
-                <div className="ia-task-card__title">Complete onboarding</div>
-                <div className="ia-task-card__subtitle">
-                  Set goals, training preferences, metrics and programme access.
-                </div>
-              </div>
-              <div className="ia-task-card__aside">
-                <span className="ia-badge ia-badge-neon">Step 1</span>
-              </div>
-            </div>
-
-            <div className="ia-task-card">
-              <div className="ia-task-card__main">
-                <div className="ia-task-card__title">Complete PAR-Q if joining the gym</div>
-                <div className="ia-task-card__subtitle">
-                  Required before attending sessions at Iron Acre Gym.
-                </div>
-              </div>
-              <div className="ia-task-card__aside">
-                <span className="ia-badge">Step 2</span>
-              </div>
-            </div>
-
-            <div className="ia-task-card">
-              <div className="ia-task-card__main">
-                <div className="ia-task-card__title">Start training</div>
-                <div className="ia-task-card__subtitle">
-                  Access workouts, habits, nutrition tools and progress tracking.
-                </div>
-              </div>
-              <div className="ia-task-card__aside">
-                <span className="ia-badge">Step 3</span>
-              </div>
-            </div>
+          <div className="text-dim small mt-2">
+            If your setup is incomplete, Iron Acre will take you straight into onboarding so we can
+            set your profile, programme and access correctly.
           </div>
         </section>
 
         <footer className="text-center small text-dim mt-4">
-          © {new Date().getFullYear()} Iron Acre Gym · /privacyPrivacy</Link> ·{" "}
-          /termsTerms</Link>
+          © {new Date().getFullYear()} Iron Acre Gym ·{" "}
+          /privacyPrivacy</Link> · /termsTerms</Link>
         </footer>
 
         <style jsx>{`
