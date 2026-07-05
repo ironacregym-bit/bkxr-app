@@ -168,7 +168,7 @@ export default function RegisterPage() {
       >
         <header className="d-flex justify-content-between align-items-center mb-3">
           <Link href="/">
-            <img src ="/iron_acre_logo_transparent.png"></img>
+            <img style={{height:"50px", width: "50px"}} src ="/iron_acre_logo_transparent.png"></img>
 
             <span className="fw-bold text-white">Iron Acre</span>
           </Link>
