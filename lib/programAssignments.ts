@@ -2,11 +2,14 @@ import { Timestamp } from "@google-cloud/firestore";
 import firestore from "./firestoreClient";
 import { notifyInAppAndPush } from "./notify";
 
+export type ProgramStartMode = "today" | "next_monday";
+
 type AssignProgramInput = {
   userEmail: string;
   gymId?: string | null;
   programId: string;
   startDate?: Date | string | null;
+  startMode?: ProgramStartMode | null;
   note?: string | null;
   createdBy?: string | null;
   sendNotification?: boolean;
@@ -22,6 +25,7 @@ export type AssignProgramResult = {
   program_id: string;
   program_name: string;
   weeks: number;
+  start_mode: ProgramStartMode;
   start_date: string;
   end_date: string;
 };
@@ -30,11 +34,23 @@ function isEmail(value: string): boolean {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(value || "").trim());
 }
 
+function normaliseDateToMidday(date: Date) {
+  const d = new Date(date);
+  d.setHours(12, 0, 0, 0);
+  return d;
+}
+
+function dateToYMD(value: Date) {
+  const d = normaliseDateToMidday(value);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function parseDateInput(value?: Date | string | null): Date {
   if (value instanceof Date && !isNaN(value.getTime())) {
-    const d = new Date(value);
-    d.setHours(12, 0, 0, 0);
-    return d;
+    return normaliseDateToMidday(value);
   }
 
   if (typeof value === "string" && value.trim()) {
@@ -52,14 +68,41 @@ function parseDateInput(value?: Date | string | null): Date {
     const parsed = new Date(trimmed);
 
     if (!isNaN(parsed.getTime())) {
-      parsed.setHours(12, 0, 0, 0);
-      return parsed;
+      return normaliseDateToMidday(parsed);
     }
   }
 
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
-  return today;
+  return getProgramStartDate("today");
+}
+
+export function getProgramStartDate(mode: ProgramStartMode): Date {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+
+  if (mode === "today") {
+    return d;
+  }
+
+  const day = d.getDay();
+  const daysUntilMonday = day === 1 ? 7 : (8 - day) % 7 || 7;
+
+  d.setDate(d.getDate() + daysUntilMonday);
+  return d;
+}
+
+function resolveStartMode(input: AssignProgramInput): ProgramStartMode {
+  if (input.startMode === "today") return "today";
+  if (input.startMode === "next_monday") return "next_monday";
+
+  return input.startDate ? "today" : "next_monday";
+}
+
+function resolveStartDate(input: AssignProgramInput): Date {
+  if (input.startDate) {
+    return parseDateInput(input.startDate);
+  }
+
+  return getProgramStartDate(resolveStartMode(input));
 }
 
 function addWeeks(date: Date, weeks: number): Date {
@@ -81,14 +124,15 @@ function formatDateOnly(value: Date): string {
 }
 
 /**
- * Week should be based on full 7-day blocks from the assigned start date.
+ * Week is based on full 7-day blocks from the assigned start date.
  *
- * Example:
  * Start Friday:
- * - Friday = Week 1
- * - Saturday/Sunday = Week 1
- * - Following Monday = Week 1
- * - Next Friday after 7 days = Week 2
+ * - Friday to Thursday = Week 1
+ * - Next Friday = Week 2
+ *
+ * Start Monday:
+ * - Monday to Sunday = Week 1
+ * - Next Monday = Week 2
  */
 export function calculateProgramWeekFromStart(
   startDateInput: Date | string | null | undefined,
@@ -138,6 +182,25 @@ async function isCurrentAssignmentActuallyActive(assignmentId: string | null) {
   }
 }
 
+function getMaybeTimestampYMD(value: any) {
+  if (!value) return "";
+
+  if (typeof value?.toDate === "function") {
+    return dateToYMD(value.toDate());
+  }
+
+  if (value instanceof Date) {
+    return dateToYMD(value);
+  }
+
+  const parsed = new Date(value);
+  if (!isNaN(parsed.getTime())) {
+    return dateToYMD(parsed);
+  }
+
+  return "";
+}
+
 export async function assignProgramToMember(
   input: AssignProgramInput
 ): Promise<AssignProgramResult> {
@@ -160,6 +223,9 @@ export async function assignProgramToMember(
   if (!gymId) {
     throw new Error("gym_id is required");
   }
+
+  const startMode = resolveStartMode(input);
+  const startDate = resolveStartDate(input);
 
   const userRef = firestore.collection("users").doc(userEmail);
   const gymRef = firestore.collection("gyms").doc(gymId);
@@ -199,20 +265,15 @@ export async function assignProgramToMember(
     : null;
 
   const currentAssignmentIsActive = await isCurrentAssignmentActuallyActive(activeAssignmentId);
+  const currentStartYMD = getMaybeTimestampYMD(userData?.active_program_start_date);
+  const desiredStartYMD = dateToYMD(startDate);
 
-  /**
-   * Only skip if:
-   * - same selected program
-   * - active assignment id exists
-   * - active assignment document is actually active
-   *
-   * This prevents a stale user.active_program_id from blocking reassignment.
-   */
   if (
     skipIfAlreadyActive &&
     activeProgramId === resolvedProgramId &&
     activeAssignmentId &&
-    currentAssignmentIsActive
+    currentAssignmentIsActive &&
+    currentStartYMD === desiredStartYMD
   ) {
     return {
       ok: true,
@@ -223,18 +284,17 @@ export async function assignProgramToMember(
       program_id: resolvedProgramId,
       program_name: programName,
       weeks,
+      start_mode: String(userData?.active_program_start_mode || startMode) as ProgramStartMode,
       start_date: userData?.active_program_start_date?.toDate
         ? userData.active_program_start_date.toDate().toISOString()
-        : new Date().toISOString(),
+        : startDate.toISOString(),
       end_date: userData?.active_program_end_date?.toDate
         ? userData.active_program_end_date.toDate().toISOString()
         : new Date().toISOString(),
     };
   }
 
-  const startDate = parseDateInput(input.startDate);
   const endDate = addWeeks(startDate, weeks);
-
   endDate.setDate(endDate.getDate() - 1);
   endDate.setHours(23, 59, 59, 999);
 
@@ -273,14 +333,12 @@ export async function assignProgramToMember(
       gym_id: gymId,
       program_id: resolvedProgramId,
       program_name: programName,
-
+      start_mode: startMode,
       start_date: Timestamp.fromDate(startDate),
       end_date: Timestamp.fromDate(endDate),
       weeks,
-
       week_calculation: "elapsed_days_from_start",
       current_week: 1,
-
       status: "active",
       is_active: true,
       created_at: now,
@@ -293,21 +351,19 @@ export async function assignProgramToMember(
       userRef,
       {
         gym_id: gymId,
-
         program_id: resolvedProgramId,
         program_name: programName,
         workout_type: resolvedProgramId,
-
+        program_start_mode: startMode,
         active_program_assignment_id: assignmentRef.id,
         active_program_id: resolvedProgramId,
         active_program_name: programName,
         active_program_status: "active",
+        active_program_start_mode: startMode,
         active_program_start_date: Timestamp.fromDate(startDate),
         active_program_end_date: Timestamp.fromDate(endDate),
-
         active_program_week_calculation: "elapsed_days_from_start",
         active_program_current_week: 1,
-
         updated_at: now,
       },
       { merge: true }
@@ -316,7 +372,7 @@ export async function assignProgramToMember(
 
   if (sendNotification) {
     try {
-      const href = "/iron-acre";
+      const href = "/";
       const startText = formatDateOnly(startDate);
 
       await notifyInAppAndPush(
@@ -332,6 +388,7 @@ export async function assignProgramToMember(
             program_id: resolvedProgramId,
             program_name: programName,
             assignment_id: assignmentRef.id,
+            start_mode: startMode,
             start_date: startDate.toISOString(),
             end_date: endDate.toISOString(),
           },
@@ -356,6 +413,7 @@ export async function assignProgramToMember(
     program_id: resolvedProgramId,
     program_name: programName,
     weeks,
+    start_mode: startMode,
     start_date: startDate.toISOString(),
     end_date: endDate.toISOString(),
   };
