@@ -18,6 +18,7 @@ type ApiResponse =
     };
 
 type UserType = "gym" | "online";
+
 type MembershipStatus =
   | "gym_member"
   | "online_user"
@@ -31,21 +32,28 @@ const ALLOWED_STRING_FIELDS = new Set([
   "job_type",
   "goal_primary",
   "goal_intensity",
+
   "program_id",
   "program_name",
+  "program_start_mode",
   "workout_type",
+
   "user_type",
   "membership_status",
   "gym_id",
   "gym_name",
+
   "location",
+
   "billing_plan",
   "payment_method_type",
   "direct_debit_status",
   "direct_debit_provider",
   "direct_debit_setup_url",
+
   "parq_status",
   "parq_completed_at",
+
   "onboarding_started_at",
   "onboarding_completed_at",
 ]);
@@ -55,6 +63,7 @@ const ALLOWED_NUMBER_FIELDS = new Set([
   "weight_kg",
   "bodyfat_pct",
   "activity_factor",
+
   "caloric_target",
   "calorie_target",
   "protein_target",
@@ -118,6 +127,13 @@ function normaliseMembershipStatus(value: unknown): MembershipStatus | null {
   return null;
 }
 
+function normaliseProgramStartMode(value: unknown): "today" | "next_monday" {
+  const cleaned = cleanNullableString(value);
+
+  if (cleaned === "today") return "today";
+  return "next_monday";
+}
+
 function addStringFieldIfPresent(
   body: Record<string, unknown>,
   payload: Record<string, unknown>,
@@ -133,6 +149,11 @@ function addStringFieldIfPresent(
 
   if (key === "membership_status") {
     payload[key] = normaliseMembershipStatus(body[key]);
+    return;
+  }
+
+  if (key === "program_start_mode") {
+    payload[key] = normaliseProgramStartMode(body[key]);
     return;
   }
 
@@ -194,7 +215,9 @@ export default async function handler(
   const session = await getServerSession(req, res, authOptions);
 
   if (!session?.user?.email) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return res.status(401).json({
+      error: "Unauthorized",
+    });
   }
 
   const body = (req.body || {}) as Record<string, unknown>;
@@ -203,7 +226,9 @@ export default async function handler(
   const bodyEmail = String(body.email || "").trim().toLowerCase();
 
   if (!sessionEmail) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return res.status(401).json({
+      error: "Unauthorized",
+    });
   }
 
   if (bodyEmail && bodyEmail !== sessionEmail) {
@@ -243,6 +268,7 @@ export default async function handler(
 
     addStringFieldIfPresent(body, payload, "program_id");
     addStringFieldIfPresent(body, payload, "program_name");
+    addStringFieldIfPresent(body, payload, "program_start_mode");
     addStringFieldIfPresent(body, payload, "workout_type");
 
     addStringFieldIfPresent(body, payload, "user_type");
@@ -309,7 +335,9 @@ export default async function handler(
 
     const writeKeys = Object.keys(payload);
 
-    await usersRef.set(payload, { merge: true });
+    await usersRef.set(payload, {
+      merge: true,
+    });
 
     let programAssignmentResult: any = null;
 
@@ -327,13 +355,18 @@ export default async function handler(
           ? body.gym_id.trim()
           : "g1";
 
+      const selectedProgramStartMode = normaliseProgramStartMode(body.program_start_mode);
+
       try {
         programAssignmentResult = await assignProgramToMember({
           userEmail,
           gymId: selectedGymId,
           programId: selectedProgramId,
-          startDate: new Date(),
-          note: "Assigned automatically from onboarding",
+          startMode: selectedProgramStartMode,
+          note:
+            selectedProgramStartMode === "today"
+              ? "Assigned automatically from onboarding — start today"
+              : "Assigned automatically from onboarding — start next Monday",
           createdBy: userEmail,
           sendNotification: false,
           skipIfAlreadyActive: true,
