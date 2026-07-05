@@ -1,4 +1,4 @@
-// pages/register.tsx
+// pages/iron-acre/register.tsx
 "use client";
 
 import Head from "next/head";
@@ -166,7 +166,6 @@ function getDeviceType() {
   if (ua.includes("ipad")) return "ipad";
   if (ua.includes("tablet")) return "tablet";
   if (ua.includes("iphone") || ua.includes("android")) return "mobile";
-
   return "desktop";
 }
 
@@ -193,9 +192,10 @@ function canvasHasInk(canvas: HTMLCanvasElement | null) {
   return false;
 }
 
-export default function RegisterPage() {
+export default function IronAcreRegisterPage() {
   const { data: session, status } = useSession();
 
+  const [mounted, setMounted] = useState(false);
   const [step, setStep] = useState<StepKey>("personal");
 
   const [busy, setBusy] = useState(false);
@@ -220,7 +220,6 @@ export default function RegisterPage() {
     q6: "",
     q7: "",
   });
-
   const [medicalNotes, setMedicalNotes] = useState("");
 
   const [mediaConsent, setMediaConsent] = useState(false);
@@ -232,6 +231,10 @@ export default function RegisterPage() {
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -259,16 +262,13 @@ export default function RegisterPage() {
   }, [answers]);
 
   const allParqAnswered = useMemo(() => {
-    return Object.values(answers).every((answer) => answer === "yes" || answer === "no");
+    return Object.values(answers).every((a) => a === "yes" || a === "no");
   }, [answers]);
-
-  const currentStepMeta = STEPS[stepIndex(step)];
-  const progressPct = ((stepIndex(step) + 1) / STEPS.length) * 100;
 
   function setAnswer(key: keyof ParqAnswers, value: Answer) {
     setAnswers((prev) => ({
       ...prev,
-      value,
+      [key]: value,
     }));
   }
 
@@ -282,139 +282,134 @@ export default function RegisterPage() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setHasSignature(false);
   }
-
   function getCanvasPoint(evt: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas) return null;
-
+  
     const rect = canvas.getBoundingClientRect();
-
+  
     return {
       x: (evt.clientX - rect.left) * (canvas.width / rect.width),
       y: (evt.clientY - rect.top) * (canvas.height / rect.height),
     };
   }
-
+  
   function handleSignaturePointerDown(evt: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
+  
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
+  
     const point = getCanvasPoint(evt);
     if (!point) return;
-
+  
     evt.preventDefault();
     drawingRef.current = true;
-
+  
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#ffffff";
-
+  
     ctx.beginPath();
     ctx.moveTo(point.x, point.y);
-
+  
     try {
       canvas.setPointerCapture(evt.pointerId);
     } catch {
       // ignore
     }
   }
-
+  
   function handleSignaturePointerMove(evt: React.PointerEvent<HTMLCanvasElement>) {
     if (!drawingRef.current) return;
-
+  
     const canvas = canvasRef.current;
     if (!canvas) return;
-
+  
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
+  
     const point = getCanvasPoint(evt);
     if (!point) return;
-
+  
     evt.preventDefault();
-
+  
     ctx.lineTo(point.x, point.y);
     ctx.stroke();
-
+  
     if (!hasSignature) {
       setHasSignature(true);
     }
   }
-
+  
   function finishSignatureStroke(evt?: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
+  
     drawingRef.current = false;
-
+  
     if (evt) {
       evt.preventDefault();
-
+  
       try {
         canvas.releasePointerCapture(evt.pointerId);
       } catch {
         // ignore
       }
     }
-
+  
     setHasSignature(canvasHasInk(canvas));
   }
-
-  function validateStep(targetStep: StepKey) {
-    if (targetStep === "personal") {
-      if (!fullName.trim()) return "Please enter the member’s full name.";
-      if (!email.trim()) return "Please enter the member’s email address.";
-      if (!isValidEmail(email.trim())) return "Please enter a valid email address.";
-      if (!phone.trim()) return "Please enter the member’s phone number.";
-      if (!isValidPhone(phone.trim())) return "Please enter a valid phone number.";
-      if (!dateOfBirth.trim()) return "Please enter the member’s date of birth.";
-      if (!isValidDob(dateOfBirth.trim())) return "Please enter a valid date of birth.";
-    }
-
-    if (targetStep === "emergency") {
-      if (!emergencyName.trim()) return "Please enter the emergency contact name.";
-      if (!emergencyPhone.trim()) return "Please enter the emergency contact phone number.";
-
-      if (!isValidPhone(emergencyPhone.trim())) {
-        return "Please enter a valid emergency contact phone number.";
+  
+    function validateStep(targetStep: StepKey) {
+      if (targetStep === "personal") {
+        if (!fullName.trim()) return "Please enter the member’s full name.";
+        if (!email.trim()) return "Please enter the member’s email address.";
+        if (!isValidEmail(email.trim())) return "Please enter a valid email address.";
+        if (!phone.trim()) return "Please enter the member’s phone number.";
+        if (!isValidPhone(phone.trim())) return "Please enter a valid phone number.";
+        if (!dateOfBirth.trim()) return "Please enter the member’s date of birth.";
+        if (!isValidDob(dateOfBirth.trim())) return "Please enter a valid date of birth.";
       }
-    }
-
-    if (targetStep === "parq") {
-      if (!allParqAnswered) return "Please answer all PAR-Q questions.";
-
-      if (requiresMedicalReview && !medicalNotes.trim()) {
-        return "Please provide additional information for the medical review.";
+  
+      if (targetStep === "emergency") {
+        if (!emergencyName.trim()) return "Please enter the emergency contact name.";
+        if (!emergencyPhone.trim()) return "Please enter the emergency contact phone number.";
+        if (!isValidPhone(emergencyPhone.trim())) {
+          return "Please enter a valid emergency contact phone number.";
+        }
       }
-    }
-
-    if (targetStep === "terms") {
-      if (!termsAccepted) return "Please accept the Membership Terms to continue.";
-    }
-
-    if (targetStep === "waiver") {
-      if (!waiverAccepted) return "Please accept the Liability Waiver to continue.";
-    }
-
-    if (targetStep === "signature") {
-      if (!signedName.trim()) return "Please enter the printed name.";
-
-      if (!canvasHasInk(canvasRef.current)) {
-        return "Please provide a signature before submitting.";
+  
+      if (targetStep === "parq") {
+        if (!allParqAnswered) return "Please answer all PAR-Q questions.";
+        if (requiresMedicalReview && !medicalNotes.trim()) {
+          return "Please provide additional information for the medical review.";
+        }
       }
+  
+      if (targetStep === "terms") {
+        if (!termsAccepted) return "Please accept the Membership Terms to continue.";
+      }
+  
+      if (targetStep === "waiver") {
+        if (!waiverAccepted) return "Please accept the Liability Waiver to continue.";
+      }
+  
+      if (targetStep === "signature") {
+        if (!signedName.trim()) return "Please enter the printed name.";
+        if (!canvasHasInk(canvasRef.current)) {
+          return "Please provide a signature before submitting.";
+        }
+      }
+  
+      return null;
     }
-
-    return null;
-  }
 
   function validateAllSteps() {
     for (const stepMeta of STEPS) {
       const validationError = validateStep(stepMeta.key);
-
       if (validationError) {
         setStep(stepMeta.key);
         return validationError;
@@ -428,7 +423,6 @@ export default function RegisterPage() {
     setError(null);
 
     const validationError = validateStep(step);
-
     if (validationError) {
       setError(validationError);
       return;
@@ -436,7 +430,6 @@ export default function RegisterPage() {
 
     const currentIndex = stepIndex(step);
     const next = STEPS[currentIndex + 1];
-
     if (next) {
       setStep(next.key);
     }
@@ -447,7 +440,6 @@ export default function RegisterPage() {
 
     const currentIndex = stepIndex(step);
     const prev = STEPS[currentIndex - 1];
-
     if (prev) {
       setStep(prev.key);
     }
@@ -458,14 +450,12 @@ export default function RegisterPage() {
     setError(null);
 
     const canvas = canvasRef.current;
-
     if (!canvas) {
       setError("Signature canvas is unavailable.");
       return;
     }
 
     const validationError = validateAllSteps();
-
     if (validationError) {
       setError(validationError);
       return;
@@ -561,15 +551,18 @@ export default function RegisterPage() {
       q6: "",
       q7: "",
     });
-
     setMedicalNotes("");
+
     setMediaConsent(false);
     setTermsAccepted(false);
     setWaiverAccepted(false);
-    setSignedName(sessionName || "");
 
+    setSignedName(sessionName || "");
     clearSignature();
   }
+
+  const currentStepMeta = STEPS[stepIndex(step)];
+  const progressPct = ((stepIndex(step) + 1) / STEPS.length) * 100;
 
   return (
     <>
@@ -584,29 +577,21 @@ export default function RegisterPage() {
           minHeight: "100vh",
           paddingBottom: 100,
           color: "#fff",
-          background:
-            "linear-gradient(to bottom, #070a0d 0%, #0d1416 55%, #111a16 100%)",
+          background: "linear-gradient(to bottom, #070a0d 0%, #0d1416 55%, #111a16 100%)",
         }}
       >
         <div className="d-flex justify-content-between align-items-center mb-3">
           <div className="d-flex align-items-center gap-2">
-            /IronAcreLogoNoBG.png => {
-                e.currentTarget.src = "/IronAcreLogoNoBG.jpg";
-              }}
-            />
+            /IronAcreLogoNoBG.png
           </div>
 
-          /
+          <Link href="/">
             Back
           </Link>
         </div>
 
         <section className="mb-4">
-          <div className="ia-kicker">
-            <i className="fas fa-clipboard-check" />
-            Member onboarding
-          </div>
-
+          <div className="ia-kicker">Member onboarding</div>
           <h1 className="ia-page-title mt-2">
             Digital registration{" "}
             <span
@@ -619,10 +604,8 @@ export default function RegisterPage() {
               Iron Acre Gym
             </span>
           </h1>
-
           <p className="ia-page-subtitle">
-            Designed for first-visit onboarding on the gym iPad. Complete all steps once, then link
-            to the member’s account later if needed.
+            Designed for first-visit onboarding on the gym iPad. Complete all steps once, then link to the member’s account later if needed.
           </p>
         </section>
 
@@ -632,9 +615,7 @@ export default function RegisterPage() {
               <i className="fas fa-check-circle" />
               submitted
             </div>
-
             <div className="ia-page-title mt-2">Registration complete</div>
-
             <div className="text-dim small mt-2">
               The member registration has been saved successfully.
             </div>
@@ -648,7 +629,7 @@ export default function RegisterPage() {
                 Start another registration
               </button>
 
-              /
+              <Link href="/">
                 Return home
               </Link>
             </div>
@@ -736,7 +717,7 @@ export default function RegisterPage() {
                   </div>
 
                   <div className="col-12">
-                    <label className="form-label ia-label">Address optional</label>
+                    <label className="form-label ia-label">Address (optional)</label>
                     <textarea
                       className="form-control ia-form-input"
                       rows={3}
@@ -792,10 +773,7 @@ export default function RegisterPage() {
 
                   {requiresMedicalReview ? (
                     <div className="ia-alert ia-alert-green">
-                      <div className="fw-semibold mb-2">
-                        Please provide additional information
-                      </div>
-
+                      <div className="fw-semibold mb-2">Please provide additional information</div>
                       <textarea
                         className="form-control ia-form-input"
                         rows={4}
@@ -806,8 +784,7 @@ export default function RegisterPage() {
                     </div>
                   ) : (
                     <div>
-                      <label className="form-label ia-label">Medical notes optional</label>
-
+                      <label className="form-label ia-label">Medical notes (optional)</label>
                       <textarea
                         className="form-control ia-form-input"
                         rows={4}
@@ -837,7 +814,6 @@ export default function RegisterPage() {
                       onChange={(e) => setMediaConsent(e.target.checked)}
                       style={{ marginTop: 3 }}
                     />
-
                     <span>{IRON_ACRE_MEDIA_CONSENT_LABEL}</span>
                   </label>
                 </div>
@@ -868,7 +844,6 @@ export default function RegisterPage() {
                       onChange={(e) => setTermsAccepted(e.target.checked)}
                       style={{ marginTop: 3 }}
                     />
-
                     <span>I have read and agree to the Membership Terms.</span>
                   </label>
                 </div>
@@ -899,10 +874,8 @@ export default function RegisterPage() {
                       onChange={(e) => setWaiverAccepted(e.target.checked)}
                       style={{ marginTop: 3 }}
                     />
-
                     <span>
-                      I understand that participation in physical training carries inherent risks and
-                      I voluntarily participate at my own risk.
+                      I understand that participation in physical training carries inherent risks and I voluntarily participate at my own risk.
                     </span>
                   </label>
                 </div>
@@ -913,7 +886,6 @@ export default function RegisterPage() {
                   <div className="row g-3">
                     <div className="col-12">
                       <label className="form-label ia-label">Printed name</label>
-
                       <input
                         type="text"
                         className="form-control ia-form-input"
@@ -966,8 +938,7 @@ export default function RegisterPage() {
                   </div>
 
                   <div className="text-dim small">
-                    Signature timestamp and device type will be captured automatically when
-                    submitted.
+                    Signature timestamp and device type will be captured automatically when submitted.
                   </div>
                 </div>
               ) : null}
@@ -1008,8 +979,8 @@ export default function RegisterPage() {
         )}
 
         <footer className="text-center small text-dim mt-4">
-          © {new Date().getFullYear()} Iron Acre Gym · /privacyPrivacy</Link> ·{" "}
-          /termsTerms</Link>
+          © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacy">Privacy</Link> ·{" "}
+          <Link href="/terms">Terms</Link>
         </footer>
 
         <style jsx>{`
@@ -1121,7 +1092,6 @@ function ParqQuestion(props: {
             checked={value === "yes"}
             onChange={() => onChange("yes")}
           />
-
           <label className="form-check-label" htmlFor={`${name}-yes`}>
             Yes
           </label>
@@ -1136,7 +1106,6 @@ function ParqQuestion(props: {
             checked={value === "no"}
             onChange={() => onChange("no")}
           />
-
           <label className="form-check-label" htmlFor={`${name}-no`}>
             No
           </label>
