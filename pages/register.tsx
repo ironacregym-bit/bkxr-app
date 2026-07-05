@@ -58,7 +58,7 @@ export default function Register() {
   const BORDER = isIronAcre ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(255,255,255,0.08)";
   const brandName = isIronAcre ? "Iron Acre Gym" : "BXKR";
   const logoSrc = isIronAcre ? "/IronAcreLogoNoBG.jpg" : "/BXKRLogoNoBG.jpg";
-  const defaultAfterLogin = isIronAcre ? "/iron-acre" : "/";
+  const defaultAfterLogin = isIronAcre ? "/" : "/";
 
   const callbackUrl = useMemo(() => {
     if (queryCallbackUrl) return queryCallbackUrl;
