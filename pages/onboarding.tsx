@@ -112,7 +112,7 @@ export default function OnboardingPage() {
   const returnTo = useMemo(() => {
     const q = router.query.returnTo;
     if (typeof q === "string" && q.trim()) return q;
-    return "/iron-acre";
+    return "/";
   }, [router.query.returnTo]);
 
   const [profile, setProfileState] = useState<UsersDoc>(() => createInitialProfile(email));
