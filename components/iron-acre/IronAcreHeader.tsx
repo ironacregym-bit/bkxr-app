@@ -432,10 +432,10 @@ export default function IronAcreHeader({
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
-            <Link href="/profile => setProfileOpen(false)}">
-              style={{
-                color: "#fff",
-                display: "flex",
+            <Link
+              href="/profile"
+              role="menuitem"
+              className="text-decorationisplay: "flex",
                 alignItems: "center",
                 gap: 10,
                 padding: "10px 10px",
@@ -449,8 +449,8 @@ export default function IronAcreHeader({
               <i className="fas fa-user" style={{ color: "#16dbaa", width: 16 }} />
               Profile
             </Link>
-
-            <Link href="/onboarding?returnTo=%2F => setProfileOpen(false)}">
+          
+            /onboarding?returnTo=%2F => setProfileOpen(false)}
               style={{
                 color: "#fff",
                 display: "flex",
@@ -467,7 +467,7 @@ export default function IronAcreHeader({
               <i className="fas fa-rotate-right" style={{ color: "#16dbaa", width: 16 }} />
               Redo onboarding
             </Link>
-
+          
             <button
               type="button"
               role="menuitem"
@@ -487,7 +487,10 @@ export default function IronAcreHeader({
                 width: "100%",
               }}
             >
-              <i className="fas fa-right-from-bracket" style={{ color: "#ffb3b3", width: 16 }} />
+              <i
+                className="fas fa-right-from-bracket"
+                style={{ color: "#ffb3b3", width: 16 }}
+              />
               Sign out
             </button>
           </div>
