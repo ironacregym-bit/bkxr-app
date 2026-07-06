@@ -36,6 +36,7 @@ const TIME_UPDATE_MS = 30_000;
 const DROPDOWN_MAX_WIDTH = 420;
 const PROFILE_DROPDOWN_WIDTH = 260;
 const FEED_KEY = "/api/notifications/feed?limit=20";
+const SHEET_CLOSE_DRAG_THRESHOLD = 110;
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -77,6 +78,9 @@ export default function IronAcreHeader({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
+  const [sheetDragY, setSheetDragY] = useState(0);
+  const [sheetDragging, setSheetDragging] = useState(false);
+
   const [dropdownPos, setDropdownPos] = useState<DropdownPosition>({
     top: 78,
     right: 12,
@@ -94,6 +98,9 @@ export default function IronAcreHeader({
 
   const profileButtonRef = useRef<HTMLButtonElement | null>(null);
   const profileDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  const dragStartYRef = useRef(0);
+  const dragLatestYRef = useRef(0);
 
   const greeting = useMemo(() => greetingForHour(new Date().getHours()), []);
   const initials = useMemo(() => getInitials(userName), [userName]);
@@ -179,6 +186,12 @@ export default function IronAcreHeader({
     };
   }, [profileOpen]);
 
+  function closeNotifications() {
+    setSheetDragY(0);
+    setSheetDragging(false);
+    setNotificationsOpen(false);
+  }
+
   useEffect(() => {
     if (!notificationsOpen && !profileOpen) return;
 
@@ -193,7 +206,7 @@ export default function IronAcreHeader({
       const clickedProfileDropdown = profileDropdownRef.current?.contains(target);
 
       if (!clickedNotificationButton && !clickedNotificationDropdown) {
-        setNotificationsOpen(false);
+        closeNotifications();
       }
 
       if (!clickedProfileButton && !clickedProfileDropdown) {
@@ -203,7 +216,7 @@ export default function IronAcreHeader({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setNotificationsOpen(false);
+        closeNotifications();
         setProfileOpen(false);
       }
     };
@@ -228,6 +241,52 @@ export default function IronAcreHeader({
     };
   }, [notificationsOpen]);
 
+  function handleSheetPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (window.innerWidth >= 768) return;
+
+    dragStartYRef.current = event.clientY;
+    dragLatestYRef.current = event.clientY;
+
+    setSheetDragging(true);
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
+  }
+
+  function handleSheetPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!sheetDragging) return;
+    if (window.innerWidth >= 768) return;
+
+    dragLatestYRef.current = event.clientY;
+
+    const deltaY = Math.max(0, event.clientY - dragStartYRef.current);
+    setSheetDragY(deltaY);
+  }
+
+  function handleSheetPointerEnd(event: React.PointerEvent<HTMLDivElement>) {
+    if (!sheetDragging) return;
+
+    const deltaY = Math.max(0, dragLatestYRef.current - dragStartYRef.current);
+
+    setSheetDragging(false);
+
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
+
+    if (deltaY > SHEET_CLOSE_DRAG_THRESHOLD) {
+      closeNotifications();
+      return;
+    }
+
+    setSheetDragY(0);
+  }
+
   async function handleSignOut() {
     await signOut({ callbackUrl: "/register" });
   }
@@ -236,7 +295,38 @@ export default function IronAcreHeader({
     "--ia-notification-sheet-top": `${dropdownPos.top}px`,
     "--ia-notification-sheet-right": `${dropdownPos.right}px`,
     "--ia-notification-sheet-width": `${dropdownPos.width}px`,
+    transform: sheetDragY > 0 ? `translate3d(0, ${sheetDragY}px, 0)` : undefined,
+    transition: sheetDragging ? "none" : "transform 0.22s ease",
   } as CSSProperties;
+
+  const profileMenuItemStyle: CSSProperties = {
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "10px 10px",
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.06)",
+    fontSize: 14,
+    fontWeight: 700,
+    textDecoration: "none",
+  };
+
+  const signOutButtonStyle: CSSProperties = {
+    color: "rgba(255,255,255,0.86)",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "10px 10px",
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.06)",
+    fontSize: 14,
+    fontWeight: 700,
+    textAlign: "left",
+    width: "100%",
+  };
 
   return (
     <>
@@ -275,7 +365,13 @@ export default function IronAcreHeader({
               aria-haspopup="dialog"
               onClick={() => {
                 setProfileOpen(false);
-                setNotificationsOpen((prev) => !prev);
+
+                if (notificationsOpen) {
+                  closeNotifications();
+                  return;
+                }
+
+                setNotificationsOpen(true);
               }}
               style={{
                 width: 46,
@@ -345,7 +441,7 @@ export default function IronAcreHeader({
               aria-expanded={profileOpen}
               aria-haspopup="menu"
               onClick={() => {
-                setNotificationsOpen(false);
+                closeNotifications();
                 setProfileOpen((prev) => !prev);
               }}
               style={{
@@ -359,7 +455,9 @@ export default function IronAcreHeader({
                 border: profileOpen
                   ? "1px solid rgba(22, 219, 170, 0.28)"
                   : "1px solid rgba(255,255,255,0.10)",
-                background: profileOpen ? "rgba(22, 219, 170, 0.08)" : "rgba(255,255,255,0.05)",
+                background: profileOpen
+                  ? "rgba(22, 219, 170, 0.08)"
+                  : "rgba(255,255,255,0.05)",
                 color: profileOpen ? "#16dbaa" : "#fff",
                 boxShadow: profileOpen ? "0 0 12px rgba(22, 219, 170, 0.12)" : "none",
                 transition: "all 0.2s ease",
@@ -379,7 +477,7 @@ export default function IronAcreHeader({
           <div
             className="ia-notification-sheet-backdrop"
             aria-hidden="true"
-            onClick={() => setNotificationsOpen(false)}
+            onClick={closeNotifications}
           />
 
           <div
@@ -389,7 +487,13 @@ export default function IronAcreHeader({
             className="ia-notification-sheet"
             style={notificationSheetStyle}
           >
-            <div className="ia-sheet-handle" />
+            <div
+              className="ia-sheet-handle"
+              onPointerDown={handleSheetPointerDown}
+              onPointerMove={handleSheetPointerMove}
+              onPointerUp={handleSheetPointerEnd}
+              onPointerCancel={handleSheetPointerEnd}
+            />
 
             {notificationsContent || (
               <div className="text-dim small">No notifications available.</div>
@@ -427,11 +531,13 @@ export default function IronAcreHeader({
               marginBottom: 10,
             }}
           >
-            <div style={{ color: "#fff", fontWeight: 800, lineHeight: 1.2 }}>{userName}</div>
+            <div style={{ color: "#fff", fontWeight: 800, lineHeight: 1.2 }}>
+              {userName}
+            </div>
             <div className="text-dim small mt-1">Iron Acre account</div>
           </div>
 
-          <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ display: "grid", gap: 6 }}>
             <Link
               href="/profile => setProfileOpen(false)}"
               role="menuitem"
@@ -525,11 +631,17 @@ export default function IronAcreHeader({
         }
 
         .ia-sheet-handle {
-          width: 42px;
-          height: 5px;
+          width: 46px;
+          height: 6px;
           border-radius: 999px;
-          background: rgba(255, 255, 255, 0.22);
+          background: rgba(255, 255, 255, 0.26);
           margin: 0 auto 14px;
+          cursor: grab;
+          touch-action: none;
+        }
+
+        .ia-sheet-handle:active {
+          cursor: grabbing;
         }
 
         @media (max-width: 767px) {
@@ -546,6 +658,7 @@ export default function IronAcreHeader({
             border-bottom: none;
             box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.5);
             animation: iaSheetUp 0.24s ease-out;
+            will-change: transform;
           }
         }
 
@@ -567,12 +680,12 @@ export default function IronAcreHeader({
         @keyframes iaSheetUp {
           from {
             opacity: 0.92;
-            transform: translateY(100%);
+            transform: translate3d(0, 100%, 0);
           }
 
           to {
             opacity: 1;
-            transform: translateY(0);
+            transform: translate3d(0, 0, 0);
           }
         }
 
