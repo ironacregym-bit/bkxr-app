@@ -435,7 +435,7 @@ export default function IronAcreHeader({
             <Link
               href="/profile => setProfileOpen(false)}"
               role="menuitem"
-              className="text-decorationisplay: "flex",
+              style={{ display: "flex",
                 alignItems: "center",
                 gap: 10,
                 padding: "10px 10px",
