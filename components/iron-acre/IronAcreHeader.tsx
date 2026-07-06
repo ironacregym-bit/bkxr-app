@@ -433,7 +433,7 @@ export default function IronAcreHeader({
 
           <div style={{ display: "grid", gap: 6 }}>
             <Link
-              href="/profile"
+              href="/profile => setProfileOpen(false)}"
               role="menuitem"
               className="text-decorationisplay: "flex",
                 alignItems: "center",
@@ -450,7 +450,7 @@ export default function IronAcreHeader({
               Profile
             </Link>
           
-            /onboarding?returnTo=%2F => setProfileOpen(false)}
+            <Link href="/onboarding?returnTo=%2F => setProfileOpen(false)}"
               style={{
                 color: "#fff",
                 display: "flex",
