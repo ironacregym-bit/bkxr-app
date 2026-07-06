@@ -13,6 +13,7 @@ import IronAcreWorkoutCard from "../components/iron-acre/IronAcreWorkoutCard";
 import IronAcreNutritionCard from "../components/iron-acre/IronAcreNutritionCard";
 import IronAcreStrengthSummary from "../components/iron-acre/IronAcreStrengthSummary";
 import IronAcreClassesList from "../components/iron-acre/IronAcreClassesList";
+import AddToHomeScreen from "../components/AddToHomeScreen";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -769,7 +770,7 @@ export default function IronAcreHome() {
         title="Turn on Iron Acre notifications"
         message="Get class reminders, weekly booking alerts, gym updates and important notices straight to your device."
       />
-
+      <AddToHomeScreen />
       <BottomNav />
     </>
   );
