@@ -3,7 +3,13 @@
 
 import Link from "next/link";
 import { signOut } from "next-auth/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import useSWR from "swr";
 
 type IronAcreHeaderProps = {
@@ -109,6 +115,7 @@ export default function IronAcreHeader({
     tick();
 
     const timer = window.setInterval(tick, TIME_UPDATE_MS);
+
     return () => window.clearInterval(timer);
   }, []);
 
@@ -138,6 +145,7 @@ export default function IronAcreHeader({
     };
 
     updatePosition();
+
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
 
@@ -161,6 +169,7 @@ export default function IronAcreHeader({
     };
 
     updatePosition();
+
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
 
@@ -208,9 +217,26 @@ export default function IronAcreHeader({
     };
   }, [notificationsOpen, profileOpen]);
 
+  useEffect(() => {
+    if (!notificationsOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [notificationsOpen]);
+
   async function handleSignOut() {
     await signOut({ callbackUrl: "/register" });
   }
+
+  const notificationSheetStyle = {
+    "--ia-notification-sheet-top": `${dropdownPos.top}px`,
+    "--ia-notification-sheet-right": `${dropdownPos.right}px`,
+    "--ia-notification-sheet-width": `${dropdownPos.width}px`,
+  } as CSSProperties;
 
   return (
     <>
@@ -349,31 +375,27 @@ export default function IronAcreHeader({
       </section>
 
       {notificationsOpen ? (
-        <div
-          ref={dropdownRef}
-          role="dialog"
-          aria-label="Notifications"
-          className="ia-tile"
-          style={{
-            position: "fixed",
-            top: dropdownPos.top,
-            right: dropdownPos.right,
-            width: dropdownPos.width,
-            maxHeight: "min(70vh, 640px)",
-            overflowY: "auto",
-            zIndex: 1050,
-            padding: 16,
-            borderRadius: 22,
-            background:
-              "linear-gradient(180deg, rgba(14,18,24,0.98) 0%, rgba(10,14,20,0.98) 100%)",
-            border: "1px solid rgba(255,255,255,0.10)",
-            boxShadow: "0 18px 48px rgba(0,0,0,0.45)",
-            backdropFilter: "blur(14px)",
-            WebkitBackdropFilter: "blur(14px)",
-          }}
-        >
-          {notificationsContent || <div className="text-dim small">No notifications available.</div>}
-        </div>
+        <>
+          <div
+            className="ia-notification-sheet-backdrop"
+            aria-hidden="true"
+            onClick={() => setNotificationsOpen(false)}
+          />
+
+          <div
+            ref={dropdownRef}
+            role="dialog"
+            aria-label="Notifications"
+            className="ia-notification-sheet"
+            style={notificationSheetStyle}
+          >
+            <div className="ia-sheet-handle" />
+
+            {notificationsContent || (
+              <div className="text-dim small">No notifications available.</div>
+            )}
+          </div>
+        </>
       ) : null}
 
       {profileOpen ? (
@@ -410,11 +432,7 @@ export default function IronAcreHeader({
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
-            <Link
-              href="/profile"
-              role="menuitem"
-              className="text-decoration-none"
-              onClick={() => setProfileOpen(false)}
+            <Link href="/profile => setProfileOpen(false)}">
               style={{
                 color: "#fff",
                 display: "flex",
@@ -432,11 +450,7 @@ export default function IronAcreHeader({
               Profile
             </Link>
 
-            <Link
-              href="/onboarding?returnTo=%2Firon-acre"
-              role="menuitem"
-              className="text-decoration-none"
-              onClick={() => setProfileOpen(false)}
+            <Link href="/onboarding?returnTo=%2F => setProfileOpen(false)}">
               style={{
                 color: "#fff",
                 display: "flex",
@@ -481,15 +495,95 @@ export default function IronAcreHeader({
       ) : null}
 
       <style jsx>{`
+        .ia-notification-sheet-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 1049;
+          background: rgba(0, 0, 0, 0.56);
+          backdrop-filter: blur(7px);
+          -webkit-backdrop-filter: blur(7px);
+        }
+
+        .ia-notification-sheet {
+          position: fixed;
+          z-index: 1050;
+          color: #fff;
+          background: linear-gradient(
+            180deg,
+            rgba(14, 18, 24, 0.98) 0%,
+            rgba(10, 14, 20, 0.98) 100%
+          );
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          overflow-y: auto;
+          overscroll-behavior: contain;
+        }
+
+        .ia-sheet-handle {
+          width: 42px;
+          height: 5px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.22);
+          margin: 0 auto 14px;
+        }
+
+        @media (max-width: 767px) {
+          .ia-notification-sheet {
+            left: 0;
+            right: 0;
+            bottom: 0;
+            top: auto;
+            width: 100%;
+            height: min(82dvh, 720px);
+            max-height: calc(100dvh - 72px);
+            padding: 16px 14px calc(18px + env(safe-area-inset-bottom, 0px));
+            border-radius: 24px 24px 0 0;
+            border-bottom: none;
+            box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.5);
+            animation: iaSheetUp 0.24s ease-out;
+          }
+        }
+
+        @media (min-width: 768px) {
+          .ia-notification-sheet {
+            top: var(--ia-notification-sheet-top);
+            right: var(--ia-notification-sheet-right);
+            width: var(--ia-notification-sheet-width);
+            max-height: min(70vh, 640px);
+            padding: 16px;
+            border-radius: 22px;
+          }
+
+          .ia-sheet-handle {
+            display: none;
+          }
+        }
+
+        @keyframes iaSheetUp {
+          from {
+            opacity: 0.92;
+            transform: translateY(100%);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
         @keyframes iaBellPulse {
           0% {
             transform: scale(1);
             box-shadow: 0 0 0 rgba(22, 219, 170, 0);
           }
+
           50% {
             transform: scale(1.04);
             box-shadow: 0 0 22px rgba(22, 219, 170, 0.22);
           }
+
           100% {
             transform: scale(1);
             box-shadow: 0 0 0 rgba(22, 219, 170, 0);
