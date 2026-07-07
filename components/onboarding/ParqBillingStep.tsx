@@ -31,15 +31,6 @@ export default function ParqBillingStep({
   profile: UsersDoc;
   setProfile: SetProfile;
 }) {
-  function markParqComplete() {
-    const completedAt = new Date().toISOString();
-
-    setProfile((prev) => ({
-      ...prev,
-      parq_status: "completed",
-      parq_completed_at: completedAt,
-    }));
-  }
 
   return (
     <>
@@ -60,10 +51,6 @@ export default function ParqBillingStep({
             <Link href="/parq" className="ia-btn ia-btn-outline">
               Open PAR-Q
             </Link>
-
-            <button type="button" className="ia-btn ia-btn-primary" onClick={markParqComplete}>
-              I have completed my PAR-Q
-            </button>
 
             <div className="text-dim small">
               Current status:{" "}
