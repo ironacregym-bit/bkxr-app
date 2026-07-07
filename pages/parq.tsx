@@ -308,9 +308,7 @@ export default function ParqPage() {
 
       const nextRegister = `/register?parq=ok&callbackUrl=${encodeURIComponent(returnTo || "/")}`;
 
-      await router.replace(
-        `/parq/success?linked=0&register=${encodeURIComponent(nextRegister)}`
-      );
+      await router.replace(`/parq/success?linked=0&register=${encodeURIComponent(nextRegister)}`);
     } catch (err: any) {
       setError(err?.message || "Something went wrong.");
     } finally {
@@ -337,7 +335,7 @@ export default function ParqPage() {
       >
         <div className="d-flex justify-content-between align-items-center mb-3">
           <Link href ="/">
-            <img src="/iron_acre_logo_transparent.png"></img>
+            <img src="/iron_acre_logo_transparent.png" style={{height:"50px", width:"50px"}}></img>
             <span className="fw-bold"
               style={{
                       color: "#fff",
@@ -585,9 +583,7 @@ export default function ParqPage() {
                 </div>
 
                 <div className="d-flex justify-content-between align-items-center gap-2 mt-2">
-                  <div className="text-dim small">
-                    Sign with a finger or mouse.
-                  </div>
+                  <div className="text-dim small">Sign with a finger or mouse.</div>
 
                   <button type="button" className="ia-btn ia-btn-muted" onClick={clearSignature}>
                     Clear
@@ -605,13 +601,13 @@ export default function ParqPage() {
             </section>
           ) : null}
 
-          <button type="submit" className="ia-btn-primary w-100" disabled={busy || !mounted}>
+          <button type="submit" className="ia-btn ia-btn-primary w-100" disabled={busy || !mounted}>
             {busy ? "Submitting..." : "Submit PAR-Q"}
           </button>
 
           <div className="small text-center text-dim">
             By submitting this form you agree to the{" "}
-            <Link href="/terms">membership terms and participation waiver</Link>.
+            /termsmembership terms and participation waiver</Link>.
           </div>
 
           <div className="small text-center text-dim">
@@ -621,8 +617,8 @@ export default function ParqPage() {
         </form>
 
         <footer className="text-center small text-dim mt-4">
-          © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacy">Privacy</Link> ·{" "}
-          <Link href="/terms">Terms</Link>
+          © {new Date().getFullYear()} Iron Acre Gym · /privacyPrivacy</Link> ·{" "}
+          /termsTerms</Link>
         </footer>
       </main>
 
