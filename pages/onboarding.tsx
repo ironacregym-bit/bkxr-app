@@ -296,10 +296,6 @@ export default function OnboardingPage() {
     }
 
     if (targetStep === "parq_billing") {
-      if (profile.user_type === "gym" && profile.parq_status !== "completed") {
-        return "Please complete your PAR-Q before finishing gym onboarding.";
-      }
-
       if (!profile.billing_plan) return "Please choose a billing option.";
       if (!profile.payment_method_type) return "Please choose a payment method.";
     }
@@ -447,9 +443,18 @@ export default function OnboardingPage() {
         setStep(nextStep);
       }
 
-      if (complete === true) {
-        window.location.href = returnTo;
+    if (complete === true) {
+      const needsParq =
+        profile.user_type === "gym" &&
+        profile.parq_status !== "completed";
+    
+      if (needsParq) {
+        window.location.href = `/parq?returnTo=${encodeURIComponent(returnTo || "/")}`;
+        return;
       }
+    
+      window.location.href = returnTo;
+    }
     } catch (err: any) {
       setErrorMsg(err?.message || "Failed to save onboarding");
     } finally {
