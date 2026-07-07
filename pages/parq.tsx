@@ -345,9 +345,10 @@ export default function ParqPage() {
             >Iron Acre</span>
           </Link>
 
-          <Link href="{returnTo !== "/" ? ({returnTo}  ) : null}">
-            Back
-          </Link>
+          <Link href={returnTo}>
+              Back
+            </Link>
+
         </div>
 
         <section className="ia-tile ia-tile-pad mb-3">
