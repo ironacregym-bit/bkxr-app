@@ -336,13 +336,16 @@ export default function ParqPage() {
         }}
       >
         <div className="d-flex justify-content-between align-items-center mb-3">
-          /
-            /iron_acre_logo_transparent.png
-
-            <span className="fw-bold">Iron Acre</span>
+          <Link href ="/">
+            <img src="/iron_acre_logo_transparent.png"></img>
+            <span className="fw-bold"
+              style={{
+                      color: "#fff",
+                      fontSize: "1rem"}}
+            >Iron Acre</span>
           </Link>
 
-          {returnTo
+          <Link href="{returnTo !== "/" ? ({returnTo}  ) : null}">
             Back
           </Link>
         </div>
