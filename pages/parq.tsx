@@ -222,7 +222,7 @@ export default function ParqPage() {
   function setAnswer(key: keyof ParqAnswers, value: Answer) {
     setAnswers((prev) => ({
       ...prev,
-      value,
+      [key]: value,
     }));
   }
 
