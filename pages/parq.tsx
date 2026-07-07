@@ -1,4 +1,4 @@
-// File: pages/parq.tsx
+// pages/parq.tsx
 import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
@@ -17,15 +17,44 @@ type ParqAnswers = {
   q7: Answer;
 };
 
+function normaliseQueryString(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return String(value[0] || "").trim();
+  return String(value || "").trim();
+}
+
+function safeReturnTo(value: string) {
+  const cleaned = String(value || "").trim();
+
+  if (!cleaned) return "/";
+  if (cleaned.startsWith("/") && !cleaned.startsWith("//")) return cleaned;
+
+  return "/";
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function canvasHasInk(canvas: HTMLCanvasElement | null) {
+  if (!canvas) return false;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return false;
+
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] > 0) return true;
+  }
+
+  return false;
+}
+
 export default function ParqPage() {
   const { status, data } = useSession();
   const router = useRouter();
 
   const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const [answers, setAnswers] = useState<ParqAnswers>({
     q1: "",
@@ -51,35 +80,95 @@ export default function ParqPage() {
   const [error, setError] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const drawing = useRef(false);
+  const drawingRef = useRef(false);
 
   const [hasSignature, setHasSignature] = useState(false);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const sessionId = useMemo(() => {
     if (!mounted) return "";
-    const v = router.query.session;
-    return typeof v === "string" ? v : "";
+
+    const value = router.query.session;
+    return typeof value === "string" ? value : "";
   }, [router.query.session, mounted]);
+
+  const returnTo = useMemo(() => {
+    if (!mounted) return "/";
+
+    return safeReturnTo(normaliseQueryString(router.query.returnTo));
+  }, [router.query.returnTo, mounted]);
 
   const hasRedFlag = useMemo(() => {
     return Object.values(answers).includes("yes");
   }, [answers]);
 
-  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  const allAnswered = useMemo(() => {
+    return Object.values(answers).every((answer) => answer === "yes" || answer === "no");
+  }, [answers]);
+
+  const isAuthed = mounted && status === "authenticated";
+  const sessionEmail = isAuthed ? String((data?.user as any)?.email || "") : "";
+  const sessionName = isAuthed ? String((data?.user as any)?.name || "") : "";
 
   useEffect(() => {
     if (!mounted) return;
+    if (status !== "authenticated") return;
 
-    if (status === "authenticated") {
-      const sessionEmail = (data?.user as any)?.email || "";
-      if (sessionEmail && !email) {
-        setEmail(sessionEmail);
-      }
+    if (sessionEmail && !email) {
+      setEmail(sessionEmail);
     }
-  }, [mounted, status, data?.user, email]);
 
-  useEffect(() => {
-    if (!mounted) return;
+    if (sessionName && !fullName) {
+      setFullName(sessionName);
+    }
+  }, [mounted, status, sessionEmail, sessionName, email, fullName]);
+
+  function getCanvasPoint(event: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+
+    const rect = canvas.getBoundingClientRect();
+
+    return {
+      x: (event.clientX - rect.left) * (canvas.width / rect.width),
+      y: (event.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  }
+
+  function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const point = getCanvasPoint(event);
+    if (!point) return;
+
+    event.preventDefault();
+
+    drawingRef.current = true;
+
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#ffffff";
+
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
+
+    try {
+      canvas.setPointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -87,78 +176,39 @@ export default function ParqPage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "#ffffff";
+    const point = getCanvasPoint(event);
+    if (!point) return;
 
-    const getPos = (evt: MouseEvent | TouchEvent) => {
-      const rect = canvas.getBoundingClientRect();
+    event.preventDefault();
 
-      if ((evt as TouchEvent).touches?.length) {
-        const t = (evt as TouchEvent).touches[0];
-        return {
-          x: t.clientX - rect.left,
-          y: t.clientY - rect.top,
-        };
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+
+    if (!hasSignature) {
+      setHasSignature(true);
+    }
+  }
+
+  function finishStroke(event?: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    drawingRef.current = false;
+
+    if (event) {
+      event.preventDefault();
+
+      try {
+        canvas.releasePointerCapture(event.pointerId);
+      } catch {
+        // ignore
       }
+    }
 
-      const m = evt as MouseEvent;
-      return {
-        x: m.clientX - rect.left,
-        y: m.clientY - rect.top,
-      };
-    };
+    setHasSignature(canvasHasInk(canvas));
+  }
 
-    const onDown = (evt: MouseEvent | TouchEvent) => {
-      evt.preventDefault();
-      drawing.current = true;
-
-      const { x, y } = getPos(evt);
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-    };
-
-    const onMove = (evt: MouseEvent | TouchEvent) => {
-      if (!drawing.current) return;
-
-      evt.preventDefault();
-
-      const { x, y } = getPos(evt);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-
-      if (!hasSignature) {
-        setHasSignature(true);
-      }
-    };
-
-    const onUp = (evt: MouseEvent | TouchEvent) => {
-      if (!drawing.current) return;
-
-      evt.preventDefault();
-      drawing.current = false;
-    };
-
-    canvas.addEventListener("mousedown", onDown);
-    canvas.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-
-    canvas.addEventListener("touchstart", onDown, { passive: false });
-    canvas.addEventListener("touchmove", onMove, { passive: false });
-    window.addEventListener("touchend", onUp);
-
-    return () => {
-      canvas.removeEventListener("mousedown", onDown);
-      canvas.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-
-      canvas.removeEventListener("touchstart", onDown);
-      canvas.removeEventListener("touchmove", onMove);
-      window.removeEventListener("touchend", onUp);
-    };
-  }, [mounted, hasSignature]);
-
-  const clearSignature = () => {
+  function clearSignature() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -167,21 +217,18 @@ export default function ParqPage() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setHasSignature(false);
-  };
+  }
 
-  const setAnswer = (key: keyof ParqAnswers, value: Answer) => {
+  function setAnswer(key: keyof ParqAnswers, value: Answer) {
     setAnswers((prev) => ({
       ...prev,
-      [key]: value,
+      value,
     }));
-  };
+  }
 
-  const allAnswered = useMemo(() => {
-    return Object.values(answers).every((a) => a === "yes" || a === "no");
-  }, [answers]);
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
     setError(null);
 
     if (!allAnswered) {
@@ -209,7 +256,7 @@ export default function ParqPage() {
       return;
     }
 
-    if (!hasSignature) {
+    if (!hasSignature || !canvasHasInk(canvasRef.current)) {
       setError("Please provide your signature.");
       return;
     }
@@ -222,11 +269,9 @@ export default function ParqPage() {
     setBusy(true);
 
     try {
-      let signature_b64: string | undefined;
-
-      if (canvasRef.current) {
-        signature_b64 = canvasRef.current.toDataURL("image/jpeg", 0.8);
-      }
+      const signature_b64 = canvasRef.current
+        ? canvasRef.current.toDataURL("image/jpeg", 0.85)
+        : undefined;
 
       const payload = {
         answers,
@@ -250,28 +295,28 @@ export default function ParqPage() {
         body: JSON.stringify(payload),
       });
 
+      const json = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "Submission failed.");
+        throw new Error(String(json?.error || "Submission failed."));
       }
 
-      const showRegisterCta = status !== "authenticated";
-      const nextRegister = "/register?parq=ok";
+      if (status === "authenticated") {
+        await router.replace(returnTo || "/");
+        return;
+      }
 
-      const successUrl = showRegisterCta
-        ? `/parq/success?linked=0&register=${encodeURIComponent(nextRegister)}`
-        : `/parq/success?linked=1`;
+      const nextRegister = `/register?parq=ok&callbackUrl=${encodeURIComponent(returnTo || "/")}`;
 
-      await router.replace(successUrl);
+      await router.replace(
+        `/parq/success?linked=0&register=${encodeURIComponent(nextRegister)}`
+      );
     } catch (err: any) {
       setError(err?.message || "Something went wrong.");
     } finally {
       setBusy(false);
     }
-  };
-
-  const isAuthed = mounted && status === "authenticated";
-  const sessionEmail = isAuthed ? ((data?.user as any)?.email || "") : "";
+  }
 
   return (
     <>
@@ -284,30 +329,39 @@ export default function ParqPage() {
         className="ia-app container py-4"
         style={{
           minHeight: "100vh",
-          paddingBottom: 80,
+          paddingBottom: 90,
           color: "#fff",
-          background: "linear-gradient(to bottom, #070a0d 0%, #0d1416 55%, #111a16 100%)",
+          background:
+            "radial-gradient(circle at top right, rgba(24,255,154,0.10), transparent 34%), linear-gradient(to bottom, #070a0d 0%, #0d1416 55%, #111a16 100%)",
         }}
       >
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <div className="d-flex align-items-center gap-2">
-            <img
-              src="/IronAcreLogoNoBG.png"
-              alt="Iron Acre Gym"
-              height={42}
-              style={{ display: "block", borderRadius: 8 }}
-            />
-          </div>
+          /
+            /iron_acre_logo_transparent.png
 
-          <Link href="/" className="ia-btn-outline">
+            <span className="fw-bold">Iron Acre</span>
+          </Link>
+
+          {returnTo
             Back
           </Link>
         </div>
 
-        <section className="mb-4">
-          <div className="ia-kicker">Health Screening</div>
+        <section className="ia-tile ia-tile-pad mb-3">
+          <div className="ia-kicker">
+            <i className="fas fa-notes-medical" />
+            health screening
+          </div>
 
-          <h1 className="ia-page-title mt-2">
+          <h1
+            className="mt-2 mb-0"
+            style={{
+              fontSize: "1.65rem",
+              lineHeight: 1.05,
+              fontWeight: 900,
+              letterSpacing: "-0.035em",
+            }}
+          >
             PAR-Q{" "}
             <span
               style={{
@@ -319,157 +373,163 @@ export default function ParqPage() {
             </span>
           </h1>
 
-          <p className="ia-page-subtitle">
-            Please answer honestly. Participation in physical activity carries risk of injury.
+          <p className="ia-page-subtitle mt-2">
+            Please answer honestly before taking part in gym training. This helps coaches understand
+            whether any additional support or review is needed.
           </p>
 
           {hasRedFlag ? (
             <div className="ia-alert ia-alert-green mt-3">
-              One or more answers may require medical guidance before participating in intense physical activity.
+              One or more answers may require medical guidance before intense physical activity.
             </div>
           ) : null}
         </section>
 
-        <section className="ia-tile ia-tile-pad mb-3">
-          <form onSubmit={handleSubmit} className="d-grid gap-4">
-            <div className="d-grid gap-3">
+        <form onSubmit={handleSubmit} className="d-grid gap-3">
+          <section className="ia-tile ia-tile-pad">
+            <div className="ia-card-title-compact">PAR-Q questions</div>
+            <div className="text-dim small mt-1">
+              Answer all seven questions before submitting.
+            </div>
+
+            <div className="d-grid gap-3 mt-3">
               <ParqQuestion
                 label="Has your doctor ever said that you have a heart condition or high blood pressure?"
                 value={answers.q1}
-                onChange={(v) => setAnswer("q1", v)}
+                onChange={(value) => setAnswer("q1", value)}
               />
 
               <ParqQuestion
                 label="Do you feel pain in your chest when you perform physical activity?"
                 value={answers.q2}
-                onChange={(v) => setAnswer("q2", v)}
+                onChange={(value) => setAnswer("q2", value)}
               />
 
               <ParqQuestion
                 label="In the past month, have you had chest pain when not doing physical activity?"
                 value={answers.q3}
-                onChange={(v) => setAnswer("q3", v)}
+                onChange={(value) => setAnswer("q3", value)}
               />
 
               <ParqQuestion
                 label="Do you lose balance because of dizziness or ever lose consciousness?"
                 value={answers.q4}
-                onChange={(v) => setAnswer("q4", v)}
+                onChange={(value) => setAnswer("q4", value)}
               />
 
               <ParqQuestion
                 label="Do you have a bone or joint problem that could worsen with physical activity?"
                 value={answers.q5}
-                onChange={(v) => setAnswer("q5", v)}
+                onChange={(value) => setAnswer("q5", value)}
               />
 
               <ParqQuestion
                 label="Is your doctor prescribing medication for blood pressure or heart conditions?"
                 value={answers.q6}
-                onChange={(v) => setAnswer("q6", v)}
+                onChange={(value) => setAnswer("q6", value)}
               />
 
               <ParqQuestion
                 label="Do you know of any other reason why you should not participate in physical activity?"
                 value={answers.q7}
-                onChange={(v) => setAnswer("q7", v)}
+                onChange={(value) => setAnswer("q7", value)}
               />
             </div>
+          </section>
 
-            <hr style={{ borderColor: "rgba(255,255,255,0.08)" }} />
+          <section className="ia-tile ia-tile-pad">
+            <div className="ia-card-title-compact">Medical notes</div>
 
-            <div>
-              <label className="form-label ia-label">
-                Injuries, medical conditions or limitations coaches should know about
-              </label>
-
-              <textarea
-                className="form-control ia-form-input"
-                rows={4}
-                placeholder="Optional medical notes..."
-                value={medicalNotes}
-                onChange={(e) => setMedicalNotes(e.target.value)}
-              />
+            <div className="text-dim small mt-1">
+              Add anything coaches should know before you train.
             </div>
 
-            <div>
-              <div className="ia-tile-title mb-3">Emergency Contact</div>
+            <textarea
+              className="form-control ia-form-input mt-3"
+              rows={4}
+              placeholder="Injuries, medical conditions, restrictions or context..."
+              value={medicalNotes}
+              onChange={(event) => setMedicalNotes(event.target.value)}
+            />
+          </section>
 
-              <div className="row g-2">
-                <div className="col-12 col-md-6">
-                  <label className="form-label ia-label">Contact Name</label>
+          <section className="ia-tile ia-tile-pad">
+            <div className="ia-card-title-compact">Emergency contact</div>
 
-                  <input
-                    type="text"
-                    className="form-control ia-form-input"
-                    value={emergencyName}
-                    onChange={(e) => setEmergencyName(e.target.value)}
-                    required
-                  />
-                </div>
+            <div className="row g-2 mt-2">
+              <div className="col-12 col-md-6">
+                <label className="form-label ia-label">Contact name</label>
 
-                <div className="col-12 col-md-6">
-                  <label className="form-label ia-label">Contact Phone</label>
+                <input
+                  type="text"
+                  className="form-control ia-form-input"
+                  value={emergencyName}
+                  onChange={(event) => setEmergencyName(event.target.value)}
+                  required
+                />
+              </div>
 
-                  <input
-                    type="tel"
-                    className="form-control ia-form-input"
-                    value={emergencyPhone}
-                    onChange={(e) => setEmergencyPhone(e.target.value)}
-                    required
-                  />
-                </div>
+              <div className="col-12 col-md-6">
+                <label className="form-label ia-label">Contact phone</label>
+
+                <input
+                  type="tel"
+                  className="form-control ia-form-input"
+                  value={emergencyPhone}
+                  onChange={(event) => setEmergencyPhone(event.target.value)}
+                  required
+                />
               </div>
             </div>
+          </section>
 
-            <hr style={{ borderColor: "rgba(255,255,255,0.08)" }} />
+          <section className="ia-tile ia-tile-pad">
+            <div className="ia-card-title-compact">Consent and signature</div>
 
-            <div className="form-check">
-              <input
-                className="form-check-input ia-checkbox"
-                type="checkbox"
-                id="photosConsent"
-                checked={photosConsent}
-                onChange={(e) => setPhotosConsent(e.target.checked)}
-              />
+            <div className="d-grid gap-3 mt-3">
+              <label className="d-flex align-items-start gap-2" style={{ cursor: "pointer" }}>
+                <input
+                  className="form-check-input ia-checkbox"
+                  type="checkbox"
+                  checked={photosConsent}
+                  onChange={(event) => setPhotosConsent(event.target.checked)}
+                  style={{ marginTop: 3 }}
+                />
 
-              <label className="form-check-label" htmlFor="photosConsent">
-                I’m happy for photos/videos to be used on Iron Acre Gym social media.
+                <span>I’m happy for photos/videos to be used on Iron Acre Gym social media.</span>
               </label>
-            </div>
 
-            <div className="form-check">
-              <input
-                className="form-check-input ia-checkbox"
-                type="checkbox"
-                id="consentConfirmed"
-                checked={consentConfirmed}
-                onChange={(e) => setConsentConfirmed(e.target.checked)}
-                required
-              />
+              <label className="d-flex align-items-start gap-2" style={{ cursor: "pointer" }}>
+                <input
+                  className="form-check-input ia-checkbox"
+                  type="checkbox"
+                  checked={consentConfirmed}
+                  onChange={(event) => setConsentConfirmed(event.target.checked)}
+                  required
+                  style={{ marginTop: 3 }}
+                />
 
-              <label className="form-check-label" htmlFor="consentConfirmed">
-                I confirm that the information provided is accurate to the best of my knowledge. I understand
-                participation in physical training carries risk of injury. I agree to follow coach instruction,
-                use equipment responsibly and stop exercise if I feel unwell.
+                <span>
+                  I confirm the information provided is accurate to the best of my knowledge. I
+                  understand physical training carries risk of injury. I agree to follow coach
+                  instruction, use equipment responsibly and stop exercise if I feel unwell.
+                </span>
               </label>
-            </div>
 
-            <div className="row g-2">
-              <div className="col-12">
-                <label className="form-label ia-label">Full Name</label>
+              <div>
+                <label className="form-label ia-label">Full name</label>
 
                 <input
                   type="text"
                   className="form-control ia-form-input"
                   placeholder="Your full legal name"
                   value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
+                  onChange={(event) => setFullName(event.target.value)}
                   required
                 />
               </div>
 
-              <div className="col-12">
+              <div>
                 <label className="form-label ia-label">
                   Email{" "}
                   {isAuthed ? (
@@ -484,7 +544,7 @@ export default function ParqPage() {
                   className="form-control ia-form-input"
                   placeholder="you@example.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(event) => setEmail(event.target.value)}
                   disabled={isAuthed}
                 />
 
@@ -494,56 +554,71 @@ export default function ParqPage() {
                   </div>
                 ) : null}
               </div>
-            </div>
 
-            <div>
-              <label className="form-label ia-label">Signature</label>
+              <div>
+                <label className="form-label ia-label">Signature</label>
 
-              <div className="ia-signature-wrap">
-                <canvas
-                  ref={canvasRef}
-                  width={600}
-                  height={180}
-                  style={{
-                    width: "100%",
-                    height: 180,
-                    touchAction: "none",
-                    display: "block",
-                  }}
-                />
+                <div className="ia-signature-wrap">
+                  <canvas
+                    ref={canvasRef}
+                    width={900}
+                    height={220}
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={finishStroke}
+                    onPointerLeave={finishStroke}
+                    onPointerCancel={finishStroke}
+                    style={{
+                      width: "100%",
+                      height: 220,
+                      touchAction: "none",
+                      display: "block",
+                      cursor: "crosshair",
+                      WebkitUserSelect: "none",
+                      userSelect: "none",
+                    }}
+                  />
+                </div>
+
+                <div className="d-flex justify-content-between align-items-center gap-2 mt-2">
+                  <div className="text-dim small">
+                    Sign with a finger or mouse.
+                  </div>
+
+                  <button type="button" className="ia-btn ia-btn-muted" onClick={clearSignature}>
+                    Clear
+                  </button>
+                </div>
               </div>
-
-              <div className="d-flex justify-content-end mt-2">
-                <button type="button" className="ia-btn-outline" onClick={clearSignature}>
-                  Clear
-                </button>
-              </div>
             </div>
+          </section>
 
-            {error ? (
-              <div className="ia-alert ia-alert-red" role="alert">
+          {error ? (
+            <section className="ia-tile ia-tile-pad">
+              <div className="ia-inline-note-error" role="alert">
                 {error}
               </div>
-            ) : null}
+            </section>
+          ) : null}
 
-            <button type="submit" className="ia-btn-primary" disabled={busy || !mounted}>
-              {busy ? "Submitting..." : "Submit PAR-Q"}
-            </button>
+          <button type="submit" className="ia-btn-primary w-100" disabled={busy || !mounted}>
+            {busy ? "Submitting..." : "Submit PAR-Q"}
+          </button>
 
-            <div className="small text-center text-dim">
-              By submitting this form you agree to the{" "}
-              <Link href="/terms">membership terms and participation waiver</Link>.
-            </div>
+          <div className="small text-center text-dim">
+            By submitting this form you agree to the{" "}
+            /termsmembership terms and participation waiver</Link>.
+          </div>
 
-            <div className="small text-center text-dim">
-              Submissions are timestamped automatically. Session link: {sessionId ? `#${sessionId}` : "None"}
-            </div>
-          </form>
-        </section>
+          <div className="small text-center text-dim">
+            Submissions are timestamped automatically. Session link:{" "}
+            {sessionId ? `#${sessionId}` : "None"}
+          </div>
+        </form>
 
-        <footer className="text-center small text-dim">
-          © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacy"></Link> ·{" "}
-          <Link href="/terms"></Link>
+        <footer className="text-center small text-dim mt-4">
+          © {new Date().getFullYear()} Iron Acre Gym · /privacyPrivacy</Link> ·{" "}
+          /termsTerms</Link>
         </footer>
       </main>
 
@@ -553,7 +628,7 @@ export default function ParqPage() {
         }
 
         .ia-label {
-          color: rgba(255,255,255,0.86);
+          color: rgba(255, 255, 255, 0.86);
           font-weight: var(--ia-fw-semi);
           margin-bottom: 6px;
         }
@@ -561,20 +636,20 @@ export default function ParqPage() {
         .ia-form-input {
           min-height: 46px;
           border-radius: 12px;
-          border: 1px solid rgba(255,255,255,0.10);
-          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: rgba(255, 255, 255, 0.03);
           color: #fff;
         }
 
         .ia-form-input:focus {
-          border-color: rgba(24,255,154,0.45);
-          box-shadow: 0 0 0 3px rgba(24,255,154,0.12);
-          background: rgba(255,255,255,0.04);
+          border-color: rgba(24, 255, 154, 0.45);
+          box-shadow: 0 0 0 3px rgba(24, 255, 154, 0.12);
+          background: rgba(255, 255, 255, 0.04);
           color: #fff;
         }
 
         .ia-form-input::placeholder {
-          color: rgba(255,255,255,0.38);
+          color: rgba(255, 255, 255, 0.38);
         }
 
         .ia-checkbox:checked {
@@ -583,8 +658,8 @@ export default function ParqPage() {
         }
 
         .ia-checkbox:focus {
-          box-shadow: 0 0 0 3px rgba(24,255,154,0.14);
-          border-color: rgba(24,255,154,0.5);
+          box-shadow: 0 0 0 3px rgba(24, 255, 154, 0.14);
+          border-color: rgba(24, 255, 154, 0.5);
         }
 
         .ia-alert {
@@ -594,19 +669,14 @@ export default function ParqPage() {
         }
 
         .ia-alert-green {
-          background: rgba(24,255,154,0.12);
-          border: 1px solid rgba(24,255,154,0.28);
-        }
-
-        .ia-alert-red {
-          background: rgba(255,107,107,0.14);
-          border: 1px solid rgba(255,107,107,0.32);
+          background: rgba(24, 255, 154, 0.12);
+          border: 1px solid rgba(24, 255, 154, 0.28);
         }
 
         .ia-signature-wrap {
           border-radius: 14px;
-          border: 1px dashed rgba(255,255,255,0.28);
-          background: rgba(255,255,255,0.03);
+          border: 1px dashed rgba(255, 255, 255, 0.28);
+          background: rgba(255, 255, 255, 0.03);
           overflow: hidden;
         }
 
@@ -622,56 +692,76 @@ export default function ParqPage() {
 function ParqQuestion(props: {
   label: string;
   value: Answer;
-  onChange: (v: Answer) => void;
+  onChange: (value: Answer) => void;
 }) {
   const { label, value, onChange } = props;
   const nameId = useId();
 
   return (
-    <div className="d-grid gap-2">
-      <label className="form-label mb-1">{label}</label>
+    <div className="ia-parq-question">
+      <label className="ia-parq-label">{label}</label>
 
-      <div className="d-flex gap-3">
-        <div className="form-check">
-          <input
-            className="form-check-input ia-checkbox"
-            type="radio"
-            name={nameId}
-            id={`${nameId}-yes`}
-            checked={value === "yes"}
-            onChange={() => onChange("yes")}
-          />
+      <div className="ia-parq-options">
+        <button
+          type="button"
+          className={value === "yes" ? "ia-parq-option-selected" : "ia-parq-option"}
+          onClick={() => onChange("yes")}
+        >
+          Yes
+        </button>
 
-          <label className="form-check-label" htmlFor={`${nameId}-yes`}>
-            Yes
-          </label>
-        </div>
-
-        <div className="form-check">
-          <input
-            className="form-check-input ia-checkbox"
-            type="radio"
-            name={nameId}
-            id={`${nameId}-no`}
-            checked={value === "no"}
-            onChange={() => onChange("no")}
-          />
-
-          <label className="form-check-label" htmlFor={`${nameId}-no`}>
-            No
-          </label>
-        </div>
+        <button
+          type="button"
+          className={value === "no" ? "ia-parq-option-selected" : "ia-parq-option"}
+          onClick={() => onChange("no")}
+        >
+          No
+        </button>
       </div>
 
+      <input type="hidden" name={nameId} value={value} />
+
       <style jsx>{`
-        .ia-checkbox:checked {
-          background-color: var(--ia-neon);
-          border-color: var(--ia-neon);
+        .ia-parq-question {
+          display: grid;
+          gap: 10px;
+          padding: 12px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
-        .ia-checkbox:focus {
-          box-shadow: 0 0 0 3px rgba(24,255,154,0.14);
-          border-color: rgba(24,255,154,0.5);
+        .ia-parq-label {
+          color: rgba(255, 255, 255, 0.9);
+          font-weight: 700;
+          line-height: 1.35;
+        }
+
+        .ia-parq-options {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+
+        .ia-parq-option,
+        .ia-parq-option-selected {
+          border-radius: 999px;
+          min-height: 38px;
+          font-size: 0.86rem;
+          font-weight: 800;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ia-parq-option {
+          background: rgba(255, 255, 255, 0.05);
+          color: #fff;
+        }
+
+        .ia-parq-option-selected {
+          border: none;
+          color: #041311;
+          background: linear-gradient(135deg, var(--ia-neon), var(--ia-neon2));
+          box-shadow: var(--ia-btn-primary-shadow);
         }
       `}</style>
     </div>
