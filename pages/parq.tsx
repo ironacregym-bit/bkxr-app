@@ -607,7 +607,7 @@ export default function ParqPage() {
 
           <div className="small text-center text-dim">
             By submitting this form you agree to the{" "}
-            /termsmembership terms and participation waiver</Link>.
+            <Link href="/terms">membership terms and participation waiver</Link>.
           </div>
 
           <div className="small text-center text-dim">
@@ -617,8 +617,8 @@ export default function ParqPage() {
         </form>
 
         <footer className="text-center small text-dim mt-4">
-          © {new Date().getFullYear()} Iron Acre Gym · /privacyPrivacy</Link> ·{" "}
-          /termsTerms</Link>
+          © {new Date().getFullYear()} Iron Acre Gym · <Link href="/privacy">Privacy</Link> ·{" "}
+          <Link href="/terms">Terms</Link>
         </footer>
       </main>
 
