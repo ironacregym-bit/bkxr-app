@@ -1,3 +1,4 @@
+// pages/onboarding.tsx
 "use client";
 
 import Head from "next/head";
@@ -40,6 +41,23 @@ const fetcher = (u: string) =>
 
 type ProgramsResponse = { items?: ProgramOption[] };
 type GymsResponse = { gyms?: GymOption[] };
+
+type MemberStatusResponse = {
+  ok?: boolean;
+  parq?: {
+    completed?: boolean;
+    status?: "completed" | "not_started";
+    completed_at?: string | null;
+    response_id?: string | null;
+    requires_medical_review?: boolean;
+  };
+  required_actions?: Array<{
+    key: string;
+    title: string;
+    message: string;
+    href: string;
+  }>;
+};
 
 function LoadingState() {
   return (
@@ -138,6 +156,7 @@ export default function OnboardingPage() {
   const profileKey = mounted && email ? `/api/profile?email=${encodeURIComponent(email)}` : null;
   const programsKey = mounted && email ? "/api/programs/list" : null;
   const gymsKey = mounted && email ? "/api/gyms/list" : null;
+  const memberStatusKey = mounted && email ? "/api/member/status" : null;
 
   const { data, error } = useSWR<UsersDoc>(profileKey, fetcher, {
     revalidateOnFocus: false,
@@ -157,6 +176,15 @@ export default function OnboardingPage() {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
+
+  const { data: memberStatus, mutate: mutateMemberStatus } = useSWR<MemberStatusResponse>(
+    memberStatusKey,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30_000,
+    }
+  );
 
   const programs = useMemo(
     () => (Array.isArray(programsData?.items) ? programsData.items : []),
@@ -207,6 +235,20 @@ export default function OnboardingPage() {
     setDirty(false);
     setDirtyFields(new Set());
   }, [data, email]);
+
+  useEffect(() => {
+    if (!memberStatus?.parq) return;
+
+    const parqCompleted = memberStatus.parq.completed === true;
+
+    setProfileState((prev) => ({
+      ...prev,
+      parq_status: parqCompleted ? "completed" : prev.parq_status ?? "not_started",
+      parq_completed_at: parqCompleted
+        ? memberStatus.parq?.completed_at || prev.parq_completed_at || null
+        : prev.parq_completed_at ?? null,
+    }));
+  }, [memberStatus]);
 
   useEffect(() => {
     if (!email) return;
@@ -289,9 +331,11 @@ export default function OnboardingPage() {
     if (targetStep === "programme_access") {
       if (!profile.program_id) return "Please choose a training programme.";
       if (!profile.program_start_mode) return "Please choose when the programme should start.";
+
       if (!profile.user_type) {
         return "Please choose whether you are joining the gym or training online.";
       }
+
       if (profile.user_type === "gym" && !profile.gym_id) return "Please choose a gym.";
     }
 
@@ -346,9 +390,6 @@ export default function OnboardingPage() {
     addField("direct_debit_status", profile.direct_debit_status ?? null);
     addField("direct_debit_provider", profile.direct_debit_provider ?? null);
     addField("direct_debit_setup_url", profile.direct_debit_setup_url ?? null);
-
-    addField("parq_status", profile.parq_status ?? null);
-    addField("parq_completed_at", profile.parq_completed_at ?? null);
 
     const shouldWriteTargets =
       isCompleting ||
@@ -439,22 +480,19 @@ export default function OnboardingPage() {
         });
       }
 
+      if (memberStatusKey) {
+        await mutateMemberStatus(undefined, {
+          revalidate: true,
+        });
+      }
+
       if (nextStep) {
         setStep(nextStep);
       }
 
-    if (complete === true) {
-      const needsParq =
-        profile.user_type === "gym" &&
-        profile.parq_status !== "completed";
-    
-      if (needsParq) {
-        window.location.href = `/parq?returnTo=${encodeURIComponent(returnTo || "/")}`;
-        return;
+      if (complete === true) {
+        window.location.href = returnTo;
       }
-    
-      window.location.href = returnTo;
-    }
     } catch (err: any) {
       setErrorMsg(err?.message || "Failed to save onboarding");
     } finally {
