@@ -34,33 +34,6 @@ export default function ParqBillingStep({
 
   return (
     <>
-      {profile.user_type === "gym" ? (
-        <section className="ia-tile ia-tile-pad mb-3">
-          <div className="ia-kicker">
-            <i className="fas fa-notes-medical" />
-            par-q
-          </div>
-
-          <div className="ia-card-title-compact mt-2">Complete your PAR-Q</div>
-
-          <div className="text-dim small mt-1">
-            Gym members need to complete a PAR-Q before attending sessions.
-          </div>
-
-          <div className="mt-3 d-grid gap-2">
-            <Link href="/parq" className="ia-btn ia-btn-outline">
-              Open PAR-Q
-            </Link>
-
-            <div className="text-dim small">
-              Current status:{" "}
-              <strong style={{ color: profile.parq_status === "completed" ? "var(--ia-neon)" : "#fff" }}>
-                {profile.parq_status === "completed" ? "Completed" : "Not completed"}
-              </strong>
-            </div>
-          </div>
-        </section>
-      ) : null}
 
       <section className="ia-tile ia-tile-pad mb-3">
         <div className="ia-kicker">
