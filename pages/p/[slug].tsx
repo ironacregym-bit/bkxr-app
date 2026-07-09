@@ -6,28 +6,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../api/auth/[...nextauth]";
 import firestore from "../../lib/firestoreClient";
 
-type GalleryImage = {
-  id?: string;
-  imageUrl?: string | null;
-  title?: string;
-  caption?: string;
-  alt?: string;
-};
-
-type MediaGallery = {
-  title?: string;
-  intro?: string;
-  images?: GalleryImage[];
-};
-
-type CustomTable = {
-  id?: string;
-  title?: string;
-  intro?: string;
-  columns?: string[];
-  rows?: string[][];
-};
-
 type PublicSite = {
   id: string;
   slug: string;
@@ -62,8 +40,6 @@ type PublicSite = {
     faq?: string;
     contact?: string;
   };
-  mediaGallery?: MediaGallery;
-  customTables?: CustomTable[];
 };
 
 function normalizeHost(host: string) {
@@ -77,7 +53,6 @@ function safeText(v: any) {
 function splitParagraphs(v: any) {
   const s = safeText(v);
   if (!s) return [];
-
   return s
     .split(/\n{2,}/g)
     .map((p) => p.trim())
@@ -87,104 +62,9 @@ function splitParagraphs(v: any) {
 function isAuthorized(site: PublicSite, email: string) {
   const e = String(email || "").toLowerCase();
   if (!e) return false;
-
   if (String(site.owner_email || "").toLowerCase() === e) return true;
-
   const editors = Array.isArray(site.editor_emails) ? site.editor_emails : [];
   return editors.map((x) => String(x || "").toLowerCase()).includes(e);
-}
-
-function normaliseGallery(site: PublicSite) {
-  const gallery = site?.mediaGallery || {};
-  const imagesRaw = Array.isArray(gallery.images) ? gallery.images : [];
-
-  const images = imagesRaw
-    .map((image, index) => ({
-      id: safeText(image?.id) || `gallery_${index}`,
-      imageUrl: safeText(image?.imageUrl),
-      title: safeText(image?.title),
-      caption: safeText(image?.caption),
-      alt: safeText(image?.alt),
-    }))
-    .filter((image) => image.imageUrl);
-
-  return {
-    title: safeText(gallery.title) || "Gallery",
-    intro: safeText(gallery.intro),
-    images,
-  };
-}
-
-function normaliseTables(site: PublicSite) {
-  const raw = (site as any)?.customTables;
-
-  if (Array.isArray(raw)) {
-    return raw
-      .map((table, tableIndex) => {
-        const columns = Array.isArray(table?.columns)
-          ? table.columns.map((column: any) => safeText(column)).filter(Boolean)
-          : [];
-
-        const rowsRaw = Array.isArray(table?.rows) ? table.rows : [];
-
-        const rows = rowsRaw
-          .map((row: any) => {
-            const rowArray = Array.isArray(row) ? row : [];
-            return columns.map((_, columnIndex) => safeText(rowArray[columnIndex]));
-          })
-          .filter((row: string[]) => row.some(Boolean));
-
-        return {
-          id: safeText(table?.id) || `table_${tableIndex}`,
-          title: safeText(table?.title),
-          intro: safeText(table?.intro),
-          columns,
-          rows,
-        };
-      })
-      .filter((table) => table.title || table.rows.length > 0);
-  }
-
-  if (!raw || typeof raw !== "object") {
-    return [];
-  }
-
-  const order = Array.isArray(raw.order) ? raw.order : [];
-  const items = raw.items && typeof raw.items === "object" ? raw.items : {};
-
-  return order
-    .map((tableId: string, tableIndex: number) => {
-      const table = items[tableId];
-      if (!table || typeof table !== "object") return null;
-
-      const columnOrder = Array.isArray(table.columnOrder) ? table.columnOrder : [];
-      const columnsMap = table.columns && typeof table.columns === "object" ? table.columns : {};
-
-      const columns = columnOrder
-        .map((columnId: string) => safeText(columnsMap[columnId]))
-        .filter(Boolean);
-
-      const rowOrder = Array.isArray(table.rowOrder) ? table.rowOrder : [];
-      const rowsMap = table.rows && typeof table.rows === "object" ? table.rows : {};
-
-      const rows = rowOrder
-        .map((rowId: string) => {
-          const row = rowsMap[rowId] || {};
-          const cells = row.cells && typeof row.cells === "object" ? row.cells : {};
-
-          return columnOrder.map((columnId: string) => safeText(cells[columnId]));
-        })
-        .filter((row: string[]) => row.some(Boolean));
-
-      return {
-        id: safeText(table?.id) || safeText(tableId) || `table_${tableIndex}`,
-        title: safeText(table?.title),
-        intro: safeText(table?.intro),
-        columns,
-        rows,
-      };
-    })
-    .filter((table: any) => table && (table.title || table.rows.length > 0));
 }
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
@@ -212,6 +92,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     const canEdit = isAuthorized(site, email);
     const published = Boolean(site.published);
 
+    // Drafts are visible only to owner/editors
     if (!published && !canEdit) return { notFound: true };
 
     return {
@@ -243,15 +124,18 @@ export default function PublicSitePage(props: {
 
   const title = safeText(site?.seo?.title) || safeText(site?.brand?.name) || "Site";
   const description = safeText(site?.seo?.description) || "";
-  const ogImage = site?.seo?.image || site?.hero?.imageUrl || site?.brand?.logoUrl || null;
+  const ogImage = site?.seo?.image || site?.hero?.imageUrl || null;
 
   const brandName = safeText(site?.brand?.name) || "Site";
-  const logoUrl = safeText(site?.brand?.logoUrl);
-  const faviconUrl = safeText(site?.brand?.faviconUrl) || logoUrl;
+  const logoUrl = site?.brand?.logoUrl || null;
+  const faviconUrl =
+    safeText(site?.brand?.faviconUrl) ||
+    safeText(site?.brand?.logoUrl) ||
+    "";
 
   const heroHeadline = safeText(site?.hero?.headline) || brandName;
-  const heroSub = safeText(site?.hero?.subheadline);
-  const heroImage = safeText(site?.hero?.imageUrl);
+  const heroSub = safeText(site?.hero?.subheadline) || "";
+  const heroImage = site?.hero?.imageUrl || null;
 
   const ctaText = safeText(site?.hero?.ctaText) || "Get started";
   const ctaHref = safeText(site?.hero?.ctaHref) || "#contact";
@@ -265,25 +149,14 @@ export default function PublicSitePage(props: {
     .map((x) => x.trim())
     .filter(Boolean);
 
-  const gallery = normaliseGallery(site);
-  const hasGallery = gallery.images.length > 0;
-
-  const customTables = normaliseTables(site);
-  const hasTables = customTables.length > 0;
-
   const isDraft = !Boolean(site.published);
 
   const bg = isLight ? "#ffffff" : "#06090d";
   const text = isLight ? "#111318" : "#ffffff";
   const muted = isLight ? "rgba(17,19,24,0.68)" : "rgba(255,255,255,0.70)";
-  const strongMuted = isLight ? "rgba(17,19,24,0.82)" : "rgba(255,255,255,0.82)";
   const border = isLight ? "rgba(17,19,24,0.08)" : "rgba(255,255,255,0.06)";
-  const strongerBorder = isLight ? "rgba(17,19,24,0.12)" : "rgba(255,255,255,0.10)";
   const cardBg = isLight ? "#f6f7f9" : "#0b0f14";
-  const innerCardBg = isLight ? "#ffffff" : "rgba(7,10,15,0.45)";
   const topBg = isLight ? "rgba(255,255,255,0.82)" : "rgba(6,9,13,0.82)";
-  const tableHeadBg = isLight ? "rgba(17,19,24,0.035)" : "rgba(255,255,255,0.04)";
-
   const heroOverlay = isLight
     ? "linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.72) 100%)"
     : "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.75) 100%)";
@@ -294,32 +167,31 @@ export default function PublicSitePage(props: {
     <>
       <Head>
         <title>{title}</title>
-
         {description ? <meta name="description" content={description} /> : null}
-
         <meta property="og:title" content={title} />
         {description ? <meta property="og:description" content={description} /> : null}
         <meta property="og:type" content="website" />
         {ogImage ? <meta property="og:image" content={String(ogImage)} /> : null}
-
         <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-        {faviconUrl ? {faviconUrl} : null}
-        {faviconUrl ? {faviconUrl} : null}
-        {faviconUrl ? {faviconUrl} : null}
+        {faviconUrl ? (
+          <>
+            {faviconUrl}
+            {faviconUrl}
+            {faviconUrl}
+          </>
+        ) : null}
       </Head>
 
       <div className="sb-wrap">
         {canEdit && isDraft ? (
           <div className="sb-draftBanner" role="status" aria-label="Draft banner">
             <div className="sb-draftDot" aria-hidden="true" />
-
             <div className="sb-draftText">
               Draft page. Only you and editors can see this. Publish it in settings when ready.
             </div>
-
             <div className="sb-draftActions">
-              }`}>
+              <Link className="sb-draftLink" href={`/sitebuilder/${encodeURIComponent(String(site.id))}`}>
                 Open settings
               </Link>
             </div>
@@ -329,17 +201,16 @@ export default function PublicSitePage(props: {
         <header className="sb-top">
           <div className="sb-brand">
             {logoUrl ? (
-              {logoUrl}
+              <img src={logoUrl} alt={`${brandName} logo`} className="sb-logo" />
             ) : (
               <div className="sb-mark" aria-hidden="true" />
             )}
-
             <div className="sb-brandText">{brandName}</div>
           </div>
 
           <div className="sb-actions">
             {canEdit ? (
-              }`}>
+              <Link className="sb-edit" href={`/sitebuilder/${encodeURIComponent(String(site.id))}`}>
                 Edit
               </Link>
             ) : null}
@@ -350,7 +221,7 @@ export default function PublicSitePage(props: {
           <section className="sb-hero">
             {heroImage ? (
               <div className="sb-heroMedia" aria-hidden="true">
-                {heroImage}
+                <img src={heroImage} alt="" className="sb-heroImg" />
                 <div className="sb-heroOverlay" aria-hidden="true" />
               </div>
             ) : null}
@@ -361,11 +232,10 @@ export default function PublicSitePage(props: {
               {heroSub ? <p className="sb-lead">{heroSub}</p> : null}
 
               <div className="sb-ctaRow">
-                {ctaHref}
+                <a className="sb-cta" href={ctaHref}>
                   {ctaText}
                 </a>
-
-                #about
+                <a className="sb-ctaGhost" href="#about">
                   Learn more
                 </a>
               </div>
@@ -374,7 +244,6 @@ export default function PublicSitePage(props: {
 
           <section id="about" className="sb-section">
             <h2 className="sb-h2">About</h2>
-
             {aboutParas.length ? (
               <div className="sb-body">
                 {aboutParas.map((p, i) => (
@@ -390,7 +259,6 @@ export default function PublicSitePage(props: {
 
           <section id="services" className="sb-section">
             <h2 className="sb-h2">Services</h2>
-
             {servicesParas.length ? (
               <div className="sb-body">
                 {servicesParas.map((p, i) => (
@@ -404,77 +272,8 @@ export default function PublicSitePage(props: {
             )}
           </section>
 
-          {hasGallery ? (
-            <section id="gallery" className="sb-section">
-              <h2 className="sb-h2">{gallery.title}</h2>
-
-              {gallery.intro ? <p className="sb-sectionIntro">{gallery.intro}</p> : null}
-
-              <div className="sb-galleryGrid">
-                {gallery.images.map((image) => (
-                  <figure key={image.id} className="sb-galleryItem">
-                    <div className="sb-galleryMedia">
-                      {image.imageUrl}
-                    </div>
-
-                    {image.title || image.caption ? (
-                      <figcaption className="sb-galleryCaption">
-                        {image.title ? <div className="sb-galleryTitle">{image.title}</div> : null}
-                        {image.caption ? <div className="sb-galleryText">{image.caption}</div> : null}
-                      </figcaption>
-                    ) : null}
-                  </figure>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {hasTables ? (
-            <section id="tables" className="sb-section">
-              <h2 className="sb-h2">Information</h2>
-
-              <div className="sb-tableList">
-                {customTables.map((table) => (
-                  <div key={table.id} className="sb-tableBlock">
-                    {table.title ? <h3 className="sb-h3">{table.title}</h3> : null}
-                    {table.intro ? <p className="sb-sectionIntro">{table.intro}</p> : null}
-
-                    {table.columns.length > 0 && table.rows.length > 0 ? (
-                      <div className="sb-tableScroll">
-                        <table className="sb-table">
-                          <thead>
-                            <tr>
-                              {table.columns.map((column, columnIndex) => (
-                                <th key={`${table.id}_head_${columnIndex}`}>{column}</th>
-                              ))}
-                            </tr>
-                          </thead>
-
-                          <tbody>
-                            {table.rows.map((row, rowIndex) => (
-                              <tr key={`${table.id}_row_${rowIndex}`}>
-                                {table.columns.map((_, columnIndex) => (
-                                  <td key={`${table.id}_cell_${rowIndex}_${columnIndex}`}>
-                                    {row[columnIndex] || "—"}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="sb-muted">No table entries yet.</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
           <section id="faq" className="sb-section">
             <h2 className="sb-h2">FAQ</h2>
-
             {faqParas.length ? (
               <div className="sb-body">
                 {faqParas.map((p, i) => (
@@ -490,7 +289,6 @@ export default function PublicSitePage(props: {
 
           <section id="contact" className="sb-section">
             <h2 className="sb-h2">Contact</h2>
-
             {contactLines.length ? (
               <div className="sb-body">
                 {contactLines.map((line, i) => (
@@ -739,20 +537,6 @@ export default function PublicSitePage(props: {
             letter-spacing: -0.2px;
           }
 
-          .sb-h3 {
-            margin: 0;
-            font-size: 16px;
-            font-weight: 650;
-            letter-spacing: -0.15px;
-          }
-
-          .sb-sectionIntro {
-            margin: 10px 0 0 0;
-            color: ${muted};
-            line-height: 1.55;
-            font-weight: 450;
-          }
-
           .sb-body {
             margin-top: 10px;
           }
@@ -777,108 +561,6 @@ export default function PublicSitePage(props: {
             font-weight: 450;
           }
 
-          .sb-galleryGrid {
-            margin-top: 14px;
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 12px;
-          }
-
-          .sb-galleryItem {
-            margin: 0;
-            border-radius: 16px;
-            overflow: hidden;
-            border: 1px solid ${strongerBorder};
-            background: ${innerCardBg};
-          }
-
-          .sb-galleryMedia {
-            aspect-ratio: 4 / 3;
-            background: ${isLight ? "rgba(17,19,24,0.04)" : "rgba(255,255,255,0.04)"};
-            overflow: hidden;
-          }
-
-          .sb-galleryImg {
-            display: block;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transition: transform 220ms ease;
-          }
-
-          .sb-galleryItem:hover .sb-galleryImg {
-            transform: scale(1.025);
-          }
-
-          .sb-galleryCaption {
-            padding: 12px;
-          }
-
-          .sb-galleryTitle {
-            color: ${text};
-            font-weight: 650;
-            line-height: 1.3;
-          }
-
-          .sb-galleryText {
-            margin-top: 5px;
-            color: ${muted};
-            line-height: 1.45;
-            font-size: 13px;
-          }
-
-          .sb-tableList {
-            margin-top: 14px;
-            display: grid;
-            gap: 14px;
-          }
-
-          .sb-tableBlock {
-            border-radius: 16px;
-            border: 1px solid ${strongerBorder};
-            background: ${innerCardBg};
-            padding: 14px;
-          }
-
-          .sb-tableScroll {
-            margin-top: 12px;
-            overflow-x: auto;
-            border-radius: 14px;
-            border: 1px solid ${strongerBorder};
-          }
-
-          .sb-table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 520px;
-          }
-
-          .sb-table th,
-          .sb-table td {
-            padding: 12px;
-            text-align: left;
-            vertical-align: top;
-            border-bottom: 1px solid ${strongerBorder};
-          }
-
-          .sb-table th {
-            background: ${tableHeadBg};
-            color: ${strongMuted};
-            font-size: 13px;
-            line-height: 1.35;
-            font-weight: 700;
-          }
-
-          .sb-table td {
-            color: ${muted};
-            line-height: 1.45;
-            font-weight: 450;
-          }
-
-          .sb-table tbody tr:last-child td {
-            border-bottom: none;
-          }
-
           .sb-foot {
             margin-top: 18px;
             padding: 18px 0 24px 0;
@@ -897,17 +579,7 @@ export default function PublicSitePage(props: {
             min-height: 18px;
           }
 
-          @media (max-width: 860px) {
-            .sb-galleryGrid {
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-          }
-
           @media (max-width: 720px) {
-            .sb-main {
-              padding: 12px;
-            }
-
             .sb-h1 {
               font-size: 38px;
             }
@@ -922,29 +594,6 @@ export default function PublicSitePage(props: {
 
             .sb-top {
               padding: 12px;
-            }
-
-            .sb-section {
-              padding: 15px;
-            }
-          }
-
-          @media (max-width: 560px) {
-            .sb-galleryGrid {
-              grid-template-columns: 1fr;
-            }
-
-            .sb-tableBlock {
-              padding: 12px;
-            }
-
-            .sb-table {
-              min-width: 480px;
-            }
-
-            .sb-table th,
-            .sb-table td {
-              padding: 10px;
             }
           }
         `}</style>
