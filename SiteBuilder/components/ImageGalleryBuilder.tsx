@@ -96,6 +96,7 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
 
     const next = [...gallery.images];
     const current = next[index];
+
     next[index] = next[nextIndex];
     next[nextIndex] = current;
 
@@ -121,15 +122,16 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
       throw new Error(json?.error?.message || "Upload failed.");
     }
 
-    const title = fileNameToTitle(file.name);
-    
+    const altText = fileNameToTitle(file.name);
+
     return {
       id: makeId(),
       imageUrl: String(json.secure_url),
       title: "",
       caption: "",
-      alt: title,
+      alt: altText,
     };
+  }
 
   async function handleMultiUpload(filesList: FileList | null) {
     const files = Array.from(filesList || []).filter((file) => file.type.startsWith("image/"));
@@ -226,9 +228,11 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
                   <button type="button" className="gb-mini" onClick={() => moveImage(item.id, "up")}>
                     Up
                   </button>
+
                   <button type="button" className="gb-mini" onClick={() => moveImage(item.id, "down")}>
                     Down
                   </button>
+
                   <button type="button" className="gb-danger" onClick={() => removeImage(item.id)}>
                     Remove
                   </button>
