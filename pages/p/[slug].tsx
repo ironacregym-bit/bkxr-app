@@ -813,7 +813,7 @@ export default function PublicSitePage(props: {
           .sb-table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 520px;
+            table-layout: fixed;
           }
           .sb-table th,
           .sb-table td {
@@ -821,6 +821,7 @@ export default function PublicSitePage(props: {
             text-align: left;
             vertical-align: top;
             border-bottom: 1px solid ${border};
+            word-break: break-word;
           }
           .sb-table th {
             background: ${isLight ? "rgba(17,19,24,0.035)" : "rgba(255,255,255,0.04)"};
@@ -876,9 +877,6 @@ export default function PublicSitePage(props: {
             }
             .sb-tableBlock {
               padding: 12px;
-            }
-            .sb-table {
-              min-width: 480px;
             }
             .sb-table th,
             .sb-table td {
