@@ -1,6 +1,8 @@
 // File: SiteBuilder/lib/model.ts
+
 export type SiteTheme = {
-  accent?: string | null; // e.g. "#1fe0a5"
+  accent?: string | null;
+  mode?: "dark" | "light";
 };
 
 export type SiteHero = {
@@ -24,8 +26,30 @@ export type SiteSeo = {
   image?: string | null;
 };
 
+export type SiteGalleryImage = {
+  id: string;
+  imageUrl: string;
+  title?: string;
+  caption?: string;
+  alt?: string;
+};
+
+export type SiteMediaGallery = {
+  title: string;
+  intro?: string;
+  images: SiteGalleryImage[];
+};
+
+export type SiteCustomTable = {
+  id: string;
+  title: string;
+  intro?: string;
+  columns: string[];
+  rows: string[][];
+};
+
 export type SiteDomain = {
-  host: string; // example.com (lowercase)
+  host: string;
   status: "pending" | "verified" | "active";
   verificationToken: string;
   addedAt: string;
@@ -49,10 +73,14 @@ export type SiteDoc = {
   brand: {
     name: string;
     logoUrl?: string | null;
+    faviconUrl?: string | null;
   };
 
   hero: SiteHero;
   sections: SiteSections;
+
+  mediaGallery: SiteMediaGallery;
+  customTables: SiteCustomTable[];
 
   domains: SiteDomain[];
 };
@@ -97,7 +125,10 @@ export function defaultSiteContent(args: { slug: string; ownerEmail: string; nam
     created_at,
     updated_at: created_at,
 
-    theme: { accent: "#1fe0a5" },
+    theme: {
+      accent: "#1fe0a5",
+      mode: "dark",
+    },
 
     seo: {
       title,
@@ -108,6 +139,7 @@ export function defaultSiteContent(args: { slug: string; ownerEmail: string; nam
     brand: {
       name,
       logoUrl: null,
+      faviconUrl: null,
     },
 
     hero: {
@@ -129,6 +161,14 @@ export function defaultSiteContent(args: { slug: string; ownerEmail: string; nam
         "Email: hello@example.com\nPhone: \nInstagram: \nAddress: ",
     },
 
+    mediaGallery: {
+      title: "Gallery",
+      intro: "",
+      images: [],
+    },
+
+    customTables: [],
+
     domains: [],
   };
 
@@ -141,6 +181,5 @@ export function normalizeHost(host: string) {
 }
 
 export function makeVerificationToken() {
-  // Short, safe token (not cryptographic, but good enough for DNS verification)
   return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
 }
