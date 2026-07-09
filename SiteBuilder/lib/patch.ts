@@ -26,10 +26,24 @@ function safeThemeMode(v: any): "dark" | "light" {
   return String(v || "").trim().toLowerCase() === "light" ? "light" : "dark";
 }
 
-function safeId(v: any) {
+function safeId(v: any, fallbackPrefix = "item") {
   const s = String(v || "").trim();
-  if (/^[a-zA-Z0-9_-]{4,80}$/.test(s)) return s;
-  return `item_${Math.random().toString(36).slice(2, 10)}`;
+
+  if (/^[a-zA-Z0-9_-]{3,80}$/.test(s)) {
+    return s;
+  }
+
+  return `${fallbackPrefix}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function safeMapKey(v: any, fallback: string) {
+  const s = String(v || "").trim();
+
+  if (/^[a-zA-Z0-9_-]{1,80}$/.test(s)) {
+    return s;
+  }
+
+  return fallback;
 }
 
 function sanitizeGallery(input: any) {
@@ -37,8 +51,8 @@ function sanitizeGallery(input: any) {
 
   const images = imagesRaw
     .slice(0, 60)
-    .map((item: any) => ({
-      id: safeId(item?.id),
+    .map((item: any, index: number) => ({
+      id: safeId(item?.id, `img_${index}`),
       imageUrl: safeUrl(item?.imageUrl, 600),
       title: safeStr(item?.title, 80),
       caption: safeStr(item?.caption, 240),
@@ -53,35 +67,151 @@ function sanitizeGallery(input: any) {
   };
 }
 
+/**
+ * Firestore-safe custom tables.
+ *
+ * Important:
+ * Firestore rejects nested arrays such as string[][].
+ *
+ * So we do NOT save:
+ * customTables: [
+ *   {
+ *     columns: ["Date", "Start", "End"],
+ *     rows: [["Monday", "08AM", "12PM"]]
+ *   }
+ * ]
+ *
+ * Instead, we save:
+ * customTables: {
+ *   order: ["tbl_abc"],
+ *   items: {
+ *     tbl_abc: {
+ *       columnOrder: ["col_0", "col_1", "col_2"],
+ *       columns: {
+ *         col_0: "Date",
+ *         col_1: "Start",
+ *         col_2: "End"
+ *       },
+ *       rowOrder: ["row_0"],
+ *       rows: {
+ *         row_0: {
+ *           id: "row_0",
+ *           cells: {
+ *             col_0: "Monday",
+ *             col_1: "08AM",
+ *             col_2: "12PM"
+ *           }
+ *         }
+ *       }
+ *     }
+ *   }
+ * }
+ */
 function sanitizeCustomTables(input: any) {
-  const tablesRaw = Array.isArray(input) ? input : [];
+  const tablesRaw = Array.isArray(input)
+    ? input
+    : Array.isArray(input?.items)
+      ? input.items
+      : input && typeof input === "object" && input.items && typeof input.items === "object"
+        ? Object.values(input.items)
+        : [];
 
-  return tablesRaw
-    .slice(0, 12)
-    .map((table: any) => {
-      const columnsRaw = Array.isArray(table?.columns) ? table.columns : [];
-      const columns = columnsRaw
-        .slice(0, 8)
-        .map((column: any) => safeStr(column, 40))
-        .filter(Boolean);
+  const order: string[] = [];
+  const items: Record<string, any> = {};
 
-      const safeColumns = columns.length > 0 ? columns : ["Column 1"];
+  tablesRaw.slice(0, 12).forEach((table: any, tableIndex: number) => {
+    const tableId = safeMapKey(safeId(table?.id, `tbl_${tableIndex}`), `tbl_${tableIndex}`);
 
-      const rowsRaw = Array.isArray(table?.rows) ? table.rows : [];
-      const rows = rowsRaw.slice(0, 80).map((row: any) => {
-        const rowArray = Array.isArray(row) ? row : [];
-        return safeColumns.map((_: string, index: number) => safeStr(rowArray[index], 120));
-      });
+    const rawColumns = Array.isArray(table?.columns)
+      ? table.columns
+      : table?.columns && typeof table.columns === "object"
+        ? Array.isArray(table?.columnOrder)
+          ? table.columnOrder.map((key: string) => table.columns[key])
+          : Object.values(table.columns)
+        : [];
 
-      return {
-        id: safeId(table?.id),
-        title: safeStr(table?.title, 90),
-        intro: safeStr(table?.intro, 500),
-        columns: safeColumns,
-        rows,
+    const columnOrder: string[] = [];
+    const columns: Record<string, string> = {};
+
+    rawColumns.slice(0, 8).forEach((column: any, columnIndex: number) => {
+      const value = safeStr(column, 40);
+      if (!value) return;
+
+      const columnId = `col_${columnIndex}`;
+      columnOrder.push(columnId);
+      columns[columnId] = value;
+    });
+
+    if (columnOrder.length === 0) {
+      columnOrder.push("col_0");
+      columns.col_0 = "Column 1";
+    }
+
+    const rawRows = Array.isArray(table?.rows)
+      ? table.rows
+      : table?.rows && typeof table.rows === "object"
+        ? Array.isArray(table?.rowOrder)
+          ? table.rowOrder.map((key: string) => table.rows[key])
+          : Object.values(table.rows)
+        : [];
+
+    const rowOrder: string[] = [];
+    const rows: Record<string, any> = {};
+
+    rawRows.slice(0, 80).forEach((row: any, rowIndex: number) => {
+      const rowId = `row_${rowIndex}`;
+      const cells: Record<string, string> = {};
+
+      if (Array.isArray(row)) {
+        columnOrder.forEach((columnId, columnIndex) => {
+          cells[columnId] = safeStr(row[columnIndex], 120);
+        });
+      } else if (row?.cells && typeof row.cells === "object") {
+        columnOrder.forEach((columnId) => {
+          cells[columnId] = safeStr(row.cells[columnId], 120);
+        });
+      } else if (row && typeof row === "object") {
+        columnOrder.forEach((columnId) => {
+          cells[columnId] = safeStr(row[columnId], 120);
+        });
+      } else {
+        columnOrder.forEach((columnId) => {
+          cells[columnId] = "";
+        });
+      }
+
+      const hasContent = Object.values(cells).some((value) => safeStr(value));
+      if (!hasContent) return;
+
+      rowOrder.push(rowId);
+      rows[rowId] = {
+        id: rowId,
+        cells,
       };
-    })
-    .filter((table: any) => table.title || table.rows.length > 0);
+    });
+
+    const title = safeStr(table?.title, 90);
+    const intro = safeStr(table?.intro, 500);
+
+    if (!title && rowOrder.length === 0) return;
+
+    order.push(tableId);
+
+    items[tableId] = {
+      id: tableId,
+      title,
+      intro,
+      columnOrder,
+      columns,
+      rowOrder,
+      rows,
+    };
+  });
+
+  return {
+    order,
+    items,
+  };
 }
 
 export function sanitizeSitePatch(patch: any) {
