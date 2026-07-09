@@ -99,7 +99,7 @@ export default function CustomTableBuilder({ value, onChange }: Props) {
     <div className="tb-wrap">
       <div className="tb-top">
         <div>
-          <div className="tb-title">Custom tables</div>
+          <div className="tb-title">Information tables</div>
           <div className="tb-sub">
             Add opening times, event dates, pop-up shop days, price lists, class times or anything else that needs rows and columns.
           </div>
