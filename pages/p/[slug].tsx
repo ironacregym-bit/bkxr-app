@@ -41,6 +41,10 @@ type PublicSite = {
     faq?: string;
     contact?: string;
   };
+  customTables?: CustomTable[] | {
+  order?: string[];
+  items?: Record<string, any>;
+};
 };
 type GalleryImage = {
   id?: string;
@@ -54,6 +58,13 @@ type MediaGallery = {
   title?: string;
   intro?: string;
   images?: GalleryImage[];
+};
+type CustomTable = {
+  id?: string;
+  title?: string;
+  intro?: string;
+  columns?: string[];
+  rows?: string[][];
 };
 
 function normalizeHost(host: string) {
@@ -91,6 +102,64 @@ function normaliseGallery(site: PublicSite) {
     intro: safeText(gallery.intro),
     images,
   };
+}
+function normaliseTables(site: PublicSite) {
+  const raw = (site as any)?.customTables;
+  if (Array.isArray(raw)) {
+    return raw
+      .map((table: any, tableIndex: number) => {
+        const columns = Array.isArray(table?.columns)
+          ? table.columns.map((column: any) => safeText(column)).filter(Boolean)
+          : [];
+        const rowsRaw = Array.isArray(table?.rows) ? table.rows : [];
+        const rows = rowsRaw
+          .map((row: any) => {
+            const rowArray = Array.isArray(row) ? row : [];
+            return columns.map((column: string, columnIndex: number) => safeText(rowArray[columnIndex]));
+          })
+          .filter((row: string[]) => row.some(Boolean));
+        return {
+          id: safeText(table?.id) || `table_${tableIndex}`,
+          title: safeText(table?.title),
+          intro: safeText(table?.intro),
+          columns,
+          rows,
+        };
+      })
+      .filter((table: any) => table.title || table.rows.length > 0);
+  }
+  if (!raw || typeof raw !== "object") {
+    return [];
+  }
+  const order = Array.isArray(raw.order) ? raw.order : [];
+  const items = raw.items && typeof raw.items === "object" ? raw.items : {};
+  return order
+    .map((tableId: string, tableIndex: number) => {
+      const table = items[tableId];
+      if (!table || typeof table !== "object") return null;
+      const columnOrder = Array.isArray(table.columnOrder) ? table.columnOrder : [];
+      const columnsMap = table.columns && typeof table.columns === "object" ? table.columns : {};
+      const columns = columnOrder
+        .map((columnId: string) => safeText(columnsMap[columnId]))
+        .filter(Boolean);
+      const rowOrder = Array.isArray(table.rowOrder) ? table.rowOrder : [];
+      const rowsMap = table.rows && typeof table.rows === "object" ? table.rows : {};
+      const rows = rowOrder
+        .map((rowId: string) => {
+          const row = rowsMap[rowId] || {};
+          const cells = row.cells && typeof row.cells === "object" ? row.cells : {};
+          return columnOrder.map((columnId: string) => safeText(cells[columnId]));
+        })
+        .filter((row: string[]) => row.some(Boolean));
+      return {
+        id: safeText(table?.id) || safeText(tableId) || `table_${tableIndex}`,
+        title: safeText(table?.title),
+        intro: safeText(table?.intro),
+        columns,
+        rows,
+      };
+    })
+    .filter((table: any) => table && (table.title || table.rows.length > 0));
 }
 
 
@@ -185,7 +254,10 @@ export default function PublicSitePage(props: {
     .filter(Boolean);
   const gallery = normaliseGallery(site);
   const hasGallery = gallery.images.length > 0;
+  const customTables = normaliseTables(site);
+  const hasTables = customTables.length > 0;
   const isDraft = !Boolean(site.published);
+  
 
   const bg = isLight ? "#ffffff" : "#06090d";
   const text = isLight ? "#111318" : "#ffffff";
@@ -342,6 +414,45 @@ export default function PublicSitePage(props: {
               </div>
             </section>
           ) : null}
+          {hasTables ? (
+          <section id="tables" className="sb-section">
+            <h2 className="sb-h2">Information</h2>
+            <div className="sb-tableList">
+              {customTables.map((table: any) => (
+                <div key={table.id} className="sb-tableBlock">
+                  {table.title ? <h3 className="sb-h3">{table.title}</h3> : null}
+                  {table.intro ? <p className="sb-sectionIntro">{table.intro}</p> : null}
+                  {table.columns.length > 0 && table.rows.length > 0 ? (
+                    <div className="sb-tableScroll">
+                      <table className="sb-table">
+                        <thead>
+                          <tr>
+                            {table.columns.map((column: string, columnIndex: number) => (
+                              <th key={`${table.id}_head_${columnIndex}`}>{column}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {table.rows.map((row: string[], rowIndex: number) => (
+                            <tr key={`${table.id}_row_${rowIndex}`}>
+                              {table.columns.map((column: string, columnIndex: number) => (
+                                <td key={`${table.id}_cell_${rowIndex}_${columnIndex}`}>
+                                  {row[columnIndex] || "—"}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="sb-muted">No table entries yet.</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
           <section id="faq" className="sb-section">
             <h2 className="sb-h2">FAQ</h2>
             {faqParas.length ? (
@@ -676,6 +787,56 @@ export default function PublicSitePage(props: {
             color: ${muted};
             font-size: 13px;
           }
+          .sb-h3 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 650;
+            letter-spacing: -0.15px;
+          }
+          .sb-tableList {
+            margin-top: 14px;
+            display: grid;
+            gap: 14px;
+          }
+          .sb-tableBlock {
+            border-radius: 16px;
+            border: 1px solid ${border};
+            background: ${isLight ? "#ffffff" : "rgba(7,10,15,0.45)"};
+            padding: 14px;
+          }
+          .sb-tableScroll {
+            margin-top: 12px;
+            overflow-x: auto;
+            border-radius: 14px;
+            border: 1px solid ${border};
+          }
+          .sb-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 520px;
+          }
+          .sb-table th,
+          .sb-table td {
+            padding: 12px;
+            text-align: left;
+            vertical-align: top;
+            border-bottom: 1px solid ${border};
+          }
+          .sb-table th {
+            background: ${isLight ? "rgba(17,19,24,0.035)" : "rgba(255,255,255,0.04)"};
+            color: ${isLight ? "rgba(17,19,24,0.82)" : "rgba(255,255,255,0.82)"};
+            font-size: 13px;
+            line-height: 1.35;
+            font-weight: 700;
+          }
+          .sb-table td {
+            color: ${muted};
+            line-height: 1.45;
+            font-weight: 450;
+          }
+          .sb-table tbody tr:last-child td {
+            border-bottom: none;
+          }
           .sb-foot {
             margin-top: 18px;
             padding: 18px 0 24px 0;
@@ -712,6 +873,16 @@ export default function PublicSitePage(props: {
             }
             .sb-galleryGrid {
               grid-template-columns: 1fr;
+            }
+            .sb-tableBlock {
+              padding: 12px;
+            }
+            .sb-table {
+              min-width: 480px;
+            }
+            .sb-table th,
+            .sb-table td {
+              padding: 10px;
             }
           }
           
