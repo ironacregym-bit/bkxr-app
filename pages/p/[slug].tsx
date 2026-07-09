@@ -1,4 +1,4 @@
-// File: pages/p/[slug].tsx
+// File: pages/p/[slug].tsx 
 import Head from "next/head";
 import Link from "next/link";
 import type { GetServerSideProps } from "next";
