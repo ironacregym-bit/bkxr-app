@@ -42,7 +42,48 @@ function normaliseGallery(site: any) {
 }
 
 function normaliseTables(site: any) {
-  return Array.isArray(site?.customTables) ? site.customTables : [];
+  const raw = site?.customTables;
+
+  if (Array.isArray(raw)) {
+    return raw;
+  }
+
+  if (!raw || typeof raw !== "object") {
+    return [];
+  }
+
+  const order = Array.isArray(raw.order) ? raw.order : [];
+  const items = raw.items && typeof raw.items === "object" ? raw.items : {};
+
+  return order
+    .map((tableId: string) => {
+      const table = items[tableId];
+      if (!table || typeof table !== "object") return null;
+
+      const columnOrder = Array.isArray(table.columnOrder) ? table.columnOrder : [];
+      const columnsMap = table.columns && typeof table.columns === "object" ? table.columns : {};
+
+      const columns = columnOrder.map((columnId: string) => String(columnsMap[columnId] || "").trim());
+
+      const rowOrder = Array.isArray(table.rowOrder) ? table.rowOrder : [];
+      const rowsMap = table.rows && typeof table.rows === "object" ? table.rows : {};
+
+      const rows = rowOrder.map((rowId: string) => {
+        const row = rowsMap[rowId] || {};
+        const cells = row.cells && typeof row.cells === "object" ? row.cells : {};
+
+        return columnOrder.map((columnId: string) => String(cells[columnId] || "").trim());
+      });
+
+      return {
+        id: String(table.id || tableId),
+        title: String(table.title || ""),
+        intro: String(table.intro || ""),
+        columns,
+        rows,
+      };
+    })
+    .filter(Boolean);
 }
 
 export default function SiteEditor() {
