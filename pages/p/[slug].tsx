@@ -289,8 +289,8 @@ const faviconHref = faviconUrl
 
         {faviconHref ? (
           <>
-            <linkconHref}
-            <linkconHref}
+            {faviconHref}
+            {faviconHref}
             {faviconHref}
           </>
         ) : null}
