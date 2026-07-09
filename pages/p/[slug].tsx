@@ -384,41 +384,7 @@ const faviconHref = faviconUrl
               <div className="sb-muted">No content yet.</div>
             )}
           </section>
-          {hasGallery ? (
-            <section id="gallery" className="sb-section">
-              <h2 className="sb-h2">{gallery.title}</h2>
-          
-              {gallery.intro ? (
-                <p className="sb-sectionIntro">{gallery.intro}</p>
-              ) : null}
-          
-              <div className="sb-galleryGrid">
-                {gallery.images.map((image) => (
-                  <figure key={image.id} className="sb-galleryItem">
-                    <div className="sb-galleryMedia">
-                      <img
-                        src={image.imageUrl || ""}
-                        alt={image.alt || image.title || ""}
-                        className="sb-galleryImg"
-                      />
-                    </div>
-          
-                    {image.title || image.caption ? (
-                      <figcaption className="sb-galleryCaption">
-                        {image.title ? (
-                          <div className="sb-galleryTitle">{image.title}</div>
-                        ) : null}
-          
-                        {image.caption ? (
-                          <div className="sb-galleryText">{image.caption}</div>
-                        ) : null}
-                      </figcaption>
-                    ) : null}
-                  </figure>
-                ))}
-              </div>
-            </section>
-          ) : null}
+
           {hasTables ? (
           <section id="tables" className="sb-section">
             <h2 className="sb-h2">Information</h2>
@@ -454,6 +420,41 @@ const faviconHref = faviconUrl
                     <div className="sb-muted">No table entries yet.</div>
                   )}
                 </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {hasGallery ? (
+          <section id="gallery" className="sb-section">
+            <h2 className="sb-h2">{gallery.title}</h2>
+        
+            {gallery.intro ? (
+              <p className="sb-sectionIntro">{gallery.intro}</p>
+            ) : null}
+        
+            <div className="sb-galleryGrid">
+              {gallery.images.map((image) => (
+                <figure key={image.id} className="sb-galleryItem">
+                  <div className="sb-galleryMedia">
+                    <img
+                      src={image.imageUrl || ""}
+                      alt={image.alt || image.title || ""}
+                      className="sb-galleryImg"
+                    />
+                  </div>
+        
+                  {image.title || image.caption ? (
+                    <figcaption className="sb-galleryCaption">
+                      {image.title ? (
+                        <div className="sb-galleryTitle">{image.title}</div>
+                      ) : null}
+        
+                      {image.caption ? (
+                        <div className="sb-galleryText">{image.caption}</div>
+                      ) : null}
+                    </figcaption>
+                  ) : null}
+                </figure>
               ))}
             </div>
           </section>
