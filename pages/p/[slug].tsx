@@ -232,10 +232,15 @@ export default function PublicSitePage(props: {
 
   const brandName = safeText(site?.brand?.name) || "Site";
   const logoUrl = site?.brand?.logoUrl || null;
+  
   const faviconUrl =
     safeText(site?.brand?.faviconUrl) ||
     safeText(site?.brand?.logoUrl) ||
     "";
+
+const faviconHref = faviconUrl
+  ? `${faviconUrl}?v=${encodeURIComponent(site.updated_at || Date.now().toString())}`
+  : "";
 
   const heroHeadline = safeText(site?.hero?.headline) || brandName;
   const heroSub = safeText(site?.hero?.subheadline) || "";
@@ -282,11 +287,11 @@ export default function PublicSitePage(props: {
         {ogImage ? <meta property="og:image" content={String(ogImage)} /> : null}
         <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-        {faviconUrl ? (
+        {faviconHref ? (
           <>
-            {faviconUrl}
-            {faviconUrl}
-            {faviconUrl}
+            <linkconHref}
+            <linkconHref}
+            {faviconHref}
           </>
         ) : null}
       </Head>
@@ -884,6 +889,14 @@ export default function PublicSitePage(props: {
             }
           }
           
+        `}</style>
+        <style jsx global>{`
+          html,
+          body,
+          #__next {
+            padding-bottom: 0 !important;
+            margin-bottom: 0 !important;
+          }
         `}</style>
       </div>
     </>
