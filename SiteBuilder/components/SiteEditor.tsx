@@ -558,24 +558,23 @@ export default function SiteEditor() {
           </div>
 
           <div className="se-card se-span2">
-            <ImageGalleryBuilder
-              value={draft.mediaGallery}
-              onChange={(value) =>
-                setDraft((p: any) => ({
-                  ...p,
-                  mediaGallery: value,
-                }))
-              }
-            />
-          </div>
-
-          <div className="se-card se-span2">
             <CustomTableBuilder
               value={draft.customTables}
               onChange={(value) =>
                 setDraft((p: any) => ({
                   ...p,
                   customTables: value,
+                }))
+              }
+            />
+          </div>
+          <div className="se-card se-span2">
+            <ImageGalleryBuilder
+              value={draft.mediaGallery}
+              onChange={(value) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  mediaGallery: value,
                 }))
               }
             />
