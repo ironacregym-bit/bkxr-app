@@ -122,15 +122,14 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
     }
 
     const title = fileNameToTitle(file.name);
-
+    
     return {
       id: makeId(),
       imageUrl: String(json.secure_url),
-      title,
+      title: "",
       caption: "",
       alt: title,
     };
-  }
 
   async function handleMultiUpload(filesList: FileList | null) {
     const files = Array.from(filesList || []).filter((file) => file.type.startsWith("image/"));
