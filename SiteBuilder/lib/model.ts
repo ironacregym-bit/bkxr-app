@@ -80,7 +80,29 @@ export type SiteDoc = {
   sections: SiteSections;
 
   mediaGallery: SiteMediaGallery;
-  customTables: SiteCustomTable[];
+  customTables:
+  | SiteCustomTable[]
+  | {
+      order: string[];
+      items: Record<
+        string,
+        {
+          id: string;
+          title: string;
+          intro?: string;
+          columnOrder: string[];
+          columns: Record<string, string>;
+          rowOrder: string[];
+          rows: Record<
+            string,
+            {
+              id: string;
+              cells: Record<string, string>;
+            }
+          >;
+        }
+      >;
+    };
 
   domains: SiteDomain[];
 };
@@ -167,7 +189,10 @@ export function defaultSiteContent(args: { slug: string; ownerEmail: string; nam
       images: [],
     },
 
-    customTables: [],
+    customTables: {
+      order: [],
+      items: {},
+    },
 
     domains: [],
   };
