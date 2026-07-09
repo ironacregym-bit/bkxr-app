@@ -5,6 +5,8 @@ import useSWR from "swr";
 import SiteDomainsCard from "./SiteDomainsCard";
 import SiteEditorsCard from "./SiteEditorsCard";
 import ImageUploadField from "./ImageUploadField";
+import ImageGalleryBuilder from "./ImageGalleryBuilder";
+import CustomTableBuilder from "./CustomTableBuilder";
 
 type GetResp =
   | { ok: true; site: any; canEdit: boolean }
@@ -18,6 +20,29 @@ const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 function safeStr(v: any) {
   return String(v || "").trim();
+}
+
+function makeCloudinaryFaviconUrl(url: string) {
+  const clean = safeStr(url);
+  if (!clean) return "";
+
+  if (clean.includes("res.cloudinary.com") && clean.includes("/image/upload/")) {
+    return clean.replace("/image/upload/", "/image/upload/c_fill,w_64,h_64,r_max,f_png,q_auto/");
+  }
+
+  return clean;
+}
+
+function normaliseGallery(site: any) {
+  return {
+    title: safeStr(site?.mediaGallery?.title) || "Gallery",
+    intro: safeStr(site?.mediaGallery?.intro),
+    images: Array.isArray(site?.mediaGallery?.images) ? site.mediaGallery.images : [],
+  };
+}
+
+function normaliseTables(site: any) {
+  return Array.isArray(site?.customTables) ? site.customTables : [];
 }
 
 export default function SiteEditor() {
@@ -48,6 +73,7 @@ export default function SiteEditor() {
         brand: {
           name: safeStr(site?.brand?.name),
           logoUrl: safeStr(site?.brand?.logoUrl),
+          faviconUrl: safeStr(site?.brand?.faviconUrl),
         },
         theme: {
           accent: safeStr(site?.theme?.accent) || "#1fe0a5",
@@ -71,9 +97,42 @@ export default function SiteEditor() {
           faq: safeStr(site?.sections?.faq),
           contact: safeStr(site?.sections?.contact),
         },
+        mediaGallery: normaliseGallery(site),
+        customTables: normaliseTables(site),
       };
     });
   }, [site]);
+
+  function setLogoUrl(url: string) {
+    setDraft((p: any) => {
+      const nextLogo = safeStr(url);
+      const currentFavicon = safeStr(p?.brand?.faviconUrl);
+      const previousLogo = safeStr(p?.brand?.logoUrl);
+      const previousAutoFavicon = makeCloudinaryFaviconUrl(previousLogo);
+
+      const shouldAutoUpdateFavicon =
+        !currentFavicon || currentFavicon === previousLogo || currentFavicon === previousAutoFavicon;
+
+      return {
+        ...p,
+        brand: {
+          ...p.brand,
+          logoUrl: nextLogo,
+          faviconUrl: shouldAutoUpdateFavicon ? makeCloudinaryFaviconUrl(nextLogo) : currentFavicon,
+        },
+      };
+    });
+  }
+
+  function autoBuildFaviconFromLogo() {
+    setDraft((p: any) => ({
+      ...p,
+      brand: {
+        ...p.brand,
+        faviconUrl: makeCloudinaryFaviconUrl(p?.brand?.logoUrl),
+      },
+    }));
+  }
 
   async function save() {
     setMsg(null);
@@ -223,10 +282,7 @@ export default function SiteEditor() {
             onChanged={() => mutate()}
           />
 
-          <SiteEditorsCard
-            siteId={String(site.id)}
-            onChanged={() => mutate()}
-          />
+          <SiteEditorsCard siteId={String(site.id)} onChanged={() => mutate()} />
 
           <div className="se-card se-span2">
             <div className="se-cardTitle">Brand</div>
@@ -267,15 +323,38 @@ export default function SiteEditor() {
             <ImageUploadField
               label="Logo"
               value={draft.brand.logoUrl}
-              onChange={(url) =>
-                setDraft((p: any) => ({
-                  ...p,
-                  brand: { ...p.brand, logoUrl: url },
-                }))
-              }
+              onChange={setLogoUrl}
               folder="sitebuilder/logos"
-              helpText="Upload a logo or paste a public image URL."
+              helpText="Upload a logo or paste a public image URL. The favicon can be generated from this logo."
             />
+
+            <div className="se-faviconRow">
+              <div className="se-faviconPreview">
+                {draft.brand.faviconUrl ? <img src={draft.brand.faviconUrl} alt="" /> : <span>No favicon</span>}
+              </div>
+
+              <button type="button" className="se-smallBtn" onClick={autoBuildFaviconFromLogo}>
+                Auto-build favicon from logo
+              </button>
+            </div>
+
+            <div className="se-field">
+              <div className="se-label">Favicon URL</div>
+              <input
+                className="se-input"
+                value={draft.brand.faviconUrl}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    brand: { ...p.brand, faviconUrl: e.target.value },
+                  }))
+                }
+                placeholder="Auto-filled from logo, or paste custom favicon URL"
+              />
+              <div className="se-help">
+                This is saved now. To show it publicly, wire it into the public renderer Head as the icon link.
+              </div>
+            </div>
 
             <div className="se-field">
               <div className="se-label">Accent</div>
@@ -438,6 +517,30 @@ export default function SiteEditor() {
           </div>
 
           <div className="se-card se-span2">
+            <ImageGalleryBuilder
+              value={draft.mediaGallery}
+              onChange={(value) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  mediaGallery: value,
+                }))
+              }
+            />
+          </div>
+
+          <div className="se-card se-span2">
+            <CustomTableBuilder
+              value={draft.customTables}
+              onChange={(value) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  customTables: value,
+                }))
+              }
+            />
+          </div>
+
+          <div className="se-card se-span2">
             <div className="se-cardTitle">SEO</div>
 
             <div className="se-two">
@@ -525,7 +628,8 @@ export default function SiteEditor() {
           color: rgba(255, 255, 255, 0.6);
           font-weight: 450;
           font-size: 13px;
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+            monospace;
         }
 
         .se-actions {
@@ -626,6 +730,47 @@ export default function SiteEditor() {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 12px;
+        }
+
+        .se-faviconRow {
+          margin-top: 12px;
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+
+        .se-faviconPreview {
+          width: 50px;
+          height: 50px;
+          border-radius: 14px;
+          background: rgba(7, 10, 15, 0.85);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          color: rgba(255, 255, 255, 0.45);
+          font-size: 11px;
+          text-align: center;
+          padding: 4px;
+        }
+
+        .se-faviconPreview img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+
+        .se-smallBtn {
+          min-height: 42px;
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: rgba(0, 0, 0, 0.18);
+          color: rgba(255, 255, 255, 0.92);
+          font-weight: 600;
+          cursor: pointer;
+          padding: 10px 12px;
         }
 
         @media (max-width: 920px) {
