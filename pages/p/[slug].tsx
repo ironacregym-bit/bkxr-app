@@ -124,13 +124,12 @@ function normaliseTables(site: PublicSite) {
         ? table.columns.map((column) => safeText(column)).filter(Boolean)
         : [];
 
-      const safeColumns = columns.length > 0 ? columns : [];
-
       const rowsRaw = Array.isArray(table?.rows) ? table.rows : [];
+
       const rows = rowsRaw
         .map((row) => {
           const rowArray = Array.isArray(row) ? row : [];
-          return safeColumns.map((_, columnIndex) => safeText(rowArray[columnIndex]));
+          return columns.map((_, columnIndex) => safeText(rowArray[columnIndex]));
         })
         .filter((row) => row.some(Boolean));
 
@@ -138,7 +137,7 @@ function normaliseTables(site: PublicSite) {
         id: safeText(table?.id) || `table_${tableIndex}`,
         title: safeText(table?.title),
         intro: safeText(table?.intro),
-        columns: safeColumns,
+        columns,
         rows,
       };
     })
@@ -204,12 +203,12 @@ export default function PublicSitePage(props: {
   const ogImage = site?.seo?.image || site?.hero?.imageUrl || site?.brand?.logoUrl || null;
 
   const brandName = safeText(site?.brand?.name) || "Site";
-  const logoUrl = site?.brand?.logoUrl || null;
-  const faviconUrl = site?.brand?.faviconUrl || site?.brand?.logoUrl || null;
+  const logoUrl = safeText(site?.brand?.logoUrl);
+  const faviconUrl = safeText(site?.brand?.faviconUrl) || logoUrl;
 
   const heroHeadline = safeText(site?.hero?.headline) || brandName;
-  const heroSub = safeText(site?.hero?.subheadline) || "";
-  const heroImage = site?.hero?.imageUrl || null;
+  const heroSub = safeText(site?.hero?.subheadline);
+  const heroImage = safeText(site?.hero?.imageUrl);
 
   const ctaText = safeText(site?.hero?.ctaText) || "Get started";
   const ctaHref = safeText(site?.hero?.ctaHref) || "#contact";
@@ -262,9 +261,9 @@ export default function PublicSitePage(props: {
 
         <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-        {faviconUrl ? {String(faviconUrl)} : null}
-        {faviconUrl ?  /> : null}
-        {faviconUrl ?  /> : null}
+        {faviconUrl ? {faviconUrl} : null}
+        {faviconUrl ? {faviconUrl} : null}
+        {faviconUrl ? {faviconUrl} : null}
       </Head>
 
       <div className="sb-wrap">
