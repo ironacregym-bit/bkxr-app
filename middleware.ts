@@ -3,60 +3,162 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
- * Custom domain root serving (phase 1)
+ * SiteBuilder custom domain routing - phase 1
  *
- * Because Next.js middleware runs on the Edge runtime, we can't use the Google Firestore Node SDK here.
- * So we use an env mapping that you can set in Vercel:
+ * This is a manual host-to-slug mapping approach.
  *
- * SITEBUILDER_HOSTS_JSON='{"client.com":"acme","www.client.com":"acme"}'
+ * Add this in Vercel env:
  *
- * Later (phase 2) we can automate this via Edge Config or a KV store.
+ * SITEBUILDER_BASE_HOST=ironacregym.co.uk
+ * SITEBUILDER_BASE_HOSTS=ironacregym.co.uk,www.ironacregym.co.uk
+ *
+ * SITEBUILDER_HOSTS_JSON='{
+ *   "clientdomain.co.uk": "client-slug",
+ *   "www.clientdomain.co.uk": "client-slug"
+ * }'
+ *
+ * The mapped value must be the public SiteBuilder slug used by /p/[slug].
+ *
+ * This middleware does not read Firestore because Middleware runs before the
+ * page route is served and should stay lightweight. Later we can move this
+ * mapping to Edge Config, KV, or a Vercel Domain API automation flow.
  */
 
-function normalizeHost(host: string) {
-  return String(host || "").trim().toLowerCase().split(":")[0];
+function normalizeHost(value: string) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/.*$/, "")
+    .split(":")[0];
+}
+
+function normalizePath(value: string) {
+  const path = String(value || "").trim();
+  if (!path) return "/";
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+function parseHostMap() {
+  try {
+    const raw = process.env.SITEBUILDER_HOSTS_JSON || "{}";
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    const map: Record<string, string> = {};
+
+    Object.entries(parsed).forEach(([host, slug]) => {
+      const cleanHost = normalizeHost(host);
+      const cleanSlug = String(slug || "").trim();
+
+      if (cleanHost && cleanSlug) {
+        map[cleanHost] = cleanSlug;
+      }
+    });
+
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+function getBaseHosts() {
+  const hosts = new Set<string>();
+
+  const singleBaseHost = normalizeHost(process.env.SITEBUILDER_BASE_HOST || "");
+  if (singleBaseHost) hosts.add(singleBaseHost);
+
+  const rawBaseHosts = String(process.env.SITEBUILDER_BASE_HOSTS || "")
+    .split(",")
+    .map((x) => normalizeHost(x))
+    .filter(Boolean);
+
+  rawBaseHosts.forEach((host) => hosts.add(host));
+
+  return hosts;
+}
+
+function isLocalOrPreviewHost(host: string) {
+  if (!host) return true;
+
+  if (host === "localhost") return true;
+  if (host === "127.0.0.1") return true;
+  if (host.endsWith(".local")) return true;
+
+  // Do not try to treat Vercel deployment URLs as customer custom domains.
+  if (host.endsWith(".vercel.app")) return true;
+
+  return false;
 }
 
 function isBypassPath(pathname: string) {
-  if (pathname.startsWith("/_next")) return true;
-  if (pathname.startsWith("/api")) return true;
-  if (pathname === "/favicon.ico") return true;
-  if (pathname === "/robots.txt") return true;
-  if (pathname === "/sitemap.xml") return true;
-  // allow direct access to the builder and platform pages
-  if (pathname.startsWith("/sitebuilder")) return true;
-  if (pathname.startsWith("/p/")) return true;
-  // allow your existing app routes to function normally on your main host
+  const path = normalizePath(pathname);
+
+  if (path.startsWith("/_next")) return true;
+  if (path.startsWith("/api")) return true;
+
+  if (path === "/favicon.ico") return true;
+  if (path === "/robots.txt") return true;
+  if (path === "/sitemap.xml") return true;
+  if (path === "/manifest.json") return true;
+
+  // File-like public assets.
+  if (/\.[a-zA-Z0-9]+$/.test(path)) return true;
+
+  // Builder/private platform routes.
+  if (path.startsWith("/sitebuilder")) return true;
+
+  // Public SiteBuilder route should remain directly accessible.
+  if (path.startsWith("/p/")) return true;
+
   return false;
+}
+
+function findSlugForHost(host: string, map: Record<string, string>) {
+  const cleanHost = normalizeHost(host);
+  if (!cleanHost) return "";
+
+  const direct = map[cleanHost];
+  if (direct) return direct;
+
+  if (cleanHost.startsWith("www.")) {
+    const apex = cleanHost.replace(/^www\./, "");
+    return map[apex] || "";
+  }
+
+  const www = `www.${cleanHost}`;
+  return map[www] || "";
 }
 
 export function middleware(req: NextRequest) {
   const host = normalizeHost(req.headers.get("host") || "");
-  const pathname = req.nextUrl.pathname;
+  const pathname = normalizePath(req.nextUrl.pathname);
 
   if (!host) return NextResponse.next();
+  if (isLocalOrPreviewHost(host)) return NextResponse.next();
   if (isBypassPath(pathname)) return NextResponse.next();
 
-  // Do not rewrite for your main app host (set in env).
-  const baseHost = normalizeHost(process.env.SITEBUILDER_BASE_HOST || "");
-  if (baseHost && host === baseHost) return NextResponse.next();
+  const baseHosts = getBaseHosts();
+  if (baseHosts.has(host)) return NextResponse.next();
 
-  // Parse host->slug mapping
-  let map: Record<string, string> = {};
-  try {
-    const raw = process.env.SITEBUILDER_HOSTS_JSON || "{}";
-    map = JSON.parse(raw);
-  } catch {
-    map = {};
-  }
+  const map = parseHostMap();
+  const slug = findSlugForHost(host, map);
 
-  const slug = map[host];
   if (!slug) return NextResponse.next();
 
-  // Rewrite ALL non-bypass requests on that host to the public site renderer.
   const url = req.nextUrl.clone();
+
   url.pathname = `/p/${encodeURIComponent(slug)}`;
-  // keep original path as a hint (optional)
+
+  // Keep original path available to your renderer.
+  // Example:
+  // clientdomain.co.uk/about
+  // rewrites to:
+  // /p/client-slug?_sb_path=/about
+  url.searchParams.set("_sb_host", host);
   url.searchParams.set("_sb_path", pathname);
 
   return NextResponse.rewrite(url);
