@@ -13,6 +13,7 @@ type PublicSite = {
   owner_email: string;
   editor_emails: string[];
   updated_at?: string;
+  mediaGallery?: MediaGallery;
   theme?: {
     accent?: string | null;
     mode?: "dark" | "light" | string;
@@ -41,6 +42,19 @@ type PublicSite = {
     contact?: string;
   };
 };
+type GalleryImage = {
+  id?: string;
+  imageUrl?: string | null;
+  title?: string;
+  caption?: string;
+  alt?: string;
+};
+
+type MediaGallery = {
+  title?: string;
+  intro?: string;
+  images?: GalleryImage[];
+};
 
 function normalizeHost(host: string) {
   return String(host || "").trim().toLowerCase().split(":")[0];
@@ -58,6 +72,27 @@ function splitParagraphs(v: any) {
     .map((p) => p.trim())
     .filter(Boolean);
 }
+function normaliseGallery(site: PublicSite) {
+  const gallery = site?.mediaGallery || {};
+  const imagesRaw = Array.isArray(gallery.images) ? gallery.images : [];
+
+  const images = imagesRaw
+    .map((image, index) => ({
+      id: safeText(image?.id) || `gallery_${index}`,
+      imageUrl: safeText(image?.imageUrl),
+      title: safeText(image?.title),
+      caption: safeText(image?.caption),
+      alt: safeText(image?.alt),
+    }))
+    .filter((image) => image.imageUrl);
+
+  return {
+    title: safeText(gallery.title) || "Gallery",
+    intro: safeText(gallery.intro),
+    images,
+  };
+}
+
 
 function isAuthorized(site: PublicSite, email: string) {
   const e = String(email || "").toLowerCase();
@@ -148,7 +183,8 @@ export default function PublicSitePage(props: {
     .split("\n")
     .map((x) => x.trim())
     .filter(Boolean);
-
+  const gallery = normaliseGallery(site);
+  const hasGallery = gallery.images.length > 0;
   const isDraft = !Boolean(site.published);
 
   const bg = isLight ? "#ffffff" : "#06090d";
@@ -271,7 +307,41 @@ export default function PublicSitePage(props: {
               <div className="sb-muted">No content yet.</div>
             )}
           </section>
-
+          {hasGallery ? (
+            <section id="gallery" className="sb-section">
+              <h2 className="sb-h2">{gallery.title}</h2>
+          
+              {gallery.intro ? (
+                <p className="sb-sectionIntro">{gallery.intro}</p>
+              ) : null}
+          
+              <div className="sb-galleryGrid">
+                {gallery.images.map((image) => (
+                  <figure key={image.id} className="sb-galleryItem">
+                    <div className="sb-galleryMedia">
+                      <img
+                        src={image.imageUrl || ""}
+                        alt={image.alt || image.title || ""}
+                        className="sb-galleryImg"
+                      />
+                    </div>
+          
+                    {image.title || image.caption ? (
+                      <figcaption className="sb-galleryCaption">
+                        {image.title ? (
+                          <div className="sb-galleryTitle">{image.title}</div>
+                        ) : null}
+          
+                        {image.caption ? (
+                          <div className="sb-galleryText">{image.caption}</div>
+                        ) : null}
+                      </figcaption>
+                    ) : null}
+                  </figure>
+                ))}
+              </div>
+            </section>
+          ) : null}
           <section id="faq" className="sb-section">
             <h2 className="sb-h2">FAQ</h2>
             {faqParas.length ? (
@@ -560,7 +630,52 @@ export default function PublicSitePage(props: {
             color: ${isLight ? "rgba(17,19,24,0.52)" : "rgba(255,255,255,0.55)"};
             font-weight: 450;
           }
-
+          .sb-sectionIntro {
+            margin: 10px 0 0 0;
+            color: ${muted};
+            line-height: 1.55;
+          }
+          
+          .sb-galleryGrid {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+          }
+          
+          .sb-galleryItem {
+            margin: 0;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid ${border};
+            background: ${cardBg};
+          }
+          
+          .sb-galleryMedia {
+            aspect-ratio: 4 / 3;
+            overflow: hidden;
+          }
+          
+          .sb-galleryImg {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+          }
+          
+          .sb-galleryCaption {
+            padding: 12px;
+          }
+          
+          .sb-galleryTitle {
+            font-weight: 650;
+          }
+          
+          .sb-galleryText {
+            margin-top: 5px;
+            color: ${muted};
+            font-size: 13px;
+          }
           .sb-foot {
             margin-top: 18px;
             padding: 18px 0 24px 0;
@@ -595,7 +710,11 @@ export default function PublicSitePage(props: {
             .sb-top {
               padding: 12px;
             }
+            .sb-galleryGrid {
+              grid-template-columns: 1fr;
+            }
           }
+          
         `}</style>
       </div>
     </>
