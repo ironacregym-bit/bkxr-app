@@ -1,4 +1,5 @@
 // File: SiteBuilder/components/ImageGalleryBuilder.tsx
+import { useMemo, useState } from "react";
 import ImageUploadField from "./ImageUploadField";
 
 type GalleryImage = {
@@ -32,8 +33,24 @@ function normaliseGallery(value: GalleryValue): GalleryValue {
   };
 }
 
+function fileNameToTitle(fileName: string) {
+  return String(fileName || "")
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export default function ImageGalleryBuilder({ value, onChange }: Props) {
   const gallery = normaliseGallery(value);
+
+  const [uploading, setUploading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const preset = process.env.NEXT_PUBLIC_CLOUDINARY_UNSIGNED_PRESET;
+
+  const canUpload = useMemo(() => Boolean(cloudName && preset), [cloudName, preset]);
 
   function update(next: Partial<GalleryValue>) {
     onChange({
@@ -85,18 +102,96 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
     update({ images: next });
   }
 
+  async function uploadOne(file: File): Promise<GalleryImage | null> {
+    if (!cloudName || !preset) return null;
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", String(preset));
+    formData.append("folder", "sitebuilder/gallery");
+
+    const resp = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+      method: "POST",
+      body: formData,
+    });
+
+    const json = await resp.json().catch(() => null);
+
+    if (!resp.ok || !json?.secure_url) {
+      throw new Error(json?.error?.message || "Upload failed.");
+    }
+
+    const title = fileNameToTitle(file.name);
+
+    return {
+      id: makeId(),
+      imageUrl: String(json.secure_url),
+      title,
+      caption: "",
+      alt: title,
+    };
+  }
+
+  async function handleMultiUpload(filesList: FileList | null) {
+    const files = Array.from(filesList || []).filter((file) => file.type.startsWith("image/"));
+
+    if (!files.length) return;
+
+    if (!canUpload) {
+      setMsg("Upload is not configured yet. Add Cloudinary env vars first.");
+      return;
+    }
+
+    setUploading(true);
+    setMsg(null);
+
+    try {
+      const uploaded = await Promise.all(files.map((file) => uploadOne(file)));
+      const cleanUploaded = uploaded.filter(Boolean) as GalleryImage[];
+
+      update({
+        images: [...gallery.images, ...cleanUploaded],
+      });
+
+      setMsg(cleanUploaded.length === 1 ? "1 image uploaded." : `${cleanUploaded.length} images uploaded.`);
+      setUploading(false);
+    } catch (e: any) {
+      setMsg(e?.message || "Upload failed.");
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="gb-wrap">
       <div className="gb-top">
         <div>
           <div className="gb-title">Image gallery</div>
-          <div className="gb-sub">Upload images and they’ll be saved as a responsive gallery for the public site.</div>
+          <div className="gb-sub">Upload multiple images and they’ll be added to this responsive gallery.</div>
         </div>
 
-        <button type="button" className="gb-btn" onClick={addImage}>
-          Add image
-        </button>
+        <div className="gb-topActions">
+          <label className={`gb-btn ${uploading ? "is-disabled" : ""}`}>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: "none" }}
+              disabled={uploading}
+              onChange={(e) => {
+                handleMultiUpload(e.target.files);
+                e.currentTarget.value = "";
+              }}
+            />
+            {uploading ? "Uploading…" : "Upload images"}
+          </label>
+
+          <button type="button" className="gb-secondaryBtn" onClick={addImage} disabled={uploading}>
+            Add blank image
+          </button>
+        </div>
       </div>
+
+      {msg ? <div className="gb-msg">{msg}</div> : null}
 
       <div className="gb-field">
         <div className="gb-label">Gallery title</div>
@@ -120,7 +215,7 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
       </div>
 
       {gallery.images.length === 0 ? (
-        <div className="gb-empty">No gallery images yet. Add the first image.</div>
+        <div className="gb-empty">No gallery images yet. Upload images or add the first image manually.</div>
       ) : (
         <div className="gb-list">
           {gallery.images.map((item, index) => (
@@ -146,7 +241,7 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
                 value={item.imageUrl}
                 onChange={(url) => updateImage(item.id, { imageUrl: url })}
                 folder="sitebuilder/gallery"
-                helpText="Upload a gallery image or paste a public image URL."
+                helpText="Upload a replacement image or paste a public image URL."
               />
 
               <div className="gb-two">
@@ -211,7 +306,15 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
           line-height: 1.35;
         }
 
+        .gb-topActions {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+
         .gb-btn,
+        .gb-secondaryBtn,
         .gb-mini,
         .gb-danger {
           min-height: 40px;
@@ -222,6 +325,8 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
           font-weight: 650;
           cursor: pointer;
           padding: 9px 12px;
+          display: inline-flex;
+          align-items: center;
         }
 
         .gb-btn {
@@ -230,9 +335,25 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
           border: none;
         }
 
+        .gb-secondaryBtn {
+          background: rgba(0, 0, 0, 0.18);
+        }
+
+        .gb-btn.is-disabled,
+        .gb-secondaryBtn:disabled {
+          opacity: 0.7;
+          cursor: default;
+        }
+
         .gb-danger {
           border-color: rgba(255, 107, 107, 0.35);
           color: #ff8585;
+        }
+
+        .gb-msg {
+          margin-top: 10px;
+          color: rgba(255, 255, 255, 0.82);
+          font-size: 13px;
         }
 
         .gb-field {
@@ -319,6 +440,16 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
         }
 
         @media (max-width: 720px) {
+          .gb-topActions {
+            width: 100%;
+          }
+
+          .gb-btn,
+          .gb-secondaryBtn {
+            width: 100%;
+            justify-content: center;
+          }
+
           .gb-two {
             grid-template-columns: 1fr;
           }
