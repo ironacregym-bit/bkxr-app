@@ -116,32 +116,75 @@ function normaliseGallery(site: PublicSite) {
 }
 
 function normaliseTables(site: PublicSite) {
-  const tablesRaw = Array.isArray(site?.customTables) ? site.customTables : [];
+  const raw = (site as any)?.customTables;
 
-  return tablesRaw
-    .map((table, tableIndex) => {
-      const columns = Array.isArray(table?.columns)
-        ? table.columns.map((column) => safeText(column)).filter(Boolean)
-        : [];
+  if (Array.isArray(raw)) {
+    return raw
+      .map((table, tableIndex) => {
+        const columns = Array.isArray(table?.columns)
+          ? table.columns.map((column: any) => safeText(column)).filter(Boolean)
+          : [];
 
-      const rowsRaw = Array.isArray(table?.rows) ? table.rows : [];
+        const rowsRaw = Array.isArray(table?.rows) ? table.rows : [];
 
-      const rows = rowsRaw
-        .map((row) => {
-          const rowArray = Array.isArray(row) ? row : [];
-          return columns.map((_, columnIndex) => safeText(rowArray[columnIndex]));
+        const rows = rowsRaw
+          .map((row: any) => {
+            const rowArray = Array.isArray(row) ? row : [];
+            return columns.map((_, columnIndex) => safeText(rowArray[columnIndex]));
+          })
+          .filter((row: string[]) => row.some(Boolean));
+
+        return {
+          id: safeText(table?.id) || `table_${tableIndex}`,
+          title: safeText(table?.title),
+          intro: safeText(table?.intro),
+          columns,
+          rows,
+        };
+      })
+      .filter((table) => table.title || table.rows.length > 0);
+  }
+
+  if (!raw || typeof raw !== "object") {
+    return [];
+  }
+
+  const order = Array.isArray(raw.order) ? raw.order : [];
+  const items = raw.items && typeof raw.items === "object" ? raw.items : {};
+
+  return order
+    .map((tableId: string, tableIndex: number) => {
+      const table = items[tableId];
+      if (!table || typeof table !== "object") return null;
+
+      const columnOrder = Array.isArray(table.columnOrder) ? table.columnOrder : [];
+      const columnsMap = table.columns && typeof table.columns === "object" ? table.columns : {};
+
+      const columns = columnOrder
+        .map((columnId: string) => safeText(columnsMap[columnId]))
+        .filter(Boolean);
+
+      const rowOrder = Array.isArray(table.rowOrder) ? table.rowOrder : [];
+      const rowsMap = table.rows && typeof table.rows === "object" ? table.rows : {};
+
+      const rows = rowOrder
+        .map((rowId: string) => {
+          const row = rowsMap[rowId] || {};
+          const cells = row.cells && typeof row.cells === "object" ? row.cells : {};
+
+          return columnOrder.map((columnId: string) => safeText(cells[columnId]));
         })
-        .filter((row) => row.some(Boolean));
+        .filter((row: string[]) => row.some(Boolean));
 
       return {
-        id: safeText(table?.id) || `table_${tableIndex}`,
+        id: safeText(table?.id) || safeText(tableId) || `table_${tableIndex}`,
         title: safeText(table?.title),
         intro: safeText(table?.intro),
         columns,
         rows,
       };
     })
-    .filter((table) => table.title || table.rows.length > 0);
+    .filter((table: any) => table && (table.title || table.rows.length > 0));
 }
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
