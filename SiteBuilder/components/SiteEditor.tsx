@@ -539,6 +539,19 @@ export default function SiteEditor() {
                 rows={6}
               />
             </div>
+            <div className="se-help">
+              Formatting supported:
+              <br />
+              ## Heading
+              <br />
+              ### Subheading
+              <br />
+              - Bullet lists
+              <br />
+              1. Numbered lists
+              <br />
+              Leave blank lines for paragraphs
+            </div>
 
             <div className="se-field">
               <div className="se-label">Contact</div>
