@@ -5,6 +5,7 @@ import type { GetServerSideProps } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../api/auth/[...nextauth]";
 import firestore from "../../lib/firestoreClient";
+import { renderRichText } from "../../lib/sitebuilder/renderRichText";
 
 type PublicSite = {
   id: string;
@@ -249,9 +250,9 @@ const faviconHref = faviconUrl
   const ctaText = safeText(site?.hero?.ctaText) || "Get started";
   const ctaHref = safeText(site?.hero?.ctaHref) || "#contact";
 
-  const aboutParas = splitParagraphs(site?.sections?.about);
-  const servicesParas = splitParagraphs(site?.sections?.services);
-  const faqParas = splitParagraphs(site?.sections?.faq);
+  const aboutContent = site?.sections?.about || "";
+  const servicesContent = site?.sections?.services || "";
+  const faqContent = site?.sections?.faq || "";
 
   const contactLines = safeText(site?.sections?.contact)
     .split("\n")
@@ -357,13 +358,9 @@ const faviconHref = faviconUrl
 
           <section id="about" className="sb-section">
             <h2 className="sb-h2">About</h2>
-            {aboutParas.length ? (
+            {aboutContent ? (
               <div className="sb-body">
-                {aboutParas.map((p, i) => (
-                  <p key={i} className="sb-p">
-                    {p}
-                  </p>
-                ))}
+                {renderRichText(aboutContent)}
               </div>
             ) : (
               <div className="sb-muted">No content yet.</div>
@@ -372,13 +369,9 @@ const faviconHref = faviconUrl
 
           <section id="services" className="sb-section">
             <h2 className="sb-h2">Services</h2>
-            {servicesParas.length ? (
+            {servicesContent ? (
               <div className="sb-body">
-                {servicesParas.map((p, i) => (
-                  <p key={i} className="sb-p">
-                    {p}
-                  </p>
-                ))}
+                {renderRichText(servicesContent)}
               </div>
             ) : (
               <div className="sb-muted">No content yet.</div>
@@ -461,13 +454,9 @@ const faviconHref = faviconUrl
         ) : null}
           <section id="faq" className="sb-section">
             <h2 className="sb-h2">FAQ</h2>
-            {faqParas.length ? (
+            {faqContent ? (
               <div className="sb-body">
-                {faqParas.map((p, i) => (
-                  <p key={i} className="sb-p">
-                    {p}
-                  </p>
-                ))}
+                {renderRichText(faqContent)}
               </div>
             ) : (
               <div className="sb-muted">No content yet.</div>
@@ -860,6 +849,47 @@ const faviconHref = faviconUrl
 
           .sb-footText {
             min-height: 18px;
+          }
+          .sb-richH2 {
+            margin: 20px 0 12px;
+            font-size: 22px;
+            font-weight: 700;
+            color: inherit;
+          }
+          
+          .sb-richH3 {
+            margin: 18px 0 10px;
+            font-size: 18px;
+            font-weight: 650;
+            color: inherit;
+          }
+          
+          .sb-richH4 {
+            margin: 16px 0 8px;
+            font-size: 15px;
+            font-weight: 650;
+            color: inherit;
+          }
+          
+          .sb-richParagraph {
+            margin: 0 0 12px;
+            color: ${muted};
+            line-height: 1.65;
+          }
+          
+          .sb-richList {
+            margin: 0 0 16px 20px;
+            padding: 0;
+            color: ${muted};
+          }
+          
+          .sb-richList li {
+            margin-bottom: 8px;
+            line-height: 1.6;
+          }
+          
+          .sb-richNumbered {
+            list-style: decimal;
           }
 
           @media (max-width: 720px) {
