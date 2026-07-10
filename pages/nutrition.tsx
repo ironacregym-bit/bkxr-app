@@ -144,7 +144,7 @@ export default function NutritionPage() {
   const { data: logsData } = useSWR<LogsResponse>(swrKey, fetcher);
 
   const savedMealsKey = session?.user?.email
-    ? "/api/nutrition/saved-meals?limit=50"
+    ? "/api/nutrition/saved-meals?limit=10"
     : null;
 
   const {
@@ -324,7 +324,7 @@ export default function NutritionPage() {
   useEffect(() => {
     const qNorm = normaliseQuery(query);
 
-    if (!qNorm || qNorm.length < 2) {
+    if (!qNorm || qNorm.length < 3) {
       cancelSearch();
       setResults([]);
       setLoadingSearch(false);
@@ -381,7 +381,7 @@ export default function NutritionPage() {
           setLoadingSearch(false);
         }
       }
-    }, 350);
+    }, 500);
 
     return () => clearTimeout(t);
   }, [query]);
