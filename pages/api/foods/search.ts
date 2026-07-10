@@ -1,5 +1,6 @@
 // File: pages/api/foods/search.ts
 import type { NextApiRequest, NextApiResponse } from "next";
+import firestore from "../../../lib/firestoreClient";
 
 type Food = {
   id: string;
@@ -278,10 +279,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     }
 
     const q = normaliseQuery(queryRaw);
-    if (!q || q.length < 2) {
+    if (!q || q.length < 3) {
       return res.status(200).json({ foods: [], meta: { q, source: "live", tookMs: Date.now() - started, count: 0 } });
     }
 
+    try {
+      const searchToken = q.split(" ")[0];
+    
+      const localSnap = await firestore
+        .collection("foods")
+        .where("search_terms", "array-contains", searchToken)
+        .limit(15)
+        .get();
+    
+      if (!localSnap.empty) {
+        const foods = localSnap.docs.map((doc) => {
+          const d = doc.data();
+    
+          return {
+            id: String(d.code || doc.id),
+            code: String(d.code || doc.id),
+            name: String(d.name || ""),
+            brand: String(d.brand || ""),
+            image: d.image || null,
+            calories: Number(d.calories || 0),
+            protein: Number(d.protein || 0),
+            carbs: Number(d.carbs || 0),
+            fat: Number(d.fat || 0),
+            servingSize: d.servingSize || null,
+          } as Food;
+        });
+    
+        return res.status(200).json({
+          foods,
+          meta: {
+            q,
+            source: "cache",
+            tookMs: Date.now() - started,
+            count: foods.length,
+          },
+        });
+      }
+    } catch (err) {
+      console.error("[foods/local-search]", err);
+    }
+    
     const cacheKey = `q:${q}`;
     const cached = cacheGet(cacheKey);
     if (cached) {
@@ -301,7 +343,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const productsUK: any[] = Array.isArray(ukRes.data?.products) ? ukRes.data.products : [];
     const ukPairs = mapProductsWithRaw(productsUK, q);
 
-    const haveEnoughUK = true;
     const globalTimedOut = false;
     const globalPairs: Array<{ raw: any; food: Food }> = [];
     const productsGlobalCount = 0;
@@ -314,6 +355,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     merged.sort((A, B) => scoreProduct(B.raw, B.food, tokens) - scoreProduct(A.raw, A.food, tokens));
 
     const foods = merged.map((x) => x.food);
+
+    try {
+      const batch = firestore.batch();
+    
+      foods.slice(0, 25).forEach((food) => {
+        const ref = firestore.collection("foods").doc(food.code);
+    
+        batch.set(
+          ref,
+          {
+            ...food,
+            search_terms: [
+              ...String(food.name || "")
+                .toLowerCase()
+                .split(/\s+/),
+              ...String(food.brand || "")
+                .toLowerCase()
+                .split(/\s+/),
+            ].filter(Boolean),
+            source: "openfoodfacts",
+            updated_at: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      });
+    
+      await batch.commit();
+    } catch (err) {
+      console.error("[foods/cache]", err);
+    }
+    
     const timedOut = Boolean(ukRes.timedOut || globalTimedOut);
 
     const payload: SearchResp = {
