@@ -310,15 +310,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           } as Food;
         });
     
-        return res.status(200).json({
-          foods,
-          meta: {
-            q,
-            source: "cache",
-            tookMs: Date.now() - started,
-            count: foods.length,
-          },
-        });
+
+        if (foods.length >= 10) {
+          return res.status(200).json({
+            foods,
+            meta: {
+              q,
+              source: "cache",
+              tookMs: Date.now() - started,
+              count: foods.length,
+            },
+          });
+        }
       }
     } catch (err) {
       console.error("[foods/local-search]", err);
