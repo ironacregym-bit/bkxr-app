@@ -4,12 +4,13 @@ export default function AIImportModal({
   open,
   result,
   onClose,
+  onImport,
 }: {
   open: boolean;
   result: any;
   onClose: () => void;
   onImport: (result: any) => void;
-}) {
+}) a{
   if (!open || !result) {
     return null;
   }
