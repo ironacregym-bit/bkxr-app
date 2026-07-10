@@ -19,6 +19,8 @@ import AddFoodSheet from "../components/nutrition/AddFoodSheet";
 import BarcodeScannerClient from "../components/nutrition/BarcodeScannerClient";
 import type { Food } from "../components/nutrition/FoodEditor";
 import { NUTRITION_COLORS as COLORS } from "../components/nutrition/nutritionTheme";
+import AIImportButton from "../components/nutrition/AIImportButton";
+import AIImportModal from "../components/nutrition/AIImportModal";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 const meals = ["Breakfast", "Lunch", "Dinner", "Snack"] as const;
@@ -410,7 +412,8 @@ export default function NutritionPage() {
   };
 
   const [scannerOpen, setScannerOpen] = useState<boolean>(false);
-
+  const [aiImportOpen, setAiImportOpen] = useState(false);
+  const [aiImportResult, setAiImportResult] = useState<any>(null);
   const addEntry = async (meal: string, food: Food) => {
     if (!session?.user?.email) return signIn("google");
 
@@ -703,7 +706,17 @@ export default function NutritionPage() {
         </div>
 
         <MacrosCard totals={totals} goals={goals} progress={progress} />
-
+        <div
+          className="d-flex justify-content-end mb-3"
+          style={{ gap: 8 }}
+        >
+          <AIImportButton
+            onImported={(result) => {
+              setAiImportResult(result);
+              setAiImportOpen(true);
+            }}
+          />
+        </div>
         <NutritionMealsCard
           meals={meals}
           entries={logsData?.entries || []}
@@ -932,7 +945,13 @@ export default function NutritionPage() {
           </div>
         </div>
       ) : null}
-
+      <AIImportModal
+        open={aiImportOpen}
+        result={aiImportResult}
+        onClose={() => {
+          setAiImportOpen(false);
+        }}
+      />
       <BottomNav />
     </>
   );
