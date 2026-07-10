@@ -155,8 +155,24 @@ function cacheGet(key: string): SearchResp | null {
   return hit.value;
 }
 
-function cacheSet(key: string, value: SearchResp, ttlMs: number) {
-  CACHE.set(key, { at: Date.now(), ttlMs, value });
+function cacheSet(
+  key: string,
+  value: SearchResp,
+  ttlMs: number
+) {
+  CACHE.set(key, {
+    at: Date.now(),
+    ttlMs,
+    value,
+  });
+
+  if (CACHE.size > 100) {
+    const oldest = CACHE.keys().next().value;
+
+    if (oldest) {
+      CACHE.delete(oldest);
+    }
+  }
 }
 
 /**
@@ -275,7 +291,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       });
     }
 
-    const pageSize = clampPageSize(Number(req.query.page_size || 30));
+    const pageSize = clampPageSize(
+      Number(req.query.page_size || 15)
+    );
     const tokens = q.split(" ").filter(Boolean).slice(0, 5);
 
     const urlUK = buildSearchUrl({ q, pageSize, onlyUK: true });
@@ -283,21 +301,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const productsUK: any[] = Array.isArray(ukRes.data?.products) ? ukRes.data.products : [];
     const ukPairs = mapProductsWithRaw(productsUK, q);
 
-    const haveEnoughUK = ukPairs.length >= 10;
-
-    let globalTimedOut = false;
-    let globalPairs: Array<{ raw: any; food: Food }> = [];
-    let productsGlobalCount = 0;
-
-    if (!haveEnoughUK) {
-      const urlGlobal = buildSearchUrl({ q, pageSize, onlyUK: false });
-      const globalRes = await fetchJSONWithTimeout(urlGlobal, 6000);
-      globalTimedOut = globalRes.timedOut;
-      const productsGlobal: any[] = Array.isArray(globalRes.data?.products) ? globalRes.data.products : [];
-      productsGlobalCount = productsGlobal.length;
-      globalPairs = mapProductsWithRaw(productsGlobal, q);
-    }
-
+    const haveEnoughUK = true;
+    const globalTimedOut = false;
+    const globalPairs: Array<{ raw: any; food: Food }> = [];
+    const productsGlobalCount = 0;
     // Merge + dedupe by code
     const mergedMap = new Map<string, { raw: any; food: Food }>();
     for (const x of ukPairs) if (!mergedMap.has(x.food.code)) mergedMap.set(x.food.code, x);
@@ -323,7 +330,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       },
     };
 
-    const ttl = q.length <= 4 ? 10 * 60_000 : 30 * 60_000;
+    const ttl = q.length <= 4
+      ? 30 * 60_000
+      : 60 * 60_000;
     cacheSet(cacheKey, payload, ttl);
 
     return res.status(200).json(payload);
