@@ -47,7 +47,7 @@ export default function AIImportButton({
     } catch (err: any) {
       alert(
         err?.message ||
-          "Failed to analyse screenshot"
+          "Failed to analyse screenshot try again later"
       );
     } finally {
       setLoading(false);
@@ -60,7 +60,7 @@ export default function AIImportButton({
     <label className="ia-btn ia-btn-outline">
       {loading
         ? "Analysing..."
-        : "📷 AI Import"}
+        : "Screenshot Upload"}
 
       <input
         hidden
