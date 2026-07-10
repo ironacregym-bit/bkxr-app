@@ -10,7 +10,7 @@ export default function AIImportModal({
   result: any;
   onClose: () => void;
   onImport: (result: any) => void;
-}) a{
+}): JSX.Element | null {
   if (!open || !result) {
     return null;
   }
