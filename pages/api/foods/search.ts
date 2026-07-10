@@ -283,6 +283,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       return res.status(200).json({ foods: [], meta: { q, source: "live", tookMs: Date.now() - started, count: 0 } });
     }
 
+    let localFoods: Food[] = [];
+    
     try {
       const searchToken = q.split(" ")[0];
     
@@ -292,36 +294,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         .limit(15)
         .get();
     
-      if (!localSnap.empty) {
-        const foods = localSnap.docs.map((doc) => {
-          const d = doc.data();
+      localFoods = localSnap.docs.map((doc) => {
+        const d = doc.data();
     
-          return {
-            id: String(d.code || doc.id),
-            code: String(d.code || doc.id),
-            name: String(d.name || ""),
-            brand: String(d.brand || ""),
-            image: d.image || null,
-            calories: Number(d.calories || 0),
-            protein: Number(d.protein || 0),
-            carbs: Number(d.carbs || 0),
-            fat: Number(d.fat || 0),
-            servingSize: d.servingSize || null,
-          } as Food;
+        return {
+          id: String(d.code || doc.id),
+          code: String(d.code || doc.id),
+          name: String(d.name || ""),
+          brand: String(d.brand || ""),
+          image: d.image || null,
+          calories: Number(d.calories || 0),
+          protein: Number(d.protein || 0),
+          carbs: Number(d.carbs || 0),
+          fat: Number(d.fat || 0),
+          servingSize: d.servingSize || null,
+        };
+      });
+    
+      // only use cache if we have a decent result set
+      if (localFoods.length >= 10) {
+        return res.status(200).json({
+          foods: localFoods,
+          meta: {
+            q,
+            source: "cache",
+            tookMs: Date.now() - started,
+            count: localFoods.length,
+          },
         });
-    
-
-        if (foods.length >= 10) {
-          return res.status(200).json({
-            foods,
-            meta: {
-              q,
-              source: "cache",
-              tookMs: Date.now() - started,
-              count: foods.length,
-            },
-          });
-        }
       }
     } catch (err) {
       console.error("[foods/local-search]", err);
