@@ -702,7 +702,51 @@ export default function NutritionPage() {
       setSavingMealName(null);
     }
   }
-
+  async function copyYesterday() {
+    if (
+      !confirm(
+        "Copy all meals from yesterday into this day?"
+      )
+    ) {
+      return;
+    }
+  
+    try {
+      const res = await fetch(
+        "/api/nutrition/copy-yesterday",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            date: formattedDate,
+          }),
+        }
+      );
+  
+      const json = await res.json();
+  
+      if (!res.ok) {
+        throw new Error(
+          json?.error || "Copy failed"
+        );
+      }
+  
+      if (swrKey) {
+        await mutate(swrKey);
+      }
+  
+      alert(
+        `Copied ${json.copied} nutrition entries`
+      );
+    } catch (err: any) {
+      alert(
+        err?.message ||
+          "Failed to copy yesterday"
+      );
+    }
+  }
   const removeEntry = async (id: string) => {
     if (!confirm("Remove this entry?")) return;
 
@@ -727,15 +771,32 @@ export default function NutritionPage() {
             <div className="ia-page-title">Nutrition</div>
             <div className="text-dim small">{formattedDate}</div>
           </div>
-
-          <button
-            className="btn btn-bxkr-outline"
-            onClick={goNextDay}
-            disabled={!canGoNext}
-            title={!canGoNext ? "You can’t go into the future" : "Next day"}
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+            }}
           >
-            Next →
-          </button>
+            <button
+              className="btn btn-bxkr-outline"
+              onClick={copyYesterday}
+            >
+              Copy Yesterday
+            </button>
+          
+            <button
+              className="btn btn-bxkr-outline"
+              onClick={goNextDay}
+              disabled={!canGoNext}
+              title={
+                !canGoNext
+                  ? "You can’t go into the future"
+                  : "Next day"
+              }
+            >
+              Next →
+            </button>
+          </div>
         </div>
 
         <MacrosCard totals={totals} goals={goals} progress={progress} />
