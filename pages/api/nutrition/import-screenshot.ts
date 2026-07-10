@@ -39,58 +39,62 @@ export default async function handler(
       });
     }
 
-    const response =
-      await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [
-          {
-            inlineData: {
-              mimeType: "image/jpeg",
-              data: imageBase64,
-            },
-          },
-          `
-Analyse this nutrition tracking screenshot.
-
-The screenshot may come from:
-
-- MyFitnessPal
-- Nutracheck
-- Cronometer
-- Lose It
-- Samsung Health
-- Apple Health
-
-Return VALID JSON ONLY.
-
-Format:
-
-{
-  "calories": number,
-  "protein": number,
-  "carbs": number,
-  "fat": number,
-  "foods": [
+    const contents = [
+      {
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: imageBase64,
+        },
+      },
+      `
+    Analyse this nutrition tracking screenshot.
+    
+    The screenshot may come from:
+    
+    - MyFitnessPal
+    - Nutracheck
+    - Cronometer
+    - Lose It
+    - Samsung Health
+    - Apple Health
+    
+    Return VALID JSON ONLY.
+    
     {
-      "name": string,
       "calories": number,
       "protein": number,
       "carbs": number,
-      "fat": number
+      "fat": number,
+      "foods": [
+        {
+          "name": string,
+          "calories": number,
+          "protein": number,
+          "carbs": number,
+          "fat": number
+        }
+      ]
     }
-  ]
-}
-
-Rules:
-
-- Use visible totals where possible.
-- If totals are not visible, estimate reasonably.
-- Do not return markdown.
-- Do not wrap response in code blocks.
-- Return JSON only.
-`,
-        ],
+    `,
+    ];
+    
+    let response;
+    
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents,
       });
+    } catch (err) {
+      console.warn(
+        "[nutrition/import-screenshot] 2.5 flash failed, trying 2.0 flash"
+      );
+    
+      response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents,
+      });
+    }
 
     const text = String(response.text || "")
       .replace(/```json/gi, "")
