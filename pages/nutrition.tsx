@@ -414,6 +414,39 @@ export default function NutritionPage() {
   const [scannerOpen, setScannerOpen] = useState<boolean>(false);
   const [aiImportOpen, setAiImportOpen] = useState(false);
   const [aiImportResult, setAiImportResult] = useState<any>(null);
+  async function importAIResult(result: any) {
+    if (!result) return;
+  
+    const food: Food = {
+      id: `ai-${Date.now()}`,
+      code: "",
+      name: "AI Nutrition Import",
+      brand: "Screenshot",
+      image: null,
+  
+      calories: Number(result.calories || 0),
+      protein: Number(result.protein || 0),
+      carbs: Number(result.carbs || 0),
+      fat: Number(result.fat || 0),
+  
+      servingSize: null,
+      caloriesPerServing: null,
+      proteinPerServing: null,
+      carbsPerServing: null,
+      fatPerServing: null,
+    };
+  
+    await addEntry(
+      "Snack",
+      food
+    );
+  
+    setAiImportOpen(false);
+    setAiImportResult(null);
+  }
+
+
+  
   const addEntry = async (meal: string, food: Food) => {
     if (!session?.user?.email) return signIn("google");
 
@@ -951,6 +984,7 @@ export default function NutritionPage() {
         onClose={() => {
           setAiImportOpen(false);
         }}
+        onImport={importAIResult}
       />
       <BottomNav />
     </>
