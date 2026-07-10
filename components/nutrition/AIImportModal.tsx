@@ -8,6 +8,7 @@ export default function AIImportModal({
   open: boolean;
   result: any;
   onClose: () => void;
+  onImport: (result: any) => void;
 }) {
   if (!open || !result) {
     return null;
@@ -21,18 +22,24 @@ export default function AIImportModal({
           maxWidth: 600,
         }}
       >
-        <div className="d-flex justify-content-between mb-3">
-          <div className="ia-tile-title">
-            AI Nutrition Import
-          </div>
-
-          <button
-            className="ia-btn ia-btn-outline"
-            onClick={onClose}
-          >
-            ✕
-          </button>
-        </div>
+      <div
+        className="d-flex justify-content-end mt-3"
+        style={{ gap: 8 }}
+      >
+        <button
+          className="ia-btn ia-btn-outline"
+          onClick={onClose}
+        >
+          Cancel
+        </button>
+      
+        <button
+          className="ia-btn ia-btn-primary"
+          onClick={() => onImport(result)}
+        >
+          Import
+        </button>
+      </div>
 
         <div className="mb-3">
           <div>
