@@ -984,11 +984,13 @@ const faviconHref = faviconUrl
           .sb-richNumbered {
             list-style: decimal;
           }
-          .sb-contactLink {
-            color: ${accent} !important;
+          .sb-contactLink,
+          .sb-contactLink:visited,
+          .sb-contactLink:active {
+            color: black !important;
             text-decoration: underline !important;
-            text-underline-offset: 3px !imporatnt;
-            font-weight: 500 !important;
+            text-underline-offset: 3px;
+            font-weight: 500;
           }
           
           .sb-contactLink:hover {
@@ -1009,9 +1011,6 @@ const faviconHref = faviconUrl
             border: 0;
           }
           
-          .sb-contactLink:hover {
-            opacity: 0.75;
-          }
 
           @media (max-width: 720px) {
             .sb-h1 {
