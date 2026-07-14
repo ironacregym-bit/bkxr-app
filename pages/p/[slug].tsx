@@ -163,6 +163,75 @@ function normaliseTables(site: PublicSite) {
     .filter((table: any) => table && (table.title || table.rows.length > 0));
 }
 
+function renderContactLine(line: string) {
+  const lower = line.toLowerCase();
+
+  if (lower.startsWith("email:")) {
+    const email = line.replace(/email:/i, "").trim();
+
+    return (
+      <>
+        Email:{" "}
+        {`mailto:${email}`}
+          {email}
+        </a>
+      </>
+    );
+  }
+
+  if (lower.startsWith("phone:")) {
+    const phone = line.replace(/phone:/i, "").trim();
+
+    return (
+      <>
+        Phone:{" "}
+        <a
+el:${phone.replace(/\s+/g,}`}
+          className="sb-contactLink"
+        >
+          {phone}
+        </a>
+      </>
+    );
+  }
+
+  if (lower.startsWith("instagram:")) {
+    const handle = line.replace(/instagram:/i, "").trim();
+
+    return (
+      <>
+        Instagram:{" "}
+        {`https://instagram.com/${handle.replace(/^@/,}`}
+          target="_blank"
+          rel="noreferrer"
+          className="sb-contactLink"
+        >
+          {handle}
+        </a>
+      </>
+    );
+  }
+
+  if (lower.startsWith("address:")) {
+    const address = line.replace(/address:/i, "").trim();
+
+    return (
+      <>
+        Address:{" "}
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${(}`}
+          target="_blank"
+          rel="noreferrer"
+          className="sb-contactLink"
+        >
+          {address}
+        </a>
+      </>
+    );
+  }
+
+  return line;
+}
 
 function isAuthorized(site: PublicSite, email: string) {
   const e = String(email || "").toLowerCase();
@@ -214,6 +283,14 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     return { notFound: true };
   }
 };
+
+const addressLine = contactLines.find((line) =>
+  line.toLowerCase().startsWith("address:")
+);
+
+const addressValue = addressLine
+  ? addressLine.replace(/address:/i, "").trim()
+  : "";
 
 export default function PublicSitePage(props: {
   site: PublicSite;
@@ -469,10 +546,22 @@ const faviconHref = faviconUrl
               <div className="sb-body">
                 {contactLines.map((line, i) => (
                   <div key={i} className="sb-line">
-                    {line}
+                    {renderContactLine(line)}
                   </div>
                 ))}
               </div>
+              {addressValue ? (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(et="_blank"
+                  rel="noreferrer"
+                  className="sb-mapCard"
+                >
+                  <iframe
+                    title="Location map"
+                    src={`https://www.google.com/maps?q=${encodeURIComponent(
+                      addressValue />
+                </a>
+              ) : null}
             ) : (
               <div className="sb-muted">No contact details yet.</div>
             )}
@@ -890,6 +979,29 @@ const faviconHref = faviconUrl
           
           .sb-richNumbered {
             list-style: decimal;
+          }
+          .sb-contactLink {
+            color: inherit;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+          }
+          .sb-mapCard {
+            display: block;
+            margin-top: 16px;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid ${border};
+          }
+          
+          .sb-map {
+            display: block;
+            width: 100%;
+            height: 320px;
+            border: 0;
+          }
+          
+          .sb-contactLink:hover {
+            opacity: 0.75;
           }
 
           @media (max-width: 720px) {
