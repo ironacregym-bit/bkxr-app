@@ -163,7 +163,7 @@ function normaliseTables(site: PublicSite) {
     .filter((table: any) => table && (table.title || table.rows.length > 0));
 }
 
-function renderContactLine(line: string) {
+function renderContactLine(line: string, accent: string) {
   const lower = line.toLowerCase();
 
   if (lower.startsWith("email:")) {
@@ -554,7 +554,7 @@ const faviconHref = faviconUrl
                 <div className="sb-body">
                   {contactLines.map((line, i) => (
                     <div key={i} className="sb-line">
-                      {renderContactLine(line)}
+                      {renderContactLine(line, accent)}
                     </div>
                   ))}
                 </div>
