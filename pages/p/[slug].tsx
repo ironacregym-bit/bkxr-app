@@ -204,7 +204,7 @@ function renderContactLine(line: string) {
       <>
         Instagram:{" "}
         <a
-          href"https://instagram.com/${handle.replace(/^@/,}`}")}`}
+          href={`https://instagram.com/${handle.replace(/^@/, "")}`}
           target="_blank"
           rel="noreferrer"
           className="sb-contactLink"
