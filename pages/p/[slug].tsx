@@ -174,7 +174,8 @@ function renderContactLine(line: string) {
         Email:{" "}
         <a
         href={`mailto:${email}`}
-        className="sb-contactLink">
+        className="sb-contactLink"
+        style={{ color: accent }}>
           {email}
         </a>
       </>
@@ -190,6 +191,7 @@ function renderContactLine(line: string) {
         <a
           href={`tel:${phone}`}
           className="sb-contactLink"
+          style={{ color: accent }}
         >
           {phone}
         </a>
@@ -208,6 +210,7 @@ function renderContactLine(line: string) {
           target="_blank"
           rel="noreferrer"
           className="sb-contactLink"
+          style={{ color: accent }}
         >
           {handle}
         </a>
@@ -226,6 +229,7 @@ function renderContactLine(line: string) {
           target="_blank"
           rel="noreferrer"
           className="sb-contactLink"
+          style={{ color: accent }}
         >
           {address}
         </a>
@@ -987,7 +991,6 @@ const faviconHref = faviconUrl
           .sb-contactLink,
           .sb-contactLink:visited,
           .sb-contactLink:active {
-            color: black !important;
             text-decoration: underline !important;
             text-underline-offset: 3px;
             font-weight: 500;
