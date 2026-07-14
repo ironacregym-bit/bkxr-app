@@ -985,10 +985,10 @@ const faviconHref = faviconUrl
             list-style: decimal;
           }
           .sb-contactLink {
-            color: ${accent};
-            text-decoration: underline;
-            text-underline-offset: 3px;
-            font-weight: 500;
+            color: ${accent} !important;
+            text-decoration: underline !important;
+            text-underline-offset: 3px !imporatnt;
+            font-weight: 500 !important;
           }
           
           .sb-contactLink:hover {
