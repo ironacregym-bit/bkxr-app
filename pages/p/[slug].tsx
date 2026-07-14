@@ -559,7 +559,7 @@ const faviconHref = faviconUrl
                   <div className="sb-mapCard">
                     <iframe
                       title="Location map"
-                      src={`https://wwwoogle.com/maps?q=${encodeURIComponent(")}&output=embed`}
+                      src={`https://www.google.com/maps?q=${encodeURIComponent(addressValue)}&output=embed`}
                       loading="lazy"
                       className="sb-map"
                     />
