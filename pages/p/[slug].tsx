@@ -172,7 +172,9 @@ function renderContactLine(line: string) {
     return (
       <>
         Email:{" "}
-        {`mailto:${email}`}
+        <a
+        href={`mailto:${email}`}
+        className="sb-contactLink">
           {email}
         </a>
       </>
@@ -186,7 +188,7 @@ function renderContactLine(line: string) {
       <>
         Phone:{" "}
         <a
-          href={`tel:${phone.
+          href={`tel:${phone}`}
           className="sb-contactLink"
         >
           {phone}
@@ -219,7 +221,8 @@ function renderContactLine(line: string) {
     return (
       <>
         Address:{" "}
-        }`}
+        <a
+          href"https://www.google.com/maps/search/?api=1&query=${(}`}")}`}
           target="_blank"
           rel="noreferrer"
           className="sb-contactLink"
