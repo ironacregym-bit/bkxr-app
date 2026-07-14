@@ -186,7 +186,7 @@ function renderContactLine(line: string) {
       <>
         Phone:{" "}
         <a
-el:${phone.replace(/\s+/g,}`}
+          href={`tel:${phone.
           className="sb-contactLink"
         >
           {phone}
@@ -201,7 +201,8 @@ el:${phone.replace(/\s+/g,}`}
     return (
       <>
         Instagram:{" "}
-        {`https://instagram.com/${handle.replace(/^@/,}`}
+        <a
+          href"https://instagram.com/${handle.replace(/^@/,}`}")}`}
           target="_blank"
           rel="noreferrer"
           className="sb-contactLink"
@@ -218,8 +219,7 @@ el:${phone.replace(/\s+/g,}`}
     return (
       <>
         Address:{" "}
-        <a
-          href={`https://www.google.com/maps/search/?api=1&query=${(}`}
+        }`}
           target="_blank"
           rel="noreferrer"
           className="sb-contactLink"
@@ -284,14 +284,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   }
 };
 
-const addressLine = contactLines.find((line) =>
-  line.toLowerCase().startsWith("address:")
-);
-
-const addressValue = addressLine
-  ? addressLine.replace(/address:/i, "").trim()
-  : "";
-
 export default function PublicSitePage(props: {
   site: PublicSite;
   canEdit: boolean;
@@ -340,7 +332,14 @@ const faviconHref = faviconUrl
   const customTables = normaliseTables(site);
   const hasTables = customTables.length > 0;
   const isDraft = !Boolean(site.published);
+
+  const addressLine = contactLines.find((line) =>
+    line.toLowerCase().startsWith("address:")
+  );
   
+  const addressValue = addressLine
+    ? addressLine.replace(/address:/i, "").trim()
+    : "";
 
   const bg = isLight ? "#ffffff" : "#06090d";
   const text = isLight ? "#111318" : "#ffffff";
@@ -542,26 +541,28 @@ const faviconHref = faviconUrl
 
           <section id="contact" className="sb-section">
             <h2 className="sb-h2">Contact</h2>
+          
             {contactLines.length ? (
-              <div className="sb-body">
-                {contactLines.map((line, i) => (
-                  <div key={i} className="sb-line">
-                    {renderContactLine(line)}
+              <>
+                <div className="sb-body">
+                  {contactLines.map((line, i) => (
+                    <div key={i} className="sb-line">
+                      {renderContactLine(line)}
+                    </div>
+                  ))}
+                </div>
+          
+                {addressValue ? (
+                  <div className="sb-mapCard">
+                    <iframe
+                      title="Location map"
+                      src={`https://wwwoogle.com/maps?q=${encodeURIComponent(")}&output=embed`}
+                      loading="lazy"
+                      className="sb-map"
+                    />
                   </div>
-                ))}
-              </div>
-              {addressValue ? (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(et="_blank"
-                  rel="noreferrer"
-                  className="sb-mapCard"
-                >
-                  <iframe
-                    title="Location map"
-                    src={`https://www.google.com/maps?q=${encodeURIComponent(
-                      addressValue />
-                </a>
-              ) : null}
+                ) : null}
+              </>
             ) : (
               <div className="sb-muted">No contact details yet.</div>
             )}
