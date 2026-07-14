@@ -985,9 +985,14 @@ const faviconHref = faviconUrl
             list-style: decimal;
           }
           .sb-contactLink {
-            color: inherit;
+            color: ${accent};
             text-decoration: underline;
             text-underline-offset: 3px;
+            font-weight: 500;
+          }
+          
+          .sb-contactLink:hover {
+            opacity: 0.75;
           }
           .sb-mapCard {
             display: block;
