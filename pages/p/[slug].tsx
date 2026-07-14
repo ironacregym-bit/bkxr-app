@@ -222,7 +222,7 @@ function renderContactLine(line: string) {
       <>
         Address:{" "}
         <a
-          href"https://www.google.com/maps/search/?api=1&query=${(}`}")}`}
+          href={"https://www.google.com/maps/search/?api=1&query=${(}`}")}`}
           target="_blank"
           rel="noreferrer"
           className="sb-contactLink"
