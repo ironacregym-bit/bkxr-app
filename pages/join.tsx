@@ -14,7 +14,7 @@ export default function JoinPage() {
 
       <main className="page">
         <section className="hero">
-          <img href="/concept-3.jpg"></img>
+          <img src="/concept-3.jpg"></img>
 
           <div className="heroOverlay" />
 
