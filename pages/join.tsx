@@ -1,5 +1,3 @@
-// pages/join.tsx
-
 import Head from "next/head";
 import Image from "next/image";
 
@@ -7,22 +5,16 @@ export default function JoinPage() {
   return (
     <>
       <Head>
-        <title>Iron Acre Gym | Join</title>
-
+        <title>Join Iron Acre Gym</title>
         <meta
           name="description"
-          content="Outdoor Strength & Conditioning in Suffolk. Small group coaching, Farm Strength, Farm Fit, personal training and recovery sessions."
+          content="Outdoor strength and conditioning in Suffolk. Small group coaching, real training and a great community."
         />
       </Head>
 
       <main className="page">
         <section className="hero">
-          -3.jpg"
-            alt="Iron Acre Gym"
-            fill
-            priority
-            className="heroImage"
-          />
+          <img href="/concept-3.jpg"></img>
 
           <div className="heroOverlay" />
 
@@ -32,7 +24,7 @@ export default function JoinPage() {
             <h1>
               Outdoor Strength
               <br />
-              & Conditioning
+              &amp; Conditioning
             </h1>
 
             <p>
@@ -43,7 +35,9 @@ export default function JoinPage() {
             <div className="heroActions">
               #trial
 
-              #timetable
+              " className="secondaryBtn">
+                View Timetable
+              </a>
             </div>
           </div>
         </section>
@@ -60,25 +54,14 @@ export default function JoinPage() {
             /concept-2.jpg
           </div>
 
-          <div className="content">
-            <span className="eyebrow">ABOUT</span>
+          <div>
+            <div className="eyebrow">ABOUT</div>
 
-            <h2>
-              Not another
-              <br />
-              commercial gym.
-            </h2>
+            <h2>Not another commercial gym.</h2>
 
             <p>
-              No mirrors.
-            </p>
-
-            <p>
-              No waiting for equipment.
-            </p>
-
-            <p>
-              No wondering what workout to do.
+              No mirrors. No waiting for equipment. No wondering what
+              workout to do.
             </p>
 
             <p>
@@ -89,7 +72,7 @@ export default function JoinPage() {
         </section>
 
         <section className="section">
-          <span className="eyebrow">CLASSES</span>
+          <div className="eyebrow">CLASSES</div>
 
           <h2>How We Train</h2>
 
@@ -104,29 +87,29 @@ export default function JoinPage() {
             <div className="classCard">
               <h3>Farm Fit</h3>
               <p>
-                Conditioning focused sessions designed to improve
-                fitness and work capacity.
+                Conditioning-focused training that builds work
+                capacity.
               </p>
             </div>
 
             <div className="classCard">
               <h3>Boxing</h3>
               <p>
-                Skill work, conditioning and bag training.
+                Technique, bags, conditioning and skill development.
               </p>
             </div>
 
             <div className="classCard">
               <h3>Recovery</h3>
               <p>
-                Mobility, stretching and recovery focused sessions.
+                Mobility, stretching and recovery-focused sessions.
               </p>
             </div>
           </div>
         </section>
 
         <section id="timetable" className="section">
-          <span className="eyebrow">TIMETABLE</span>
+          <div className="eyebrow">TIMETABLE</div>
 
           <h2>Train Around Your Life</h2>
 
@@ -153,27 +136,10 @@ export default function JoinPage() {
               <p>07:00 Farm Strength</p>
             </div>
           </div>
-
-          <div className="smallText">
-            Maximum 12 people per class.
-          </div>
-        </section>
-
-        <section className="section workout">
-          <span className="eyebrow">SAMPLE WORKOUT</span>
-
-          <h2>Farm Strength</h2>
-
-          <div className="workoutCard">
-            <div>200m Sandbag Carry</div>
-            <div>15 Sandbag Cleans</div>
-            <div>20 Kettlebell Swings</div>
-            <div>200m Run</div>
-          </div>
         </section>
 
         <section className="section">
-          <span className="eyebrow">BUILD JOURNEY</span>
+          <div className="eyebrow">BUILD JOURNEY</div>
 
           <h2>Built From The Ground Up</h2>
 
@@ -190,26 +156,24 @@ export default function JoinPage() {
         </section>
 
         <section className="section">
-          <span className="eyebrow">FOUNDER</span>
+          <div className="eyebrow">FOUNDER</div>
 
           <h2>Meet Rob</h2>
 
-          <div className="founder">
-            <p>
-              I built Iron Acre because I wanted the gym I
-              couldn't find locally.
-            </p>
+          <p>
+            I built Iron Acre because I wanted the gym I couldn't find
+            locally.
+          </p>
 
-            <p>
-              Somewhere people could train hard, get stronger
-              and actually enjoy turning up every week.
-            </p>
+          <p>
+            Somewhere people could train hard, get stronger and enjoy
+            turning up every week.
+          </p>
 
-            <p>
-              Iron Acre is being built from scratch and every
-              member becomes part of that story.
-            </p>
-          </div>
+          <p>
+            Iron Acre is being built from scratch and every member
+            becomes part of that story.
+          </p>
         </section>
 
         <section id="trial" className="cta">
@@ -226,13 +190,13 @@ export default function JoinPage() {
       <style jsx>{`
         .page {
           background: #06090d;
-          color: white;
+          color: #fff;
           min-height: 100vh;
         }
 
         .hero {
-          height: 100vh;
           position: relative;
+          min-height: 100vh;
           display: flex;
           align-items: center;
         }
@@ -250,10 +214,10 @@ export default function JoinPage() {
         .heroContent {
           position: relative;
           z-index: 2;
-          max-width: 1100px;
+          max-width: 1200px;
           margin: 0 auto;
-          width: 100%;
           padding: 24px;
+          width: 100%;
         }
 
         .eyebrow {
@@ -261,17 +225,18 @@ export default function JoinPage() {
           font-size: 12px;
           font-weight: 700;
           letter-spacing: 2px;
+          margin-bottom: 12px;
         }
 
         h1 {
           font-size: clamp(3rem, 8vw, 6rem);
           line-height: 1;
-          margin: 16px 0;
+          margin-bottom: 20px;
         }
 
         h2 {
-          font-size: clamp(2rem, 4vw, 3.5rem);
-          margin-bottom: 24px;
+          margin-bottom: 20px;
+          font-size: clamp(2rem, 4vw, 3rem);
         }
 
         .heroActions {
@@ -283,27 +248,27 @@ export default function JoinPage() {
 
         .primaryBtn {
           background: #18ff9a;
-          color: black;
+          color: #000;
+          text-decoration: none;
           padding: 14px 24px;
           border-radius: 12px;
           font-weight: 700;
-          text-decoration: none;
         }
 
         .secondaryBtn {
-          border: 1px solid rgba(255,255,255,.2);
+          border: 1px solid rgba(255, 255, 255, 0.2);
           color: white;
+          text-decoration: none;
           padding: 14px 24px;
           border-radius: 12px;
-          text-decoration: none;
         }
 
         .trustBar {
           display: grid;
-          grid-template-columns: repeat(4,1fr);
+          grid-template-columns: repeat(4, 1fr);
           text-align: center;
-          border-top: 1px solid rgba(255,255,255,.08);
-          border-bottom: 1px solid rgba(255,255,255,.08);
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .trustBar div {
@@ -324,10 +289,10 @@ export default function JoinPage() {
         }
 
         .imageWrap {
+          height: 500px;
           position: relative;
-          height: 600px;
-          border-radius: 24px;
           overflow: hidden;
+          border-radius: 24px;
         }
 
         .cover {
@@ -338,33 +303,29 @@ export default function JoinPage() {
         .timetable,
         .timeline {
           display: grid;
-          grid-template-columns: repeat(auto-fit,minmax(250px,1fr));
-          gap: 24px;
+          grid-template-columns: repeat(
+            auto-fit,
+            minmax(250px, 1fr)
+          );
+          gap: 20px;
         }
 
         .classCard,
-        .workoutCard,
-        .timeline div,
-        .timetable div {
+        .timetable div,
+        .timeline div {
           background: #0b0f14;
-          border: 1px solid rgba(255,255,255,.08);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           border-radius: 20px;
           padding: 24px;
         }
 
-        .workoutCard {
-          display: grid;
-          gap: 12px;
-          max-width: 600px;
-        }
-
         .cta {
           text-align: center;
-          padding: 140px 24px;
+          padding: 120px 24px;
           background: linear-gradient(
             180deg,
             transparent,
-            rgba(24,255,154,.08)
+            rgba(24, 255, 154, 0.08)
           );
         }
 
@@ -374,7 +335,13 @@ export default function JoinPage() {
           }
 
           .trustBar {
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+
+        @media (max-width: 640px) {
+          .trustBar {
+            grid-template-columns: 1fr;
           }
         }
       `}</style>
