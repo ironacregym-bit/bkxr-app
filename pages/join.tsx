@@ -1,4 +1,7 @@
 import Head from "next/head";
+import styles from "../styles/join.module.css";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/router";
 
 export default function JoinPage() {
   return (
@@ -184,6 +187,10 @@ export default function JoinPage() {
                 className="bookBtn"
                 target="_blank"
                 rel="noopener noreferrer">Book</a>
+            </div>
+          </div>
+        </section>
+        <section>
           <div className="eyebrow">COMMUNITY</div>
 
           <h2>More Than A Gym</h2>
@@ -263,205 +270,6 @@ export default function JoinPage() {
           </p>
         </section>
       </main>
-        <style jsx>{`
-        .page {
-          background: #06090d;
-          color: #fff;
-        }
-
-        .hero {
-          position: relative;
-          min-height: 75vh;
-          overflow: hidden;
-          display: flex;
-          align-items: center;
-        }
-
-        .heroImage {
-          position: absolute;
-          inset: 0;
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .heroOverlay {
-          position: absolute;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.55);
-        }
-
-        .heroContent {
-          position: relative;
-          z-index: 2;
-          max-width: 800px;
-          margin: auto;
-          padding: 24px;
-        }
-
-        .eyebrow {
-          color: #18ff9a;
-          font-size: 12px;
-          font-weight: 700;
-          letter-spacing: 2px;
-          margin-bottom: 12px;
-        }
-
-        h1 {
-          font-size: clamp(3rem, 7vw, 5.5rem);
-          line-height: 0.95;
-          margin-bottom: 24px;
-        }
-
-        h2 {
-          font-size: clamp(2rem, 5vw, 3.5rem);
-          margin-bottom: 24px;
-        }
-
-        .lead {
-          font-size: 1.25rem;
-        }
-
-        .heroActions {
-          display: flex;
-          gap: 16px;
-          margin-top: 30px;
-          flex-wrap: wrap;
-        }
-
-        .primaryBtn,
-        .bookBtn {
-          background: #18ff9a;
-          color: #000;
-          text-decoration: none;
-          padding: 14px 24px;
-          border-radius: 12px;
-          font-weight: 700;
-        }
-
-        .secondaryBtn {
-          border: 1px solid rgba(255,255,255,.2);
-          color: #fff;
-          text-decoration: none;
-          padding: 14px 24px;
-          border-radius: 12px;
-        }
-
-        .trustBar {
-          display: grid;
-          grid-template-columns: repeat(4,1fr);
-          text-align: center;
-          border-top: 1px solid rgba(255,255,255,.08);
-          border-bottom: 1px solid rgba(255,255,255,.08);
-        }
-
-        .trustBar div {
-          padding: 20px;
-        }
-
-        .section {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 100px 24px;
-        }
-
-        .trainingBlocks {
-          display: grid;
-          gap: 24px;
-        }
-
-        .trainingBlock {
-          background: #0b0f14;
-          padding: 40px;
-          border-radius: 24px;
-          border: 1px solid rgba(255,255,255,.08);
-        }
-
-        .trainingBlock h3 {
-          color: #18ff9a;
-          margin-bottom: 16px;
-        }
-
-        .appGrid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit,minmax(220px,1fr));
-          gap: 16px;
-          margin: 30px 0;
-        }
-
-        .appGrid div {
-          background: #0b0f14;
-          padding: 24px;
-          border-radius: 18px;
-        }
-
-        .timetableTable {
-          border: 1px solid rgba(255,255,255,.08);
-          border-radius: 24px;
-          overflow: hidden;
-        }
-
-        .timeRow {
-          display: grid;
-          grid-template-columns: 1.5fr 120px 1fr auto;
-          gap: 16px;
-          align-items: center;
-          padding: 24px;
-          border-bottom: 1px solid rgba(255,255,255,.08);
-        }
-
-        .timeline {
-          position: relative;
-          max-width: 700px;
-        }
-
-        .timeline::before {
-          content: "";
-          position: absolute;
-          left: 20px;
-          top: 0;
-          bottom: 0;
-          width: 2px;
-          background: #18ff9a;
-        }
-
-        .timelineItem {
-          position: relative;
-          padding-left: 60px;
-          margin-bottom: 40px;
-        }
-
-        .timelineItem::before {
-          content: "";
-          position: absolute;
-          left: 13px;
-          top: 6px;
-          width: 16px;
-          height: 16px;
-          border-radius: 50%;
-          background: #18ff9a;
-        }
-
-        .cta {
-          text-align: center;
-          padding: 120px 24px;
-          background: linear-gradient(
-            180deg,
-            transparent,
-            rgba(24,255,154,.08)
-          );
-        }
-
-        @media (max-width: 768px) {
-          .trustBar {
-            grid-template-columns: 1fr 1fr;
-          }
-
-          .timeRow {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
     </>
   );
 }
