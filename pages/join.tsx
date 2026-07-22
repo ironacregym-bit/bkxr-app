@@ -15,7 +15,7 @@ export default function JoinPage() {
         <section className="hero">
           <img src="/concept-3.jpg"></img>
 
-          <div className="heroOverlay" />
+          <div className="heroOverlay"></div>
 
           <div className="heroContent">
             <div className="eyebrow">IRON ACRE GYM</div>
@@ -170,7 +170,8 @@ export default function JoinPage() {
               <a href="https://wa.me/447860861120?text=Hi%20Rob,%20I'd%20like%20to%20book%20Tuesday%20Farm%20Strength"
                 className="bookBtn"
                 target="_blank"
-                rel="noopener noreferrer" >Book</a>
+                rel="noopener noreferrer" >Book
+              </a>
             </div>
 
             <div className="timeRow">
@@ -268,8 +269,10 @@ export default function JoinPage() {
           <p>Your first week is completely free.</p>
 
           <a
-            href="https://wa.me/447860861120?text=Hi%20Rob,%20I'd%20like%20to%20book%20a%20free%20trial%20session"
-                  <style jsx>{`
+            href="https://wa.me/447860861120?text=Hi%20Rob,%20I'd%20like%20to%20book%20a%20free%20trial%20session">Book</a>
+
+        </section>
+        <style jsx>{`
         .page {
           background: #06090d;
           color: #fff;
