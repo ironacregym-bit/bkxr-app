@@ -262,16 +262,6 @@ export default function JoinPage() {
             Every member becomes part of the story we're building here.
           </p>
         </section>
-
-        <section className="cta">
-          <h2>Come And Try Iron Acre</h2>
-
-          <p>Your first week is completely free.</p>
-
-          <a
-            href="https://wa.me/447860861120?text=Hi%20Rob,%20I'd%20like%20to%20book%20a%20free%20trial%20session">Book</a>
-
-        </section>
         <style jsx>{`
         .page {
           background: #06090d;
