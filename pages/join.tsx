@@ -262,6 +262,7 @@ export default function JoinPage() {
             Every member becomes part of the story we're building here.
           </p>
         </section>
+      </main>
         <style jsx>{`
         .page {
           background: #06090d;
