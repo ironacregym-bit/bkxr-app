@@ -33,9 +33,8 @@ export default function JoinPage() {
             </p>
 
             <div className="heroActions">
-              #trial
-
-              " className="secondaryBtn">
+              <a href="#trial"
+              className="secondaryBtn">
                 View Timetable
               </a>
             </div>
@@ -51,7 +50,7 @@ export default function JoinPage() {
 
         <section className="section intro">
           <div className="imageWrap">
-            /concept-2.jpg
+            <img src="/concept-2.jpg"></img>
           </div>
 
           <div>
