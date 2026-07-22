@@ -132,11 +132,6 @@ export default function WaitlistPage() {
           content="Train hard. Be outside. Build something real. Founders £60/month locked for life for the first 20."
         />
         <meta property="og:title" content="Iron Acre Gym | Founders" />
-        <meta
-          property="og:description"
-          content="Train hard. Be outside. Build something real. Founders £60/month locked for life for the first 20."
-        />
-        <meta property="og:type" content="website" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
@@ -148,7 +143,7 @@ export default function WaitlistPage() {
               alt=""
               fill
               priority
-              sizes="100vw"
+              sizes="70vw"
               style={{ objectFit: "cover", objectPosition: "50% 55%" }}
             />
           </div>
@@ -612,7 +607,7 @@ export default function WaitlistPage() {
                 <div className="cardTitle">How does founders work?</div>
                 <div className="cardText">
                   The first 20 people to accept the founders invite get £60/month locked for life. After that,
-                  membership moves to £100/month.
+                  membership moves to £89/month.
                 </div>
               </div>
 
@@ -1217,7 +1212,6 @@ export default function WaitlistPage() {
             }
           }
         `}</style>
-      </div>
-    </>
+      </>
   );
 }
