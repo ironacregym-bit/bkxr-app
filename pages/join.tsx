@@ -21,9 +21,9 @@ export default function JoinPage() {
             <div className="eyebrow">IRON ACRE GYM</div>
 
             <h1>
-              Not Another Gym.
+              Outdoor Training
               <br />
-              A Place To Get Stronger.
+              Strength Rooted In Nature
             </h1>
 
             <p>
@@ -33,7 +33,7 @@ export default function JoinPage() {
             </p>
 
             <div className="heroActions">
-              <a href="447860861120?text=Hi%20Rob,%20I'd%20like%20to%20book%20a%20free%20trial%20session"
+              <a href="https://wa.me/447860861120?text=Hi%20Rob,%20I'd%20like%20to%20book%20a%20free%20trial%20session"
                 className="primaryBtn"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -170,7 +170,7 @@ export default function JoinPage() {
               <a href="https://wa.me/447860861120?text=Hi%20Rob,%20I'd%20like%20to%20book%20Tuesday%20Farm%20Strength"
                 className="bookBtn"
                 target="_blank"
-                rel="noopener noreferrer"
+                rel="noopener noreferrer" >Book</a>
             </div>
 
             <div className="timeRow">
@@ -181,7 +181,8 @@ export default function JoinPage() {
               <a
                 href="https://wa.me/447860861120?text=Hi%20Rob,%20I'd%20like%20to%20book%20Wednesday%20Farm%20Strength"
                 className="bookBtn"
-   section className="section">
+                target="_blank"
+                rel="noopener noreferrer">Book</a>
           <div className="eyebrow">COMMUNITY</div>
 
           <h2>More Than A Gym</h2>
