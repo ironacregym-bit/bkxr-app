@@ -369,7 +369,7 @@ export default function BookingPage() {
               </div>
             </div>
 
-            /
+            <Link href="/">
               <i className="fas fa-chevron-left" />
               Home
             </Link>
