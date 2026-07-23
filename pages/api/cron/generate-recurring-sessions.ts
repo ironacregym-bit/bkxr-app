@@ -323,7 +323,24 @@ function buildMonthlySessionsEmailHtml(params: {
       </p>
 
       <p style="margin: 0 0 16px;">
-        Open the Iron Acre App, view the schedule, and secure your places early.
+        View the Iron Acre timetable online and reserve your place before sessions fill up.
+      </p>
+      
+      <p style="margin: 24px 0;">
+        <a
+          href="https://ironacregym.co.uk/schedule"
+          style="
+            background:#d97706;
+            color:#ffffff;
+            padding:14px 22px;
+            border-radius:8px;
+            text-decoration:none;
+            display:inline-block;
+            font-weight:700;
+          "
+        >
+          View Timetable & Book Sessions
+        </a>
       </p>
 
       <p style="margin: 0 0 16px;">
@@ -350,7 +367,9 @@ function buildMonthlySessionsEmailText(params: {
 
 ${classText} now available to book at ${gymName}.
 
-Open the Iron Acre App, view the schedule, and secure your places early.
+View the timetable and book your sessions here:
+
+https://ironacregym.co.uk/schedule
 
 Class numbers are limited, so booking ahead is the best way to make sure you get the sessions you want.
 
@@ -414,7 +433,7 @@ async function notifyGymMembersOfNewMonth(params: {
       ? `${gymName} has opened bookings for ${targetMonthLabel}. Tap to view the schedule and secure your place.`
       : `${gymName} has opened bookings for ${targetMonthLabel}. ${createdCount} classes are now available to book. Tap to view the schedule and secure your places.`;
 
-  const href = "/schedule";
+  const href = "https://ironacregym.co.uk/schedule";
 
   let succeeded = 0;
   let failed = 0;
@@ -448,10 +467,10 @@ async function notifyGymMembersOfNewMonth(params: {
           },
           {
             title,
-            body:
-              createdCount === 1
-                ? "A new class is now open to book."
-                : `${targetMonthLabel} timetable is ready to book.`,
+          body:
+            createdCount === 1
+              ? "A new class is now available. Tap to view the timetable and book your place."
+              : `${targetMonthLabel} sessions are now available. Tap to view the timetable and book your place.`,
             url: href,
           }
         )
@@ -750,7 +769,6 @@ export default async function handler(
     let emailFailures = 0;
 
     for (const [gymId, gymMeta] of createdByGym.entries()) {
-      if (!gymMeta.notifyMembersEnabled) continue;
 
       const notificationSummary = await notifyGymMembersOfNewMonth({
         gymId,
