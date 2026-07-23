@@ -3,8 +3,9 @@ name: Iron Acre Generate Recurring Sessions
 
 on:
   schedule:
-    # Every Sunday at 18:00 UTC
-    - cron: "0 18 * * 0"
+    # 1st day of every month at 00:00 UTC
+    # Example: 1 August generates all September sessions.
+    - cron: "0 0 1 * *"
   workflow_dispatch: {}
 
 jobs:
