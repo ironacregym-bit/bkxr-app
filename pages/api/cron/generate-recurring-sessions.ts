@@ -46,21 +46,38 @@ function getHeader(req: NextApiRequest, name: string): string {
   return String(raw || "").trim();
 }
 
-function startOfUpcomingMondayUTC(from: Date): Date {
-  const d = new Date(from);
-  d.setUTCHours(0, 0, 0, 0);
-
-  const day = d.getUTCDay(); // Sun=0, Mon=1, ... Sat=6
-  const daysUntilNextMonday = ((8 - day) % 7) || 7;
-
-  d.setUTCDate(d.getUTCDate() + daysUntilNextMonday);
-  return d;
-}
-
 function addDaysUTC(date: Date, days: number): Date {
   const d = new Date(date);
   d.setUTCDate(d.getUTCDate() + days);
   return d;
+}
+
+function startOfNextMonthUTC(from: Date): Date {
+  return new Date(
+    Date.UTC(
+      from.getUTCFullYear(),
+      from.getUTCMonth() + 1,
+      1,
+      0,
+      0,
+      0,
+      0
+    )
+  );
+}
+
+function endOfMonthUTC(monthStart: Date): Date {
+  return new Date(
+    Date.UTC(
+      monthStart.getUTCFullYear(),
+      monthStart.getUTCMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999
+    )
+  );
 }
 
 function ymdUTC(date: Date): string {
@@ -106,24 +123,15 @@ function weekdayFromYmdUTC(dateYMD: string): number {
   return d ? d.getUTCDay() : -1;
 }
 
-function formatWeekRangeText(start: Date, end: Date): string {
+function formatMonthText(date: Date): string {
   try {
-    const startText = start.toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      timeZone: "UTC",
-    });
-
-    const endText = end.toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
+    return date.toLocaleDateString("en-GB", {
+      month: "long",
       year: "numeric",
       timeZone: "UTC",
     });
-
-    return `${startText} – ${endText}`;
   } catch {
-    return `${ymdUTC(start)} – ${ymdUTC(end)}`;
+    return ymdUTC(date).slice(0, 7);
   }
 }
 
@@ -195,15 +203,14 @@ async function notifyGymMembersOfNewWeek(params: {
     return { attempted: 0, succeeded: 0, failed: 0 };
   }
 
-  const weekStart = parseYmdUtc(targetWeekStart) || new Date();
-  const weekEnd = parseYmdUtc(targetWeekEnd) || new Date();
-  const weekRangeText = formatWeekRangeText(weekStart, weekEnd);
+  const monthStart = parseYmdUtc(targetWeekStart) || new Date();
+  const monthText = formatMonthText(monthStart);
 
-  const title = "Next week’s classes are live";
+  const title = `${monthText} classes are now live`;
   const message =
     createdCount === 1
-      ? `${gymName} has opened bookings for next week (${weekRangeText}). Tap to view the schedule and secure your spot.`
-      : `${gymName} has opened bookings for next week (${weekRangeText}). ${createdCount} classes are now available to book. Tap to view the schedule and secure your spots.`;
+      ? `${gymName} has opened bookings for ${monthText}. Tap to view the schedule and secure your place.`
+      : `${gymName} has opened bookings for ${monthText}. ${createdCount} classes are now available to book. Tap to view the schedule and secure your places.`;
 
   const href = "/schedule";
 
@@ -228,6 +235,9 @@ async function notifyGymMembersOfNewWeek(params: {
               gym_name: gymName,
               target_week_start: targetWeekStart,
               target_week_end: targetWeekEnd,
+              target_month_start: targetWeekStart,
+              target_month_end: targetWeekEnd,
+              target_month_label: monthText,
               created_count: createdCount,
               session_ids: sessionIds,
             },
@@ -237,7 +247,7 @@ async function notifyGymMembersOfNewWeek(params: {
             body:
               createdCount === 1
                 ? "A new class is now open to book."
-                : "Next week’s timetable is ready to book.",
+                : `${monthText} timetable is ready to book.`,
             url: href,
           }
         )
@@ -279,25 +289,32 @@ export default async function handler(
   try {
     const now = new Date();
 
-    // Sunday run => generate the next full Monday-Sunday week
-    const targetWeekStartDate = startOfUpcomingMondayUTC(now);
-    const targetWeekEndDate = addDaysUTC(targetWeekStartDate, 6);
+    // Monthly run => generate every recurring session for the next calendar month.
+    // Example: 1 August generates all September sessions.
+    const targetMonthStartDate = startOfNextMonthUTC(now);
+    const targetMonthEndDate = endOfMonthUTC(targetMonthStartDate);
 
-    const targetWeekStart = ymdUTC(targetWeekStartDate);
-    const targetWeekEnd = ymdUTC(targetWeekEndDate);
+    // Kept as targetWeekStart / targetWeekEnd to avoid changing existing response shape,
+    // existing cron_run fields, and downstream notification metadata.
+    const targetWeekStart = ymdUTC(targetMonthStartDate);
+    const targetWeekEnd = ymdUTC(targetMonthEndDate);
     const runKey = `generate-recurring-sessions-${targetWeekStart}`;
 
     const claimed = await claimRun(runKey, {
       type: "generate_recurring_sessions",
+      generation_scope: "monthly",
       target_week_start: targetWeekStart,
       target_week_end: targetWeekEnd,
+      target_month_start: targetWeekStart,
+      target_month_end: targetWeekEnd,
+      target_month_label: formatMonthText(targetMonthStartDate),
     });
 
     if (!claimed) {
       return res.status(200).json({
         ok: true,
         skipped: true,
-        reason: "Already generated for this target week",
+        reason: "Already generated for this target month",
         runKey,
         targetWeekStart,
         targetWeekEnd,
@@ -313,17 +330,21 @@ export default async function handler(
       .where("active", "==", true)
       .get();
 
-      const recurringItems = recurringSnap.docs.map((doc) => {
-        const data = doc.data() as RecurringTimetableItem;
-        return {
-          ...data,
-          id: doc.id,
-        };
-      });
+    const recurringItems = recurringSnap.docs.map((doc) => {
+      const data = doc.data() as RecurringTimetableItem;
+      return {
+        ...data,
+        id: doc.id,
+      };
+    });
 
-    const targetDates = Array.from({ length: 7 }, (_, i) =>
-      ymdUTC(addDaysUTC(targetWeekStartDate, i))
-    );
+    const targetDates: string[] = [];
+    let currentDate = new Date(targetMonthStartDate);
+
+    while (currentDate <= targetMonthEndDate) {
+      targetDates.push(ymdUTC(currentDate));
+      currentDate = addDaysUTC(currentDate, 1);
+    }
 
     const candidates = recurringItems.flatMap((item) => {
       if (!isActiveRecurringItem(item)) return [];
@@ -427,6 +448,10 @@ export default async function handler(
             effective_to: String(item.effective_to || "").trim() || null,
           },
           source: "recurring_generator",
+          generation_scope: "monthly",
+          generated_for_month_start: targetWeekStart,
+          generated_for_month_end: targetWeekEnd,
+          generated_for_month_label: formatMonthText(targetMonthStartDate),
           cancelled: false,
           cancelled_at: null,
           cancelled_by: null,
