@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { Timestamp } from "@google-cloud/firestore";
 import firestore from "../../../lib/firestoreClient";
 import { notifyInAppAndPush } from "../../../lib/notify";
+import { sendMail } from "../../../lib/email";
 
 type Resp =
   | {
@@ -12,10 +13,13 @@ type Resp =
       runKey: string;
       targetWeekStart: string;
       targetWeekEnd: string;
+      targetMonthLabel: string;
       created: number;
       sessionIds: string[];
       notifiedUsers: number;
       notificationFailures: number;
+      emailedUsers: number;
+      emailFailures: number;
     }
   | {
       error: string;
@@ -64,6 +68,29 @@ function startOfNextMonthUTC(from: Date): Date {
       0
     )
   );
+}
+
+function startOfMonthUTCFromYYYYMM(value: string): Date | null {
+  const trimmed = String(value || "").trim();
+
+  if (!/^\d{4}-\d{2}$/.test(trimmed)) {
+    return null;
+  }
+
+  const [yearRaw, monthRaw] = trimmed.split("-");
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+
+  if (!Number.isFinite(year) || !Number.isFinite(month)) {
+    return null;
+  }
+
+  if (month < 1 || month > 12) {
+    return null;
+  }
+
+  const d = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+  return isNaN(d.getTime()) ? null : d;
 }
 
 function endOfMonthUTC(monthStart: Date): Date {
@@ -177,50 +204,212 @@ function matchesEffectiveWindow(item: RecurringTimetableItem, dateYMD: string) {
   return true;
 }
 
-function shouldNotifyUserForGym(user: any, targetGymId: string): boolean {
-  const userGymId = String(user?.gym_id || "").trim();
-  return Boolean(userGymId) && userGymId === targetGymId;
+function getUserGymId(user: any): string {
+  return String(user?.gym_id || user?.gymId || "").trim();
 }
 
-async function notifyGymMembersOfNewWeek(params: {
+function getUserEmail(docId: string, user: any): string {
+  const emailFromDoc = String(docId || "").trim().toLowerCase();
+  const emailFromData = String(user?.email || user?.user_email || "").trim().toLowerCase();
+
+  if (emailFromDoc.includes("@")) return emailFromDoc;
+  if (emailFromData.includes("@")) return emailFromData;
+
+  return "";
+}
+
+function shouldNotifyUserForGym(user: any, targetGymId: string): boolean {
+  const userGymId = getUserGymId(user);
+
+  if (!targetGymId || userGymId !== targetGymId) {
+    return false;
+  }
+
+  if (
+    user?.deleted === true ||
+    user?.disabled === true ||
+    user?.archived === true ||
+    user?.is_deleted === true ||
+    user?.isDeleted === true ||
+    user?.is_disabled === true ||
+    user?.isDisabled === true
+  ) {
+    return false;
+  }
+
+  const explicitGymMemberFlags = [
+    user?.is_gym_member,
+    user?.isGymMember,
+    user?.gym_member,
+    user?.gymMember,
+    user?.member,
+    user?.is_member,
+    user?.isMember,
+  ];
+
+  if (explicitGymMemberFlags.some((value) => value === false)) {
+    return false;
+  }
+
+  const rawStatus = String(
+    user?.membership_status ||
+      user?.membershipStatus ||
+      user?.member_status ||
+      user?.memberStatus ||
+      user?.subscription_status ||
+      user?.subscriptionStatus ||
+      user?.stripe_subscription_status ||
+      user?.stripeSubscriptionStatus ||
+      user?.status ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
+
+  const blockedStatuses = new Set([
+    "inactive",
+    "cancelled",
+    "canceled",
+    "expired",
+    "deleted",
+    "disabled",
+    "archived",
+    "paused",
+    "unpaid",
+    "past_due",
+    "past due",
+    "incomplete",
+    "incomplete_expired",
+  ]);
+
+  if (rawStatus && blockedStatuses.has(rawStatus)) {
+    return false;
+  }
+
+  return true;
+}
+
+function buildMonthlySessionsEmailHtml(params: {
+  gymName: string;
+  monthText: string;
+  createdCount: number;
+}) {
+  const { gymName, monthText, createdCount } = params;
+  const classText = createdCount === 1 ? "1 class is" : `${createdCount} classes are`;
+
+  return `
+    <div style="font-family: Arial, sans-serif; color: #111111; line-height: 1.6; max-width: 620px; margin: 0 auto;">
+      <h1 style="margin: 0 0 16px; font-size: 28px; line-height: 1.2;">
+        ${monthText} classes are now live
+      </h1>
+
+      <p style="margin: 0 0 16px;">
+        ${classText} now available to book at ${gymName}.
+      </p>
+
+      <p style="margin: 0 0 16px;">
+        Open the Iron Acre App, view the schedule, and secure your places early.
+      </p>
+
+      <p style="margin: 0 0 16px;">
+        Class numbers are limited, so booking ahead is the best way to make sure you get the sessions you want.
+      </p>
+
+      <p style="margin: 24px 0 0;">
+        See you in the yard,<br />
+        <strong>Iron Acre Gym</strong>
+      </p>
+    </div>
+  `;
+}
+
+function buildMonthlySessionsEmailText(params: {
+  gymName: string;
+  monthText: string;
+  createdCount: number;
+}) {
+  const { gymName, monthText, createdCount } = params;
+  const classText = createdCount === 1 ? "1 class is" : `${createdCount} classes are`;
+
+  return `${monthText} classes are now live
+
+${classText} now available to book at ${gymName}.
+
+Open the Iron Acre App, view the schedule, and secure your places early.
+
+Class numbers are limited, so booking ahead is the best way to make sure you get the sessions you want.
+
+See you in the yard,
+Iron Acre Gym`;
+}
+
+async function getGymMemberEmails(gymId: string): Promise<string[]> {
+  const usersSnap = await firestore.collection("users").get();
+
+  const emails = usersSnap.docs
+    .map((doc) => {
+      const data = doc.data() as any;
+
+      if (!shouldNotifyUserForGym(data, gymId)) {
+        return "";
+      }
+
+      return getUserEmail(doc.id, data);
+    })
+    .filter(Boolean);
+
+  return Array.from(new Set(emails));
+}
+
+async function notifyGymMembersOfNewMonth(params: {
   gymId: string;
   gymName: string;
   targetWeekStart: string;
   targetWeekEnd: string;
+  targetMonthLabel: string;
   createdCount: number;
   sessionIds: string[];
 }) {
-  const { gymId, gymName, targetWeekStart, targetWeekEnd, createdCount, sessionIds } = params;
+  const {
+    gymId,
+    gymName,
+    targetWeekStart,
+    targetWeekEnd,
+    targetMonthLabel,
+    createdCount,
+    sessionIds,
+  } = params;
 
-  const usersSnap = await firestore.collection("users").get();
-
-  const targetEmails = usersSnap.docs
-    .filter((doc) => shouldNotifyUserForGym(doc.data(), gymId))
-    .map((doc) => String(doc.id || "").trim().toLowerCase())
-    .filter(Boolean);
+  const targetEmails = await getGymMemberEmails(gymId);
 
   if (!targetEmails.length) {
-    return { attempted: 0, succeeded: 0, failed: 0 };
+    return {
+      attempted: 0,
+      succeeded: 0,
+      failed: 0,
+      emailAttempted: 0,
+      emailSucceeded: 0,
+      emailFailed: 0,
+    };
   }
 
-  const monthStart = parseYmdUtc(targetWeekStart) || new Date();
-  const monthText = formatMonthText(monthStart);
-
-  const title = `${monthText} classes are now live`;
+  const title = `${targetMonthLabel} classes are now live`;
   const message =
     createdCount === 1
-      ? `${gymName} has opened bookings for ${monthText}. Tap to view the schedule and secure your place.`
-      : `${gymName} has opened bookings for ${monthText}. ${createdCount} classes are now available to book. Tap to view the schedule and secure your places.`;
+      ? `${gymName} has opened bookings for ${targetMonthLabel}. Tap to view the schedule and secure your place.`
+      : `${gymName} has opened bookings for ${targetMonthLabel}. ${createdCount} classes are now available to book. Tap to view the schedule and secure your places.`;
 
   const href = "/schedule";
 
   let succeeded = 0;
   let failed = 0;
+  let emailSucceeded = 0;
+  let emailFailed = 0;
 
   const chunks = chunkArray(targetEmails, 20);
 
   for (const chunk of chunks) {
-    const results = await Promise.allSettled(
+    const notificationResults = await Promise.allSettled(
       chunk.map((email) =>
         notifyInAppAndPush(
           email,
@@ -237,7 +426,7 @@ async function notifyGymMembersOfNewWeek(params: {
               target_week_end: targetWeekEnd,
               target_month_start: targetWeekStart,
               target_month_end: targetWeekEnd,
-              target_month_label: monthText,
+              target_month_label: targetMonthLabel,
               created_count: createdCount,
               session_ids: sessionIds,
             },
@@ -247,18 +436,45 @@ async function notifyGymMembersOfNewWeek(params: {
             body:
               createdCount === 1
                 ? "A new class is now open to book."
-                : `${monthText} timetable is ready to book.`,
+                : `${targetMonthLabel} timetable is ready to book.`,
             url: href,
           }
         )
       )
     );
 
-    for (const result of results) {
+    for (const result of notificationResults) {
       if (result.status === "fulfilled") {
         succeeded++;
       } else {
         failed++;
+      }
+    }
+
+    const emailResults = await Promise.allSettled(
+      chunk.map((email) =>
+        sendMail({
+          to: email,
+          subject: `${targetMonthLabel} classes are now live`,
+          html: buildMonthlySessionsEmailHtml({
+            gymName,
+            monthText: targetMonthLabel,
+            createdCount,
+          }),
+          text: buildMonthlySessionsEmailText({
+            gymName,
+            monthText: targetMonthLabel,
+            createdCount,
+          }),
+        })
+      )
+    );
+
+    for (const result of emailResults) {
+      if (result.status === "fulfilled") {
+        emailSucceeded++;
+      } else {
+        emailFailed++;
       }
     }
   }
@@ -267,6 +483,9 @@ async function notifyGymMembersOfNewWeek(params: {
     attempted: targetEmails.length,
     succeeded,
     failed,
+    emailAttempted: targetEmails.length,
+    emailSucceeded,
+    emailFailed,
   };
 }
 
@@ -288,40 +507,58 @@ export default async function handler(
 
   try {
     const now = new Date();
+    const body = (req.body || {}) as { target_month?: string };
 
-    // Monthly run => generate every recurring session for the next calendar month.
-    // Example: 1 August generates all September sessions.
-    const targetMonthStartDate = startOfNextMonthUTC(now);
+    const manualTargetMonth = String(body.target_month || "").trim();
+    const manualTargetMonthStartDate = manualTargetMonth
+      ? startOfMonthUTCFromYYYYMM(manualTargetMonth)
+      : null;
+
+    if (manualTargetMonth && !manualTargetMonthStartDate) {
+      return res.status(400).json({
+        error: "Invalid target_month. Use YYYY-MM, for example 2026-08.",
+      });
+    }
+
+    const targetMonthStartDate = manualTargetMonthStartDate || startOfNextMonthUTC(now);
     const targetMonthEndDate = endOfMonthUTC(targetMonthStartDate);
+    const targetMonthLabel = formatMonthText(targetMonthStartDate);
 
-    // Kept as targetWeekStart / targetWeekEnd to avoid changing existing response shape,
-    // existing cron_run fields, and downstream notification metadata.
     const targetWeekStart = ymdUTC(targetMonthStartDate);
     const targetWeekEnd = ymdUTC(targetMonthEndDate);
-    const runKey = `generate-recurring-sessions-${targetWeekStart}`;
+
+    const runKey = manualTargetMonthStartDate
+      ? `generate-recurring-sessions-manual-${targetWeekStart}`
+      : `generate-recurring-sessions-${targetWeekStart}`;
 
     const claimed = await claimRun(runKey, {
       type: "generate_recurring_sessions",
-      generation_scope: "monthly",
+      generation_scope: manualTargetMonthStartDate ? "manual_monthly" : "monthly",
       target_week_start: targetWeekStart,
       target_week_end: targetWeekEnd,
       target_month_start: targetWeekStart,
       target_month_end: targetWeekEnd,
-      target_month_label: formatMonthText(targetMonthStartDate),
+      target_month_label: targetMonthLabel,
+      requested_target_month: manualTargetMonth || null,
     });
 
     if (!claimed) {
       return res.status(200).json({
         ok: true,
         skipped: true,
-        reason: "Already generated for this target month",
+        reason: manualTargetMonthStartDate
+          ? "Already generated for this manual target month"
+          : "Already generated for this target month",
         runKey,
         targetWeekStart,
         targetWeekEnd,
+        targetMonthLabel,
         created: 0,
         sessionIds: [],
         notifiedUsers: 0,
         notificationFailures: 0,
+        emailedUsers: 0,
+        emailFailures: 0,
       });
     }
 
@@ -383,6 +620,8 @@ export default async function handler(
           session_ids: [],
           notified_users: 0,
           notification_failures: 0,
+          emailed_users: 0,
+          email_failures: 0,
         },
         { merge: true }
       );
@@ -392,10 +631,13 @@ export default async function handler(
         runKey,
         targetWeekStart,
         targetWeekEnd,
+        targetMonthLabel,
         created: 0,
         sessionIds: [],
         notifiedUsers: 0,
         notificationFailures: 0,
+        emailedUsers: 0,
+        emailFailures: 0,
       });
     }
 
@@ -448,10 +690,10 @@ export default async function handler(
             effective_to: String(item.effective_to || "").trim() || null,
           },
           source: "recurring_generator",
-          generation_scope: "monthly",
+          generation_scope: manualTargetMonthStartDate ? "manual_monthly" : "monthly",
           generated_for_month_start: targetWeekStart,
           generated_for_month_end: targetWeekEnd,
-          generated_for_month_label: formatMonthText(targetMonthStartDate),
+          generated_for_month_label: targetMonthLabel,
           cancelled: false,
           cancelled_at: null,
           cancelled_by: null,
@@ -489,21 +731,26 @@ export default async function handler(
 
     let notifiedUsers = 0;
     let notificationFailures = 0;
+    let emailedUsers = 0;
+    let emailFailures = 0;
 
     for (const [gymId, gymMeta] of createdByGym.entries()) {
       if (!gymMeta.notifyMembersEnabled) continue;
 
-      const notificationSummary = await notifyGymMembersOfNewWeek({
+      const notificationSummary = await notifyGymMembersOfNewMonth({
         gymId,
         gymName: gymMeta.gymName,
         targetWeekStart,
         targetWeekEnd,
+        targetMonthLabel,
         createdCount: gymMeta.sessionIds.length,
         sessionIds: gymMeta.sessionIds,
       });
 
       notifiedUsers += notificationSummary.succeeded;
       notificationFailures += notificationSummary.failed;
+      emailedUsers += notificationSummary.emailSucceeded;
+      emailFailures += notificationSummary.emailFailed;
     }
 
     await firestore.collection("cron_runs").doc(runKey).set(
@@ -513,6 +760,8 @@ export default async function handler(
         session_ids: createdSessionIds,
         notified_users: notifiedUsers,
         notification_failures: notificationFailures,
+        emailed_users: emailedUsers,
+        email_failures: emailFailures,
       },
       { merge: true }
     );
@@ -522,10 +771,13 @@ export default async function handler(
       runKey,
       targetWeekStart,
       targetWeekEnd,
+      targetMonthLabel,
       created: createdSessionIds.length,
       sessionIds: createdSessionIds,
       notifiedUsers,
       notificationFailures,
+      emailedUsers,
+      emailFailures,
     });
   } catch (err: any) {
     console.error("[cron/generate-recurring-sessions]", err?.message || err);
