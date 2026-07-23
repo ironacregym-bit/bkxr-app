@@ -525,7 +525,24 @@ export default function SchedulePage() {
 
   const activeDaySessions = activeDay ? sessionsByDay[activeDay] || [] : [];
   const nowMs = Date.now();
+  useEffect(() => {
+  if (!sessions.length) return;
 
+  console.log(
+    "SESSION DEBUG",
+    sessions.map((s) => ({
+      id: s.id,
+      start_time: s.start_time,
+      end_time: s.end_time,
+      start_iso: safeMillis(s.start_time)
+        ? new Date(safeMillis(s.start_time)!).toISOString()
+        : null,
+      start_local: safeMillis(s.start_time)
+        ? new Date(safeMillis(s.start_time)!).toLocaleString("en-GB")
+        : null,
+    }))
+  );
+}, [sessions]);
   return (
     <>
       <main className="container py-2 iron-acre-home ia-home-main" style={{ color: "#fff" }}>
