@@ -148,11 +148,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(403).json({ error: "Forbidden" });
   }
 
-  const { session_id, payment_method, guest_name, guest_email } = (req.body || {}) as {
+  const {
+    session_id,
+    payment_method,
+    guest_name,
+    guest_email,
+    guest_phone,
+  } = (req.body || {}) as {
     session_id?: string;
     payment_method?: PaymentMethod;
     guest_name?: string;
     guest_email?: string;
+    guest_phone?: string;
   };
 
   if (!session_id) {
@@ -172,6 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const guestName = String(guest_name || "").trim();
   const guestEmail = String(guest_email || "").trim().toLowerCase();
+  const guestPhone = String(guest_phone || "").trim();
 
   if (!uidFromSession) {
     if (!guestName) {
@@ -180,6 +188,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!guestEmail) {
       return res.status(400).json({ error: "guest_email is required for guests" });
     }
+  }
+  if (!guestPhone) {
+    return res.status(400).json({ error: "guest_phone is required for guests" });
   }
 
   const userFlags = email ? await getUserFlags(email) : null;
@@ -297,6 +308,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             user_email: uidFromSession ? email : null,
             guest_name: uidFromSession ? null : guestName,
             guest_email: uidFromSession ? null : guestEmail,
+            guest_phone: uidFromSession ? null : guestPhone,
             class_id: String(sessData?.class_id || "").trim() || null,
             class_name: String(sessData?.class_name || "").trim() || null,
             gym_id: String(sessData?.gym_id || "").trim() || null,
@@ -318,6 +330,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         user_email: uidFromSession ? email : null,
         guest_name: uidFromSession ? null : guestName,
         guest_email: uidFromSession ? null : guestEmail,
+        guest_phone: uidFromSession ? null : guestPhone,
         status,
         payment_method: method,
         amount_gbp,
