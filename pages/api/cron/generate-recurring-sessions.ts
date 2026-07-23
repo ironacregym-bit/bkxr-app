@@ -129,35 +129,25 @@ function parseYmdUtc(value: string | null | undefined): Date | null {
 }
 
 function parseDateTimeUTC(dateYMD: string, hhmm: string): Date | null {
-  const [year, month, day] = String(dateYMD || "")
-    .split("-")
-    .map(Number);
-
   const [hours, minutes] = String(hhmm || "")
     .split(":")
     .map(Number);
 
-  if (
-    !Number.isFinite(year) ||
-    !Number.isFinite(month) ||
-    !Number.isFinite(day) ||
-    !Number.isFinite(hours) ||
-    !Number.isFinite(minutes)
-  ) {
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
     return null;
   }
 
-  // Treat timetable times as Europe/London local times
-  // and convert them to the correct UTC timestamp.
-  const londonDate = new Date(
-    new Date(
-      `${dateYMD}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`
-    ).toLocaleString("en-US", {
-      timeZone: "Europe/London",
-    })
-  );
+  const localDate = new Date(`${dateYMD}T${hhmm}:00`);
 
-  return londonDate;
+  const londonString = localDate.toLocaleString("en-US", {
+    timeZone: "Europe/London",
+  });
+
+  const londonDate = new Date(londonString);
+
+  const offsetMs = localDate.getTime() - londonDate.getTime();
+
+  return new Date(localDate.getTime() + offsetMs);
 }
 
 function weekdayFromYmdUTC(dateYMD: string): number {
