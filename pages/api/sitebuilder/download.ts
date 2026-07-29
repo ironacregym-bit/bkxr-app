@@ -4,45 +4,51 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const url = String(req.query.url || "").trim();
+  const url = String(req.query.url || "");
 
-  if (!url) {
-    return res.status(400).send("Missing url");
-  }
+  console.log("DOWNLOAD URL:", url);
 
   try {
     const response = await fetch(url);
 
+    console.log("STATUS:", response.status);
+    console.log(
+      "CONTENT TYPE:",
+      response.headers.get("content-type")
+    );
+
     if (!response.ok) {
-      return res.status(404).send("File not found");
+      const text = await response.text();
+
+      console.error("ERROR RESPONSE:");
+      console.error(text);
+
+      return res
+        .status(response.status)
+        .send(text);
     }
 
     const buffer = Buffer.from(
       await response.arrayBuffer()
     );
 
-    const fileName =
-      url.split("/").pop()?.split("?")[0] ||
-      "download";
-
-    const contentType =
-      response.headers.get("content-type") ||
-      "application/octet-stream";
-
     res.setHeader(
       "Content-Type",
-      contentType
+      response.headers.get("content-type") ||
+        "application/octet-stream"
     );
 
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${fileName}"`
+      'attachment; filename="download"'
     );
 
-    res.send(buffer);
-  } catch (error) {
-    console.error(error);
+    return res.send(buffer);
+  } catch (e: any) {
+    console.error(e);
 
-    res.status(500).send("Download failed");
+    return res
+      .status(500)
+      .send(e?.message || "Download failed");
   }
 }
