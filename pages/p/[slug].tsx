@@ -565,13 +565,13 @@ const faviconHref = faviconUrl
 
             <div className="sb-docGrid">
               {documents.map((doc: any) => (
-              <a
-                key={doc.id}
-                href={`/api/sitebuilder/download?url=${encodeURIComponent(
-                  doc.fileUrl
-                )}`}
-                className="sb-docCard"
-              >
+                <a
+                  key={doc.id}
+                  href={`/api/sitebuilder/download?url=${name=${encodeURIComponent(
+                    `${doc.title || "document"}.pdf`
+                  )}`}
+                  className="sb-docCard"
+                >
                   <div className="sb-docTitle">
                     {doc.title}
                   </div>
