@@ -562,26 +562,25 @@ const faviconHref = faviconUrl
             <h2 className="sb-h2">
               Documents
             </h2>
-            <div className="sb-docGrid">
-              {documents.map((doc: any) => (
-                <a
-                  key={doc.id}
-                  href={doc.fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="sb-docCard"
-                >
-            b-docDescription">
-                      {doc.description}
-                    </div>
-                  ) : null}
-            
-                  <div className="sb-docLink">
-                    Download Document →
+          <div className="sb-docGrid">
+            {documents.map((doc: any) => (
+              <a
+                key={doc.id}
+                href={doc.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+             on ? (
+                  <div className="sb-docDescription">
+                    {doc.description}
                   </div>
-                </a>
-              ))}
-            </div>
+                ) : null}
+          
+                <div className="sb-docLink">
+                  Download Document →
+                </div>
+              </a>
+            ))}
+          </div>
           </section>
         ) : null}
           <section id="faq" className="sb-section">
