@@ -146,6 +146,7 @@ export default function SiteEditor() {
         },
         mediaGallery: normaliseGallery(site),
         customTables: normaliseTables(site),
+        documents: normaliseDocuments(site),
       };
     });
   }, [site]);
