@@ -213,7 +213,20 @@ function sanitizeCustomTables(input: any) {
     items,
   };
 }
+function sanitizeDocuments(input: any) {
+  const docs = Array.isArray(input) ? input : [];
 
+  return docs
+    .slice(0, 100)
+    .map((doc: any, index: number) => ({
+      id: safeId(doc?.id, `doc_${index}`),
+      title: safeStr(doc?.title, 120),
+      description: safeStr(doc?.description, 500),
+      fileUrl: safeUrl(doc?.fileUrl, 600),
+      fileName: safeStr(doc?.fileName, 200),
+    }))
+    .filter((doc) => doc.title && doc.fileUrl);
+}
 export function sanitizeSitePatch(patch: any) {
   const out: any = {};
 
@@ -253,6 +266,7 @@ export function sanitizeSitePatch(patch: any) {
 
   out.mediaGallery = sanitizeGallery(patch?.mediaGallery);
   out.customTables = sanitizeCustomTables(patch?.customTables);
-
+  out.documents = sanitizeDocuments(patch?.documents);
+  
   return out;
 }
