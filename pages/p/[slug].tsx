@@ -567,11 +567,8 @@ const faviconHref = faviconUrl
               {documents.map((doc: any) => (
                 <a
                   key={doc.id}
-                  href={doc.fileUrl.replace(
-                    "/upload/",
-                    "/upload/fl_attachment/"
-                  )}
-                  target="download"
+                  href={doc.fileUrl}
+                  target="_self"
                   rel="noreferrer"
                   className="sb-docCard"
                 >
