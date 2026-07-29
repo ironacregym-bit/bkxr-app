@@ -569,14 +569,14 @@ const faviconHref = faviconUrl
                 href={doc.fileUrl}
                 target="_blank"
                 rel="noopener noreferrer">
-               on ? (
+               
                 <div className="sb-docTitle">
                   {doc.title}
                 </div>
                 <div className="sb-docDescription">
                   {doc.description}
                 </div>
-                )
+                
                 <div className="sb-docLink">
                   Download Document →
                 </div>
