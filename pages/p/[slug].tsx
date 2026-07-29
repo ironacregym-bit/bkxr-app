@@ -570,11 +570,10 @@ const faviconHref = faviconUrl
                 target="_blank"
                 rel="noopener noreferrer">
                on ? (
-                  <div className="sb-docDescription">
-                    {doc.description}
-                  </div>
-                ) : null}
-          
+                <div className="sb-docDescription">
+                  {doc.description}
+                </div>
+                )
                 <div className="sb-docLink">
                   Download Document →
                 </div>
@@ -582,7 +581,7 @@ const faviconHref = faviconUrl
             ))}
           </div>
           </section>
-        ) : null}
+          ) : null}
           <section id="faq" className="sb-section">
             <h2 className="sb-h2">FAQ</h2>
             {faqContent ? (
