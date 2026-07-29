@@ -567,8 +567,11 @@ const faviconHref = faviconUrl
               {documents.map((doc: any) => (
                 <a
                   key={doc.id}
-                  href={doc.fileUrl}
-                  target="_blank"
+                  href={doc.fileUrl.replace(
+                    "/upload/",
+                    "/upload/fl_attachment/"
+                  )}
+                  target="download"
                   rel="noreferrer"
                   className="sb-docCard"
                 >
@@ -583,7 +586,7 @@ const faviconHref = faviconUrl
                   ) : null}
 
                   <div className="sb-docLink">
-                    Open Document →
+                    Download Document →
                   </div>
                 </a>
               ))}
@@ -1085,11 +1088,13 @@ const faviconHref = faviconUrl
 
           .sb-docTitle {
             font-weight: 650;
+            color: ${text};
           }
 
           .sb-docDescription {
             margin-top: 8px;
             color: ${muted};
+            line-height: 1.5;
           }
 
           .sb-docLink {
