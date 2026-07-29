@@ -15,6 +15,7 @@ type PublicSite = {
   editor_emails: string[];
   updated_at?: string;
   mediaGallery?: MediaGallery;
+  documents?: SiteDocument[];
   theme?: {
     accent?: string | null;
     mode?: "dark" | "light" | string;
@@ -67,7 +68,12 @@ type CustomTable = {
   columns?: string[];
   rows?: string[][];
 };
-
+type SiteDocument = {
+  id?: string;
+  title?: string;
+  description?: string;
+  fileUrl?: string;
+};
 function normalizeHost(host: string) {
   return String(host || "").trim().toLowerCase().split(":")[0];
 }
@@ -162,7 +168,19 @@ function normaliseTables(site: PublicSite) {
     })
     .filter((table: any) => table && (table.title || table.rows.length > 0));
 }
+function normaliseDocuments(site: PublicSite) {
+  const docs = Array.isArray(
+    (site as any)?.documents
+  )
+    ? (site as any).documents
+    : [];
 
+  return docs.filter(
+    (x: any) =>
+      x?.title &&
+      x?.fileUrl
+  );
+}
 function renderContactLine(line: string, accent: string) {
   const lower = line.toLowerCase();
 
@@ -339,7 +357,8 @@ const faviconHref = faviconUrl
   const customTables = normaliseTables(site);
   const hasTables = customTables.length > 0;
   const isDraft = !Boolean(site.published);
-
+  const documents = normaliseDocuments(site);
+  const hasDocuments = documents.length > 0;
   const addressLine = contactLines.find((line) =>
     line.toLowerCase().startsWith("address:")
   );
@@ -531,6 +550,42 @@ const faviconHref = faviconUrl
                     </figcaption>
                   ) : null}
                 </figure>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {hasDocuments ? (
+          <section
+            id="documents"
+            className="sb-section"
+          >
+            <h2 className="sb-h2">
+              Documents
+            </h2>
+
+            <div className="sb-docGrid">
+              {documents.map((doc: any) => (
+                <a
+                  key={doc.id}
+                  href={doc.fileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="sb-docCard"
+                >
+                  <div className="sb-docTitle">
+                    {doc.title}
+                  </div>
+
+                  {doc.description ? (
+                    <div className="sb-docDescription">
+                      {doc.description}
+                    </div>
+                  ) : null}
+
+                  <div className="sb-docLink">
+                    Open Document →
+                  </div>
+                </a>
               ))}
             </div>
           </section>
@@ -1013,7 +1068,35 @@ const faviconHref = faviconUrl
             height: 320px;
             border: 0;
           }
-          
+          .sb-docGrid {
+            margin-top: 14px;
+            display: grid;
+            gap: 12px;
+          }
+
+          .sb-docCard {
+            display: block;
+            padding: 18px;
+            border-radius: 16px;
+            text-decoration: none;
+            border: 1px solid ${border};
+            background: ${cardBg};
+          }
+
+          .sb-docTitle {
+            font-weight: 650;
+          }
+
+          .sb-docDescription {
+            margin-top: 8px;
+            color: ${muted};
+          }
+
+          .sb-docLink {
+            margin-top: 12px;
+            color: ${accent};
+            font-weight: 600;
+          }
 
           @media (max-width: 720px) {
             .sb-h1 {
