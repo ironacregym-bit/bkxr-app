@@ -7,6 +7,7 @@ import SiteEditorsCard from "./SiteEditorsCard";
 import ImageUploadField from "./ImageUploadField";
 import ImageGalleryBuilder from "./ImageGalleryBuilder";
 import CustomTableBuilder from "./CustomTableBuilder";
+import DocumentBuilder from "./DocumentBuilder";
 
 type GetResp =
   | { ok: true; site: any; canEdit: boolean }
@@ -31,6 +32,11 @@ function makeCloudinaryFaviconUrl(url: string) {
   }
 
   return clean;
+}
+function normaliseDocuments(site: any) {
+  return Array.isArray(site?.documents)
+    ? site.documents
+    : [];
 }
 
 function normaliseGallery(site: any) {
@@ -588,6 +594,18 @@ export default function SiteEditor() {
                 setDraft((p: any) => ({
                   ...p,
                   mediaGallery: value,
+                }))
+              }
+            />
+          </div>
+
+          <div className="se-card se-span2">
+            <DocumentBuilder
+              value={draft.documents}
+              onChange={(value) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  documents: value,
                 }))
               }
             />
