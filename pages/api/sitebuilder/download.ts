@@ -1,21 +1,30 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
+function safeFileName(name: string) {
+  return name.replace(/[<>:"/\\|?*]+/g, "_");
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const url = String(req.query.url || "");
+  const url = String(req.query.url || "").trim();
 
-  console.log("DOWNLOAD URL:", url);
+  const filename =
+    safeFileName(
+      String(req.query.filename || "").trim()
+    ) || "download";
+
+  if (!url) {
+    return res.status(400).send("Missing url");
+  }
 
   try {
+    console.log("DOWNLOAD URL:", url);
+
     const response = await fetch(url);
 
     console.log("STATUS:", response.status);
-    console.log(
-      "CONTENT TYPE:",
-      response.headers.get("content-type")
-    );
 
     if (!response.ok) {
       const text = await response.text();
@@ -23,24 +32,22 @@ export default async function handler(
       console.error("ERROR RESPONSE:");
       console.error(text);
 
-      return res
-        .status(response.status)
-        .send(text);
+      return res.status(response.status).send(text);
     }
 
     const buffer = Buffer.from(
       await response.arrayBuffer()
     );
 
-    res.setHeader(
-      "Content-Type",
+    const contentType =
       response.headers.get("content-type") ||
-        "application/octet-stream"
-    );
+      "application/octet-stream";
+
+    res.setHeader("Content-Type", contentType);
 
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="download"'
+      `attachment; filename="${filename}"`
     );
 
     return res.send(buffer);
