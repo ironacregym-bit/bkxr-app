@@ -570,6 +570,9 @@ const faviconHref = faviconUrl
                 target="_blank"
                 rel="noopener noreferrer">
                on ? (
+                <div className="sb-docTitle">
+                  {doc.title}
+                </div>
                 <div className="sb-docDescription">
                   {doc.description}
                 </div>
