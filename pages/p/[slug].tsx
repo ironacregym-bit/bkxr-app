@@ -562,32 +562,28 @@ const faviconHref = faviconUrl
             <h2 className="sb-h2">
               Documents
             </h2>
-
-            <div className="sb-docGrid">
-              {documents.map((doc: any) => (
-                <a
-                  key={doc.id}
-                  href={`/api/sitebuilder/download?url=${name=${encodeURIComponent(
-                    `${doc.title || "document"}.pdf`
-                  )}`}
-                  className="sb-docCard"
-                >
-                  <div className="sb-docTitle">
-                    {doc.title}
+          <div className="sb-docGrid">
+            {documents.map((doc: any) => (
+              <a
+                key={doc.id}
+                href={`/api/sitebuilder/download?url=${encodeURIComponent(
+                  doc.fileUrl
+                )}&filename=${encodeURIComponent(
+                  `${doc.title || "
+                </div>
+          
+                {doc.description ? (
+                  <div className="sb-docDescription">
+                    {doc.description}
                   </div>
-
-                  {doc.description ? (
-                    <div className="sb-docDescription">
-                      {doc.description}
-                    </div>
-                  ) : null}
-
-                  <div className="sb-docLink">
-                    Download Document →
-                  </div>
-                </a>
-              ))}
-            </div>
+                ) : null}
+          
+                <div className="sb-docLink">
+                  Download Document →
+                </div>
+              </a>
+            ))}
+          </div>
           </section>
         ) : null}
           <section id="faq" className="sb-section">
