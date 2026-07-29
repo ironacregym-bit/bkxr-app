@@ -568,8 +568,8 @@ const faviconHref = faviconUrl
                 key={doc.id}
                 href={doc.fileUrl}
                 target="_blank"
-                rel="noopener noreferrer"
-             on ? (
+                rel="noopener noreferrer">
+               on ? (
                   <div className="sb-docDescription">
                     {doc.description}
                   </div>
