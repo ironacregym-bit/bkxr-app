@@ -55,10 +55,21 @@ export type SiteDomain = {
   addedAt: string;
   verifiedAt?: string;
 };
+export type SiteDocument = {
+  id: string;
+  title: string;
+  description?: string;
+  fileUrl: string;
+  fileName?: string;
+};
+
+export type SiteDocuments = SiteDocument[];
 
 export type SiteDoc = {
   id: string;
   slug: string;
+
+  documents: SiteDocuments;
 
   owner_email: string;
   editor_emails: string[];
@@ -195,6 +206,7 @@ export function defaultSiteContent(args: { slug: string; ownerEmail: string; nam
     },
 
     domains: [],
+    documents: [],
   };
 
   return doc;
