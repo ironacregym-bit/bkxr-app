@@ -139,6 +139,21 @@ export default function SiteEditor() {
           ctaHref: safeStr(site?.hero?.ctaHref),
         },
         sections: {
+          promotion: {
+            enabled: Boolean(site?.promotion?.enabled),
+            title: safeStr(site?.promotion?.title),
+            description: safeStr(site?.promotion?.description),
+            buttonText: safeStr(site?.promotion?.buttonText),
+            buttonUrl: safeStr(site?.promotion?.buttonUrl),
+          },
+          
+          newsletter: {
+            enabled: Boolean(site?.newsletter?.enabled),
+            title: safeStr(site?.newsletter?.title),
+            description: safeStr(site?.newsletter?.description),
+            buttonText: safeStr(site?.newsletter?.buttonText),
+            subscribeUrl: safeStr(site?.newsletter?.subscribeUrl),
+          },
           about: safeStr(site?.sections?.about),
           services: safeStr(site?.sections?.services),
           faq: safeStr(site?.sections?.faq),
@@ -611,7 +626,144 @@ export default function SiteEditor() {
               }
             />
           </div>
-
+          <div className="se-card se-span2">
+              <div className="se-cardTitle">
+                Marketing
+              </div>
+            
+              <div className="se-field">
+                <label className="se-check">
+                  <input
+                    type="checkbox"
+                    checked={draft.promotion.enabled}
+                    onChange={(e) =>
+                      setDraft((p: any) => ({
+                        ...p,
+                        promotion: {
+                          ...p.promotion,
+                          enabled: e.target.checked,
+                        },
+                      }))
+                    }
+                  />
+                  <span>Show promotion banner</span>
+                </label>
+              </div>
+            
+              <div className="se-field">
+                <div className="se-label">Promotion title</div>
+            
+                <input
+                  className="se-input"
+                  value={draft.promotion.title}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      promotion: {
+                        ...p.promotion,
+                        title: e.target.value,
+                      },
+                    }))
+                  }
+                />
+              </div>
+            
+              <div className="se-field">
+                <div className="se-label">Promotion description</div>
+            
+                <textarea
+                  className="se-textarea"
+                  rows={3}
+                  value={draft.promotion.description}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      promotion: {
+                        ...p.promotion,
+                        description: e.target.value,
+                      },
+                    }))
+                  }
+                />
+              </div>
+            
+              <div className="se-two">
+                <div className="se-field">
+                  <div className="se-label">Button text</div>
+            
+                  <input
+                    className="se-input"
+                    value={draft.promotion.buttonText}
+                    onChange={(e) =>
+                      setDraft((p: any) => ({
+                        ...p,
+                        promotion: {
+                          ...p.promotion,
+                          buttonText: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+            
+                <div className="se-field">
+                  <div className="se-label">Button URL</div>
+            
+                  <input
+                    className="se-input"
+                    value={draft.promotion.buttonUrl}
+                    onChange={(e) =>
+                      setDraft((p: any) => ({
+                        ...p,
+                        promotion: {
+                          ...p.promotion,
+                          buttonUrl: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            
+              <hr />
+            
+              <div className="se-field">
+                <label className="se-check">
+                  <input
+                    type="checkbox"
+                    checked={draft.newsletter.enabled}
+                    onChange={(e) =>
+                      setDraft((p: any) => ({
+                        ...p,
+                        newsletter: {
+                          ...p.newsletter,
+                          enabled: e.target.checked,
+                        },
+                      }))
+                    }
+                  />
+                  <span>Show newsletter section</span>
+                </label>
+              </div>
+            
+              <div className="se-field">
+                <div className="se-label">Newsletter URL</div>
+            
+                <input
+                  className="se-input"
+                  value={draft.newsletter.subscribeUrl}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      newsletter: {
+                        ...p.newsletter,
+                        subscribeUrl: e.target.value,
+                      },
+                    }))
+                  }
+                />
+              </div>
+            </div>
           <div className="se-card se-span2">
             <div className="se-cardTitle">SEO</div>
 
