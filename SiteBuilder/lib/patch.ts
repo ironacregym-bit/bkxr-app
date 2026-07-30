@@ -263,7 +263,21 @@ export function sanitizeSitePatch(patch: any) {
     faq: safeStr(patch?.sections?.faq, 6000),
     contact: safeStr(patch?.sections?.contact, 3000),
   };
-
+  out.promotion = {
+    enabled: Boolean(patch?.promotion?.enabled),
+    title: safeStr(patch?.promotion?.title, 120),
+    description: safeStr(patch?.promotion?.description, 1000),
+    buttonText: safeStr(patch?.promotion?.buttonText, 40),
+    buttonUrl: safeUrl(patch?.promotion?.buttonUrl, 600),
+  };
+  
+  out.newsletter = {
+    enabled: Boolean(patch?.newsletter?.enabled),
+    title: safeStr(patch?.newsletter?.title, 120),
+    description: safeStr(patch?.newsletter?.description, 1000),
+    buttonText: safeStr(patch?.newsletter?.buttonText, 40),
+    subscribeUrl: safeUrl(patch?.newsletter?.subscribeUrl, 600),
+  };
   out.mediaGallery = sanitizeGallery(patch?.mediaGallery);
   out.customTables = sanitizeCustomTables(patch?.customTables);
   out.documents = sanitizeDocuments(patch?.documents);
