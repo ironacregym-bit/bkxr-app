@@ -114,6 +114,21 @@ export type SiteDoc = {
         }
       >;
     };
+    promotion: {
+      enabled: boolean;
+      title: string;
+      description: string;
+      buttonText: string;
+      buttonUrl: string;
+    };
+
+    newsletter: {
+      enabled: boolean;
+      title: string;
+      description: string;
+      buttonText: string;
+      subscribeUrl: string;
+    };
 
   domains: SiteDomain[];
 };
@@ -207,6 +222,21 @@ export function defaultSiteContent(args: { slug: string; ownerEmail: string; nam
 
     domains: [],
     documents: [],
+    promotion: {
+      enabled: false,
+      title: "",
+      description: "",
+      buttonText: "",
+      buttonUrl: "",
+    },
+
+    newsletter: {
+      enabled: false,
+      title: "Join Our Newsletter",
+      description: "Get updates, news and special offers.",
+      buttonText: "Subscribe",
+      subscribeUrl: "",
+    },
   };
 
   return doc;
