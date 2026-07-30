@@ -944,8 +944,19 @@ const faviconHref = faviconUrl
             color: ${muted};
             line-height: 1.55;
           }
+          .sb-promo {
+            border: 1px solid ${accent};
+            box-shadow: 0 0 0 1px rgba(31, 224, 165, 0.08);
+          }
           
-          .sb-galleryGrid {
+          .sb-newsletter {
+            text-align: center;
+          }
+          
+          .sb-newsletter .sb-cta {
+            margin-top: 12px;
+          }
+                    .sb-galleryGrid {
             margin-top: 14px;
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
