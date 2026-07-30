@@ -139,20 +139,20 @@ export default function SiteEditor() {
           ctaHref: safeStr(site?.hero?.ctaHref),
         },
         sections: {
-          promotion: {
-            enabled: Boolean(site?.promotion?.enabled),
-            title: safeStr(site?.promotion?.title),
-            description: safeStr(site?.promotion?.description),
-            buttonText: safeStr(site?.promotion?.buttonText),
-            buttonUrl: safeStr(site?.promotion?.buttonUrl),
+          promotion: site?.promotion || {
+            enabled: false,
+            title: "",
+            description: "",
+            buttonText: "",
+            buttonUrl: "",
           },
           
-          newsletter: {
-            enabled: Boolean(site?.newsletter?.enabled),
-            title: safeStr(site?.newsletter?.title),
-            description: safeStr(site?.newsletter?.description),
-            buttonText: safeStr(site?.newsletter?.buttonText),
-            subscribeUrl: safeStr(site?.newsletter?.subscribeUrl),
+          newsletter: site?.newsletter || {
+            enabled: false,
+            title: "Join Our Newsletter",
+            description: "Get updates, news and special offers.",
+            buttonText: "Subscribe",
+            subscribeUrl: "",
           },
           about: safeStr(site?.sections?.about),
           services: safeStr(site?.sections?.services),
