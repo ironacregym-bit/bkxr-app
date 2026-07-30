@@ -47,6 +47,21 @@ type PublicSite = {
   order?: string[];
   items?: Record<string, any>;
 };
+  promotion?: {
+    enabled?: boolean;
+    title?: string;
+    description?: string;
+    buttonText?: string;
+    buttonUrl?: string;
+  };
+  
+  newsletter?: {
+    enabled?: boolean;
+    title?: string;
+    description?: string;
+    buttonText?: string;
+    subscribeUrl?: string;
+  };
 };
 type GalleryImage = {
   id?: string;
@@ -340,7 +355,8 @@ const faviconHref = faviconUrl
   const heroHeadline = safeText(site?.hero?.headline) || brandName;
   const heroSub = safeText(site?.hero?.subheadline) || "";
   const heroImage = site?.hero?.imageUrl || null;
-
+  const promotion = site?.promotion;
+  const newsletter = site?.newsletter;
   const ctaText = safeText(site?.hero?.ctaText) || "Get started";
   const ctaHref = safeText(site?.hero?.ctaHref) || "#contact";
 
@@ -457,7 +473,26 @@ const faviconHref = faviconUrl
               </div>
             </div>
           </section>
-
+          {promotion?.enabled ? (
+            <section className="sb-section">
+              <h2 className="sb-h2">
+                {promotion.title}
+              </h2>
+          
+              <p className="sb-sectionIntro">
+                {promotion.description}
+              </p>
+          
+              {promotion.buttonUrl ? (
+                <a
+                  href={promotion.buttonUrl}
+                  className="sb-cta"
+                >
+                  {promotion.buttonText || "Learn More"}
+                </a>
+              ) : null}
+            </section>
+          ) : null}
           <section id="about" className="sb-section">
             <h2 className="sb-h2">About</h2>
             {aboutContent ? (
@@ -624,7 +659,28 @@ const faviconHref = faviconUrl
               <div className="sb-muted">No contact details yet.</div>
             )}
           </section>
-
+          {newsletter?.enabled ? (
+            <section className="sb-section">
+              <h2 className="sb-h2">
+                {newsletter.title}
+              </h2>
+          
+              <p className="sb-sectionIntro">
+                {newsletter.description}
+              </p>
+          
+              {newsletter.subscribeUrl ? (
+                <a
+                  href={newsletter.subscribeUrl}
+                  className="sb-cta"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {newsletter.buttonText || "Subscribe"}
+                </a>
+              ) : null}
+            </section>
+          ) : null}
           <footer className="sb-foot">
             <div className="sb-footInner">
               <div className="sb-footText">{isCustomDomain ? "" : "Powered by SiteBuilder"}</div>
