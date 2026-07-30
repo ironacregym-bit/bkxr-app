@@ -139,7 +139,13 @@ export default function SiteEditor() {
           ctaHref: safeStr(site?.hero?.ctaHref),
         },
         sections: {
-          promotion: site?.promotion || {
+          
+          about: safeStr(site?.sections?.about),
+          services: safeStr(site?.sections?.services),
+          faq: safeStr(site?.sections?.faq),
+          contact: safeStr(site?.sections?.contact),
+        },
+        promotion: site?.promotion || {
             enabled: false,
             title: "",
             description: "",
@@ -154,11 +160,6 @@ export default function SiteEditor() {
             buttonText: "Subscribe",
             subscribeUrl: "",
           },
-          about: safeStr(site?.sections?.about),
-          services: safeStr(site?.sections?.services),
-          faq: safeStr(site?.sections?.faq),
-          contact: safeStr(site?.sections?.contact),
-        },
         mediaGallery: normaliseGallery(site),
         customTables: normaliseTables(site),
         documents: normaliseDocuments(site),
