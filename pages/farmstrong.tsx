@@ -1,20 +1,20 @@
 import Head from "next/head";
-import useSWR from "swr";
-import { useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
 import BottomNav from "../components/BottomNav";
 import IronAcreHeader from "../components/iron-acre/IronAcreHeader";
 
-const fetcher = (u: string) =>
-  fetch(u).then((r) => r.json());
+const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 export default function FarmStrongPage() {
   const { data: session } = useSession();
 
-  const [saving, setSaving] =
-    useState<string>("");
+  const [selectedLift, setSelectedLift] = useState("");
+  const [newLiftValue, setNewLiftValue] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const { data: config } = useSWR(
+  const { data: farmData } = useSWR(
     "/api/admin/farmstrong/get",
     fetcher
   );
@@ -22,46 +22,91 @@ export default function FarmStrongPage() {
   const {
     data: strengthProfile,
     mutate: mutateStrength,
-  } = useSWR(
-    "/api/strength/profile/get",
+  } = useSWR("/api/strength/profile/get", fetcher);
+
+  const { data: checkins } = useSWR(
+    "/api/checkins/series?limit=52",
     fetcher
   );
 
-  const activeBlock =
-    config?.blocks?.find(
-      (b: any) =>
-        b.id === config?.activeBlockId
-    ) || null;
+  const activeBlock = useMemo(() => {
+    return (
+      farmData?.blocks?.find(
+        (b: any) => b.id === farmData?.activeBlockId
+      ) || null
+    );
+  }, [farmData]);
 
-  const lifts =
-    activeBlock?.exercise_ids || [];
+  const exerciseLookup = useMemo(() => {
+    const map = new Map<string, any>();
+
+    for (const ex of farmData?.exercises || []) {
+      map.set(ex.id, ex);
+    }
+
+    return map;
+  }, [farmData]);
+
+  const lifts = activeBlock?.exercise_ids || [];
+
+  useEffect(() => {
+    if (!selectedLift && lifts.length) {
+      setSelectedLift(lifts[0]);
+    }
+  }, [lifts, selectedLift]);
+
+  const featuredLifts = useMemo(() => {
+    return lifts.slice(0, 4);
+  }, [lifts]);
+
+  const selectedExercise =
+    exerciseLookup.get(selectedLift);
 
   const trainingMaxes =
-    strengthProfile?.profile
-      ?.training_maxes || {};
+    strengthProfile?.profile?.training_maxes || {};
 
-  async function updateLift(
-    exerciseId: string,
-    exerciseName: string
-  ) {
-    const current =
-      trainingMaxes?.[exerciseName] || "";
+  const true1Rms =
+    strengthProfile?.profile?.true_1rms || {};
 
-    const value = prompt(
-      `Update ${exerciseName}`,
-      String(current)
-    );
+  const selectedCurrent =
+    trainingMaxes?.[
+      selectedExercise?.exercise_name || ""
+    ] || 0;
 
-    if (!value) return;
+  const selectedBest =
+    true1Rms?.[
+      selectedExercise?.exercise_name || ""
+    ] || 0;
 
-    const numericValue = Number(value);
+  const latestWeight =
+    checkins?.results?.[0]?.weight_kg || null;
 
-    if (!Number.isFinite(numericValue)) {
+  const previousWeight =
+    checkins?.results?.[1]?.weight_kg || null;
+
+  const weightChange =
+    latestWeight != null &&
+    previousWeight != null
+      ? latestWeight - previousWeight
+      : null;
+
+  async function saveLift() {
+    if (!selectedLift) return;
+
+    const exerciseName =
+      selectedExercise?.exercise_name;
+
+    const value = Number(newLiftValue);
+
+    if (!exerciseName) return;
+
+    if (!Number.isFinite(value)) {
+      alert("Enter a valid number");
       return;
     }
 
     try {
-      setSaving(exerciseId);
+      setSaving(true);
 
       const res = await fetch(
         "/api/farmstrong/update-lift",
@@ -72,41 +117,33 @@ export default function FarmStrongPage() {
               "application/json",
           },
           body: JSON.stringify({
-            exercise_id: exerciseId,
+            exercise_id: selectedLift,
             exercise_name: exerciseName,
-            value: numericValue,
+            value,
           }),
         }
       );
 
+      const json = await res.json();
+
       if (!res.ok) {
-        const json = await res.json();
         throw new Error(
           json?.error || "Failed"
         );
       }
 
+      setNewLiftValue("");
+
       await mutateStrength();
     } catch (err: any) {
       alert(
         err?.message ||
-          "Failed to save"
+          "Failed to update"
       );
     } finally {
-      setSaving("");
+      setSaving(false);
     }
   }
-
-  const exerciseLookup = useMemo(() => {
-    const map = new Map();
-
-    for (const ex of config?.exercises ||
-      []) {
-      map.set(ex.id, ex);
-    }
-
-    return map;
-  }, [config]);
 
   return (
     <>
@@ -141,79 +178,205 @@ export default function FarmStrongPage() {
 
         <section className="ia-tile ia-tile-pad mb-2">
           <div className="ia-card-title-compact">
-            Focus Lifts
+            Weight Progress
           </div>
 
-          {lifts.length === 0 ? (
-            <div className="text-dim small mt-2">
-              No exercises configured.
-            </div>
-          ) : (
-            <div className="mt-2">
-              {lifts.map(
-                (exerciseId: string) => {
-                  const exercise =
-                    exerciseLookup.get(
-                      exerciseId
-                    );
+          <div
+            style={{
+              fontSize: "2rem",
+              fontWeight: 800,
+              marginTop: 8,
+            }}
+          >
+            {latestWeight
+              ? `${latestWeight}kg`
+              : "--"}
+          </div>
 
-                  const exerciseName =
-                    exercise
-                      ?.exercise_name ||
-                    exerciseId;
+          <div className="text-dim small">
+            {weightChange != null
+              ? `${weightChange > 0 ? "+" : ""}${weightChange.toFixed(
+                  1
+                )}kg since last check-in`
+              : "Waiting for more check-ins"}
+          </div>
+        </section>
 
-                  const currentValue =
-                    trainingMaxes?.[
-                      exerciseName
-                    ] || 0;
+        <section className="ia-tile ia-tile-pad mb-2">
+          <div className="ia-card-title-compact">
+            Featured Lifts
+          </div>
 
-                  return (
-                    <div
-                      key={exerciseId}
-                      className="ia-strength-row"
-                    >
-                      <div>
-                        <div className="ia-tile-title">
-                          {exerciseName}
-                        </div>
-
-                        <div className="text-dim small">
-                          Current best
-                        </div>
-                      </div>
-
-                      <div className="d-flex align-items-center gap-2">
-                        <div className="ia-strength-value">
-                          {currentValue > 0
-                            ? `${currentValue}kg`
-                            : "--"}
-                        </div>
-
-                        <button
-                          className="ia-btn-outline"
-                          disabled={
-                            saving ===
-                            exerciseId
-                          }
-                          onClick={() =>
-                            updateLift(
-                              exerciseId,
-                              exerciseName
-                            )
-                          }
-                        >
-                          {saving ===
-                          exerciseId
-                            ? "Saving..."
-                            : "Update"}
-                        </button>
-                      </div>
-                    </div>
+          <div className="row g-2 mt-2">
+            {featuredLifts.map(
+              (exerciseId: string) => {
+                const exercise =
+                  exerciseLookup.get(
+                    exerciseId
                   );
-                }
-              )}
+
+                const current =
+                  trainingMaxes?.[
+                    exercise?.exercise_name
+                  ] || 0;
+
+                return (
+                  <div
+                    className="col-6"
+                    key={exerciseId}
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedLift(
+                          exerciseId
+                        )
+                      }
+                      style={{
+                        padding: 0,
+                        border: "none",
+                        background:
+                          "transparent",
+                        width: "100%",
+                      }}
+                    >
+                      <div className="ia-task-card">
+                        <div className="ia-task-card__main">
+                          <div className="ia-task-card__title">
+                            {
+                              exercise?.exercise_name
+                            }
+                          </div>
+
+                          <div
+                            className="ia-strength-value"
+                            style={{
+                              marginTop: 8,
+                            }}
+                          >
+                            {current > 0
+                              ? `${current}kg`
+                              : "--"}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                );
+              }
+            )}
+          </div>
+        </section>
+
+        <section className="ia-tile ia-tile-pad mb-2">
+          <div className="ia-card-title-compact">
+            All Movements
+          </div>
+
+          <div className="ia-week-chip-row mt-2">
+            {lifts.map(
+              (exerciseId: string) => {
+                const exercise =
+                  exerciseLookup.get(
+                    exerciseId
+                  );
+
+                return (
+                  <button
+                    key={exerciseId}
+                    type="button"
+                    className={
+                      selectedLift ===
+                      exerciseId
+                        ? "ia-week-chip ia-week-chip-active"
+                        : "ia-week-chip"
+                    }
+                    onClick={() =>
+                      setSelectedLift(
+                        exerciseId
+                      )
+                    }
+                  >
+                    {
+                      exercise?.exercise_name
+                    }
+                  </button>
+                );
+              }
+            )}
+          </div>
+        </section>
+
+        <section className="ia-tile ia-tile-pad mb-2">
+          <div className="ia-card-title-compact">
+            {selectedExercise
+              ?.exercise_name ||
+              "Select Movement"}
+          </div>
+
+          <div className="row g-2 mt-2">
+            <div className="col-6">
+              <div className="ia-stat-mini">
+                <div className="ia-stat-mini-value">
+                  {selectedCurrent > 0
+                    ? `${selectedCurrent}kg`
+                    : "--"}
+                </div>
+
+                <div className="ia-stat-mini-label">
+                  Current
+                </div>
+              </div>
             </div>
-          )}
+
+            <div className="col-6">
+              <div className="ia-stat-mini">
+                <div className="ia-stat-mini-value">
+                  {selectedBest > 0
+                    ? `${selectedBest}kg`
+                    : "--"}
+                </div>
+
+                <div className="ia-stat-mini-label">
+                  Best Ever
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <label className="form-label">
+              Update Lift
+            </label>
+
+            <input
+              type="number"
+              step="0.5"
+              className="form-control"
+              value={newLiftValue}
+              onChange={(e) =>
+                setNewLiftValue(
+                  e.target.value
+                )
+              }
+              placeholder="Enter new best"
+            />
+          </div>
+
+          <div className="mt-3">
+            <button
+              className="ia-btn-primary"
+              disabled={
+                saving ||
+                !selectedLift
+              }
+              onClick={saveLift}
+            >
+              {saving
+                ? "Saving..."
+                : "Save Lift"}
+            </button>
+          </div>
         </section>
       </main>
 
