@@ -13,6 +13,7 @@ import IronAcreWorkoutCard from "../../components/iron-acre/IronAcreWorkoutCard"
 import IronAcreNutritionCard from "../../components/iron-acre/IronAcreNutritionCard";
 import IronAcreStrengthSummary from "../../components/iron-acre/IronAcreStrengthSummary";
 import IronAcreClassesList from "../../components/iron-acre/IronAcreClassesList";
+import AddToHomeScreen from "../../components/AddToHomeScreen";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -364,7 +365,7 @@ function TasksCard({
   );
 }
 
-export default function IronAcreHome() {
+export default function IronAcreDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -496,7 +497,7 @@ export default function IronAcreHome() {
     if (!profileLoaded) return;
 
     if (!onboardingComplete) {
-      router.replace(`/onboarding?returnTo=${encodeURIComponent("/iron-acre")}`);
+      router.replace(`/onboarding?returnTo=${encodeURIComponent("/")}`);
     }
   }, [mounted, status, session, profileLoaded, onboardingComplete, router]);
 
@@ -624,7 +625,7 @@ export default function IronAcreHome() {
   }
 
   if (!session) {
-    const cb = encodeURIComponent("/iron-acre");
+    const cb = encodeURIComponent("/");
 
     return (
       <>
@@ -769,9 +770,8 @@ export default function IronAcreHome() {
         title="Turn on Iron Acre notifications"
         message="Get class reminders, weekly booking alerts, gym updates and important notices straight to your device."
       />
-
+      <AddToHomeScreen />
       <BottomNav />
     </>
   );
 }
-
