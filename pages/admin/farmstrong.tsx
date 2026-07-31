@@ -149,7 +149,7 @@ export default function FarmStrongAdminPage() {
               </div>
             </div>
 
-            /admin
+            <Link href="/admin">
               Back
             </Link>
           </div>
