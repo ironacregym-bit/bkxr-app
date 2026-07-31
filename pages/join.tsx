@@ -3,6 +3,7 @@ import Image from "next/image";
 import Head from "next/head";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
+import styles from "../styles/join.module.css";
 
 type ApiResp =
   | { ok: true; existed: boolean }
@@ -126,7 +127,7 @@ export default function WaitlistPage() {
   return (
     <>
       <Head>
-        <title>Iron Acre Gym | Founders</title>
+        <title>Iron Acre Gym </title>
         <meta
           name="description"
           content="Train hard. Be outside. Build something real. Founders £60/month locked for life for the first 20."
@@ -471,49 +472,124 @@ export default function WaitlistPage() {
 
           <section id="classes" className="section">
             <div className="sectionHead">
-              <div className="sectionEyebrow">TRAINING</div>
-              <h2 className="sectionTitle">Classes</h2>
-              <p className="sectionSub">Four clear pillars. Real training. Real progression.</p>
+              <div className="sectionEyebrow">
+                PROGRAMMING
+              </div>
+          
+              <h2 className="sectionTitle">
+                Farm Strong
+              </h2>
+          
+              <p className="sectionSub">
+                Functional bodybuilding meets strength and conditioning.
+              </p>
             </div>
-
+          
             <div className="grid2">
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Hybrid Fit</div>
-                <div className="cardText">
-                  Strength and conditioning combined properly. Build muscle, improve fitness, raise your engine and
-                  move better under pressure. These sessions bring structure to hard work so you feel fitter, stronger
-                  and more athletic week after week.
+              <div
+                className="card ia-tile ia-tile-pad"
+                style={{
+                  gridColumn: "1 / -1",
+                }}
+              >
+                <div className="cardTitle">
+                  Farm Strong
                 </div>
-              </div>
-
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Farm Strength</div>
+          
                 <div className="cardText">
-                  Carries, sleds, sandbags and functional lifts designed to build useful, real-world strength.
-                  This is rugged training that makes you more capable, not just more tired. The kind of sessions
-                  that leave you feeling powerful and ready for anything.
+                  Farm Strong combines the muscle-building principles of
+                  functional bodybuilding with the fitness-building principles
+                  of strength and conditioning.
+                  <br />
+                  <br />
+                  The goal isn't simply to get tired.
+                  <br />
+                  <br />
+                  The goal is to build the strongest, fittest and most capable
+                  version of yourself.
+                  <br />
+                  <br />
+                  Every training block follows structured progression focused on:
+                  <br />
+                  <br />
+                  • Building lean muscle
+                  <br />
+                  • Increasing strength
+                  <br />
+                  • Improving conditioning
+                  <br />
+                  • Developing athleticism
+                  <br />
+                  • Creating long-term progress
+                  <br />
+                  <br />
+                  Expect sled work, sandbags, carries, kettlebells,
+                  bodyweight movements and progressive strength work delivered
+                  through a system that gives you purpose every time you train.
+                  <br />
+                  <br />
+                  Every session has a reason.
+                  <br />
+                  Every block has progression.
+                  <br />
+                  Every member knows what they're working towards.
                 </div>
-              </div>
-
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Boxing Conditioning</div>
-                <div className="cardText">
-                  Learn to move well, punch properly and build serious conditioning at the same time. Sharp skill work,
-                  hard rounds on the bags and coaching that helps you improve every week. Fast-paced, addictive and
-                  seriously effective.
+          
+                <div
+                  style={{
+                    marginTop: 18,
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 10,
+                  }}
+                >
+                  <span className="diffChip">
+                    Functional Bodybuilding
+                  </span>
+          
+                  <span className="diffChip">
+                    Strength
+                  </span>
+          
+                  <span className="diffChip">
+                    Conditioning
+                  </span>
+          
+                  <span className="diffChip">
+                    Progression
+                  </span>
                 </div>
-              </div>
-
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Kettlebells</div>
-                <div className="cardText">
-                  Simple, effective training that builds full-body strength, control and endurance. Clean movement
-                  patterns, smart progressions and sessions that leave you feeling worked without feeling wrecked.
+          
+                <div
+                  style={{
+                    marginTop: 18,
+                    padding: 14,
+                    borderRadius: 14,
+                    background: "rgba(24,255,154,.08)",
+                    border: "1px solid rgba(24,255,154,.18)",
+                  }}
+                >
+                  <div
+                    style={{
+                      color: "#18ff9a",
+                      fontWeight: 700,
+                      marginBottom: 6,
+                    }}
+                  >
+                    Current Session Times
+                  </div>
+          
+                  <div>
+                    Monday • 6:30pm - 7:30pm
+                  </div>
+          
+                  <div>
+                    Wednesday • 6:30pm - 7:30pm
+                  </div>
                 </div>
               </div>
             </div>
           </section>
-
           <section id="benefits" className="section">
             <div className="sectionHead">
               <div className="sectionEyebrow">MEMBERSHIP</div>
