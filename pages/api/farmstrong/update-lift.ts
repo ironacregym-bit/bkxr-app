@@ -38,53 +38,73 @@ export default async function handler(
     value,
   } = req.body || {};
 
-  if (!exercise_id || value == null) {
+  const numericValue = Number(value);
+
+  if (
+    !exercise_id ||
+    !exercise_name ||
+    !Number.isFinite(numericValue)
+  ) {
     return res.status(400).json({
-      error: "Missing fields",
+      error: "Invalid data",
     });
   }
 
   try {
-    const liftRef = firestore
+    const profileRef = firestore
       .collection("strength_profiles")
-      .doc(email)
+      .doc(email);
+
+    const liftRef = profileRef
       .collection("lifts")
       .doc(exercise_id);
 
-    const snap = await liftRef.get();
+    const existingSnap = await liftRef.get();
 
-    const current =
-      snap.exists ? snap.data() || {} : {};
+    const existing = existingSnap.exists
+      ? existingSnap.data() || {}
+      : {};
 
-    const bestEver = Math.max(
-      Number(current?.best_ever || 0),
-      Number(value || 0)
+    const existingBest = Number(
+      existing?.best_true_1rm_kg || 0
+    );
+
+    await profileRef.set(
+      {
+        updated_at: Timestamp.now(),
+      },
+      { merge: true }
     );
 
     await liftRef.set(
       {
-        exercise_name:
-          exercise_name || exercise_id,
-        current_best: Number(value),
-        best_ever: bestEver,
+        exercise_name,
+        training_max_kg: numericValue,
+        best_true_1rm_kg: Math.max(
+          existingBest,
+          numericValue
+        ),
         updated_at: Timestamp.now(),
       },
       { merge: true }
     );
 
     await liftRef.collection("entries").add({
-      value: Number(value),
+      value: numericValue,
       recorded_at: Timestamp.now(),
     });
 
     return res.status(200).json({
       ok: true,
     });
-  } catch (err: any) {
-    console.error(err);
+  } catch (e: any) {
+    console.error(
+      "[farmstrong/update-lift]",
+      e?.message || e
+    );
 
     return res.status(500).json({
-      error: "Failed to save lift",
+      error: "Failed to update lift",
     });
   }
 }
