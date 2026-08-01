@@ -1,4 +1,4 @@
-// File: pages/waitlist.tsx
+//join.tsx
 import Image from "next/image";
 import Head from "next/head";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -135,7 +135,7 @@ export default function WaitlistPage() {
         <meta property="og:title" content="Iron Acre Gym | Founders" />
         <meta
           property="og:description"
-          content="Train hard. Be outside. Build something real. Founders £60/month locked for life for the first 20."
+          content="Train hard. Be outside. Build something real. OPEN NOW • Early Access Pricing • £8 Per Session For Life"
         />
         <meta property="og:type" content="website" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -178,21 +178,17 @@ export default function WaitlistPage() {
             </div>
 
             <nav className="heroNav heroNavDesktop" aria-label="Page sections">
-              <button type="button" className="navLink" onClick={() => scrollToId("founders")}>
+              <button type="button" className="navLink" onClick={() => scrollToId("Pricing")}>
                 Founders
               </button>
               <button type="button" className="navLink" onClick={() => scrollToId("about")}>
                 About
               </button>
-              <button type="button" className="navLink" onClick={() => scrollToId("classes")}>
+              <button type="button" className="navLink" onClick={() => scrollToId("Methodology")}>
                 Classes
               </button>
               <button type="button" className="navLink" onClick={() => scrollToId("benefits")}>
                 Benefits
-              </button>
-              <button type="button" className="navLink" onClick={() => scrollToId("next")}>
-                What’s Next
-              </button>
               <button type="button" className="navLink" onClick={() => scrollToId("faq")}>
                 FAQ
               </button>
@@ -308,7 +304,7 @@ export default function WaitlistPage() {
                     scrollToForm();
                   }}
                 >
-                  Join the Acre
+                  Enquire About A Class
                 </button>
               </div>
             </div>
@@ -333,51 +329,38 @@ export default function WaitlistPage() {
               </div>
 
               <div className="badgeRow">
-                <div className="badge">Founders £60/month locked for life • first 20 only</div>
+                <div className="badge">
+                  OPEN NOW • Early Access Pricing • £8 Per Session For Life
+                </div>
               </div>
             </div>
 
-            <div className="heroRight" ref={formRef}>
-              <div className="formCard ia-tile ia-tile-pad">
-                <div className="formTitle">Join the Acre</div>
-                <div className="formSub">
-                  One email. Early access. Founders get invited first.
-                </div>
-
-                <div className="formGrid">
-                  <input
-                    className="form-control formInput"
-                    placeholder="Email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    inputMode="email"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                  />
-
-                  <label className="checkRow">
-                    <input
-                      type="checkbox"
-                      checked={foundersInterest}
-                      onChange={(e) => setFoundersInterest(e.target.checked)}
-                    />
-                    <span>I want a founders spot (£60/month locked for life)</span>
-                  </label>
-
-                  {error ? <div className="formError">{error}</div> : null}
-
-                  <button
-                    type="button"
-                    className="ia-btn ia-btn-primary formBtn"
-                    disabled={loading}
-                    onClick={submit}
-                  >
-                    {loading ? "Joining…" : "Join the Acre"}
-                  </button>
-
-                  <div className="finePrint">
-                    Standard membership will be £100/month. No payment is taken until one month after opening.
-                  </div>
+            <div className="formCard ia-tile ia-tile-pad">
+              <div className="formTitle">
+                Enquire About A Class
+              </div>
+            
+              <div className="formSub">
+                Farm Strong currently runs Mondays and Wednesdays from 6:30pm to 7:30pm.
+              </div>
+            
+              <div className="formGrid">
+                <button
+                  type="button"
+                  className="ia-btn ia-btn-primary formBtn"
+                  onClick={() =>
+                    window.open(
+                      "https://wa.me/447000000000?text=Hi%20I'm%20interested%20in%20attending%20one%20of%20your%20Farm%20Strong%20classes.",
+                      "_blank"
+                    )
+                  }
+                >
+                  Enquire About A Class
+                </button>
+            
+                <div className="finePrint">
+                  £8 per session for life during our early access phase.
+                  Standard pricing will be £12 per session.
                 </div>
               </div>
             </div>
@@ -387,35 +370,6 @@ export default function WaitlistPage() {
         </section>
 
         <main className="main">
-          <section id="founders" className="section">
-            <div className="sectionHead">
-              <div className="sectionEyebrow">FOUNDING OFFER</div>
-              <h2 className="sectionTitle">Founding Members</h2>
-              <p className="sectionSub">
-                Get in early. Pay less forever. Be part of what Iron Acre becomes from day one.
-              </p>
-            </div>
-
-            <div className="grid2">
-              <div className="card ia-tile ia-tile-pad cardFounders">
-                <div className="cardTitle cardTitleAccent">£60 a month for life</div>
-                <div className="cardText">
-                  The first 20 members lock in at <strong>£60 a month for life</strong>. After that, membership moves
-                  to <strong>£100 a month</strong>. If you know you want in, this is the moment to move.
-                </div>
-              </div>
-
-              <div className="card ia-tile ia-tile-pad cardFounders">
-                <div className="cardTitle">More than just a lower price</div>
-                <div className="cardText">
-                  Founding members get <strong>priority access to sessions</strong>, <strong>early access before public launch</strong>,
-                  and an invite to the <strong>opening BBQ</strong>. More importantly, you get to be part of the group
-                  that shapes the culture of the gym from the very start.
-                </div>
-              </div>
-            </div>
-          </section>
-
           <section id="about" className="section">
             <div className="sectionHead">
               <div className="sectionEyebrow">ABOUT IRON ACRE</div>
@@ -599,83 +553,50 @@ export default function WaitlistPage() {
 
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Coach led sessions</div>
+                <div className="cardTitle">
+                  Expert Coaching
+                </div>
+            
                 <div className="cardText">
-                  Every session is coached with intent. You are not left guessing. You get structure, feedback and
-                  progression built into the experience from day one.
+                  Every session is coached from start to finish so you
+                  always know what you're doing and why.
                 </div>
               </div>
-
+            
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Open gym sessions</div>
+                <div className="cardTitle">
+                  Structured Programming
+                </div>
+            
                 <div className="cardText">
-                  Train in your own time as well as in class. Use the space, the equipment and the environment to build
-                  a training routine that actually fits your week.
+                  Every block follows progression and has a purpose.
+                  No random workouts. No guesswork.
                 </div>
               </div>
-
+            
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Full gym program through the custom app</div>
+                <div className="cardTitle">
+                  Outdoor Environment
+                </div>
+            
                 <div className="cardText">
-                  Members get a structured training plan delivered through the app, so progress continues outside the
-                  classes too. It gives you direction, accountability and a proper system to follow.
+                  Train surrounded by woodland and open countryside in
+                  a space you'll actually want to show up to.
                 </div>
               </div>
-
+            
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Online personal training support</div>
+                <div className="cardTitle">
+                  Iron Acre App
+                </div>
+            
                 <div className="cardText">
-                  Every member gets more than gym access. Nutrition tracking, workout tracking, movement tracking,
-                  daily habits and weekly check-ins all come as part of the package. It’s a full personal training
-                  setup for the price of a gym membership.
+                  Track training, bodyweight, performance and progress
+                  directly through the Iron Acre app.
                 </div>
               </div>
             </div>
           </section>
-
-          <section id="next" className="section">
-            <div className="sectionHead">
-              <div className="sectionEyebrow">THE VISION</div>
-              <h2 className="sectionTitle">What’s Next</h2>
-              <p className="sectionSub">This is just the beginning of what Iron Acre becomes.</p>
-            </div>
-
-            <div className="grid2">
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Recovery and contrast therapy</div>
-                <div className="cardText">
-                  Cold water therapy is first in line, followed by wild saunas and wild hot tubs. The goal is to make
-                  Iron Acre more than a place you train. It becomes a place you recover, switch off and reset too.
-                </div>
-              </div>
-
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Expanding the training area</div>
-                <div className="cardText">
-                  More room, more equipment, more session capacity and more ways to train. The gym area will keep
-                  evolving, and the early members will be there to shape what comes next.
-                </div>
-              </div>
-
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">A place with real identity</div>
-                <div className="cardText">
-                  Iron Acre is being built to feel different from the second you arrive. Training with the meadow in
-                  front of you and woodland behind you is part of the experience. It’s a gym with atmosphere, not just
-                  equipment.
-                </div>
-              </div>
-
-              <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Be there from the start</div>
-                <div className="cardText">
-                  The people who join early won’t just get the best price. They’ll be the core of the community and
-                  the first to experience every upgrade as Iron Acre grows.
-                </div>
-              </div>
-            </div>
-          </section>
-
           <section id="faq" className="section">
             <div className="sectionHead">
               <div className="sectionEyebrow">QUESTIONS</div>
@@ -685,33 +606,46 @@ export default function WaitlistPage() {
 
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">How does founders work?</div>
+                <div className="cardTitle">
+                  Expert Coaching
+                </div>
+            
                 <div className="cardText">
-                  The first 20 people to accept the founders invite get £60/month locked for life. After that,
-                  membership moves to £100/month.
+                  Every session is coached from start to finish so you
+                  always know what you're doing and why.
                 </div>
               </div>
-
+            
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">When do I pay?</div>
+                <div className="cardTitle">
+                  Structured Programming
+                </div>
+            
                 <div className="cardText">
-                  No payment is taken until one month after opening. You’re securing your place early and getting
-                  invited first.
+                  Every block follows progression and has a purpose.
+                  No random workouts. No guesswork.
                 </div>
               </div>
-
+            
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Where is it?</div>
+                <div className="cardTitle">
+                  Outdoor Environment
+                </div>
+            
                 <div className="cardText">
-                  Ipswich area. Exact location and directions will be sent by email as we get closer to launch.
+                  Train surrounded by woodland and open countryside in
+                  a space you'll actually want to show up to.
                 </div>
               </div>
-
+            
               <div className="card ia-tile ia-tile-pad">
-                <div className="cardTitle">Is it suitable for beginners?</div>
+                <div className="cardTitle">
+                  Iron Acre App
+                </div>
+            
                 <div className="cardText">
-                  Yes. Sessions are coached and scaled. You start where you are and build from there properly and
-                  safely.
+                  Track training, bodyweight, performance and progress
+                  directly through the Iron Acre app.
                 </div>
               </div>
             </div>
@@ -727,12 +661,23 @@ export default function WaitlistPage() {
             <div className="contactCard ia-tile ia-tile-pad">
               <div className="contactRow">
                 <div className="contactLabel">Best next step</div>
-                <button type="button" className="ia-btn ia-btn-primary" onClick={scrollToForm}>
-                  Join the Acre
-                </button>
+                  <button
+                    type="button"
+                    className="ia-btn ia-btn-primary"
+                    onClick={() =>
+                      window.open(
+                        "https://wa.me/447860861120?text=Hi%20I'm%20interested%20in%20attending%20one%20of%20your%20Farm%20Strong%20classes.",
+                        "_blank"
+                      )
+                    }
+                  >
+                    Enquire About A Class
+                  </button>
               </div>
               <div className="contactFoot">
-                Founders is limited to 20. £60/month is locked in for those spots.
+                Farm Strong currently runs Mondays and Wednesdays from
+                6:30pm to 7:30pm. Early access pricing is £8 per session
+                for life.
               </div>
             </div>
           </section>
