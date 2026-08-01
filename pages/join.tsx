@@ -3,7 +3,7 @@ import Image from "next/image";
 import Head from "next/head";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
-import  "../styles/join.css";
+
 
 type ApiResp =
   | { ok: true; existed: boolean }
