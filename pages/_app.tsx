@@ -6,6 +6,7 @@ import "../styles/bootstrap.css";
 import "../styles/gymworkout.css";
 import "../styles/ironacre-ui.css";
 import { appFont } from "../lib/fonts";
+import  "../styles/join.css";
 
 import NotificationsInit from "../components/NotificationsInit";
 import BillingTrialBanner from "../components/BillingTrialBanner";
