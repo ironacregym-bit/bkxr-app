@@ -189,6 +189,7 @@ export default function WaitlistPage() {
               </button>
               <button type="button" className="navLink" onClick={() => scrollToId("benefits")}>
                 Benefits
+              </button>
               <button type="button" className="navLink" onClick={() => scrollToId("faq")}>
                 FAQ
               </button>
