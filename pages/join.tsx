@@ -387,37 +387,75 @@ export default function WaitlistPage() {
 
         <main className="main">
           <section className="section">
-            <div className="sectionHead">
-              <div className="sectionEyebrow">
-                THIS ISN'T A GYM
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.2fr 0.8fr",
+                gap: 40,
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <div className="sectionEyebrow">
+                  ABOUT IRON ACRE
+                </div>
+          
+                <h2
+                  className="sectionTitle"
+                  style={{
+                    fontSize: "clamp(2rem,4vw,3.5rem)",
+                    lineHeight: 1.1,
+                    marginBottom: 20,
+                  }}
+                >
+                  Strength.
+                  <br />
+                  Fitness.
+                  <br />
+                  Community.
+                </h2>
+          
+                <div
+                  style={{
+                    color: "rgba(255,255,255,.8)",
+                    fontSize: 18,
+                    lineHeight: 1.8,
+                    maxWidth: 650,
+                  }}
+                >
+                  Iron Acre was built for people who want more than a
+                  commercial gym membership.
+          
+                  <br />
+                  <br />
+          
+                  Farm Strong combines strength training and conditioning
+                  in a supportive environment where people push each other
+                  to improve every week.
+          
+                  <br />
+                  <br />
+          
+                  No egos.
+                  No mirrors.
+                  No nonsense.
+          
+                  <br />
+                  <br />
+          
+                  Just good coaching, hard work and real progress.
+                </div>
               </div>
           
-              <h2 className="sectionTitle">
-                Just show up. We'll handle the rest.
-              </h2>
-            </div>
-          
-            <div className="card ia-tile ia-tile-pad">
-              <div className="cardText">
-                Most gyms give you equipment.
-                <br /><br />
-                Most classes just make you tired.
-                <br /><br />
-                Most programmes leave you guessing.
-                <br /><br />
-                Iron Acre is different.
-                <br /><br />
-                Every session is programmed.
-                <br />
-                Every movement has a purpose.
-                <br />
-                Every training block builds towards something.
-                <br /><br />
-                You don't need a plan.
-                <br />
-                You don't need motivation.
-                <br />
-                You just need to turn up.
+              <div
+                className="conceptWrap ia-tile"
+                style={{
+                  marginTop: 0,
+                  height: 500,
+                  borderRadius: 24,
+                }}
+              >
+                {concept2Src}
               </div>
             </div>
           </section>
