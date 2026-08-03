@@ -772,31 +772,41 @@ export default function WaitlistPage() {
 
           <section id="contact" className="section">
             <div className="sectionHead">
-              <div className="sectionEyebrow">READY TO JOIN?</div>
-              <h2 className="sectionTitle">Contact</h2>
-              <p className="sectionSub">Join the Acre and we’ll keep you in the loop by email.</p>
+              <div className="sectionEyebrow">
+                READY TO TRY FARM STRONG?
+              </div>
+          
+              <h2 className="sectionTitle">
+                Come And See What The Hype Is About
+              </h2>
+          
+              <p className="sectionSub">
+                No contracts. No pressure. Just turn up and train.
+              </p>
             </div>
-
+          
             <div className="contactCard ia-tile ia-tile-pad">
               <div className="contactRow">
-                <div className="contactLabel">Best next step</div>
-                  <button
-                    type="button"
-                    className="ia-btn ia-btn-primary"
-                    onClick={() =>
-                      window.open(
-                        "https://wa.me/447860861120?text=Hi%20I'm%20interested%20in%20attending%20one%20of%20your%20Farm%20Strong%20classes.",
-                        "_blank"
-                      )
-                    }
-                  >
-                    Enquire About A Class
-                  </button>
+                <button
+                  type="button"
+                  className="ia-btn ia-btn-primary"
+                  onClick={() =>
+                    window.open(
+                      "https://wa.me/447860861120?text=Hi%20I'm%20interested%20in%20booking%20a%20free%20Farm%20Strong%20taster%20session.",
+                      "_blank"
+                    )
+                  }
+                >
+                  Book My Free Taster Session
+                </button>
               </div>
+          
               <div className="contactFoot">
-                Farm Strong currently runs Mondays and Wednesdays from
-                6:30pm to 7:30pm. Early access pricing is £8 per session
-                for life.
+                Monday & Wednesday • 6:30pm - 7:30pm
+          
+                <br />
+          
+                Early Access Members: £8 Per Session For Life
               </div>
             </div>
           </section>
