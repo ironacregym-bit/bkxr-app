@@ -380,8 +380,8 @@ export default function WaitlistPage() {
                   </div>
                 </div>
               </div>
+            </div>
           </div>
-
           <div className="heroScrollHint" aria-hidden="true" />
         </section>
 
