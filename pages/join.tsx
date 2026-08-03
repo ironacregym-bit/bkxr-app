@@ -337,40 +337,90 @@ export default function WaitlistPage() {
             </div>
 
             <div className="formCard ia-tile ia-tile-pad">
-              <div className="formTitle">
-                Enquire About A Class
-              </div>
-            
-              <div className="formSub">
-                Farm Strong currently runs Mondays and Wednesdays from 6:30pm to 7:30pm.
-              </div>
-            
-              <div className="formGrid">
-                <button
-                  type="button"
-                  className="ia-btn ia-btn-primary formBtn"
-                  onClick={() =>
-                    window.open(
-                      "https://wa.me/447000000000?text=Hi%20I'm%20interested%20in%20attending%20one%20of%20your%20Farm%20Strong%20classes.",
-                      "_blank"
-                    )
-                  }
+              <div className="formCard ia-tile ia-tile-pad">
+                <div className="formTitle">
+                  Book A Free Taster Session
+                </div>
+              
+                <div className="formSub">
+                  Experience Farm Strong for yourself before committing.
+                </div>
+              
+                <div
+                  style={{
+                    marginTop: 12,
+                    display: "grid",
+                    gap: 8,
+                    color: "rgba(255,255,255,.85)",
+                  }}
                 >
-                  Enquire About A Class
-                </button>
-            
-                <div className="finePrint">
-                  £8 per session for life during our early access phase.
-                  Standard pricing will be £12 per session.
+                  <div>✅ Monday 6:30pm - 7:30pm</div>
+                  <div>✅ Wednesday 6:30pm - 7:30pm</div>
+                  <div>✅ All abilities welcome</div>
+                  <div>✅ Early access pricing available</div>
+                </div>
+              
+                <div className="formGrid">
+                  <button
+                    type="button"
+                    className="ia-btn ia-btn-primary formBtn"
+                    onClick={() =>
+                      window.open(
+                        "https://wa.me/447860861120?text=Hi%20I'm%20interested%20in%20booking%20a%20free%20Farm%20Strong%20taster%20session.",
+                        "_blank"
+                      )
+                    }
+                  >
+                    Book My Free Taster Session
+                  </button>
+              
+                  <div className="finePrint">
+                    Early access members lock in £8 sessions for life.
+                    Standard pricing will be £12.
+                  </div>
                 </div>
               </div>
-            </div>
           </div>
 
           <div className="heroScrollHint" aria-hidden="true" />
         </section>
 
         <main className="main">
+          <section className="section">
+            <div className="sectionHead">
+              <div className="sectionEyebrow">
+                THIS ISN'T A GYM
+              </div>
+          
+              <h2 className="sectionTitle">
+                Just show up. We'll handle the rest.
+              </h2>
+            </div>
+          
+            <div className="card ia-tile ia-tile-pad">
+              <div className="cardText">
+                Most gyms give you equipment.
+                <br /><br />
+                Most classes just make you tired.
+                <br /><br />
+                Most programmes leave you guessing.
+                <br /><br />
+                Iron Acre is different.
+                <br /><br />
+                Every session is programmed.
+                <br />
+                Every movement has a purpose.
+                <br />
+                Every training block builds towards something.
+                <br /><br />
+                You don't need a plan.
+                <br />
+                You don't need motivation.
+                <br />
+                You just need to turn up.
+              </div>
+            </div>
+          </section>
           <section id="about" className="section">
             <div className="sectionHead">
               <div className="sectionEyebrow">ABOUT IRON ACRE</div>
@@ -428,7 +478,7 @@ export default function WaitlistPage() {
           <section id="classes" className="section">
             <div className="sectionHead">
               <div className="sectionEyebrow">
-                PROGRAMMING
+                FARM STRONG METHOD
               </div>
           
               <h2 className="sectionTitle">
@@ -452,42 +502,53 @@ export default function WaitlistPage() {
                 </div>
           
                 <div className="cardText">
-                  Farm Strong combines the muscle-building principles of
-                  functional bodybuilding with the fitness-building principles
-                  of strength and conditioning.
+                  We combine the best parts of strength training and
+                  conditioning into one structured coaching system.
+                
+                  <br /><br />
+                
+                  Expect:
+                
+                  <br /><br />
+                
+                  • Kettlebells
+                
                   <br />
+                
+                  • Sandbags
+                
                   <br />
+                
+                  • Carries
+                
+                  <br />
+                
+                  • Sled Pushes
+                
+                  <br />
+                
+                  • Sled Drags
+                
+                  <br />
+                
+                  • Bodyweight Training
+                
+                  <br />
+                
+                  • Functional Strength Work
+                
+                  <br />
+                
+                  • Conditioning Finishers
+                
+                  <br /><br />
+                
                   The goal isn't simply to get tired.
-                  <br />
-                  <br />
-                  The goal is to build the strongest, fittest and most capable
-                  version of yourself.
-                  <br />
-                  <br />
-                  Every training block follows structured progression focused on:
-                  <br />
-                  <br />
-                  • Building lean muscle
-                  <br />
-                  • Increasing strength
-                  <br />
-                  • Improving conditioning
-                  <br />
-                  • Developing athleticism
-                  <br />
-                  • Creating long-term progress
-                  <br />
-                  <br />
-                  Expect sled work, sandbags, carries, kettlebells,
-                  bodyweight movements and progressive strength work delivered
-                  through a system that gives you purpose every time you train.
-                  <br />
-                  <br />
-                  Every session has a reason.
-                  <br />
-                  Every block has progression.
-                  <br />
-                  Every member knows what they're working towards.
+                
+                  <br /><br />
+                
+                  The goal is to become stronger, fitter, leaner and
+                  more capable every month.
                 </div>
           
                 <div
@@ -499,19 +560,19 @@ export default function WaitlistPage() {
                   }}
                 >
                   <span className="diffChip">
-                    Functional Bodybuilding
+                    STRONGER
                   </span>
           
                   <span className="diffChip">
-                    Strength
+                    LEANER
                   </span>
           
                   <span className="diffChip">
-                    Conditioning
+                    FITTER
                   </span>
           
                   <span className="diffChip">
-                    Progression
+                    MORE CONFIDENT
                   </span>
                 </div>
           
@@ -598,6 +659,59 @@ export default function WaitlistPage() {
               </div>
             </div>
           </section>
+          <section className="section">
+            <div className="sectionHead">
+              <div className="sectionEyebrow">
+                REAL PEOPLE
+              </div>
+          
+              <h2 className="sectionTitle">
+                What Members Say
+              </h2>
+            </div>
+          
+            <div className="grid2">
+              <div className="card ia-tile ia-tile-pad">
+                <div className="cardText">
+                  ⭐⭐⭐⭐⭐
+          
+                  <br /><br />
+          
+                  "Helped me rebuild strength after a back injury."
+                </div>
+              </div>
+          
+              <div className="card ia-tile ia-tile-pad">
+                <div className="cardText">
+                  ⭐⭐⭐⭐⭐
+          
+                  <br /><br />
+          
+                  "First gym I've actually stuck with."
+                </div>
+              </div>
+          
+              <div className="card ia-tile ia-tile-pad">
+                <div className="cardText">
+                  ⭐⭐⭐⭐⭐
+          
+                  <br /><br />
+          
+                  "The style of workouts helps me focus on improving every week."
+                </div>
+              </div>
+          
+              <div className="card ia-tile ia-tile-pad">
+                <div className="cardText">
+                  ⭐⭐⭐⭐⭐
+          
+                  <br /><br />
+          
+                  "I genuinely look forward to training."
+                </div>
+              </div>
+            </div>
+          </section>
           <section id="faq" className="section">
             <div className="sectionHead">
               <div className="sectionEyebrow">QUESTIONS</div>
@@ -608,45 +722,49 @@ export default function WaitlistPage() {
             <div className="grid2">
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">
-                  Expert Coaching
+                  How fit do I need to be?
                 </div>
             
                 <div className="cardText">
-                  Every session is coached from start to finish so you
-                  always know what you're doing and why.
+                  You don't.
+            
+                  Sessions are scaled to suit complete beginners through to experienced gym-goers.
                 </div>
               </div>
             
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">
-                  Structured Programming
+                  When are classes?
                 </div>
             
                 <div className="cardText">
-                  Every block follows progression and has a purpose.
-                  No random workouts. No guesswork.
+                  Monday and Wednesday.
+            
+                  6:30pm to 7:30pm.
                 </div>
               </div>
             
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">
-                  Outdoor Environment
+                  How much does it cost?
                 </div>
             
                 <div className="cardText">
-                  Train surrounded by woodland and open countryside in
-                  a space you'll actually want to show up to.
+                  Early access members receive £8 sessions for life.
+            
+                  Standard pricing will be £12.
                 </div>
               </div>
             
               <div className="card ia-tile ia-tile-pad">
                 <div className="cardTitle">
-                  Iron Acre App
+                  Where are you based?
                 </div>
             
                 <div className="cardText">
-                  Track training, bodyweight, performance and progress
-                  directly through the Iron Acre app.
+                  Near Ipswich.
+            
+                  Directions are provided when booking.
                 </div>
               </div>
             </div>
