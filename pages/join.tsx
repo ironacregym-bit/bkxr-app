@@ -455,7 +455,7 @@ export default function WaitlistPage() {
                   borderRadius: 24,
                 }}
               >
-                {concept2Src}
+                <img src="{concept2Src}"></img>
               </div>
             </div>
           </section>
