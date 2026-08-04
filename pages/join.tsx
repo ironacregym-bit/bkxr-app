@@ -399,51 +399,35 @@ export default function WaitlistPage() {
                 <div className="sectionEyebrow">
                   ABOUT IRON ACRE
                 </div>
-          
+              
                 <h2
                   className="sectionTitle"
                   style={{
-                    fontSize: "clamp(2rem,4vw,3.5rem)",
-                    lineHeight: 1.1,
+                    fontSize: "clamp(1.75rem,2.5vw,2.75rem)",
+                    lineHeight: 1.2,
                     marginBottom: 20,
                   }}
                 >
-                  Strength.
-                  <br />
-                  Fitness.
-                  <br />
-                  Community.
+                  Strength • Fitness • Community
                 </h2>
-          
+              
                 <div
                   style={{
                     color: "rgba(255,255,255,.8)",
-                    fontSize: 18,
+                    fontSize: 17,
                     lineHeight: 1.8,
-                    maxWidth: 650,
+                    maxWidth: 580,
                   }}
                 >
-                  Iron Acre was built for people who want more than a
-                  commercial gym membership.
-          
-                  <br />
-                  <br />
-          
-                  Farm Strong combines strength training and conditioning
-                  in a supportive environment where people push each other
-                  to improve every week.
-          
-                  <br />
-                  <br />
-          
-                  No egos.
-                  No mirrors.
-                  No nonsense.
-          
-                  <br />
-                  <br />
-          
-                  Just good coaching, hard work and real progress.
+                  Iron Acre was built for people who want more than a gym membership.
+              
+                  <br /><br />
+              
+                  Farm Strong combines strength training and conditioning in an outdoor environment that challenges you, supports you and keeps you coming back.
+              
+                  <br /><br />
+              
+                  No egos. No nonsense. Just good people training hard together.
                 </div>
               </div>
           
@@ -451,11 +435,22 @@ export default function WaitlistPage() {
                 className="conceptWrap ia-tile"
                 style={{
                   marginTop: 0,
-                  height: 500,
+                  height: 420,
                   borderRadius: 24,
+                  overflow: "hidden",
+                  position: "relative",
                 }}
               >
-                <img src={concept2Src}></img>
+                <Image
+                  src={concept2Src}
+                  alt="Iron Acre Gym"
+                  fill
+                  sizes="50vw"
+                  style={{
+                    objectFit: "cover",
+                    objectPosition: "center",
+                  }}
+                />
               </div>
             </div>
           </section>
