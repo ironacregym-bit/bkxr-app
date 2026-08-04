@@ -121,7 +121,7 @@ export default function WaitlistPage() {
   }
 
   const heroImageSrc = "/concept-3.jpg";
-  const concept2Src = "/concept-2.jpg";
+  const concept2Src = "/Gym_side_view.JPG";
   const logoSrc = "/iron_acre_logo_transparent.png";
 
   return (
