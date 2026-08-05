@@ -2,7 +2,7 @@
 
 import Head from "next/head";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import useSWR from "swr";
 import BottomNav from "../../../components/BottomNav";
@@ -37,6 +37,7 @@ type WorkoutBlock = {
   block_id: string;
   title: string;
   focus?: string | null;
+  ai_prompt?: string | null;
   raw_text: string;
   weeks: WeekPlan[];
   created_by?: string | null;
@@ -61,6 +62,75 @@ const DAY_NAMES: WorkoutDayName[] = [
   "Sunday",
 ];
 
+const DEFAULT_AI_PROMPT = `Act as a strength and conditioning coach designing the next 6-week block for Iron Acre Gym.
+
+Iron Acre is a rural outdoor fitness facility combining:
+- Brian Alsruhe Every Day Carry principles
+- Nuclear Fit / OCR style fitness
+- Strongman-inspired training
+- Functional real-world strength
+
+The identity is:
+MOVE BETTER
+CARRY HEAVY THINGS
+GET STRONG
+WORK HARD
+
+Equipment:
+- Sandbags
+- Kettlebells
+- Farmer carry handles
+- Open outdoor space
+
+Do not rely on barbells.
+
+Class format:
+- 12 members
+- 6 pairs
+- Mixed ability
+- 60 minute sessions
+
+Weekly schedule:
+Monday = Hinge & Carry
+Wednesday = Press & Stability
+Friday = Squat & Grit
+Saturday = Loading & Strongman
+
+Each session should follow:
+5 mins mobility flow
+5 mins bodyweight prep
+12 mins carry/loading block
+20 mins strength block
+12 mins capacity block
+6 mins athletic finisher
+
+Strength should stay the same or similar across the 6 weeks so members can progress.
+
+Capacity and athletic finishers should change weekly with genuinely different stimuli:
+- E3MOM
+- E2MOM
+- AMRAP
+- Chipper
+- Relay
+- Partner accumulation
+- I Go You Go
+- Density block
+- OCR style event work
+
+Avoid Russian twists.
+
+Use core work such as:
+- Deadbugs
+- Pull throughs
+- V-Ups
+- Full body crunches
+- Hollow holds
+- Side planks
+- Carries
+- Holds
+
+Make the plan feel like Brian Alsruhe + Nuclear Fit + Strongman + Iron Acre, not generic bootcamp or CrossFit.`;
+
 function stripBullet(line: string): string {
   return line
     .replace(/^\s*[-*•]\s*/g, "")
@@ -74,7 +144,10 @@ function cleanHeading(line: string): string {
 
 function parseDayHeading(line: string): { dayName: WorkoutDayName; theme?: string } | null {
   const cleaned = cleanHeading(line);
-  const match = cleaned.match(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b\s*[-:–]?\s*(.*)$/i);
+  const match = cleaned.match(
+    /^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b\s*[-:–]?\s*(.*)$/i
+  );
+
   if (!match) return null;
 
   const dayName = DAY_NAMES.find((d) => d.toLowerCase() === match[1].toLowerCase());
@@ -89,6 +162,7 @@ function parseDayHeading(line: string): { dayName: WorkoutDayName; theme?: strin
 function parseWeekHeading(line: string): { weekNumber: number; theme?: string } | null {
   const cleaned = cleanHeading(line);
   const match = cleaned.match(/^WEEK\s+(\d+)\s*[-:]?\s*(.*)$/i);
+
   if (!match) return null;
 
   const weekNumber = Number(match[1]);
@@ -123,6 +197,7 @@ function parseWorkoutText(raw: string): WeekPlan[] {
 
   lines.forEach((line, index) => {
     const heading = parseWeekHeading(line);
+
     if (heading) {
       weekStartIndexes.push({
         index,
@@ -145,8 +220,8 @@ function parseWorkoutText(raw: string): WeekPlan[] {
 
   const weeks: WeekPlan[] = [];
 
-  weekStartIndexes.forEach((weekStart, i) => {
-    const next = weekStartIndexes[i + 1];
+  weekStartIndexes.forEach((weekStart, index) => {
+    const next = weekStartIndexes[index + 1];
     const slice = lines.slice(weekStart.index + 1, next ? next.index : lines.length);
     const rawWeek = slice.join("\n").trim();
 
@@ -166,6 +241,7 @@ function parseDaysFromLines(lines: string[]): WorkoutDay[] {
 
   lines.forEach((line, index) => {
     const parsed = parseDayHeading(line);
+
     if (parsed) {
       dayStartIndexes.push({
         index,
@@ -179,8 +255,8 @@ function parseDaysFromLines(lines: string[]): WorkoutDay[] {
 
   const days: WorkoutDay[] = [];
 
-  dayStartIndexes.forEach((dayStart, i) => {
-    const next = dayStartIndexes[i + 1];
+  dayStartIndexes.forEach((dayStart, index) => {
+    const next = dayStartIndexes[index + 1];
     const slice = lines.slice(dayStart.index + 1, next ? next.index : lines.length);
     const rawDay = slice.join("\n").trim();
 
@@ -201,6 +277,7 @@ function parseDaysFromLines(lines: string[]): WorkoutDay[] {
       if (!trimmed) return;
 
       const nextSection = getSectionFromLine(trimmed);
+
       if (nextSection) {
         section = nextSection;
         return;
@@ -218,25 +295,33 @@ function parseDaysFromLines(lines: string[]): WorkoutDay[] {
   return days;
 }
 
-function normaliseBlocks(raw: any): WorkoutBlock[] {
+function normaliseBlocks(raw: unknown): WorkoutBlock[] {
+  const obj = raw as any;
+
   const arr =
-    (Array.isArray(raw?.blocks) && raw.blocks) ||
-    (Array.isArray(raw?.items) && raw.items) ||
-    (Array.isArray(raw?.data) && raw.data) ||
+    (Array.isArray(obj?.blocks) && obj.blocks) ||
+    (Array.isArray(obj?.items) && obj.items) ||
+    (Array.isArray(obj?.data) && obj.data) ||
     [];
 
   return arr
-    .map((x: any) => ({
-      block_id: String(x?.block_id || x?.id || "").trim(),
-      title: String(x?.title || x?.name || "Untitled block").trim(),
-      focus: x?.focus ?? null,
-      raw_text: String(x?.raw_text || ""),
-      weeks: Array.isArray(x?.weeks) ? x.weeks : [],
-      created_by: x?.created_by ?? null,
-      created_at: x?.created_at ?? null,
-      updated_at: x?.updated_at ?? null,
-    }))
-    .filter((x: WorkoutBlock) => x.block_id);
+    .map((x: any): WorkoutBlock | null => {
+      const blockId = String(x?.block_id || x?.id || "").trim();
+      if (!blockId) return null;
+
+      return {
+        block_id: blockId,
+        title: String(x?.title || x?.name || "Untitled block").trim(),
+        focus: x?.focus ?? null,
+        ai_prompt: x?.ai_prompt ?? null,
+        raw_text: String(x?.raw_text || ""),
+        weeks: Array.isArray(x?.weeks) ? x.weeks : [],
+        created_by: x?.created_by ?? null,
+        created_at: x?.created_at ?? null,
+        updated_at: x?.updated_at ?? null,
+      };
+    })
+    .filter((x: WorkoutBlock | null): x is WorkoutBlock => x !== null);
 }
 
 function SectionList({ title, items }: { title: string; items: string[] }) {
@@ -303,17 +388,18 @@ export default function WorkoutBlocksPage() {
   const ownerEmail = (session?.user?.email || "").toLowerCase();
   const role = (session?.user as any)?.role || "user";
 
-  const { data, mutate, isLoading } = useSWR<BlocksResponse>("/api/workout-blocks?limit=20", fetcher, {
+  const { data, mutate, isLoading } = useSWR<BlocksResponse>("/api/workout-blocks?limit=50", fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
 
   const blocks = useMemo(() => normaliseBlocks(data), [data]);
 
+  const [editingBlockId, setEditingBlockId] = useState<string>("");
   const [title, setTitle] = useState("");
   const [focus, setFocus] = useState("");
+  const [aiPrompt, setAiPrompt] = useState(DEFAULT_AI_PROMPT);
   const [rawText, setRawText] = useState("");
-  const [selectedBlockId, setSelectedBlockId] = useState<string>("");
   const [selectedWeekNumber, setSelectedWeekNumber] = useState<number>(1);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -321,15 +407,24 @@ export default function WorkoutBlocksPage() {
 
   const parsedWeeks = useMemo(() => parseWorkoutText(rawText), [rawText]);
 
-  const selectedBlock = useMemo(() => {
-    if (selectedBlockId) {
-      const found = blocks.find((b) => b.block_id === selectedBlockId);
-      if (found) return found;
-    }
-    return blocks[0] || null;
-  }, [blocks, selectedBlockId]);
+  const editingBlock = useMemo(() => {
+    if (!editingBlockId) return null;
+    return blocks.find((b) => b.block_id === editingBlockId) || null;
+  }, [blocks, editingBlockId]);
 
-  const visibleWeeks = selectedBlock?.weeks?.length ? selectedBlock.weeks : parsedWeeks;
+  useEffect(() => {
+    if (!editingBlock) return;
+
+    setTitle(editingBlock.title || "");
+    setFocus(editingBlock.focus || "");
+    setAiPrompt(editingBlock.ai_prompt || DEFAULT_AI_PROMPT);
+    setRawText(editingBlock.raw_text || "");
+    setSelectedWeekNumber(1);
+    setSaveError(null);
+    setSaveOk(null);
+  }, [editingBlock]);
+
+  const visibleWeeks = parsedWeeks.length ? parsedWeeks : editingBlock?.weeks || [];
 
   const selectedWeek = useMemo(() => {
     return (
@@ -338,6 +433,17 @@ export default function WorkoutBlocksPage() {
       null
     );
   }, [visibleWeeks, selectedWeekNumber]);
+
+  function handleNewBlock() {
+    setEditingBlockId("");
+    setTitle("");
+    setFocus("");
+    setAiPrompt(DEFAULT_AI_PROMPT);
+    setRawText("");
+    setSelectedWeekNumber(1);
+    setSaveError(null);
+    setSaveOk(null);
+  }
 
   async function handleSave() {
     setSaveError(null);
@@ -352,21 +458,25 @@ export default function WorkoutBlocksPage() {
     }
 
     if (!safeRaw) {
-      setSaveError("Paste the workout block text first.");
+      setSaveError("Paste or write the workout block text first.");
       return;
     }
 
     setSaving(true);
 
     try {
+      const isUpdate = Boolean(editingBlockId);
+
       const resp = await fetch("/api/workout-blocks", {
-        method: "POST",
+        method: isUpdate ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          block_id: editingBlockId || undefined,
           title: safeTitle,
           focus: focus.trim() || null,
+          ai_prompt: aiPrompt.trim() || null,
           raw_text: safeRaw,
           weeks: parsedWeeks,
           created_by: ownerEmail || null,
@@ -379,17 +489,28 @@ export default function WorkoutBlocksPage() {
         throw new Error(json?.error || "Failed to save workout block");
       }
 
-      setSaveOk("Workout block saved.");
-      setTitle("");
-      setFocus("");
-      setRawText("");
-      setSelectedBlockId(json.block_id || "");
+      const savedId = String(json?.block_id || editingBlockId || "");
+
+      setSaveOk(isUpdate ? "Workout block updated." : "Workout block saved.");
+      setEditingBlockId(savedId);
       setSelectedWeekNumber(1);
+
       await mutate();
     } catch (err: any) {
       setSaveError(err?.message || "Failed to save workout block");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function copyPromptToClipboard() {
+    try {
+      await navigator.clipboard.writeText(aiPrompt);
+      setSaveOk("AI prompt copied.");
+      setSaveError(null);
+    } catch {
+      setSaveError("Could not copy prompt.");
+      setSaveOk(null);
     }
   }
 
@@ -434,12 +555,23 @@ export default function WorkoutBlocksPage() {
 
         <div className="ia-page-title">Workout blocks</div>
         <div className="ia-page-subtitle">
-          Build, paste and save 6-week Farm Strong blocks. Open each block and click through the weeks like tabs.
+          Create, edit and save 6-week Farm Strong blocks. Use the AI prompt box to generate your next block.
         </div>
 
         <div className="ia-layout">
-          <section className="ia-tile ia-tile-pad ia-create-panel">
-            <div className="ia-panel-title">Create new 6-week block</div>
+          <section className="ia-tile ia-tile-pad ia-editor-panel">
+            <div className="ia-editor-head">
+              <div>
+                <div className="ia-panel-title">{editingBlockId ? "Edit block" : "Create new block"}</div>
+                <div className="text-dim">
+                  {editingBlockId ? "Changes will update the selected block." : "Save this as a new 6-week block."}
+                </div>
+              </div>
+
+              <button type="button" className="ia-btn ia-btn-outline" onClick={handleNewBlock}>
+                New block
+              </button>
+            </div>
 
             <label className="ia-label">
               Block title
@@ -462,7 +594,23 @@ export default function WorkoutBlocksPage() {
             </label>
 
             <label className="ia-label">
-              Paste block text
+              AI prompt
+              <textarea
+                className="ia-textarea ia-prompt-textarea"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="Paste or write the prompt you want to use with AI here."
+              />
+            </label>
+
+            <div className="ia-editor-actions">
+              <button type="button" className="ia-btn ia-btn-outline" onClick={copyPromptToClipboard}>
+                Copy AI prompt
+              </button>
+            </div>
+
+            <label className="ia-label">
+              Workout block text
               <textarea
                 className="ia-textarea"
                 value={rawText}
@@ -498,7 +646,7 @@ Athletic
               </div>
 
               <button className="ia-btn ia-btn-primary" type="button" onClick={handleSave} disabled={saving}>
-                {saving ? "Saving…" : "Save block"}
+                {saving ? "Saving…" : editingBlockId ? "Update block" : "Save block"}
               </button>
             </div>
 
@@ -518,28 +666,20 @@ Athletic
             {blocks.length ? (
               <div className="ia-block-tabs">
                 {blocks.map((block) => {
-                  const active = (selectedBlock?.block_id || "") === block.block_id;
+                  const active = editingBlockId === block.block_id;
+
                   return (
                     <button
                       key={block.block_id}
                       type="button"
                       className={`ia-block-tab ${active ? "active" : ""}`}
-                      onClick={() => {
-                        setSelectedBlockId(block.block_id);
-                        setSelectedWeekNumber(1);
-                      }}
+                      onClick={() => setEditingBlockId(block.block_id)}
                     >
                       <span>{block.title}</span>
                       {block.focus ? <small>{block.focus}</small> : null}
                     </button>
                   );
                 })}
-              </div>
-            ) : null}
-
-            {!blocks.length && parsedWeeks.length ? (
-              <div className="ia-preview-note">
-                Previewing unsaved text. Save it to make it available as a block tab.
               </div>
             ) : null}
 
@@ -562,7 +702,7 @@ Athletic
               </>
             ) : (
               <div className="ia-empty-preview">
-                Paste a block on the left or choose a saved block above.
+                Select a saved block or start writing a new one.
               </div>
             )}
           </section>
@@ -573,18 +713,18 @@ Athletic
 
       <style jsx>{`
         .ia-block-page {
-          max-width: 1180px;
+          max-width: 1220px;
         }
 
         .ia-layout {
           display: grid;
-          grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+          grid-template-columns: minmax(320px, 460px) minmax(0, 1fr);
           gap: 18px;
           margin-top: 18px;
           align-items: start;
         }
 
-        .ia-create-panel,
+        .ia-editor-panel,
         .ia-preview-panel {
           border: 1px solid rgba(255, 255, 255, 0.1);
           background:
@@ -592,17 +732,24 @@ Athletic
             rgba(12, 16, 13, 0.92);
         }
 
+        .ia-editor-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          align-items: flex-start;
+          margin-bottom: 14px;
+        }
+
         .ia-panel-title {
           font-size: 1.05rem;
-          font-weight: 800;
+          font-weight: 850;
           letter-spacing: -0.02em;
-          margin-bottom: 14px;
         }
 
         .ia-label {
           display: block;
           font-size: 0.85rem;
-          font-weight: 700;
+          font-weight: 750;
           color: rgba(255, 255, 255, 0.84);
           margin-bottom: 12px;
         }
@@ -627,12 +774,28 @@ Athletic
         }
 
         .ia-textarea {
-          min-height: 430px;
+          min-height: 390px;
           resize: vertical;
           line-height: 1.45;
           font-family:
-            ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+            ui-monospace,
+            SFMono-Regular,
+            Menlo,
+            Monaco,
+            Consolas,
+            "Liberation Mono",
+            "Courier New",
             monospace;
+        }
+
+        .ia-prompt-textarea {
+          min-height: 220px;
+        }
+
+        .ia-editor-actions {
+          display: flex;
+          justify-content: flex-end;
+          margin: -2px 0 12px;
         }
 
         .ia-parser-row {
@@ -648,7 +811,7 @@ Athletic
           border-radius: 12px;
           padding: 10px 12px;
           font-size: 0.9rem;
-          font-weight: 700;
+          font-weight: 750;
         }
 
         .ia-alert-error {
@@ -698,16 +861,6 @@ Athletic
           margin-top: 5px;
           color: rgba(255, 255, 255, 0.62);
           line-height: 1.25;
-        }
-
-        .ia-preview-note {
-          border: 1px dashed rgba(245, 130, 32, 0.45);
-          background: rgba(245, 130, 32, 0.08);
-          border-radius: 14px;
-          padding: 10px 12px;
-          margin-bottom: 12px;
-          color: rgba(255, 255, 255, 0.78);
-          font-size: 0.9rem;
         }
 
         .ia-week-tabs {
@@ -846,6 +999,10 @@ Athletic
 
           .ia-textarea {
             min-height: 320px;
+          }
+
+          .ia-prompt-textarea {
+            min-height: 200px;
           }
         }
       `}</style>
