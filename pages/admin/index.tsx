@@ -191,10 +191,10 @@ export default function AdminDashboard() {
           tone: "green",
         },
         {
-          title: "Create workout",
-          subtitle: "Build a BXKR workout",
+          title: "Create A Block",
+          subtitle: "Paste the block content as text",
           icon: "fas fa-dumbbell",
-          link: "/admin/workouts/create",
+          link: "/admin/workouts/blocks",
           tone: "green",
         },
         {
