@@ -111,7 +111,7 @@ function normaliseWeeks(input: unknown): WeekPlan[] {
                 raw: cleanString(d?.raw, 12000),
               };
             })
-            .filter((d): d is WorkoutDay => d !== null)
+            .filter((d: WorkoutDay | null): d is WorkoutDay => d !== null)
         : [];
 
       return {
