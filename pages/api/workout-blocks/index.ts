@@ -74,14 +74,17 @@ function normaliseStringArray(input: unknown, maxItems = 100): string[] {
 function normaliseWeeks(input: unknown): WeekPlan[] {
   if (!Array.isArray(input)) return [];
 
-  return input
-    .map((w: any) => {
+  const weeks = input
+    .map((w: any): WeekPlan | null => {
       const weekNumber = Number(w?.weekNumber);
-      if (!Number.isFinite(weekNumber) || weekNumber < 1) return null;
+
+      if (!Number.isFinite(weekNumber) || weekNumber < 1) {
+        return null;
+      }
 
       const days: WorkoutDay[] = Array.isArray(w?.days)
         ? w.days
-            .map((d: any) => {
+            .map((d: any): WorkoutDay | null => {
               const dayName = String(d?.dayName || "").trim() as WorkoutDayName;
 
               const allowedDays: WorkoutDayName[] = [
@@ -94,7 +97,9 @@ function normaliseWeeks(input: unknown): WeekPlan[] {
                 "Sunday",
               ];
 
-              if (!allowedDays.includes(dayName)) return null;
+              if (!allowedDays.includes(dayName)) {
+                return null;
+              }
 
               return {
                 dayName,
@@ -106,7 +111,7 @@ function normaliseWeeks(input: unknown): WeekPlan[] {
                 raw: cleanString(d?.raw, 12000),
               };
             })
-            .filter(Boolean)
+            .filter((d): d is WorkoutDay => d !== null)
         : [];
 
       return {
@@ -116,8 +121,9 @@ function normaliseWeeks(input: unknown): WeekPlan[] {
         raw: cleanString(w?.raw, 25000),
       };
     })
-    .filter(Boolean)
-    .sort((a: WeekPlan, b: WeekPlan) => a.weekNumber - b.weekNumber) as WeekPlan[];
+    .filter((w): w is WeekPlan => w !== null);
+
+  return weeks.sort((a, b) => a.weekNumber - b.weekNumber);
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -126,7 +132,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === "GET") {
     try {
       const rawLimit = Number(req.query.limit || 20);
-      const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(50, rawLimit)) : 20;
+      const limit = Number.isFinite(rawLimit)
+        ? Math.max(1, Math.min(50, rawLimit))
+        : 20;
 
       const snap = await db
         .collection("workout_blocks")
@@ -149,10 +157,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
       });
 
-      return res.status(200).json({ ok: true, blocks });
+      return res.status(200).json({
+        ok: true,
+        blocks,
+      });
     } catch (err: any) {
       console.error("[workout-blocks] GET error:", err?.message || err);
-      return res.status(500).json({ error: err?.message || "Failed to load workout blocks" });
+
+      return res.status(500).json({
+        error: err?.message || "Failed to load workout blocks",
+      });
     }
   }
 
@@ -167,11 +181,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const weeks = normaliseWeeks(p.weeks);
 
       if (!title) {
-        return res.status(400).json({ error: "title is required" });
+        return res.status(400).json({
+          error: "title is required",
+        });
       }
 
       if (!rawText && !weeks.length) {
-        return res.status(400).json({ error: "raw_text or weeks is required" });
+        return res.status(400).json({
+          error: "raw_text or weeks is required",
+        });
       }
 
       const ref = db.collection("workout_blocks").doc();
@@ -200,10 +218,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     } catch (err: any) {
       console.error("[workout-blocks] POST error:", err?.message || err);
-      return res.status(500).json({ error: err?.message || "Failed to save workout block" });
+
+      return res.status(500).json({
+        error: err?.message || "Failed to save workout block",
+      });
     }
   }
 
   res.setHeader("Allow", "GET, POST");
-  return res.status(405).json({ error: "Method not allowed" });
+
+  return res.status(405).json({
+    error: "Method not allowed",
+  });
 }
