@@ -31,12 +31,24 @@ type WeekPlan = {
 };
 
 type CreateWorkoutBlockPayload = {
+  block_id?: string;
   title: string;
   focus?: string | null;
+  ai_prompt?: string | null;
   raw_text: string;
   weeks?: WeekPlan[];
   created_by?: string | null;
 };
+
+const ALLOWED_DAYS: WorkoutDayName[] = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
 
 function serialiseTimestamp(value: any): string | null {
   if (!value) return null;
@@ -66,8 +78,8 @@ function normaliseStringArray(input: unknown, maxItems = 100): string[] {
   if (!Array.isArray(input)) return [];
 
   return input
-    .map((x) => String(x || "").trim())
-    .filter(Boolean)
+    .map((x: unknown) => String(x || "").trim())
+    .filter((x: string) => Boolean(x))
     .slice(0, maxItems);
 }
 
@@ -87,17 +99,7 @@ function normaliseWeeks(input: unknown): WeekPlan[] {
             .map((d: any): WorkoutDay | null => {
               const dayName = String(d?.dayName || "").trim() as WorkoutDayName;
 
-              const allowedDays: WorkoutDayName[] = [
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-                "Sunday",
-              ];
-
-              if (!allowedDays.includes(dayName)) {
+              if (!ALLOWED_DAYS.includes(dayName)) {
                 return null;
               }
 
@@ -121,9 +123,25 @@ function normaliseWeeks(input: unknown): WeekPlan[] {
         raw: cleanString(w?.raw, 25000),
       };
     })
-    .filter((w): w is WeekPlan => w !== null);
+    .filter((w: WeekPlan | null): w is WeekPlan => w !== null);
 
   return weeks.sort((a, b) => a.weekNumber - b.weekNumber);
+}
+
+function serialiseBlock(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) {
+  const data = doc.data() || {};
+
+  return {
+    block_id: data.block_id || doc.id,
+    title: data.title || "Untitled block",
+    focus: data.focus ?? null,
+    ai_prompt: data.ai_prompt ?? null,
+    raw_text: data.raw_text || "",
+    weeks: Array.isArray(data.weeks) ? data.weeks : [],
+    created_by: data.created_by ?? null,
+    created_at: serialiseTimestamp(data.created_at),
+    updated_at: serialiseTimestamp(data.updated_at),
+  };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -132,9 +150,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === "GET") {
     try {
       const rawLimit = Number(req.query.limit || 20);
-      const limit = Number.isFinite(rawLimit)
-        ? Math.max(1, Math.min(50, rawLimit))
-        : 20;
+      const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(50, rawLimit)) : 20;
 
       const snap = await db
         .collection("workout_blocks")
@@ -142,20 +158,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .limit(limit)
         .get();
 
-      const blocks = snap.docs.map((doc) => {
-        const data = doc.data();
-
-        return {
-          block_id: data.block_id || doc.id,
-          title: data.title || "Untitled block",
-          focus: data.focus ?? null,
-          raw_text: data.raw_text || "",
-          weeks: Array.isArray(data.weeks) ? data.weeks : [],
-          created_by: data.created_by ?? null,
-          created_at: serialiseTimestamp(data.created_at),
-          updated_at: serialiseTimestamp(data.updated_at),
-        };
-      });
+      const blocks = snap.docs.map((doc) => serialiseBlock(doc));
 
       return res.status(200).json({
         ok: true,
@@ -176,6 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const title = cleanString(p.title, 160);
       const focus = cleanString(p.focus, 240) || null;
+      const aiPrompt = cleanString(p.ai_prompt, 20000) || null;
       const rawText = cleanString(p.raw_text, 100000);
       const createdBy = cleanString(p.created_by, 320) || null;
       const weeks = normaliseWeeks(p.weeks);
@@ -200,13 +204,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           block_id: ref.id,
           title,
           focus,
+          ai_prompt: aiPrompt,
           raw_text: rawText,
           weeks,
           created_by: createdBy,
           created_at: now,
           updated_at: now,
           status: "active",
-          source: "admin_paste",
+          source: "admin_editor",
           block_type: "farm_strong_6_week",
         },
         { merge: true }
@@ -225,7 +230,78 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  res.setHeader("Allow", "GET, POST");
+  if (req.method === "PUT") {
+    try {
+      const p = req.body as CreateWorkoutBlockPayload;
+
+      const blockId = cleanString(p.block_id, 160);
+      const title = cleanString(p.title, 160);
+      const focus = cleanString(p.focus, 240) || null;
+      const aiPrompt = cleanString(p.ai_prompt, 20000) || null;
+      const rawText = cleanString(p.raw_text, 100000);
+      const createdBy = cleanString(p.created_by, 320) || null;
+      const weeks = normaliseWeeks(p.weeks);
+
+      if (!blockId) {
+        return res.status(400).json({
+          error: "block_id is required",
+        });
+      }
+
+      if (!title) {
+        return res.status(400).json({
+          error: "title is required",
+        });
+      }
+
+      if (!rawText && !weeks.length) {
+        return res.status(400).json({
+          error: "raw_text or weeks is required",
+        });
+      }
+
+      const ref = db.collection("workout_blocks").doc(blockId);
+      const existing = await ref.get();
+
+      if (!existing.exists) {
+        return res.status(404).json({
+          error: "Workout block not found",
+        });
+      }
+
+      const now = Timestamp.now();
+
+      await ref.set(
+        {
+          block_id: blockId,
+          title,
+          focus,
+          ai_prompt: aiPrompt,
+          raw_text: rawText,
+          weeks,
+          updated_by: createdBy,
+          updated_at: now,
+          status: "active",
+          source: "admin_editor",
+          block_type: "farm_strong_6_week",
+        },
+        { merge: true }
+      );
+
+      return res.status(200).json({
+        ok: true,
+        block_id: blockId,
+      });
+    } catch (err: any) {
+      console.error("[workout-blocks] PUT error:", err?.message || err);
+
+      return res.status(500).json({
+        error: err?.message || "Failed to update workout block",
+      });
+    }
+  }
+
+  res.setHeader("Allow", "GET, POST, PUT");
 
   return res.status(405).json({
     error: "Method not allowed",
