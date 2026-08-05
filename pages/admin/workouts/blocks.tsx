@@ -410,7 +410,7 @@ export default function WorkoutBlocksPage() {
           <div className="ia-page-title">Access denied</div>
           <div className="ia-page-subtitle">You do not have permission to view this page.</div>
           <div className="mt-3">
-            /admin
+            <Link href="/admin">
               Back to admin
             </Link>
           </div>
