@@ -50,6 +50,8 @@ type BlocksResponse = {
   blocks: WorkoutBlock[];
 };
 
+type DaySectionKey = "strength" | "capacity" | "athletic" | "notes";
+
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 const DAY_NAMES: WorkoutDayName[] = [
@@ -61,6 +63,8 @@ const DAY_NAMES: WorkoutDayName[] = [
   "Saturday",
   "Sunday",
 ];
+
+const DEFAULT_TRAINING_DAYS: WorkoutDayName[] = ["Monday", "Wednesday", "Friday", "Saturday"];
 
 const DEFAULT_AI_PROMPT = `Act as a strength and conditioning coach designing the next 6-week block for Iron Acre Gym.
 
@@ -174,18 +178,94 @@ function parseWeekHeading(line: string): { weekNumber: number; theme?: string } 
   };
 }
 
-function getSectionFromLine(line: string): "strength" | "capacity" | "athletic" | "notes" | null {
+function getSectionFromLine(line: string): DaySectionKey | null {
   const cleaned = cleanHeading(line).toLowerCase();
 
   if (cleaned.includes("strength")) return "strength";
-  if (cleaned.includes("capacity")) return "capacity";
   if (cleaned.includes("work capacity")) return "capacity";
+  if (cleaned.includes("capacity")) return "capacity";
   if (cleaned.includes("finisher")) return "athletic";
   if (cleaned.includes("athletic")) return "athletic";
   if (cleaned.includes("notes")) return "notes";
   if (cleaned.includes("coaching")) return "notes";
 
   return null;
+}
+
+function textToLines(value: string): string[] {
+  return String(value || "")
+    .split("\n")
+    .map((x) => stripBullet(x))
+    .filter(Boolean);
+}
+
+function linesToText(lines: string[]): string {
+  return (Array.isArray(lines) ? lines : []).join("\n");
+}
+
+function createDefaultDay(dayName: WorkoutDayName): WorkoutDay {
+  return {
+    dayName,
+    theme:
+      dayName === "Monday"
+        ? "Hinge & Carry"
+        : dayName === "Wednesday"
+          ? "Press & Stability"
+          : dayName === "Friday"
+            ? "Squat & Grit"
+            : dayName === "Saturday"
+              ? "Loading & Strongman"
+              : "",
+    strength: [],
+    capacity: [],
+    athletic: [],
+    notes: [],
+    raw: "",
+  };
+}
+
+function createEmptyWeeks(): WeekPlan[] {
+  return Array.from({ length: 6 }).map((_, index) => ({
+    weekNumber: index + 1,
+    theme: "",
+    raw: "",
+    days: DEFAULT_TRAINING_DAYS.map((day) => createDefaultDay(day)),
+  }));
+}
+
+function normaliseWeekShape(input: WeekPlan[]): WeekPlan[] {
+  const source = Array.isArray(input) && input.length ? input : createEmptyWeeks();
+
+  return source
+    .map((week) => {
+      const existingDays = Array.isArray(week.days) ? week.days : [];
+
+      const days = DEFAULT_TRAINING_DAYS.map((dayName) => {
+        const existing = existingDays.find((day) => day.dayName === dayName);
+
+        if (existing) {
+          return {
+            dayName,
+            theme: existing.theme || createDefaultDay(dayName).theme,
+            strength: Array.isArray(existing.strength) ? existing.strength : [],
+            capacity: Array.isArray(existing.capacity) ? existing.capacity : [],
+            athletic: Array.isArray(existing.athletic) ? existing.athletic : [],
+            notes: Array.isArray(existing.notes) ? existing.notes : [],
+            raw: String(existing.raw || ""),
+          };
+        }
+
+        return createDefaultDay(dayName);
+      });
+
+      return {
+        weekNumber: Number(week.weekNumber) || 1,
+        theme: week.theme || "",
+        raw: week.raw || "",
+        days,
+      };
+    })
+    .sort((a, b) => a.weekNumber - b.weekNumber);
 }
 
 function parseWorkoutText(raw: string): WeekPlan[] {
@@ -208,14 +288,14 @@ function parseWorkoutText(raw: string): WeekPlan[] {
   });
 
   if (!weekStartIndexes.length) {
-    return [
+    return normaliseWeekShape([
       {
         weekNumber: 1,
-        theme: "Unparsed Block",
+        theme: "Imported Block",
         raw: text,
         days: parseDaysFromLines(lines),
       },
-    ];
+    ]);
   }
 
   const weeks: WeekPlan[] = [];
@@ -227,13 +307,13 @@ function parseWorkoutText(raw: string): WeekPlan[] {
 
     weeks.push({
       weekNumber: weekStart.weekNumber,
-      theme: weekStart.theme,
+      theme: weekStart.theme || "",
       raw: rawWeek,
       days: parseDaysFromLines(slice),
     });
   });
 
-  return weeks.sort((a, b) => a.weekNumber - b.weekNumber);
+  return normaliseWeekShape(weeks);
 }
 
 function parseDaysFromLines(lines: string[]): WorkoutDay[] {
@@ -262,7 +342,7 @@ function parseDaysFromLines(lines: string[]): WorkoutDay[] {
 
     const day: WorkoutDay = {
       dayName: dayStart.dayName,
-      theme: dayStart.theme,
+      theme: dayStart.theme || createDefaultDay(dayStart.dayName).theme,
       strength: [],
       capacity: [],
       athletic: [],
@@ -270,7 +350,7 @@ function parseDaysFromLines(lines: string[]): WorkoutDay[] {
       raw: rawDay,
     };
 
-    let section: "strength" | "capacity" | "athletic" | "notes" = "notes";
+    let section: DaySectionKey = "notes";
 
     slice.forEach((line) => {
       const trimmed = line.trim();
@@ -295,6 +375,37 @@ function parseDaysFromLines(lines: string[]): WorkoutDay[] {
   return days;
 }
 
+function generateRawTextFromWeeks(weeks: WeekPlan[]): string {
+  return weeks
+    .map((week) => {
+      const weekTitle = `WEEK ${week.weekNumber}${week.theme ? ` - ${week.theme}` : ""}`;
+
+      const daysText = week.days
+        .map((day) => {
+          const title = `${day.dayName}${day.theme ? ` - ${day.theme}` : ""}`;
+
+          const section = (label: string, lines: string[]) => {
+            if (!lines.length) return "";
+            return `${label}\n${lines.map((line) => `- ${line}`).join("\n")}`;
+          };
+
+          return [
+            title,
+            section("Strength", day.strength),
+            section("Capacity", day.capacity),
+            section("Athletic", day.athletic),
+            section("Notes", day.notes),
+          ]
+            .filter(Boolean)
+            .join("\n\n");
+        })
+        .join("\n\n");
+
+      return [weekTitle, daysText].filter(Boolean).join("\n\n");
+    })
+    .join("\n\n");
+}
+
 function normaliseBlocks(raw: unknown): WorkoutBlock[] {
   const obj = raw as any;
 
@@ -315,7 +426,7 @@ function normaliseBlocks(raw: unknown): WorkoutBlock[] {
         focus: x?.focus ?? null,
         ai_prompt: x?.ai_prompt ?? null,
         raw_text: String(x?.raw_text || ""),
-        weeks: Array.isArray(x?.weeks) ? x.weeks : [],
+        weeks: Array.isArray(x?.weeks) ? normaliseWeekShape(x.weeks) : [],
         created_by: x?.created_by ?? null,
         created_at: x?.created_at ?? null,
         updated_at: x?.updated_at ?? null,
@@ -324,7 +435,7 @@ function normaliseBlocks(raw: unknown): WorkoutBlock[] {
     .filter((x: WorkoutBlock | null): x is WorkoutBlock => x !== null);
 }
 
-function SectionList({ title, items }: { title: string; items: string[] }) {
+function SectionPreview({ title, items }: { title: string; items: string[] }) {
   if (!items.length) return null;
 
   return (
@@ -339,45 +450,16 @@ function SectionList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function DayCard({ day }: { day: WorkoutDay }) {
+function DayPreviewCard({ day }: { day: WorkoutDay }) {
   return (
-    <div className="ia-day-card">
-      <div className="ia-day-head">
-        <div>
-          <div className="ia-day-name">{day.dayName}</div>
-          {day.theme ? <div className="ia-day-theme">{day.theme}</div> : null}
-        </div>
-      </div>
+    <div className="ia-preview-day-card">
+      <div className="ia-day-name">{day.dayName}</div>
+      {day.theme ? <div className="ia-day-theme">{day.theme}</div> : null}
 
-      <SectionList title="Strength" items={day.strength} />
-      <SectionList title="Capacity" items={day.capacity} />
-      <SectionList title="Athletic" items={day.athletic} />
-      <SectionList title="Notes" items={day.notes} />
-
-      {!day.strength.length && !day.capacity.length && !day.athletic.length ? (
-        <pre className="ia-raw-day">{day.raw}</pre>
-      ) : null}
-    </div>
-  );
-}
-
-function WeekView({ week }: { week: WeekPlan }) {
-  return (
-    <div className="ia-week-panel">
-      <div className="ia-week-title">
-        Week {week.weekNumber}
-        {week.theme ? <span> - {week.theme}</span> : null}
-      </div>
-
-      {week.days.length ? (
-        <div className="ia-days-grid">
-          {week.days.map((day) => (
-            <DayCard key={`${week.weekNumber}-${day.dayName}`} day={day} />
-          ))}
-        </div>
-      ) : (
-        <pre className="ia-raw-week">{week.raw}</pre>
-      )}
+      <SectionPreview title="Strength" items={day.strength} />
+      <SectionPreview title="Capacity" items={day.capacity} />
+      <SectionPreview title="Athletic" items={day.athletic} />
+      <SectionPreview title="Notes" items={day.notes} />
     </div>
   );
 }
@@ -399,50 +481,136 @@ export default function WorkoutBlocksPage() {
   const [title, setTitle] = useState("");
   const [focus, setFocus] = useState("");
   const [aiPrompt, setAiPrompt] = useState(DEFAULT_AI_PROMPT);
-  const [rawText, setRawText] = useState("");
+  const [draftWeeks, setDraftWeeks] = useState<WeekPlan[]>(createEmptyWeeks());
   const [selectedWeekNumber, setSelectedWeekNumber] = useState<number>(1);
+  const [rawImportText, setRawImportText] = useState("");
+  const [showImport, setShowImport] = useState(false);
+  const [showRawText, setShowRawText] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState<string | null>(null);
-
-  const parsedWeeks = useMemo(() => parseWorkoutText(rawText), [rawText]);
 
   const editingBlock = useMemo(() => {
     if (!editingBlockId) return null;
     return blocks.find((b) => b.block_id === editingBlockId) || null;
   }, [blocks, editingBlockId]);
 
+  const generatedRawText = useMemo(() => generateRawTextFromWeeks(draftWeeks), [draftWeeks]);
+
+  const selectedWeek = useMemo(() => {
+    return (
+      draftWeeks.find((w) => Number(w.weekNumber) === Number(selectedWeekNumber)) ||
+      draftWeeks[0] ||
+      null
+    );
+  }, [draftWeeks, selectedWeekNumber]);
+
   useEffect(() => {
     if (!editingBlock) return;
+
+    const weeksFromBlock =
+      Array.isArray(editingBlock.weeks) && editingBlock.weeks.length
+        ? normaliseWeekShape(editingBlock.weeks)
+        : parseWorkoutText(editingBlock.raw_text || "");
 
     setTitle(editingBlock.title || "");
     setFocus(editingBlock.focus || "");
     setAiPrompt(editingBlock.ai_prompt || DEFAULT_AI_PROMPT);
-    setRawText(editingBlock.raw_text || "");
+    setDraftWeeks(weeksFromBlock.length ? weeksFromBlock : createEmptyWeeks());
     setSelectedWeekNumber(1);
+    setRawImportText(editingBlock.raw_text || "");
+    setShowImport(false);
+    setShowRawText(false);
     setSaveError(null);
     setSaveOk(null);
   }, [editingBlock]);
-
-  const visibleWeeks = parsedWeeks.length ? parsedWeeks : editingBlock?.weeks || [];
-
-  const selectedWeek = useMemo(() => {
-    return (
-      visibleWeeks.find((w) => Number(w.weekNumber) === Number(selectedWeekNumber)) ||
-      visibleWeeks[0] ||
-      null
-    );
-  }, [visibleWeeks, selectedWeekNumber]);
 
   function handleNewBlock() {
     setEditingBlockId("");
     setTitle("");
     setFocus("");
     setAiPrompt(DEFAULT_AI_PROMPT);
-    setRawText("");
+    setDraftWeeks(createEmptyWeeks());
     setSelectedWeekNumber(1);
+    setRawImportText("");
+    setShowImport(false);
+    setShowRawText(false);
     setSaveError(null);
     setSaveOk(null);
+  }
+
+  function updateWeekTheme(weekNumber: number, theme: string) {
+    setDraftWeeks((prev) =>
+      prev.map((week) =>
+        week.weekNumber === weekNumber
+          ? {
+              ...week,
+              theme,
+            }
+          : week
+      )
+    );
+  }
+
+  function updateDayTheme(weekNumber: number, dayName: WorkoutDayName, theme: string) {
+    setDraftWeeks((prev) =>
+      prev.map((week) =>
+        week.weekNumber === weekNumber
+          ? {
+              ...week,
+              days: week.days.map((day) =>
+                day.dayName === dayName
+                  ? {
+                      ...day,
+                      theme,
+                    }
+                  : day
+              ),
+            }
+          : week
+      )
+    );
+  }
+
+  function updateDaySection(
+    weekNumber: number,
+    dayName: WorkoutDayName,
+    section: DaySectionKey,
+    value: string
+  ) {
+    setDraftWeeks((prev) =>
+      prev.map((week) =>
+        week.weekNumber === weekNumber
+          ? {
+              ...week,
+              days: week.days.map((day) =>
+                day.dayName === dayName
+                  ? {
+                      ...day,
+                      textToLines(value),
+                    }
+                  : day
+              ),
+            }
+          : week
+      )
+    );
+  }
+
+  function handleImportText() {
+    const parsed = parseWorkoutText(rawImportText);
+
+    if (!parsed.length) {
+      setSaveError("Could not parse that text. Make sure it contains WEEK 1, Monday, Strength, Capacity and Athletic headings.");
+      setSaveOk(null);
+      return;
+    }
+
+    setDraftWeeks(parsed);
+    setSelectedWeekNumber(1);
+    setShowImport(false);
+    setSaveOk("Imported text into the editor.");
+    setSaveError(null);
   }
 
   async function handleSave() {
@@ -450,17 +618,14 @@ export default function WorkoutBlocksPage() {
     setSaveOk(null);
 
     const safeTitle = title.trim();
-    const safeRaw = rawText.trim();
 
     if (!safeTitle) {
       setSaveError("Add a block title first.");
       return;
     }
 
-    if (!safeRaw) {
-      setSaveError("Paste or write the workout block text first.");
-      return;
-    }
+    const cleanWeeks = normaliseWeekShape(draftWeeks);
+    const rawText = generateRawTextFromWeeks(cleanWeeks);
 
     setSaving(true);
 
@@ -477,8 +642,8 @@ export default function WorkoutBlocksPage() {
           title: safeTitle,
           focus: focus.trim() || null,
           ai_prompt: aiPrompt.trim() || null,
-          raw_text: safeRaw,
-          weeks: parsedWeeks,
+          raw_text: rawText,
+          weeks: cleanWeeks,
           created_by: ownerEmail || null,
         }),
       });
@@ -491,6 +656,8 @@ export default function WorkoutBlocksPage() {
 
       const savedId = String(json?.block_id || editingBlockId || "");
 
+      setDraftWeeks(cleanWeeks);
+      setRawImportText(rawText);
       setSaveOk(isUpdate ? "Workout block updated." : "Workout block saved.");
       setEditingBlockId(savedId);
       setSelectedWeekNumber(1);
@@ -510,6 +677,17 @@ export default function WorkoutBlocksPage() {
       setSaveError(null);
     } catch {
       setSaveError("Could not copy prompt.");
+      setSaveOk(null);
+    }
+  }
+
+  async function copyRawTextToClipboard() {
+    try {
+      await navigator.clipboard.writeText(generatedRawText);
+      setSaveOk("Workout text copied.");
+      setSaveError(null);
+    } catch {
+      setSaveError("Could not copy workout text.");
       setSaveOk(null);
     }
   }
@@ -547,32 +725,67 @@ export default function WorkoutBlocksPage() {
       </Head>
 
       <main className="container py-3 text-white ia-block-page" style={{ paddingBottom: 90 }}>
-        <div className="mb-3">
+        <div className="ia-top-row">
           <Link href="/admin">
             ← Back to admin
           </Link>
+
+          <div className="ia-top-actions">
+            <button type="button" className="ia-btn ia-btn-outline" onClick={handleNewBlock}>
+              New block
+            </button>
+
+            <button type="button" className="ia-btn ia-btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : editingBlockId ? "Update block" : "Save block"}
+            </button>
+          </div>
         </div>
 
         <div className="ia-page-title">Workout blocks</div>
         <div className="ia-page-subtitle">
-          Create, edit and save 6-week Farm Strong blocks. Use the AI prompt box to generate your next block.
+          Edit each week and day properly. The programme is saved as structured weeks, plus clean raw text for reuse.
         </div>
 
-        <div className="ia-layout">
-          <section className="ia-tile ia-tile-pad ia-editor-panel">
-            <div className="ia-editor-head">
-              <div>
-                <div className="ia-panel-title">{editingBlockId ? "Edit block" : "Create new block"}</div>
-                <div className="text-dim">
-                  {editingBlockId ? "Changes will update the selected block." : "Save this as a new 6-week block."}
-                </div>
-              </div>
+        {saveError ? <div className="ia-alert ia-alert-error">{saveError}</div> : null}
+        {saveOk ? <div className="ia-alert ia-alert-ok">{saveOk}</div> : null}
 
-              <button type="button" className="ia-btn ia-btn-outline" onClick={handleNewBlock}>
-                New block
-              </button>
+        <section className="ia-tile ia-tile-pad ia-block-picker">
+          <div className="ia-panel-row">
+            <div>
+              <div className="ia-panel-title">Saved blocks</div>
+              <div className="text-dim">Click a block to load it into the editor.</div>
             </div>
 
+            {isLoading ? <div className="text-dim">Loading…</div> : null}
+          </div>
+
+          {!isLoading && !blocks.length ? <div className="text-dim mt-2">No saved workout blocks yet.</div> : null}
+
+          {blocks.length ? (
+            <div className="ia-block-tabs">
+              {blocks.map((block) => {
+                const active = editingBlockId === block.block_id;
+
+                return (
+                  <button
+                    key={block.block_id}
+                    type="button"
+                    className={`ia-block-tab ${active ? "active" : ""}`}
+                    onClick={() => setEditingBlockId(block.block_id)}
+                  >
+                    <span>{block.title}</span>
+                    {block.focus ? <small>{block.focus}</small> : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </section>
+
+        <section className="ia-tile ia-tile-pad ia-meta-panel">
+          <div className="ia-panel-title">{editingBlockId ? "Editing block" : "New block"}</div>
+
+          <div className="ia-meta-grid">
             <label className="ia-label">
               Block title
               <input
@@ -592,147 +805,251 @@ export default function WorkoutBlocksPage() {
                 placeholder="Strength base, carries, OCR fitness"
               />
             </label>
+          </div>
+        </section>
 
-            <label className="ia-label">
-              AI prompt
-              <textarea
-                className="ia-textarea ia-prompt-textarea"
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="Paste or write the prompt you want to use with AI here."
-              />
-            </label>
+        <section className="ia-layout">
+          <div className="ia-tile ia-tile-pad ia-editor-panel">
+            <div className="ia-panel-row">
+              <div>
+                <div className="ia-panel-title">Structured editor</div>
+                <div className="text-dim">Edit the programme here. This is the source of truth.</div>
+              </div>
 
-            <div className="ia-editor-actions">
-              <button type="button" className="ia-btn ia-btn-outline" onClick={copyPromptToClipboard}>
-                Copy AI prompt
+              <button type="button" className="ia-btn ia-btn-outline" onClick={() => setShowImport((v) => !v)}>
+                {showImport ? "Hide import" : "Import text"}
               </button>
             </div>
 
-            <label className="ia-label">
-              Workout block text
-              <textarea
-                className="ia-textarea"
-                value={rawText}
-                onChange={(e) => {
-                  setRawText(e.target.value);
-                  setSelectedWeekNumber(1);
-                }}
-                placeholder={`WEEK 1 - Foundation Week
+            {showImport ? (
+              <div className="ia-import-box">
+                <label className="ia-label">
+                  Paste generated workout text
+                  <textarea
+                    className="ia-textarea ia-import-textarea"
+                    value={rawImportText}
+                    onChange={(e) => setRawImportText(e.target.value)}
+                    placeholder="Paste the full 6-week block here, then click import."
+                  />
+                </label>
 
-Monday - Hinge & Carry
-
-Strength
-- Sandbag Over Shoulder x4
-- Sandbag Deadlift x8
-- Bent Row x8
-- Plank x30s
-
-Capacity
-- 6 Ground To Shoulder
-- 40m Farmer Carry
-- 8 Burpees
-
-Athletic
-21-15-9
-- KB Swings
-- Full Body Crunches`}
-              />
-            </label>
-
-            <div className="ia-parser-row">
-              <div className="text-dim">
-                Parsed: {parsedWeeks.length} week{parsedWeeks.length === 1 ? "" : "s"}
+                <button type="button" className="ia-btn ia-btn-primary" onClick={handleImportText}>
+                  Import into editor
+                </button>
               </div>
+            ) : null}
 
-              <button className="ia-btn ia-btn-primary" type="button" onClick={handleSave} disabled={saving}>
-                {saving ? "Saving…" : editingBlockId ? "Update block" : "Save block"}
-              </button>
+            <div className="ia-week-tabs">
+              {draftWeeks.map((week) => (
+                <button
+                  key={week.weekNumber}
+                  type="button"
+                  className={`ia-week-tab ${selectedWeekNumber === week.weekNumber ? "active" : ""}`}
+                  onClick={() => setSelectedWeekNumber(week.weekNumber)}
+                >
+                  Week {week.weekNumber}
+                </button>
+              ))}
             </div>
 
-            {saveError ? <div className="ia-alert ia-alert-error">{saveError}</div> : null}
-            {saveOk ? <div className="ia-alert ia-alert-ok">{saveOk}</div> : null}
-          </section>
-
-          <section className="ia-tile ia-tile-pad ia-preview-panel">
-            <div className="ia-panel-title">Saved blocks</div>
-
-            {isLoading ? <div className="text-dim">Loading blocks…</div> : null}
-
-            {!isLoading && !blocks.length ? (
-              <div className="text-dim">No saved workout blocks yet.</div>
-            ) : null}
-
-            {blocks.length ? (
-              <div className="ia-block-tabs">
-                {blocks.map((block) => {
-                  const active = editingBlockId === block.block_id;
-
-                  return (
-                    <button
-                      key={block.block_id}
-                      type="button"
-                      className={`ia-block-tab ${active ? "active" : ""}`}
-                      onClick={() => setEditingBlockId(block.block_id)}
-                    >
-                      <span>{block.title}</span>
-                      {block.focus ? <small>{block.focus}</small> : null}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-
-            {visibleWeeks.length ? (
+            {selectedWeek ? (
               <>
-                <div className="ia-week-tabs">
-                  {visibleWeeks.map((week) => (
-                    <button
-                      key={week.weekNumber}
-                      type="button"
-                      className={`ia-week-tab ${selectedWeekNumber === week.weekNumber ? "active" : ""}`}
-                      onClick={() => setSelectedWeekNumber(week.weekNumber)}
-                    >
-                      Week {week.weekNumber}
-                    </button>
+                <label className="ia-label">
+                  Week theme
+                  <input
+                    className="ia-input"
+                    value={selectedWeek.theme || ""}
+                    onChange={(e) => updateWeekTheme(selectedWeek.weekNumber, e.target.value)}
+                    placeholder="Foundation Week"
+                  />
+                </label>
+
+                <div className="ia-day-editor-grid">
+                  {selectedWeek.days.map((day) => (
+                    <div key={`${selectedWeek.weekNumber}-${day.dayName}`} className="ia-day-editor-card">
+                      <div className="ia-day-editor-head">
+                        <div className="ia-day-name">{day.dayName}</div>
+                      </div>
+
+                      <label className="ia-label">
+                        Theme
+                        <input
+                          className="ia-input"
+                          value={day.theme || ""}
+                          onChange={(e) => updateDayTheme(selectedWeek.weekNumber, day.dayName, e.target.value)}
+                          placeholder="Hinge & Carry"
+                        />
+                      </label>
+
+                      <label className="ia-label">
+                        Strength
+                        <textarea
+                          className="ia-textarea ia-section-textarea"
+                          value={linesToText(day.strength)}
+                          onChange={(e) =>
+                            updateDaySection(selectedWeek.weekNumber, day.dayName, "strength", e.target.value)
+                          }
+                          placeholder="Sandbag Over Shoulder x4&#10;Sandbag Deadlift x8"
+                        />
+                      </label>
+
+                      <label className="ia-label">
+                        Capacity
+                        <textarea
+                          className="ia-textarea ia-section-textarea"
+                          value={linesToText(day.capacity)}
+                          onChange={(e) =>
+                            updateDaySection(selectedWeek.weekNumber, day.dayName, "capacity", e.target.value)
+                          }
+                          placeholder="E3MOM x4&#10;Ground To Shoulder x6"
+                        />
+                      </label>
+
+                      <label className="ia-label">
+                        Athletic
+                        <textarea
+                          className="ia-textarea ia-section-textarea"
+                          value={linesToText(day.athletic)}
+                          onChange={(e) =>
+                            updateDaySection(selectedWeek.weekNumber, day.dayName, "athletic", e.target.value)
+                          }
+                          placeholder="21-15-9&#10;KB Swings&#10;Full Body Crunches"
+                        />
+                      </label>
+
+                      <label className="ia-label">
+                        Notes
+                        <textarea
+                          className="ia-textarea ia-section-textarea ia-notes-textarea"
+                          value={linesToText(day.notes)}
+                          onChange={(e) =>
+                            updateDaySection(selectedWeek.weekNumber, day.dayName, "notes", e.target.value)
+                          }
+                          placeholder="Scaling, coaching notes, equipment notes."
+                        />
+                      </label>
+                    </div>
                   ))}
                 </div>
-
-                {selectedWeek ? <WeekView week={selectedWeek} /> : null}
               </>
-            ) : (
-              <div className="ia-empty-preview">
-                Select a saved block or start writing a new one.
+            ) : null}
+          </div>
+
+          <aside className="ia-tile ia-tile-pad ia-preview-panel">
+            <div className="ia-panel-row">
+              <div>
+                <div className="ia-panel-title">Preview</div>
+                <div className="text-dim">This is how the week will display.</div>
               </div>
+
+              <button type="button" className="ia-btn ia-btn-outline" onClick={copyRawTextToClipboard}>
+                Copy text
+              </button>
+            </div>
+
+            {selectedWeek ? (
+              <div className="ia-week-preview">
+                <div className="ia-week-title">
+                  Week {selectedWeek.weekNumber}
+                  {selectedWeek.theme ? <span> - {selectedWeek.theme}</span> : null}
+                </div>
+
+                <div className="ia-preview-days">
+                  {selectedWeek.days.map((day) => (
+                    <DayPreviewCard key={`preview-${selectedWeek.weekNumber}-${day.dayName}`} day={day} />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="ia-empty-preview">Select a week to preview.</div>
             )}
-          </section>
-        </div>
+
+            <div className="ia-raw-toggle-row">
+              <button type="button" className="ia-btn ia-btn-outline" onClick={() => setShowRawText((v) => !v)}>
+                {showRawText ? "Hide raw text" : "Show raw text"}
+              </button>
+            </div>
+
+            {showRawText ? <pre className="ia-raw-week">{generatedRawText}</pre> : null}
+          </aside>
+        </section>
+
+        <section className="ia-tile ia-tile-pad ia-ai-panel">
+          <div className="ia-panel-row">
+            <div>
+              <div className="ia-panel-title">AI prompt template</div>
+              <div className="text-dim">
+                Keep this at the bottom. Copy it when you want to generate the next block.
+              </div>
+            </div>
+
+            <button type="button" className="ia-btn ia-btn-outline" onClick={copyPromptToClipboard}>
+              Copy AI prompt
+            </button>
+          </div>
+
+          <label className="ia-label">
+            Prompt
+            <textarea
+              className="ia-textarea ia-prompt-textarea"
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder="Paste or edit your reusable prompt here."
+            />
+          </label>
+        </section>
       </main>
 
       <BottomNav />
 
       <style jsx>{`
         .ia-block-page {
-          max-width: 1220px;
+          max-width: 1280px;
         }
 
-        .ia-layout {
-          display: grid;
-          grid-template-columns: minmax(320px, 460px) minmax(0, 1fr);
-          gap: 18px;
-          margin-top: 18px;
-          align-items: start;
+        .ia-top-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 16px;
         }
 
+        .ia-top-actions {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+        }
+
+        .ia-block-picker,
+        .ia-meta-panel,
         .ia-editor-panel,
-        .ia-preview-panel {
+        .ia-preview-panel,
+        .ia-ai-panel {
           border: 1px solid rgba(255, 255, 255, 0.1);
           background:
             radial-gradient(circle at top left, rgba(245, 130, 32, 0.12), transparent 34%),
             rgba(12, 16, 13, 0.92);
         }
 
-        .ia-editor-head {
+        .ia-block-picker,
+        .ia-meta-panel {
+          margin-top: 16px;
+        }
+
+        .ia-layout {
+          display: grid;
+          grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+          gap: 18px;
+          margin-top: 18px;
+          align-items: start;
+        }
+
+        .ia-ai-panel {
+          margin-top: 18px;
+        }
+
+        .ia-panel-row {
           display: flex;
           justify-content: space-between;
           gap: 12px;
@@ -744,6 +1061,12 @@ Athletic
           font-size: 1.05rem;
           font-weight: 850;
           letter-spacing: -0.02em;
+        }
+
+        .ia-meta-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          gap: 14px;
         }
 
         .ia-label {
@@ -774,7 +1097,6 @@ Athletic
         }
 
         .ia-textarea {
-          min-height: 390px;
           resize: vertical;
           line-height: 1.45;
           font-family:
@@ -788,50 +1110,36 @@ Athletic
             monospace;
         }
 
-        .ia-prompt-textarea {
-          min-height: 220px;
+        .ia-import-box {
+          border: 1px solid rgba(245, 130, 32, 0.22);
+          background: rgba(245, 130, 32, 0.06);
+          border-radius: 18px;
+          padding: 14px;
+          margin-bottom: 14px;
         }
 
-        .ia-editor-actions {
-          display: flex;
-          justify-content: flex-end;
-          margin: -2px 0 12px;
+        .ia-import-textarea {
+          min-height: 260px;
         }
 
-        .ia-parser-row {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          align-items: center;
-          margin-top: 14px;
-        }
-
-        .ia-alert {
-          margin-top: 12px;
-          border-radius: 12px;
-          padding: 10px 12px;
+        .ia-section-textarea {
+          min-height: 112px;
           font-size: 0.9rem;
-          font-weight: 750;
         }
 
-        .ia-alert-error {
-          background: rgba(180, 40, 40, 0.16);
-          color: #ffbdbd;
-          border: 1px solid rgba(255, 120, 120, 0.2);
+        .ia-notes-textarea {
+          min-height: 78px;
         }
 
-        .ia-alert-ok {
-          background: rgba(42, 128, 69, 0.16);
-          color: #b7f7c7;
-          border: 1px solid rgba(120, 255, 150, 0.18);
+        .ia-prompt-textarea {
+          min-height: 260px;
         }
 
         .ia-block-tabs {
           display: flex;
           gap: 10px;
           overflow-x: auto;
-          padding-bottom: 8px;
-          margin-bottom: 14px;
+          padding: 10px 0 4px;
         }
 
         .ia-block-tab {
@@ -888,25 +1196,15 @@ Athletic
           border-color: #f58220;
         }
 
-        .ia-week-title {
-          font-size: 1.35rem;
-          font-weight: 900;
-          letter-spacing: -0.04em;
-          margin-bottom: 12px;
-        }
-
-        .ia-week-title span {
-          color: rgba(255, 255, 255, 0.66);
-          font-weight: 700;
-        }
-
-        .ia-days-grid {
+        .ia-day-editor-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
+          gap: 14px;
+          margin-top: 14px;
         }
 
-        .ia-day-card {
+        .ia-day-editor-card,
+        .ia-preview-day-card {
           border: 1px solid rgba(255, 255, 255, 0.1);
           background: rgba(255, 255, 255, 0.045);
           border-radius: 18px;
@@ -914,12 +1212,13 @@ Athletic
           min-width: 0;
         }
 
-        .ia-day-head {
+        .ia-day-editor-head {
           display: flex;
           justify-content: space-between;
+          align-items: center;
+          padding-bottom: 10px;
           margin-bottom: 12px;
           border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-          padding-bottom: 10px;
         }
 
         .ia-day-name {
@@ -933,6 +1232,23 @@ Athletic
           font-weight: 700;
           font-size: 0.9rem;
           margin-top: 2px;
+        }
+
+        .ia-week-title {
+          font-size: 1.35rem;
+          font-weight: 900;
+          letter-spacing: -0.04em;
+          margin-bottom: 12px;
+        }
+
+        .ia-week-title span {
+          color: rgba(255, 255, 255, 0.66);
+          font-weight: 700;
+        }
+
+        .ia-preview-days {
+          display: grid;
+          gap: 12px;
         }
 
         .ia-block-section {
@@ -965,16 +1281,44 @@ Athletic
           margin: 4px 0;
         }
 
-        .ia-raw-week,
-        .ia-raw-day {
+        .ia-raw-toggle-row {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 14px;
+        }
+
+        .ia-raw-week {
           white-space: pre-wrap;
           background: rgba(0, 0, 0, 0.22);
           border: 1px solid rgba(255, 255, 255, 0.08);
           border-radius: 14px;
           padding: 12px;
           color: rgba(255, 255, 255, 0.82);
-          font-size: 0.9rem;
+          font-size: 0.85rem;
           line-height: 1.45;
+          margin-top: 12px;
+          max-height: 420px;
+          overflow: auto;
+        }
+
+        .ia-alert {
+          margin-top: 12px;
+          border-radius: 12px;
+          padding: 10px 12px;
+          font-size: 0.9rem;
+          font-weight: 750;
+        }
+
+        .ia-alert-error {
+          background: rgba(180, 40, 40, 0.16);
+          color: #ffbdbd;
+          border: 1px solid rgba(255, 120, 120, 0.2);
+        }
+
+        .ia-alert-ok {
+          background: rgba(42, 128, 69, 0.16);
+          color: #b7f7c7;
+          border: 1px solid rgba(120, 255, 150, 0.18);
         }
 
         .ia-empty-preview {
@@ -988,21 +1332,27 @@ Athletic
           border-radius: 18px;
         }
 
-        @media (max-width: 980px) {
+        @media (max-width: 1100px) {
           .ia-layout {
             grid-template-columns: 1fr;
           }
+        }
 
-          .ia-days-grid {
+        @media (max-width: 760px) {
+          .ia-top-row,
+          .ia-top-actions,
+          .ia-panel-row {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .ia-meta-grid,
+          .ia-day-editor-grid {
             grid-template-columns: 1fr;
           }
 
-          .ia-textarea {
-            min-height: 320px;
-          }
-
-          .ia-prompt-textarea {
-            min-height: 200px;
+          .ia-block-tab {
+            min-width: 170px;
           }
         }
       `}</style>
