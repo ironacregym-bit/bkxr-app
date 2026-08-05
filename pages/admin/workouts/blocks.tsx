@@ -427,7 +427,7 @@ export default function WorkoutBlocksPage() {
 
       <main className="container py-3 text-white ia-block-page" style={{ paddingBottom: 90 }}>
         <div className="mb-3">
-          /admin
+          <Link href="/admin">
             ← Back to admin
           </Link>
         </div>
