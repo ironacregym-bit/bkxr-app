@@ -572,30 +572,30 @@ export default function WorkoutBlocksPage() {
     );
   }
 
-  function updateDaySection(
-    weekNumber: number,
-    dayName: WorkoutDayName,
-    section: DaySectionKey,
-    value: string
-  ) {
-    setDraftWeeks((prev) =>
-      prev.map((week) =>
-        week.weekNumber === weekNumber
-          ? {
-              ...week,
-              days: week.days.map((day) =>
-                day.dayName === dayName
-                  ? {
-                      ...day,
-                      textToLines(value),
-                    }
-                  : day
-              ),
-            }
-          : week
-      )
-    );
-  }
+function updateDaySection(
+  weekNumber: number,
+  dayName: WorkoutDayName,
+  section: DaySectionKey,
+  value: string
+) {
+  setDraftWeeks((prev) =>
+    prev.map((week) =>
+      week.weekNumber === weekNumber
+        ? {
+            ...week,
+            days: week.days.map((day) =>
+              day.dayName === dayName
+                ? {
+                    ...day,
+                    textToLines(value),
+                  }
+                : day
+            ),
+          }
+        : week
+    )
+  );
+}
 
   function handleImportText() {
     const parsed = parseWorkoutText(rawImportText);
