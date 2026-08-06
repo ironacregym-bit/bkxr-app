@@ -61,8 +61,6 @@ type WorkoutDay = {
   athletic: string[];
   notes: string[];
   raw: string;
-
-  // New structured model, additive to avoid breaking existing saved blocks.
   sections?: WorkoutDaySections;
 };
 
@@ -136,6 +134,7 @@ function normaliseStringArray(input: unknown, maxItems = 100): string[] {
 
 function toNullableNumber(input: unknown): number | null {
   if (input === null || input === undefined || input === "") return null;
+
   const n = Number(input);
   return Number.isFinite(n) ? n : null;
 }
@@ -147,7 +146,10 @@ function normaliseScheme(input: unknown): ProgrammeScheme | null {
 
 function normaliseProgrammeExercise(input: any): ProgrammeExercise | null {
   const name = cleanString(input?.name || input?.exercise_name || input?.title, 160);
-  if (!name) return null;
+
+  if (!name) {
+    return null;
+  }
 
   return {
     id: cleanString(input?.id, 160) || undefined,
@@ -205,11 +207,19 @@ function linesFromSection(section?: ProgrammeSection): string[] {
 
   const output: string[] = [];
 
-  if (section.schemeLabel) output.push(section.schemeLabel);
-  else if (section.scheme) output.push(String(section.scheme));
+  if (section.schemeLabel) {
+    output.push(section.schemeLabel);
+  } else if (section.scheme) {
+    output.push(String(section.scheme));
+  }
 
-  if (section.durationMinutes) output.push(`${section.durationMinutes} mins`);
-  if (section.rounds) output.push(`${section.rounds} rounds`);
+  if (section.durationMinutes) {
+    output.push(`${section.durationMinutes} mins`);
+  }
+
+  if (section.rounds) {
+    output.push(`${section.rounds} rounds`);
+  }
 
   if (Array.isArray(section.instructions)) {
     output.push(...section.instructions.filter(Boolean));
@@ -222,7 +232,11 @@ function linesFromSection(section?: ProgrammeSection): string[] {
       if (ex.reps) pieces.push(String(ex.reps));
       if (ex.notes) pieces.push(`- ${ex.notes}`);
 
-      output.push(pieces.filter(Boolean).join(" "));
+      const line = pieces.filter(Boolean).join(" ").trim();
+
+      if (line) {
+        output.push(line);
+      }
     }
   }
 
@@ -251,33 +265,18 @@ function normaliseWeeks(input: unknown): WeekPlan[] {
 
               const sections = normaliseSections(d?.sections);
 
-              const strength =
-                normaliseStringArray(d?.strength, 120).length > 0
-                  ? normaliseStringArray(d?.strength, 120)
-                  : linesFromSection(sections?.strength);
-
-              const capacity =
-                normaliseStringArray(d?.capacity, 120).length > 0
-                  ? normaliseStringArray(d?.capacity, 120)
-                  : linesFromSection(sections?.capacity);
-
-              const athletic =
-                normaliseStringArray(d?.athletic, 120).length > 0
-                  ? normaliseStringArray(d?.athletic, 120)
-                  : linesFromSection(sections?.athletic);
-
-              const notes =
-                normaliseStringArray(d?.notes, 120).length > 0
-                  ? normaliseStringArray(d?.notes, 120)
-                  : linesFromSection(sections?.notes);
+              const rawStrength = normaliseStringArray(d?.strength, 120);
+              const rawCapacity = normaliseStringArray(d?.capacity, 120);
+              const rawAthletic = normaliseStringArray(d?.athletic, 120);
+              const rawNotes = normaliseStringArray(d?.notes, 120);
 
               const day: WorkoutDay = {
                 dayName,
                 theme: cleanString(d?.theme, 160) || undefined,
-                strength,
-                capacity,
-                athletic,
-                notes,
+                strength: rawStrength.length > 0 ? rawStrength : linesFromSection(sections?.strength),
+                capacity: rawCapacity.length > 0 ? rawCapacity : linesFromSection(sections?.capacity),
+                athletic: rawAthletic.length > 0 ? rawAthletic : linesFromSection(sections?.athletic),
+                notes: rawNotes.length > 0 ? rawNotes : linesFromSection(sections?.notes),
                 raw: cleanString(d?.raw, 12000),
               };
 
@@ -381,7 +380,7 @@ async function resolveStrengthExerciseId(exerciseName: string): Promise<string> 
     .get();
 
   if (!exactNameSnap.empty) {
-    const doc = exactNameSnap.docs[0];
+    const doc = exactNameSnap.docs[0]!;
     const existing = doc.data() || {};
 
     await doc.ref.set(
@@ -404,7 +403,7 @@ async function resolveStrengthExerciseId(exerciseName: string): Promise<string> 
     .get();
 
   if (!normalisedSnap.empty) {
-    const doc = normalisedSnap.docs[0];
+    const doc = normalisedSnap.docs[0]!;
     const existing = doc.data() || {};
 
     await doc.ref.set(
@@ -441,95 +440,85 @@ async function resolveStrengthExerciseId(exerciseName: string): Promise<string> 
   return newRef.id;
 }
 
+function cloneSection(section?: ProgrammeSection): ProgrammeSection | undefined {
+  if (!section) return undefined;
+
+  return {
+    ...section,
+    instructions: Array.isArray(section.instructions) ? [...section.instructions] : [],
+    exercises: Array.isArray(section.exercises) ? section.exercises.map((ex) => ({ ...ex })) : [],
+  };
+}
+
+function cloneDay(day: WorkoutDay): WorkoutDay {
+  return {
+    ...day,
+    strength: Array.isArray(day.strength) ? [...day.strength] : [],
+    capacity: Array.isArray(day.capacity) ? [...day.capacity] : [],
+    athletic: Array.isArray(day.athletic) ? [...day.athletic] : [],
+    notes: Array.isArray(day.notes) ? [...day.notes] : [],
+    sections: day.sections
+      ? {
+          strength: cloneSection(day.sections.strength),
+          capacity: cloneSection(day.sections.capacity),
+          athletic: cloneSection(day.sections.athletic),
+          notes: cloneSection(day.sections.notes),
+        }
+      : undefined,
+  };
+}
+
 async function resolveTrackedStrengthExercises(weeks: WeekPlan[]): Promise<{
   weeks: WeekPlan[];
   trackedStrengthExercises: TrackedStrengthExerciseRef[];
 }> {
   const trackedStrengthExercises: TrackedStrengthExerciseRef[] = [];
-
   const resolvedWeeks: WeekPlan[] = [];
 
   for (const week of weeks) {
     const resolvedDays: WorkoutDay[] = [];
 
     for (const day of week.days) {
-      const nextDay: WorkoutDay = {
-        ...day,
-        strength: Array.isArray(day.strength) ? [...day.strength] : [],
-        capacity: Array.isArray(day.capacity) ? [...day.capacity] : [],
-        athletic: Array.isArray(day.athletic) ? [...day.athletic] : [],
-        notes: Array.isArray(day.notes) ? [...day.notes] : [],
-        sections: day.sections
-          ? {
-              strength: day.sections.strength
-                ? {
-                    ...day.sections.strength,
-                    instructions: Array.isArray(day.sections.strength.instructions)
-                      ? [...day.sections.strength.instructions]
-                      : [],
-                    exercises: Array.isArray(day.sections.strength.exercises)
-                      ? [...day.sections.strength.exercises]
-                      : [],
-                  }
-                : undefined,
-              capacity: day.sections.capacity
-                ? {
-                    ...day.sections.capacity,
-                    instructions: Array.isArray(day.sections.capacity.instructions)
-                      ? [...day.sections.capacity.instructions]
-                      : [],
-                    exercises: Array.isArray(day.sections.capacity.exercises)
-                      ? [...day.sections.capacity.exercises]
-                      : [],
-                  }
-                : undefined,
-              athletic: day.sections.athletic
-                ? {
-                    ...day.sections.athletic,
-                    instructions: Array.isArray(day.sections.athletic.instructions)
-                      ? [...day.sections.athletic.instructions]
-                      : [],
-                    exercises: Array.isArray(day.sections.athletic.exercises)
-                      ? [...day.sections.athletic.exercises]
-                      : [],
-                  }
-                : undefined,
-              notes: day.sections.notes
-                ? {
-                    ...day.sections.notes,
-                    instructions: Array.isArray(day.sections.notes.instructions)
-                      ? [...day.sections.notes.instructions]
-                      : [],
-                    exercises: Array.isArray(day.sections.notes.exercises)
-                      ? [...day.sections.notes.exercises]
-                      : [],
-                  }
-                : undefined,
-            }
-          : undefined,
-      };
-
+      const nextDay = cloneDay(day);
       const strengthExercises = nextDay.sections?.strength?.exercises || [];
 
-      if (strengthExercises.length) {
+      if (strengthExercises.length > 0) {
         const resolvedStrengthExercises: ProgrammeExercise[] = [];
 
         for (const ex of strengthExercises) {
-          if (!ex.tracked) {
-            resolvedStrengthExercises.push(ex);
+          const cleanName = cleanString(ex.name, 180);
+
+          if (!cleanName) {
+            resolvedStrengthExercises.push({
+              ...ex,
+              name: "",
+              tracked: false,
+              strength_exercise_id: null,
+            });
             continue;
           }
 
-          const resolvedId = ex.strength_exercise_id || (await resolveStrengthExerciseId(ex.name));
+          if (!ex.tracked) {
+            resolvedStrengthExercises.push({
+              ...ex,
+              name: cleanName,
+              tracked: false,
+              strength_exercise_id: ex.strength_exercise_id || null,
+            });
+            continue;
+          }
+
+          const resolvedId = ex.strength_exercise_id || (await resolveStrengthExerciseId(cleanName));
 
           resolvedStrengthExercises.push({
             ...ex,
+            name: cleanName,
             tracked: true,
             strength_exercise_id: resolvedId,
           });
 
           trackedStrengthExercises.push({
-            exercise_name: ex.name,
+            exercise_name: cleanName,
             strength_exercise_id: resolvedId,
             weekNumber: week.weekNumber,
             dayName: day.dayName,
@@ -540,4 +529,239 @@ async function resolveTrackedStrengthExercises(weeks: WeekPlan[]): Promise<{
         nextDay.sections = {
           ...(nextDay.sections || {}),
           strength: {
-            ...(nextDay.sections?.strength || {
+            ...(nextDay.sections?.strength || { title: "Strength" }),
+            exercises: resolvedStrengthExercises,
+          },
+        };
+
+        nextDay.strength = linesFromSection(nextDay.sections.strength);
+      }
+
+      resolvedDays.push(nextDay);
+    }
+
+    resolvedWeeks.push({
+      ...week,
+      days: resolvedDays,
+    });
+  }
+
+  return {
+    weeks: resolvedWeeks,
+    trackedStrengthExercises,
+  };
+}
+
+function serialiseBlock(doc: any) {
+  const data = doc.data() || {};
+
+  return {
+    block_id: data.block_id || doc.id,
+    title: data.title || "Untitled block",
+    focus: data.focus ?? null,
+    ai_prompt: data.ai_prompt ?? null,
+    raw_text: data.raw_text || "",
+    weeks: Array.isArray(data.weeks) ? data.weeks : [],
+    tracked_strength_exercises: Array.isArray(data.tracked_strength_exercises)
+      ? data.tracked_strength_exercises
+      : [],
+    created_by: data.created_by ?? null,
+    updated_by: data.updated_by ?? null,
+    created_at: serialiseTimestamp(data.created_at),
+    updated_at: serialiseTimestamp(data.updated_at),
+    status: data.status ?? null,
+    source: data.source ?? null,
+    block_type: data.block_type ?? null,
+  };
+}
+
+async function buildBlockPayload(input: {
+  blockId: string;
+  title: string;
+  focus: string | null;
+  aiPrompt: string | null;
+  rawText: string;
+  weeks: WeekPlan[];
+  actorEmail: string | null;
+  mode: "create" | "update";
+}) {
+  const now = Timestamp.now();
+  const resolved = await resolveTrackedStrengthExercises(input.weeks);
+
+  const payload: Record<string, any> = {
+    block_id: input.blockId,
+    title: input.title,
+    focus: input.focus,
+    ai_prompt: input.aiPrompt,
+    raw_text: input.rawText,
+    weeks: resolved.weeks,
+    tracked_strength_exercises: resolved.trackedStrengthExercises,
+    updated_at: now,
+    status: "active",
+    source: "admin_editor",
+    block_type: "farm_strong_6_week",
+  };
+
+  if (input.mode === "create") {
+    payload.created_by = input.actorEmail;
+    payload.created_at = now;
+  } else {
+    payload.updated_by = input.actorEmail;
+  }
+
+  return payload;
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const db = firestore;
+
+  if (req.method === "GET") {
+    try {
+      const rawLimit = Number(req.query.limit || 20);
+      const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(50, rawLimit)) : 20;
+
+      const snap = await db
+        .collection("workout_blocks")
+        .orderBy("created_at", "desc")
+        .limit(limit)
+        .get();
+
+      const blocks = snap.docs.map((doc) => serialiseBlock(doc));
+
+      return res.status(200).json({
+        ok: true,
+        blocks,
+      });
+    } catch (err: any) {
+      console.error("[workout-blocks] GET error:", err?.message || err);
+
+      return res.status(500).json({
+        error: err?.message || "Failed to load workout blocks",
+      });
+    }
+  }
+
+  if (req.method === "POST") {
+    try {
+      const p = req.body as CreateWorkoutBlockPayload;
+
+      const title = cleanString(p.title, 160);
+      const focus = cleanString(p.focus, 240) || null;
+      const aiPrompt = cleanString(p.ai_prompt, 20000) || null;
+      const rawText = cleanString(p.raw_text, 100000);
+      const createdBy = cleanString(p.created_by, 320) || null;
+      const weeks = normaliseWeeks(p.weeks);
+
+      if (!title) {
+        return res.status(400).json({
+          error: "title is required",
+        });
+      }
+
+      if (!rawText && !weeks.length) {
+        return res.status(400).json({
+          error: "raw_text or weeks is required",
+        });
+      }
+
+      const ref = db.collection("workout_blocks").doc();
+
+      const payload = await buildBlockPayload({
+        blockId: ref.id,
+        title,
+        focus,
+        aiPrompt,
+        rawText,
+        weeks,
+        actorEmail: createdBy,
+        mode: "create",
+      });
+
+      await ref.set(payload, { merge: true });
+
+      return res.status(201).json({
+        ok: true,
+        block_id: ref.id,
+        tracked_strength_exercises: payload.tracked_strength_exercises || [],
+      });
+    } catch (err: any) {
+      console.error("[workout-blocks] POST error:", err?.message || err);
+
+      return res.status(500).json({
+        error: err?.message || "Failed to save workout block",
+      });
+    }
+  }
+
+  if (req.method === "PUT") {
+    try {
+      const p = req.body as CreateWorkoutBlockPayload;
+
+      const blockId = cleanString(p.block_id, 160);
+      const title = cleanString(p.title, 160);
+      const focus = cleanString(p.focus, 240) || null;
+      const aiPrompt = cleanString(p.ai_prompt, 20000) || null;
+      const rawText = cleanString(p.raw_text, 100000);
+      const updatedBy = cleanString(p.created_by, 320) || null;
+      const weeks = normaliseWeeks(p.weeks);
+
+      if (!blockId) {
+        return res.status(400).json({
+          error: "block_id is required",
+        });
+      }
+
+      if (!title) {
+        return res.status(400).json({
+          error: "title is required",
+        });
+      }
+
+      if (!rawText && !weeks.length) {
+        return res.status(400).json({
+          error: "raw_text or weeks is required",
+        });
+      }
+
+      const ref = db.collection("workout_blocks").doc(blockId);
+      const existing = await ref.get();
+
+      if (!existing.exists) {
+        return res.status(404).json({
+          error: "Workout block not found",
+        });
+      }
+
+      const payload = await buildBlockPayload({
+        blockId,
+        title,
+        focus,
+        aiPrompt,
+        rawText,
+        weeks,
+        actorEmail: updatedBy,
+        mode: "update",
+      });
+
+      await ref.set(payload, { merge: true });
+
+      return res.status(200).json({
+        ok: true,
+        block_id: blockId,
+        tracked_strength_exercises: payload.tracked_strength_exercises || [],
+      });
+    } catch (err: any) {
+      console.error("[workout-blocks] PUT error:", err?.message || err);
+
+      return res.status(500).json({
+        error: err?.message || "Failed to update workout block",
+      });
+    }
+  }
+
+  res.setHeader("Allow", "GET, POST, PUT");
+
+  return res.status(405).json({
+    error: "Method not allowed",
+  });
+}
