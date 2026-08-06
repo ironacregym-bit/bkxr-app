@@ -832,16 +832,16 @@ export default function WorkoutBlocksPage() {
       const sections = normaliseDaySections(day, day.dayName);
       const current = normaliseProgrammeSection((sections as any)[section], createDefaultSection(section, "CUSTOM", "", null));
 
-      return {
-        ...day,
-        sections: {
-          ...sections,
-          {
-            ...current,
-            ...patch,
-          },
+     return {
+      ...day,
+      sections: {
+        ...sections,
+        [section]: {
+          ...current,
+          ...patch,
         },
-      };
+      },
+    };
     });
   }
 
