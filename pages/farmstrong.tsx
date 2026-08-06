@@ -500,7 +500,7 @@ export default function FarmStrongPage() {
 
       setLiftValues((prev) => ({
         ...prev,
-        "",
+        key : "",
       }));
 
       setExpandedLiftKey(key);
