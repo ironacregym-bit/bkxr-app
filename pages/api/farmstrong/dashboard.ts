@@ -53,17 +53,22 @@ export default async function handler(
     //
     const currentSnap = await firestore
       .collection("farmstrong_settings")
-      .doc("current")
+      .doc("main")
       .get();
-
+    
     const activeBlockId =
-      currentSnap.data()?.active_block_id || null;
+      currentSnap.data()?.active_workout_block_id || null;
+    
+    const currentWeekNumber =
+      Number(
+        currentSnap.data()?.current_week_number || 1
+      );
 
     let activeBlock: any = null;
 
     if (activeBlockId) {
       const blockSnap = await firestore
-        .collection("farmstrong_blocks")
+        .collection("workout_blocks")
         .doc(activeBlockId)
         .get();
 
@@ -74,12 +79,27 @@ export default async function handler(
         };
       }
     }
+    //
+    // CURRENT PROGRAMMED WEEK
+    //
+    const currentWeek =
+      activeBlock?.weeks?.find(
+        (w: any) =>
+          Number(w.weekNumber) === currentWeekNumber
+      ) || null;
 
+
+    
     //
     // EXERCISES
     //
+    const trackedStrengthExercises =
+      activeBlock?.tracked_strength_exercises || [];
+    
     const strengthExerciseIds =
-      activeBlock?.exercise_ids || [];
+      trackedStrengthExercises.map(
+        (x: any) => x.strength_exercise_id
+      );
 
     const exerciseDocs = await Promise.all(
       strengthExerciseIds.map((id: string) =>
@@ -210,17 +230,21 @@ export default async function handler(
           )
         : lifts;
 
-    return res.status(200).json({
-      ok: true,
-
-      activeBlock,
-
-      exercises,
-
-      weightHistory,
-
-      lifts: blockLifts,
-    });
+  return res.status(200).json({
+    ok: true,
+  
+    activeBlock,
+  
+    currentWeek,
+  
+    currentWeekNumber,
+  
+    exercises,
+  
+    weightHistory,
+  
+    lifts: blockLifts,
+  });
   } catch (err: any) {
     console.error(
       "[farmstrong/dashboard]",
