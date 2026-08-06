@@ -16,6 +16,45 @@ type WorkoutDayName =
   | "Saturday"
   | "Sunday";
 
+type ProgrammeScheme =
+  | "E2MOM"
+  | "E3MOM"
+  | "E5MOM"
+  | "EMOM"
+  | "AMRAP"
+  | "FOR_TIME"
+  | "CHIPPER"
+  | "DENSITY"
+  | "RELAY"
+  | "SETS_REPS"
+  | "CUSTOM";
+
+type ProgrammeExercise = {
+  id?: string;
+  name: string;
+  reps?: string | null;
+  notes?: string | null;
+  tracked?: boolean;
+  strength_exercise_id?: string | null;
+};
+
+type ProgrammeSection = {
+  title?: string;
+  scheme?: ProgrammeScheme | null;
+  schemeLabel?: string | null;
+  durationMinutes?: number | null;
+  rounds?: number | null;
+  instructions?: string[];
+  exercises?: ProgrammeExercise[];
+};
+
+type WorkoutDaySections = {
+  strength?: ProgrammeSection;
+  capacity?: ProgrammeSection;
+  athletic?: ProgrammeSection;
+  notes?: ProgrammeSection;
+};
+
 type WorkoutDay = {
   dayName: WorkoutDayName;
   theme?: string;
@@ -24,6 +63,7 @@ type WorkoutDay = {
   athletic: string[];
   notes: string[];
   raw: string;
+  sections?: WorkoutDaySections;
 };
 
 type WeekPlan = {
@@ -40,6 +80,12 @@ type WorkoutBlock = {
   ai_prompt?: string | null;
   raw_text: string;
   weeks: WeekPlan[];
+  tracked_strength_exercises?: Array<{
+    exercise_name: string;
+    strength_exercise_id: string;
+    weekNumber: number;
+    dayName: WorkoutDayName;
+  }>;
   created_by?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -65,6 +111,20 @@ const DAY_NAMES: WorkoutDayName[] = [
 ];
 
 const DEFAULT_TRAINING_DAYS: WorkoutDayName[] = ["Monday", "Wednesday", "Friday", "Saturday"];
+
+const SCHEME_OPTIONS: Array<{ value: ProgrammeScheme; label: string }> = [
+  { value: "E2MOM", label: "E2MOM" },
+  { value: "E3MOM", label: "E3MOM" },
+  { value: "E5MOM", label: "E5MOM" },
+  { value: "EMOM", label: "EMOM" },
+  { value: "AMRAP", label: "AMRAP" },
+  { value: "FOR_TIME", label: "For Time" },
+  { value: "CHIPPER", label: "Chipper" },
+  { value: "DENSITY", label: "Density" },
+  { value: "RELAY", label: "Relay" },
+  { value: "SETS_REPS", label: "Sets/Reps" },
+  { value: "CUSTOM", label: "Custom" },
+];
 
 const DEFAULT_AI_PROMPT = `Act as a strength and conditioning coach designing the next 6-week block for Iron Acre Gym.
 
@@ -203,24 +263,47 @@ function linesToText(lines: string[]): string {
   return (Array.isArray(lines) ? lines : []).join("\n");
 }
 
+function toNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function createDefaultSection(title: string, scheme: ProgrammeScheme | null, schemeLabel: string, durationMinutes: number | null): ProgrammeSection {
+  return {
+    title,
+    scheme,
+    schemeLabel,
+    durationMinutes,
+    rounds: null,
+    instructions: [],
+    exercises: [],
+  };
+}
+
+function defaultDayTheme(dayName: WorkoutDayName): string {
+  if (dayName === "Monday") return "Hinge & Carry";
+  if (dayName === "Wednesday") return "Press & Stability";
+  if (dayName === "Friday") return "Squat & Grit";
+  if (dayName === "Saturday") return "Loading & Strongman";
+  return "";
+}
+
 function createDefaultDay(dayName: WorkoutDayName): WorkoutDay {
   return {
     dayName,
-    theme:
-      dayName === "Monday"
-        ? "Hinge & Carry"
-        : dayName === "Wednesday"
-          ? "Press & Stability"
-          : dayName === "Friday"
-            ? "Squat & Grit"
-            : dayName === "Saturday"
-              ? "Loading & Strongman"
-              : "",
+    theme: defaultDayTheme(dayName),
     strength: [],
     capacity: [],
     athletic: [],
     notes: [],
     raw: "",
+    sections: {
+      strength: createDefaultSection("Strength", "E5MOM", "E5MOM x 4", 20),
+      capacity: createDefaultSection("Capacity", "E3MOM", "E3MOM x 4", 12),
+      athletic: createDefaultSection("Athletic", "CUSTOM", "", 6),
+      notes: createDefaultSection("Notes", "CUSTOM", "", null),
+    },
   };
 }
 
@@ -233,6 +316,132 @@ function createEmptyWeeks(): WeekPlan[] {
   }));
 }
 
+function lineToExercise(line: string): ProgrammeExercise {
+  return {
+    name: line,
+    reps: "",
+    notes: null,
+    tracked: false,
+    strength_exercise_id: null,
+  };
+}
+
+function sectionToLines(section?: ProgrammeSection): string[] {
+  if (!section) return [];
+
+  const output: string[] = [];
+
+  if (section.schemeLabel) output.push(section.schemeLabel);
+  else if (section.scheme && section.scheme !== "CUSTOM") output.push(section.scheme);
+
+  if (section.durationMinutes) output.push(`${section.durationMinutes} mins`);
+
+  if (Array.isArray(section.instructions)) {
+    output.push(...section.instructions.filter(Boolean));
+  }
+
+  if (Array.isArray(section.exercises)) {
+    for (const ex of section.exercises) {
+      const parts = [ex.name];
+
+      if (ex.reps) parts.push(ex.reps);
+      if (ex.notes) parts.push(`- ${ex.notes}`);
+
+      const label = parts.filter(Boolean).join(" ");
+      if (label) output.push(label);
+    }
+  }
+
+  return output.filter(Boolean);
+}
+
+function normaliseProgrammeExercise(input: any): ProgrammeExercise | null {
+  const name = String(input?.name || input?.exercise_name || "").trim();
+  if (!name) return null;
+
+  return {
+    id: String(input?.id || "").trim() || undefined,
+    name,
+    reps: String(input?.reps || "").trim() || "",
+    notes: String(input?.notes || "").trim() || null,
+    tracked: input?.tracked === true || String(input?.tracked || "").toLowerCase() === "true",
+    strength_exercise_id: String(input?.strength_exercise_id || "").trim() || null,
+  };
+}
+
+function normaliseProgrammeSection(input: any, fallback: ProgrammeSection): ProgrammeSection {
+  if (!input || typeof input !== "object") return fallback;
+
+  const exercises = Array.isArray(input.exercises)
+    ? input.exercises
+        .map((x: any): ProgrammeExercise | null => normaliseProgrammeExercise(x))
+        .filter((x: ProgrammeExercise | null): x is ProgrammeExercise => x !== null)
+    : fallback.exercises || [];
+
+  return {
+    title: String(input.title || fallback.title || "").trim() || fallback.title,
+    scheme: (String(input.scheme || fallback.scheme || "CUSTOM").trim() as ProgrammeScheme) || "CUSTOM",
+    schemeLabel: String(input.schemeLabel || input.scheme_label || fallback.schemeLabel || "").trim(),
+    durationMinutes: toNullableNumber(input.durationMinutes ?? input.duration_minutes ?? fallback.durationMinutes),
+    rounds: toNullableNumber(input.rounds ?? fallback.rounds),
+    instructions: Array.isArray(input.instructions) ? textToLines(input.instructions.join("\n")) : fallback.instructions || [],
+    exercises,
+  };
+}
+
+function normaliseDaySections(day: Partial<WorkoutDay>, dayName: WorkoutDayName): WorkoutDaySections {
+  const fallback = createDefaultDay(dayName).sections || {};
+
+  const strengthLines = Array.isArray(day.strength) ? day.strength : [];
+  const capacityLines = Array.isArray(day.capacity) ? day.capacity : [];
+  const athleticLines = Array.isArray(day.athletic) ? day.athletic : [];
+  const noteLines = Array.isArray(day.notes) ? day.notes : [];
+
+  const strengthFallback: ProgrammeSection = {
+    ...(fallback.strength || createDefaultSection("Strength", "E5MOM", "E5MOM x 4", 20)),
+    exercises: strengthLines.map(lineToExercise),
+  };
+
+  const capacityFallback: ProgrammeSection = {
+    ...(fallback.capacity || createDefaultSection("Capacity", "E3MOM", "E3MOM x 4", 12)),
+    instructions: capacityLines,
+  };
+
+  const athleticFallback: ProgrammeSection = {
+    ...(fallback.athletic || createDefaultSection("Athletic", "CUSTOM", "", 6)),
+    instructions: athleticLines,
+  };
+
+  const notesFallback: ProgrammeSection = {
+    ...(fallback.notes || createDefaultSection("Notes", "CUSTOM", "", null)),
+    instructions: noteLines,
+  };
+
+  const inputSections = day.sections || {};
+
+  return {
+    strength: normaliseProgrammeSection(inputSections.strength, strengthFallback),
+    capacity: normaliseProgrammeSection(inputSections.capacity, capacityFallback),
+    athletic: normaliseProgrammeSection(inputSections.athletic, athleticFallback),
+    notes: normaliseProgrammeSection(inputSections.notes, notesFallback),
+  };
+}
+
+function normaliseDay(input: Partial<WorkoutDay>, dayName: WorkoutDayName): WorkoutDay {
+  const sections = normaliseDaySections(input, dayName);
+
+  return {
+    dayName,
+    theme: input.theme || defaultDayTheme(dayName),
+    strength: sectionToLines(sections.strength),
+    capacity: sectionToLines(sections.capacity),
+    athletic: sectionToLines(sections.athletic),
+    notes: sectionToLines(sections.notes),
+    raw: String(input.raw || ""),
+    sections,
+  };
+}
+
 function normaliseWeekShape(input: WeekPlan[]): WeekPlan[] {
   const source = Array.isArray(input) && input.length ? input : createEmptyWeeks();
 
@@ -242,20 +451,7 @@ function normaliseWeekShape(input: WeekPlan[]): WeekPlan[] {
 
       const days = DEFAULT_TRAINING_DAYS.map((dayName) => {
         const existing = existingDays.find((day) => day.dayName === dayName);
-
-        if (existing) {
-          return {
-            dayName,
-            theme: existing.theme || createDefaultDay(dayName).theme,
-            strength: Array.isArray(existing.strength) ? existing.strength : [],
-            capacity: Array.isArray(existing.capacity) ? existing.capacity : [],
-            athletic: Array.isArray(existing.athletic) ? existing.athletic : [],
-            notes: Array.isArray(existing.notes) ? existing.notes : [],
-            raw: String(existing.raw || ""),
-          };
-        }
-
-        return createDefaultDay(dayName);
+        return normaliseDay(existing || createDefaultDay(dayName), dayName);
       });
 
       return {
@@ -340,14 +536,11 @@ function parseDaysFromLines(lines: string[]): WorkoutDay[] {
     const slice = lines.slice(dayStart.index + 1, next ? next.index : lines.length);
     const rawDay = slice.join("\n").trim();
 
-    const day: WorkoutDay = {
-      dayName: dayStart.dayName,
-      theme: dayStart.theme || createDefaultDay(dayStart.dayName).theme,
+    const sectionLines: Record<DaySectionKey, string[]> = {
       strength: [],
       capacity: [],
       athletic: [],
       notes: [],
-      raw: rawDay,
     };
 
     let section: DaySectionKey = "notes";
@@ -366,10 +559,23 @@ function parseDaysFromLines(lines: string[]): WorkoutDay[] {
       const cleaned = stripBullet(trimmed);
       if (!cleaned) return;
 
-      day[section].push(cleaned);
+      sectionLines[section].push(cleaned);
     });
 
-    days.push(day);
+    days.push(
+      normaliseDay(
+        {
+          dayName: dayStart.dayName,
+          theme: dayStart.theme || defaultDayTheme(dayStart.dayName),
+          strength: sectionLines.strength,
+          capacity: sectionLines.capacity,
+          athletic: sectionLines.athletic,
+          notes: sectionLines.notes,
+          raw: rawDay,
+        },
+        dayStart.dayName
+      )
+    );
   });
 
   return days;
@@ -427,6 +633,9 @@ function normaliseBlocks(raw: unknown): WorkoutBlock[] {
         ai_prompt: x?.ai_prompt ?? null,
         raw_text: String(x?.raw_text || ""),
         weeks: Array.isArray(x?.weeks) ? normaliseWeekShape(x.weeks) : [],
+        tracked_strength_exercises: Array.isArray(x?.tracked_strength_exercises)
+          ? x.tracked_strength_exercises
+          : [],
         created_by: x?.created_by ?? null,
         created_at: x?.created_at ?? null,
         updated_at: x?.updated_at ?? null,
@@ -435,12 +644,30 @@ function normaliseBlocks(raw: unknown): WorkoutBlock[] {
     .filter((x: WorkoutBlock | null): x is WorkoutBlock => x !== null);
 }
 
-function SectionPreview({ title, items }: { title: string; items: string[] }) {
+function SectionPreview({
+  title,
+  section,
+  fallbackItems,
+}: {
+  title: string;
+  section?: ProgrammeSection;
+  fallbackItems: string[];
+}) {
+  const items = section ? sectionToLines(section) : fallbackItems;
+
   if (!items.length) return null;
 
   return (
     <div className="ia-block-section">
       <div className="ia-block-section-title">{title}</div>
+
+      {section?.schemeLabel || section?.durationMinutes ? (
+        <div className="ia-scheme-preview">
+          {section.schemeLabel ? <span>{section.schemeLabel}</span> : null}
+          {section.durationMinutes ? <small>{section.durationMinutes} mins</small> : null}
+        </div>
+      ) : null}
+
       <ul className="ia-block-list">
         {items.map((item, index) => (
           <li key={`${title}-${index}`}>{item}</li>
@@ -456,12 +683,16 @@ function DayPreviewCard({ day }: { day: WorkoutDay }) {
       <div className="ia-day-name">{day.dayName}</div>
       {day.theme ? <div className="ia-day-theme">{day.theme}</div> : null}
 
-      <SectionPreview title="Strength" items={day.strength} />
-      <SectionPreview title="Capacity" items={day.capacity} />
-      <SectionPreview title="Athletic" items={day.athletic} />
-      <SectionPreview title="Notes" items={day.notes} />
+      <SectionPreview title="Strength" section={day.sections?.strength} fallbackItems={day.strength} />
+      <SectionPreview title="Capacity" section={day.sections?.capacity} fallbackItems={day.capacity} />
+      <SectionPreview title="Athletic" section={day.sections?.athletic} fallbackItems={day.athletic} />
+      <SectionPreview title="Notes" section={day.sections?.notes} fallbackItems={day.notes} />
     </div>
   );
+}
+
+function makeExerciseId(): string {
+  return `ex_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export default function WorkoutBlocksPage() {
@@ -539,6 +770,38 @@ export default function WorkoutBlocksPage() {
     setSaveOk(null);
   }
 
+  function rebuildDayFromSections(day: WorkoutDay): WorkoutDay {
+    const sections = normaliseDaySections(day, day.dayName);
+
+    return {
+      ...day,
+      sections,
+      strength: sectionToLines(sections.strength),
+      capacity: sectionToLines(sections.capacity),
+      athletic: sectionToLines(sections.athletic),
+      notes: sectionToLines(sections.notes),
+    };
+  }
+
+  function updateDay(
+    weekNumber: number,
+    dayName: WorkoutDayName,
+    updater: (day: WorkoutDay) => WorkoutDay
+  ) {
+    setDraftWeeks((prev) =>
+      prev.map((week) =>
+        week.weekNumber === weekNumber
+          ? {
+              ...week,
+              days: week.days.map((day) =>
+                day.dayName === dayName ? rebuildDayFromSections(updater(day)) : day
+              ),
+            }
+          : week
+      )
+    );
+  }
+
   function updateWeekTheme(weekNumber: number, theme: string) {
     setDraftWeeks((prev) =>
       prev.map((week) =>
@@ -553,54 +816,146 @@ export default function WorkoutBlocksPage() {
   }
 
   function updateDayTheme(weekNumber: number, dayName: WorkoutDayName, theme: string) {
-    setDraftWeeks((prev) =>
-      prev.map((week) =>
-        week.weekNumber === weekNumber
-          ? {
-              ...week,
-              days: week.days.map((day) =>
-                day.dayName === dayName
-                  ? {
-                      ...day,
-                      theme,
-                    }
-                  : day
-              ),
-            }
-          : week
-      )
-    );
+    updateDay(weekNumber, dayName, (day) => ({
+      ...day,
+      theme,
+    }));
   }
 
-function updateDaySection(
-  weekNumber: number,
-  dayName: WorkoutDayName,
-  section: DaySectionKey,
-  value: string
-) {
-  setDraftWeeks((prev) =>
-    prev.map((week) =>
-      week.weekNumber === weekNumber
-        ? {
-            ...week,
-            days: week.days.map((day) =>
-              day.dayName === dayName
-                ? {
-                    ...day,
-                   [section]: textToLines(value)}
-                : day
-            ),
-          }
-        : week
-    )
-  );
-}
+  function updateSectionMeta(
+    weekNumber: number,
+    dayName: WorkoutDayName,
+    section: DaySectionKey,
+    patch: Partial<ProgrammeSection>
+  ) {
+    updateDay(weekNumber, dayName, (day) => {
+      const sections = normaliseDaySections(day, day.dayName);
+      const current = normaliseProgrammeSection((sections as any)[section], createDefaultSection(section, "CUSTOM", "", null));
+
+      return {
+        ...day,
+        sections: {
+          ...sections,
+          {
+            ...current,
+            ...patch,
+          },
+        },
+      };
+    });
+  }
+
+  function updateSectionInstructions(
+    weekNumber: number,
+    dayName: WorkoutDayName,
+    section: Exclude<DaySectionKey, "strength">,
+    value: string
+  ) {
+    updateSectionMeta(weekNumber, dayName, section, {
+      instructions: textToLines(value),
+    });
+  }
+
+  function addStrengthExercise(weekNumber: number, dayName: WorkoutDayName) {
+    updateDay(weekNumber, dayName, (day) => {
+      const sections = normaliseDaySections(day, day.dayName);
+      const strength = normaliseProgrammeSection(
+        sections.strength,
+        createDefaultSection("Strength", "E5MOM", "E5MOM x 4", 20)
+      );
+
+      return {
+        ...day,
+        sections: {
+          ...sections,
+          strength: {
+            ...strength,
+            exercises: [
+              ...(strength.exercises || []),
+              {
+                id: makeExerciseId(),
+                name: "",
+                reps: "",
+                notes: null,
+                tracked: false,
+                strength_exercise_id: null,
+              },
+            ],
+          },
+        },
+      };
+    });
+  }
+
+  function updateStrengthExercise(
+    weekNumber: number,
+    dayName: WorkoutDayName,
+    index: number,
+    patch: Partial<ProgrammeExercise>
+  ) {
+    updateDay(weekNumber, dayName, (day) => {
+      const sections = normaliseDaySections(day, day.dayName);
+      const strength = normaliseProgrammeSection(
+        sections.strength,
+        createDefaultSection("Strength", "E5MOM", "E5MOM x 4", 20)
+      );
+
+      const exercises = [...(strength.exercises || [])];
+
+      exercises[index] = {
+        ...(exercises[index] || {
+          id: makeExerciseId(),
+          name: "",
+          reps: "",
+          tracked: false,
+          strength_exercise_id: null,
+        }),
+        ...patch,
+      };
+
+      return {
+        ...day,
+        sections: {
+          ...sections,
+          strength: {
+            ...strength,
+            exercises,
+          },
+        },
+      };
+    });
+  }
+
+  function removeStrengthExercise(weekNumber: number, dayName: WorkoutDayName, index: number) {
+    updateDay(weekNumber, dayName, (day) => {
+      const sections = normaliseDaySections(day, day.dayName);
+      const strength = normaliseProgrammeSection(
+        sections.strength,
+        createDefaultSection("Strength", "E5MOM", "E5MOM x 4", 20)
+      );
+
+      const exercises = (strength.exercises || []).filter((_, i) => i !== index);
+
+      return {
+        ...day,
+        sections: {
+          ...sections,
+          strength: {
+            ...strength,
+            exercises,
+          },
+        },
+      };
+    });
+  }
 
   function handleImportText() {
     const parsed = parseWorkoutText(rawImportText);
 
     if (!parsed.length) {
-      setSaveError("Could not parse that text. Make sure it contains WEEK 1, Monday, Strength, Capacity and Athletic headings.");
+      setSaveError(
+        "Could not parse that text. Make sure it contains WEEK 1, Monday, Strength, Capacity and Athletic headings."
+      );
       setSaveOk(null);
       return;
     }
@@ -708,9 +1063,7 @@ function updateDaySection(
           <div className="ia-page-title">Access denied</div>
           <div className="ia-page-subtitle">You do not have permission to view this page.</div>
           <div className="mt-3">
-            <Link href="/admin">
-              Back to admin
-            </Link>
+            <Link href="/admin">Back to admin</Link>
           </div>
         </div>
       </div>
@@ -725,9 +1078,7 @@ function updateDaySection(
 
       <main className="container py-3 text-white ia-block-page" style={{ paddingBottom: 90 }}>
         <div className="ia-top-row">
-          <Link href="/admin">
-            ← Back to admin
-          </Link>
+          <Link href="/admin">← Back to admin</Link>
 
           <div className="ia-top-actions">
             <button type="button" className="ia-btn ia-btn-outline" onClick={handleNewBlock}>
@@ -742,7 +1093,7 @@ function updateDaySection(
 
         <div className="ia-page-title">Workout blocks</div>
         <div className="ia-page-subtitle">
-          Edit each week and day properly. The programme is saved as structured weeks, plus clean raw text for reuse.
+          Build programme blocks, define schemes, tick tracked strength lifts and save them into Firestore.
         </div>
 
         {saveError ? <div className="ia-alert ia-alert-error">{saveError}</div> : null}
@@ -812,7 +1163,7 @@ function updateDaySection(
             <div className="ia-panel-row">
               <div>
                 <div className="ia-panel-title">Structured editor</div>
-                <div className="text-dim">Edit the programme here. This is the source of truth.</div>
+                <div className="text-dim">Strength now uses editable rows with tracking support.</div>
               </div>
 
               <button type="button" className="ia-btn ia-btn-outline" onClick={() => setShowImport((v) => !v)}>
@@ -864,71 +1215,313 @@ function updateDaySection(
                 </label>
 
                 <div className="ia-day-editor-grid">
-                  {selectedWeek.days.map((day) => (
-                    <div key={`${selectedWeek.weekNumber}-${day.dayName}`} className="ia-day-editor-card">
-                      <div className="ia-day-editor-head">
-                        <div className="ia-day-name">{day.dayName}</div>
+                  {selectedWeek.days.map((day) => {
+                    const sections = normaliseDaySections(day, day.dayName);
+                    const strength = normaliseProgrammeSection(
+                      sections.strength,
+                      createDefaultSection("Strength", "E5MOM", "E5MOM x 4", 20)
+                    );
+                    const capacity = normaliseProgrammeSection(
+                      sections.capacity,
+                      createDefaultSection("Capacity", "E3MOM", "E3MOM x 4", 12)
+                    );
+                    const athletic = normaliseProgrammeSection(
+                      sections.athletic,
+                      createDefaultSection("Athletic", "CUSTOM", "", 6)
+                    );
+                    const notes = normaliseProgrammeSection(
+                      sections.notes,
+                      createDefaultSection("Notes", "CUSTOM", "", null)
+                    );
+
+                    return (
+                      <div key={`${selectedWeek.weekNumber}-${day.dayName}`} className="ia-day-editor-card">
+                        <div className="ia-day-editor-head">
+                          <div>
+                            <div className="ia-day-name">{day.dayName}</div>
+                            <div className="ia-day-theme">{day.theme}</div>
+                          </div>
+                        </div>
+
+                        <label className="ia-label">
+                          Theme
+                          <input
+                            className="ia-input"
+                            value={day.theme || ""}
+                            onChange={(e) => updateDayTheme(selectedWeek.weekNumber, day.dayName, e.target.value)}
+                            placeholder="Hinge & Carry"
+                          />
+                        </label>
+
+                        <div className="ia-programme-section">
+                          <div className="ia-programme-title">Strength</div>
+
+                          <div className="ia-scheme-grid">
+                            <label className="ia-label">
+                              Scheme
+                              <select
+                                className="ia-input"
+                                value={strength.scheme || "CUSTOM"}
+                                onChange={(e) =>
+                                  updateSectionMeta(selectedWeek.weekNumber, day.dayName, "strength", {
+                                    scheme: e.target.value as ProgrammeScheme,
+                                  })
+                                }
+                              >
+                                {SCHEME_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label className="ia-label">
+                              Display label
+                              <input
+                                className="ia-input"
+                                value={strength.schemeLabel || ""}
+                                onChange={(e) =>
+                                  updateSectionMeta(selectedWeek.weekNumber, day.dayName, "strength", {
+                                    schemeLabel: e.target.value,
+                                  })
+                                }
+                                placeholder="E5MOM x 4"
+                              />
+                            </label>
+
+                            <label className="ia-label">
+                              Minutes
+                              <input
+                                className="ia-input"
+                                type="number"
+                                min={0}
+                                value={strength.durationMinutes ?? ""}
+                                onChange={(e) =>
+                                  updateSectionMeta(selectedWeek.weekNumber, day.dayName, "strength", {
+                                    durationMinutes: toNullableNumber(e.target.value),
+                                  })
+                                }
+                                placeholder="20"
+                              />
+                            </label>
+                          </div>
+
+                          <div className="ia-exercise-table">
+                            {(strength.exercises || []).map((exercise, index) => (
+                              <div key={exercise.id || `${day.dayName}-strength-${index}`} className="ia-exercise-row">
+                                <label className="ia-track-check">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!exercise.tracked}
+                                    onChange={(e) =>
+                                      updateStrengthExercise(selectedWeek.weekNumber, day.dayName, index, {
+                                        tracked: e.target.checked,
+                                      })
+                                    }
+                                  />
+                                  <span>Track</span>
+                                </label>
+
+                                <input
+                                  className="ia-input"
+                                  value={exercise.name}
+                                  onChange={(e) =>
+                                    updateStrengthExercise(selectedWeek.weekNumber, day.dayName, index, {
+                                      name: e.target.value,
+                                    })
+                                  }
+                                  placeholder="Sandbag Deadlift"
+                                />
+
+                                <input
+                                  className="ia-input"
+                                  value={exercise.reps || ""}
+                                  onChange={(e) =>
+                                    updateStrengthExercise(selectedWeek.weekNumber, day.dayName, index, {
+                                      reps: e.target.value,
+                                    })
+                                  }
+                                  placeholder="x8"
+                                />
+
+                                <button
+                                  type="button"
+                                  className="ia-mini-btn"
+                                  onClick={() => removeStrengthExercise(selectedWeek.weekNumber, day.dayName, index)}
+                                >
+                                  Remove
+                                </button>
+
+                                {exercise.strength_exercise_id ? (
+                                  <div className="ia-match-pill">Matched: {exercise.strength_exercise_id}</div>
+                                ) : exercise.tracked ? (
+                                  <div className="ia-match-pill ia-match-pending">Will match/create on save</div>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+
+                          <button
+                            type="button"
+                            className="ia-btn ia-btn-outline ia-add-row-btn"
+                            onClick={() => addStrengthExercise(selectedWeek.weekNumber, day.dayName)}
+                          >
+                            Add strength exercise
+                          </button>
+                        </div>
+
+                        <div className="ia-programme-section">
+                          <div className="ia-programme-title">Capacity</div>
+
+                          <div className="ia-scheme-grid">
+                            <label className="ia-label">
+                              Scheme
+                              <select
+                                className="ia-input"
+                                value={capacity.scheme || "CUSTOM"}
+                                onChange={(e) =>
+                                  updateSectionMeta(selectedWeek.weekNumber, day.dayName, "capacity", {
+                                    scheme: e.target.value as ProgrammeScheme,
+                                  })
+                                }
+                              >
+                                {SCHEME_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label className="ia-label">
+                              Display label
+                              <input
+                                className="ia-input"
+                                value={capacity.schemeLabel || ""}
+                                onChange={(e) =>
+                                  updateSectionMeta(selectedWeek.weekNumber, day.dayName, "capacity", {
+                                    schemeLabel: e.target.value,
+                                  })
+                                }
+                                placeholder="E3MOM x 4"
+                              />
+                            </label>
+
+                            <label className="ia-label">
+                              Minutes
+                              <input
+                                className="ia-input"
+                                type="number"
+                                min={0}
+                                value={capacity.durationMinutes ?? ""}
+                                onChange={(e) =>
+                                  updateSectionMeta(selectedWeek.weekNumber, day.dayName, "capacity", {
+                                    durationMinutes: toNullableNumber(e.target.value),
+                                  })
+                                }
+                                placeholder="12"
+                              />
+                            </label>
+                          </div>
+
+                          <label className="ia-label">
+                            Instructions
+                            <textarea
+                              className="ia-textarea ia-section-textarea"
+                              value={linesToText(capacity.instructions || [])}
+                              onChange={(e) =>
+                                updateSectionInstructions(selectedWeek.weekNumber, day.dayName, "capacity", e.target.value)
+                              }
+                              placeholder={`6 Ground To Shoulder
+40m Farmer Carry
+8 Burpees`}
+                            />
+                          </label>
+                        </div>
+
+                        <div className="ia-programme-section">
+                          <div className="ia-programme-title">Athletic</div>
+
+                          <div className="ia-scheme-grid">
+                            <label className="ia-label">
+                              Scheme
+                              <select
+                                className="ia-input"
+                                value={athletic.scheme || "CUSTOM"}
+                                onChange={(e) =>
+                                  updateSectionMeta(selectedWeek.weekNumber, day.dayName, "athletic", {
+                                    scheme: e.target.value as ProgrammeScheme,
+                                  })
+                                }
+                              >
+                                {SCHEME_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label className="ia-label">
+                              Display label
+                              <input
+                                className="ia-input"
+                                value={athletic.schemeLabel || ""}
+                                onChange={(e) =>
+                                  updateSectionMeta(selectedWeek.weekNumber, day.dayName, "athletic", {
+                                    schemeLabel: e.target.value,
+                                  })
+                                }
+                                placeholder="21-15-9"
+                              />
+                            </label>
+
+                            <label className="ia-label">
+                              Minutes
+                              <input
+                                className="ia-input"
+                                type="number"
+                                min={0}
+                                value={athletic.durationMinutes ?? ""}
+                                onChange={(e) =>
+                                  updateSectionMeta(selectedWeek.weekNumber, day.dayName, "athletic", {
+                                    durationMinutes: toNullableNumber(e.target.value),
+                                  })
+                                }
+                                placeholder="6"
+                              />
+                            </label>
+                          </div>
+
+                          <label className="ia-label">
+                            Instructions
+                            <textarea
+                              className="ia-textarea ia-section-textarea"
+                              value={linesToText(athletic.instructions || [])}
+                              onChange={(e) =>
+                                updateSectionInstructions(selectedWeek.weekNumber, day.dayName, "athletic", e.target.value)
+                              }
+                              placeholder={`KB Swings
+Full Body Crunches`}
+                            />
+                          </label>
+                        </div>
+
+                        <label className="ia-label">
+                          Notes
+                          <textarea
+                            className="ia-textarea ia-section-textarea ia-notes-textarea"
+                            value={linesToText(notes.instructions || [])}
+                            onChange={(e) =>
+                              updateSectionInstructions(selectedWeek.weekNumber, day.dayName, "notes", e.target.value)
+                            }
+                            placeholder="Scaling, coaching notes, equipment notes."
+                          />
+                        </label>
                       </div>
-
-                      <label className="ia-label">
-                        Theme
-                        <input
-                          className="ia-input"
-                          value={day.theme || ""}
-                          onChange={(e) => updateDayTheme(selectedWeek.weekNumber, day.dayName, e.target.value)}
-                          placeholder="Hinge & Carry"
-                        />
-                      </label>
-
-                      <label className="ia-label">
-                        Strength
-                        <textarea
-                          className="ia-textarea ia-section-textarea"
-                          value={linesToText(day.strength)}
-                          onChange={(e) =>
-                            updateDaySection(selectedWeek.weekNumber, day.dayName, "strength", e.target.value)
-                          }
-                          placeholder="Sandbag Over Shoulder x4&#10;Sandbag Deadlift x8"
-                        />
-                      </label>
-
-                      <label className="ia-label">
-                        Capacity
-                        <textarea
-                          className="ia-textarea ia-section-textarea"
-                          value={linesToText(day.capacity)}
-                          onChange={(e) =>
-                            updateDaySection(selectedWeek.weekNumber, day.dayName, "capacity", e.target.value)
-                          }
-                          placeholder="E3MOM x4&#10;Ground To Shoulder x6"
-                        />
-                      </label>
-
-                      <label className="ia-label">
-                        Athletic
-                        <textarea
-                          className="ia-textarea ia-section-textarea"
-                          value={linesToText(day.athletic)}
-                          onChange={(e) =>
-                            updateDaySection(selectedWeek.weekNumber, day.dayName, "athletic", e.target.value)
-                          }
-                          placeholder="21-15-9&#10;KB Swings&#10;Full Body Crunches"
-                        />
-                      </label>
-
-                      <label className="ia-label">
-                        Notes
-                        <textarea
-                          className="ia-textarea ia-section-textarea ia-notes-textarea"
-                          value={linesToText(day.notes)}
-                          onChange={(e) =>
-                            updateDaySection(selectedWeek.weekNumber, day.dayName, "notes", e.target.value)
-                          }
-                          placeholder="Scaling, coaching notes, equipment notes."
-                        />
-                      </label>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             ) : null}
@@ -938,7 +1531,7 @@ function updateDaySection(
             <div className="ia-panel-row">
               <div>
                 <div className="ia-panel-title">Preview</div>
-                <div className="text-dim">This is how the week will display.</div>
+                <div className="text-dim">This is how the week will display to members.</div>
               </div>
 
               <button type="button" className="ia-btn ia-btn-outline" onClick={copyRawTextToClipboard}>
@@ -977,9 +1570,7 @@ function updateDaySection(
           <div className="ia-panel-row">
             <div>
               <div className="ia-panel-title">AI prompt template</div>
-              <div className="text-dim">
-                Keep this at the bottom. Copy it when you want to generate the next block.
-              </div>
+              <div className="text-dim">Keep this at the bottom. Copy it when you want to generate the next block.</div>
             </div>
 
             <button type="button" className="ia-btn ia-btn-outline" onClick={copyPromptToClipboard}>
@@ -1003,7 +1594,7 @@ function updateDaySection(
 
       <style jsx>{`
         .ia-block-page {
-          max-width: 1280px;
+          max-width: 1320px;
         }
 
         .ia-top-row {
@@ -1038,7 +1629,7 @@ function updateDaySection(
 
         .ia-layout {
           display: grid;
-          grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+          grid-template-columns: minmax(0, 1.15fr) minmax(380px, 0.85fr);
           gap: 18px;
           margin-top: 18px;
           align-items: start;
@@ -1122,7 +1713,7 @@ function updateDaySection(
         }
 
         .ia-section-textarea {
-          min-height: 112px;
+          min-height: 100px;
           font-size: 0.9rem;
         }
 
@@ -1197,7 +1788,7 @@ function updateDaySection(
 
         .ia-day-editor-grid {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns: 1fr;
           gap: 14px;
           margin-top: 14px;
         }
@@ -1231,6 +1822,95 @@ function updateDaySection(
           font-weight: 700;
           font-size: 0.9rem;
           margin-top: 2px;
+        }
+
+        .ia-programme-section {
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(0, 0, 0, 0.18);
+          border-radius: 16px;
+          padding: 12px;
+          margin-bottom: 14px;
+        }
+
+        .ia-programme-title {
+          font-size: 0.88rem;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: #ffb66f;
+          font-weight: 950;
+          margin-bottom: 10px;
+        }
+
+        .ia-scheme-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr) minmax(90px, 0.5fr);
+          gap: 10px;
+        }
+
+        .ia-exercise-table {
+          display: grid;
+          gap: 10px;
+          margin-top: 8px;
+        }
+
+        .ia-exercise-row {
+          display: grid;
+          grid-template-columns: 88px minmax(0, 1.2fr) minmax(90px, 0.45fr) auto;
+          gap: 8px;
+          align-items: center;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.035);
+          border-radius: 14px;
+          padding: 10px;
+        }
+
+        .ia-track-check {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          color: rgba(255, 255, 255, 0.82);
+          font-size: 0.85rem;
+          font-weight: 800;
+          margin: 0;
+        }
+
+        .ia-track-check input {
+          accent-color: #f58220;
+        }
+
+        .ia-mini-btn {
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          background: rgba(255, 255, 255, 0.05);
+          color: rgba(255, 255, 255, 0.82);
+          border-radius: 12px;
+          padding: 10px 12px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .ia-mini-btn:hover {
+          background: rgba(255, 255, 255, 0.09);
+        }
+
+        .ia-match-pill {
+          grid-column: 2 / -1;
+          font-size: 0.78rem;
+          color: #b7f7c7;
+          background: rgba(42, 128, 69, 0.12);
+          border: 1px solid rgba(120, 255, 150, 0.14);
+          border-radius: 999px;
+          padding: 6px 9px;
+          width: fit-content;
+        }
+
+        .ia-match-pending {
+          color: #ffd6a6;
+          background: rgba(245, 130, 32, 0.1);
+          border-color: rgba(245, 130, 32, 0.22);
+        }
+
+        .ia-add-row-btn {
+          margin-top: 10px;
         }
 
         .ia-week-title {
@@ -1267,6 +1947,25 @@ function updateDaySection(
           letter-spacing: 0.06em;
           font-weight: 950;
           margin-bottom: 6px;
+        }
+
+        .ia-scheme-preview {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
+
+        .ia-scheme-preview span,
+        .ia-scheme-preview small {
+          display: inline-flex;
+          border-radius: 999px;
+          padding: 5px 9px;
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: rgba(255, 255, 255, 0.78);
+          font-weight: 800;
+          font-size: 0.78rem;
         }
 
         .ia-block-list {
@@ -1331,7 +2030,7 @@ function updateDaySection(
           border-radius: 18px;
         }
 
-        @media (max-width: 1100px) {
+        @media (max-width: 1120px) {
           .ia-layout {
             grid-template-columns: 1fr;
           }
@@ -1346,8 +2045,13 @@ function updateDaySection(
           }
 
           .ia-meta-grid,
-          .ia-day-editor-grid {
+          .ia-scheme-grid,
+          .ia-exercise-row {
             grid-template-columns: 1fr;
+          }
+
+          .ia-match-pill {
+            grid-column: auto;
           }
 
           .ia-block-tab {
