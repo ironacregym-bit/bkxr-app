@@ -82,6 +82,30 @@ export default function FarmStrongAdminPage() {
       setSaving(false);
     }
   }
+  async function makeActive(blockId: string) {
+    const res = await fetch(
+      "/api/admin/farmstrong/settings",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          active_workout_block_id: blockId,
+          current_week_number: 1,
+        }),
+      }
+    );
+  
+    const json = await res.json();
+  
+    if (!res.ok) {
+      alert(json?.error || "Failed");
+      return;
+    }
+  
+    alert("Active block updated");
+  }
 
   async function activateBlock(id: string) {
     const r = await fetch(
@@ -335,6 +359,20 @@ export default function FarmStrongAdminPage() {
                 ? "Update Block"
                 : "Create Block"}
             </button>
+            {isActive ? (
+              <span className="ia-badge-neon">
+                ACTIVE
+              </span>
+            ) : (
+              <button
+                className="ia-btn-primary"
+                onClick={() =>
+                  makeActive(block.block_id)
+                }
+              >
+                Set Active
+              </button>
+            )}
           </div>
         </section>
 
