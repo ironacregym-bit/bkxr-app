@@ -83,18 +83,6 @@ type ActiveBlock = {
   title?: string;
   name?: string;
   focus?: string | null;
-  weeks?: WeekPlan[];
-  tracked_strength_exercises?: Array<{
-    exercise_name: string;
-    strength_exercise_id: string;
-    weekNumber: number;
-    dayName: WorkoutDayName;
-  }>;
-};
-
-type LiftHistoryRow = {
-  value: number;
-  recorded_at: string | null;
 };
 
 type LiftSummary = {
@@ -102,7 +90,10 @@ type LiftSummary = {
   exerciseName: string;
   current: number;
   best: number;
-  history: LiftHistoryRow[];
+  history?: Array<{
+    value: number;
+    recorded_at: string | null;
+  }>;
 };
 
 type DashboardResponse = {
@@ -111,10 +102,6 @@ type DashboardResponse = {
   currentWeek?: WeekPlan | null;
   currentWeekNumber?: number | null;
   lifts?: LiftSummary[];
-  weightHistory?: Array<{
-    weight_kg: number;
-    date: string | null;
-  }>;
 };
 
 const fetcher = (url: string) =>
@@ -122,6 +109,8 @@ const fetcher = (url: string) =>
     if (!r.ok) throw new Error(String(r.status));
     return r.json();
   });
+
+const TRAINING_DAYS: WorkoutDayName[] = ["Monday", "Wednesday", "Friday", "Saturday"];
 
 function shortDate(iso: string | null | undefined) {
   if (!iso) return "";
@@ -146,13 +135,19 @@ function normaliseDayName(value: any): WorkoutDayName {
   return allowed.includes(raw as WorkoutDayName) ? (raw as WorkoutDayName) : "Monday";
 }
 
-function getSectionLabel(section?: ProgrammeSection, fallback?: string) {
-  if (section?.schemeLabel) return section.schemeLabel;
-  if (section?.scheme) return section.scheme;
-  return fallback || "";
+function sectionLabel(section?: ProgrammeSection): string {
+  if (section?.schemeLabel) return String(section.schemeLabel);
+  if (section?.scheme) return String(section.scheme);
+  return "";
 }
 
-function sectionLines(section?: ProgrammeSection, fallback?: string[]) {
+function sectionDuration(section?: ProgrammeSection): string {
+  const mins = Number(section?.durationMinutes || 0);
+  if (!Number.isFinite(mins) || mins <= 0) return "";
+  return `${mins} min`;
+}
+
+function sectionLines(section?: ProgrammeSection, fallback?: string[]): string[] {
   const lines: string[] = [];
 
   if (Array.isArray(section?.instructions)) {
@@ -171,283 +166,49 @@ function sectionLines(section?: ProgrammeSection, fallback?: string[]) {
     }
   }
 
-  if (!lines.length && Array.isArray(fallback)) return fallback.filter(Boolean);
+  if (!lines.length && Array.isArray(fallback)) {
+    return fallback.filter(Boolean);
+  }
 
   return lines;
 }
 
-function parseReps(value: string | null | undefined): number | null {
-  if (!value) return null;
-
-  const match = String(value).match(/(\d+(\.\d+)?)/);
-  if (!match) return null;
-
-  const n = Number(match[1]);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-function formatKg(value: any) {
+function formatKg(value: any): string {
   const n = Number(value || 0);
-  if (!Number.isFinite(n) || n <= 0) return "—";
+  if (!Number.isFinite(n) || n <= 0) return "No previous";
   return `${n}kg`;
 }
 
-function makeFarmStrongWorkoutId(blockId: string, weekNumber: number, dayName: string) {
-  const safeBlock = String(blockId || "farmstrong").replace(/[^a-zA-Z0-9_-]/g, "_");
-  const safeDay = String(dayName || "day").replace(/[^a-zA-Z0-9_-]/g, "_");
-  return `farmstrong_${safeBlock}_w${weekNumber}_${safeDay}`;
-}
-
-function findLift(lifts: LiftSummary[], idOrName?: string | null) {
-  if (!idOrName) return null;
-
-  const target = String(idOrName).trim().toLowerCase();
+function findLift(lifts: LiftSummary[], exerciseId?: string | null, name?: string | null): LiftSummary | null {
+  const id = String(exerciseId || "").trim().toLowerCase();
+  const exerciseName = String(name || "").trim().toLowerCase();
 
   return (
-    lifts.find((lift) => String(lift.exerciseId || "").trim().toLowerCase() === target) ||
-    lifts.find((lift) => String(lift.exerciseName || "").trim().toLowerCase() === target) ||
+    lifts.find((lift) => String(lift.exerciseId || "").trim().toLowerCase() === id) ||
+    lifts.find((lift) => String(lift.exerciseName || "").trim().toLowerCase() === exerciseName) ||
     null
   );
 }
 
-function SectionCard({
-  title,
-  section,
-  fallback,
-  icon,
-  scoreLabel,
-  scoreValue,
-  onScoreChange,
-}: {
-  title: string;
-  section?: ProgrammeSection;
-  fallback?: string[];
-  icon: string;
-  scoreLabel?: string;
-  scoreValue?: string;
-  onScoreChange?: (value: string) => void;
-}) {
-  const label = getSectionLabel(section);
-  const lines = sectionLines(section, fallback);
-
-  if (!label && !lines.length && !scoreLabel) return null;
-
-  return (
-    <section className="ia-tile ia-tile-pad mb-2 fs-section-card">
-      <div className="fs-section-head">
-        <div>
-          <div className="ia-kicker">
-            <i className={`fas ${icon}`} />
-            {title}
-          </div>
-
-          {label ? <div className="fs-scheme-pill mt-2">{label}</div> : null}
-        </div>
-
-        {section?.durationMinutes ? (
-          <div className="fs-duration-pill">{section.durationMinutes} min</div>
-        ) : null}
-      </div>
-
-      {lines.length ? (
-        <div className="fs-work-list mt-3">
-          {lines.map((line, index) => (
-            <div key={`${title}-${index}`} className="fs-work-row">
-              <span className="fs-work-dot" />
-              <span>{line}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {scoreLabel && onScoreChange ? (
-        <div className="mt-3">
-          <label className="fs-label">{scoreLabel}</label>
-          <input
-            className="fs-input"
-            value={scoreValue || ""}
-            onChange={(e) => onScoreChange(e.target.value)}
-            placeholder="e.g. completed, 6:42, 8 rounds, notes"
-          />
-        </div>
-      ) : null}
-    </section>
-  );
+function getTrackedExercises(day?: WorkoutDay | null): ProgrammeExercise[] {
+  const exercises = day?.sections?.strength?.exercises;
+  if (!Array.isArray(exercises)) return [];
+  return exercises.filter((exercise) => exercise.tracked);
 }
 
-function StrengthLogCard({
-  day,
-  lifts,
-  values,
-  onChange,
-}: {
-  day: WorkoutDay;
-  lifts: LiftSummary[];
-  values: Record<string, string>;
-  onChange: (key: string, value: string) => void;
-}) {
-  const strength = day.sections?.strength;
-  const exercises = Array.isArray(strength?.exercises) ? strength!.exercises! : [];
-  const tracked = exercises.filter((ex) => ex.tracked);
-
-  if (!tracked.length) {
-    const fallbackLines = sectionLines(strength, day.strength || []);
-
-    return (
-      <section className="ia-tile ia-tile-pad mb-2 fs-section-card">
-        <div className="ia-kicker">
-          <i className="fas fa-dumbbell" />
-          STRENGTH
-        </div>
-
-        {getSectionLabel(strength) ? <div className="fs-scheme-pill mt-2">{getSectionLabel(strength)}</div> : null}
-
-        <div className="fs-work-list mt-3">
-          {fallbackLines.map((line, index) => (
-            <div key={`strength-line-${index}`} className="fs-work-row">
-              <span className="fs-work-dot" />
-              <span>{line}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="fs-empty-note mt-3">
-          No tracked strength lifts have been set for this day yet.
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="ia-tile ia-tile-pad mb-2 fs-section-card fs-strength-card">
-      <div className="fs-section-head">
-        <div>
-          <div className="ia-kicker">
-            <i className="fas fa-dumbbell" />
-            STRENGTH
-          </div>
-
-          {getSectionLabel(strength) ? <div className="fs-scheme-pill mt-2">{getSectionLabel(strength)}</div> : null}
-        </div>
-
-        {strength?.durationMinutes ? (
-          <div className="fs-duration-pill">{strength.durationMinutes} min</div>
-        ) : null}
-      </div>
-
-      <div className="fs-track-list mt-3">
-        {tracked.map((exercise, index) => {
-          const key = exercise.strength_exercise_id || exercise.name || String(index);
-          const lift = findLift(lifts, exercise.strength_exercise_id || exercise.name);
-          const previous = lift?.current || 0;
-          const best = lift?.best || 0;
-
-          return (
-            <div key={`${key}-${index}`} className="fs-track-row">
-              <div className="fs-track-main">
-                <div className="fs-track-title">{exercise.name}</div>
-                <div className="fs-track-meta">
-                  {exercise.reps ? <span>{exercise.reps}</span> : null}
-                  <span>Previous {formatKg(previous)}</span>
-                  <span>Best {formatKg(best)}</span>
-                </div>
-              </div>
-
-              <div className="fs-track-input-wrap">
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  className="fs-track-input"
-                  value={values[key] || ""}
-                  onChange={(e) => onChange(key, e.target.value)}
-                  placeholder="kg"
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-export default function FarmStrongPage() {
-  const { data: session, status } = useSession();
-
-  const [emailValue, setEmailValue] = useState("");
-  const [selectedDay, setSelectedDay] = useState<WorkoutDayName>("Monday");
-  const [strengthValues, setStrengthValues] = useState<Record<string, string>>({});
-  const [capacityScore, setCapacityScore] = useState("");
-  const [athleticScore, setAthleticScore] = useState("");
-  const [sessionNotes, setSessionNotes] = useState("");
-  const [selectedLiftId, setSelectedLiftId] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saveOk, setSaveOk] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  const { data, mutate } = useSWR<DashboardResponse>(
-    status === "authenticated" ? "/api/farmstrong/dashboard" : null,
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 30_000,
-    }
-  );
-
-  const activeBlock = data?.activeBlock || null;
-  const currentWeek = data?.currentWeek || null;
-  const currentWeekNumber = Number(data?.currentWeekNumber || currentWeek?.weekNumber || 1);
-  const lifts = Array.isArray(data?.lifts) ? data!.lifts! : [];
-
-  const days: WorkoutDay[] = useMemo(() => {
-    return Array.isArray(currentWeek?.days) ? currentWeek!.days : [];
-  }, [currentWeek]);
-
-  useEffect(() => {
-    if (!days.length) return;
-
-    const existing = days.find((day) => day.dayName === selectedDay);
-    if (!existing) {
-      setSelectedDay(normaliseDayName(days[0]?.dayName));
-    }
-  }, [days, selectedDay]);
-
-  useEffect(() => {
-    if (!selectedLiftId && lifts.length) {
-      setSelectedLiftId(lifts[0].exerciseId);
-    }
-  }, [lifts, selectedLiftId]);
-
-  useEffect(() => {
-    setStrengthValues({});
-    setCapacityScore("");
-    setAthleticScore("");
-    setSessionNotes("");
-    setSaveOk(null);
-    setSaveError(null);
-  }, [selectedDay, currentWeekNumber, activeBlock?.id, activeBlock?.block_id]);
-
-  const activeDay = useMemo(() => {
-    return days.find((day) => day.dayName === selectedDay) || days[0] || null;
-  }, [days, selectedDay]);
-
-  const selectedLift = useMemo(() => {
-    return lifts.find((lift) => lift.exerciseId === selectedLiftId) || lifts[0] || null;
-  }, [lifts, selectedLiftId]);
-
-  const weightChart = useMemo(() => {
-    const rows = data?.weightHistory || [];
+function MovementGraph({ lift }: { lift: LiftSummary | null }) {
+  const chart = useMemo(() => {
+    const rows = Array.isArray(lift?.history) ? lift!.history!.filter((x) => x.recorded_at) : [];
 
     if (!rows.length) return null;
 
     return {
       data: {
-        labels: rows.map((x: any) => shortDate(x.date)),
+        labels: rows.map((x) => shortDate(x.recorded_at)),
         datasets: [
           {
-            label: "Weight",
-            data: rows.map((x: any) => x.weight_kg),
+            label: lift?.exerciseName || "Progress",
+            data: rows.map((x) => x.value),
             borderColor: "#18ff9a",
             backgroundColor: "rgba(24,255,154,.12)",
             tension: 0.35,
@@ -485,144 +246,270 @@ export default function FarmStrongPage() {
         },
       } as ChartOptions<"line">,
     };
-  }, [data]);
+  }, [lift]);
 
-  const liftChart = useMemo(() => {
-    if (!selectedLift?.history?.length) return null;
+  if (!chart) {
+    return <div className="fs-empty mt-2">No graph data yet. Update this lift a few times and progress will show here.</div>;
+  }
 
-    return {
-      data: {
-        labels: selectedLift.history.map((x: any) => shortDate(x.recorded_at)),
-        datasets: [
-          {
-            label: selectedLift.exerciseName,
-            data: selectedLift.history.map((x: any) => x.value),
-            borderColor: "#18ff9a",
-            backgroundColor: "rgba(24,255,154,.12)",
-            tension: 0.35,
-            fill: true,
-          } as ChartDataset<"line">,
-        ],
-      } as ChartData<"line">,
+  return (
+    <div className="fs-graph-wrap mt-2">
+      <Line data={chart.data} options={chart.options} />
+    </div>
+  );
+}
 
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            display: false,
-          },
-        },
-        scales: {
-          x: {
-            ticks: {
-              color: "#9fb0c3",
-            },
-            grid: {
-              color: "rgba(255,255,255,.06)",
-            },
-          },
-          y: {
-            ticks: {
-              color: "#9fb0c3",
-            },
-            grid: {
-              color: "rgba(255,255,255,.06)",
-            },
-          },
-        },
-      } as ChartOptions<"line">,
-    };
-  }, [selectedLift]);
+function WorkoutSection({
+  title,
+  icon,
+  section,
+  fallback,
+}: {
+  title: string;
+  icon: string;
+  section?: ProgrammeSection;
+  fallback?: string[];
+}) {
+  const label = sectionLabel(section);
+  const duration = sectionDuration(section);
+  const lines = sectionLines(section, fallback);
+
+  if (!label && !duration && !lines.length) return null;
+
+  return (
+    <section className="ia-tile ia-tile-pad mb-2 fs-section-card">
+      <div className="fs-section-top">
+        <div>
+          <div className="ia-kicker">
+            <i className={`fas ${icon}`} />
+            {title}
+          </div>
+
+          <div className="fs-pill-row mt-2">
+            {label ? <span className="fs-pill">{label}</span> : null}
+            {duration ? <span className="fs-pill fs-pill-muted">{duration}</span> : null}
+          </div>
+        </div>
+      </div>
+
+      {lines.length ? (
+        <div className="fs-work-list mt-3">
+          {lines.map((line, index) => (
+            <div key={`${title}-${index}`} className="fs-work-line">
+              <span className="fs-dot" />
+              <span>{line}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-dim small mt-2">Nothing programmed for this section.</div>
+      )}
+    </section>
+  );
+}
+
+function TrackedLiftCard({
+  exercise,
+  lift,
+  value,
+  saving,
+  expanded,
+  onToggle,
+  onChange,
+  onSave,
+}: {
+  exercise: ProgrammeExercise;
+  lift: LiftSummary | null;
+  value: string;
+  saving: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  onChange: (value: string) => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="fs-lift-card">
+      <button type="button" className="fs-lift-main" onClick={onToggle}>
+        <div className="fs-lift-title-row">
+          <div className="fs-lift-title">{exercise.name}</div>
+          <i className={`fas fa-chevron-${expanded ? "up" : "down"} fs-expand-icon`} />
+        </div>
+
+        <div className="fs-lift-meta">
+          {exercise.reps ? <span>{exercise.reps}</span> : null}
+          <span>Last {formatKg(lift?.current)}</span>
+          <span>Best {formatKg(lift?.best)}</span>
+        </div>
+      </button>
+
+      <div className="fs-lift-action">
+        <input
+          type="number"
+          min="0"
+          step="0.5"
+          className="fs-lift-input"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="kg"
+        />
+
+        <button type="button" className="ia-btn-primary fs-save-lift-btn" disabled={saving} onClick={onSave}>
+          {saving ? "Saving" : "Update"}
+        </button>
+      </div>
+
+      {expanded ? (
+        <div className="fs-lift-expanded">
+          <div className="row g-2">
+            <div className="col-6">
+              <div className="ia-stat-mini">
+                <div className="ia-stat-mini-value">{formatKg(lift?.current)}</div>
+                <div className="ia-stat-mini-label">Current</div>
+              </div>
+            </div>
+
+            <div className="col-6">
+              <div className="ia-stat-mini">
+                <div className="ia-stat-mini-value">{formatKg(lift?.best)}</div>
+                <div className="ia-stat-mini-label">Best ever</div>
+              </div>
+            </div>
+          </div>
+
+          <MovementGraph lift={lift} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export default function FarmStrongPage() {
+  const { data: session, status } = useSession();
+
+  const [emailValue, setEmailValue] = useState("");
+  const [selectedDay, setSelectedDay] = useState<WorkoutDayName>("Monday");
+  const [liftValues, setLiftValues] = useState<Record<string, string>>({});
+  const [savingKey, setSavingKey] = useState<string>("");
+  const [expandedLiftKey, setExpandedLiftKey] = useState<string>("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const { data, mutate } = useSWR<DashboardResponse>(
+    status === "authenticated" ? "/api/farmstrong/dashboard" : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30_000,
+    }
+  );
+
+  const activeBlock = data?.activeBlock || null;
+  const currentWeek = data?.currentWeek || null;
+  const currentWeekNumber = Number(data?.currentWeekNumber || currentWeek?.weekNumber || 1);
+  const lifts = Array.isArray(data?.lifts) ? data!.lifts! : [];
+
+  const days: WorkoutDay[] = useMemo(() => {
+    if (Array.isArray(currentWeek?.days) && currentWeek!.days.length) {
+      return currentWeek!.days;
+    }
+
+    return [];
+  }, [currentWeek]);
+
+  useEffect(() => {
+    if (!days.length) return;
+
+    const currentSelectedExists = days.some((day) => day.dayName === selectedDay);
+
+    if (!currentSelectedExists) {
+      const preferred = days.find((day) => TRAINING_DAYS.includes(day.dayName)) || days[0];
+      setSelectedDay(normaliseDayName(preferred?.dayName));
+    }
+  }, [days, selectedDay]);
+
+  useEffect(() => {
+    setMessage(null);
+    setErrorMessage(null);
+    setExpandedLiftKey("");
+  }, [selectedDay]);
+
+  const activeDay = useMemo(() => {
+    return days.find((day) => day.dayName === selectedDay) || days[0] || null;
+  }, [days, selectedDay]);
+
+  const trackedExercises = useMemo(() => getTrackedExercises(activeDay), [activeDay]);
 
   async function emailLogin() {
-    if (!emailValue) return;
+    if (!emailValue.trim()) return;
 
     await signIn("email", {
-      email: emailValue,
+      email: emailValue.trim(),
       callbackUrl: "/farmstrong",
     });
   }
 
-  function updateStrengthValue(key: string, value: string) {
-    setStrengthValues((prev) => ({
+  function updateLiftValue(key: string, value: string) {
+    setLiftValues((prev) => ({
       ...prev,
       value,
     }));
   }
 
-  async function saveSession() {
-    if (!activeBlock || !activeDay) return;
+  async function saveLift(exercise: ProgrammeExercise) {
+    const exerciseId = String(exercise.strength_exercise_id || exercise.name || "").trim();
+    const exerciseName = String(exercise.name || exerciseId).trim();
+    const key = exerciseId || exerciseName;
+    const value = Number(liftValues[key]);
 
-    setSaving(true);
-    setSaveOk(null);
-    setSaveError(null);
+    setMessage(null);
+    setErrorMessage(null);
+
+    if (!exerciseId || !exerciseName) {
+      setErrorMessage("This tracked exercise is missing an exercise name.");
+      return;
+    }
+
+    if (!Number.isFinite(value) || value <= 0) {
+      setErrorMessage("Enter the weight you used first.");
+      return;
+    }
+
+    setSavingKey(key);
 
     try {
-      const blockId = String(activeBlock.block_id || activeBlock.id || "");
-      const workoutId = makeFarmStrongWorkoutId(blockId, currentWeekNumber, activeDay.dayName);
-      const strengthExercises = activeDay.sections?.strength?.exercises || [];
-
-      const sets = strengthExercises
-        .filter((exercise) => exercise.tracked)
-        .map((exercise, index) => {
-          const key = exercise.strength_exercise_id || exercise.name || String(index);
-          const weight = Number(strengthValues[key]);
-          const reps = parseReps(exercise.reps);
-
-          if (!Number.isFinite(weight) || weight <= 0) return null;
-
-          return {
-            exercise_id: exercise.strength_exercise_id || exercise.name,
-            set: 1,
-            weight,
-            reps,
-            movement_key: exercise.strength_exercise_id || exercise.name,
-          };
-        })
-        .filter(Boolean);
-
-      const notesParts = [
-        capacityScore ? `Capacity: ${capacityScore}` : "",
-        athleticScore ? `Athletic: ${athleticScore}` : "",
-        sessionNotes ? `Notes: ${sessionNotes}` : "",
-      ].filter(Boolean);
-
-      const res = await fetch("/api/completions/create", {
+      const res = await fetch("/api/farmstrong/update-lift", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          workout_id: workoutId,
-          activity_type: "Farm Strong",
-          notes: notesParts.join("\n"),
-          sets,
-          farmstrong_block_id: blockId,
+          exercise_id: exerciseId,
+          exercise_name: exerciseName,
+          value,
+          farmstrong_block_id: activeBlock?.block_id || activeBlock?.id || null,
           farmstrong_week_number: currentWeekNumber,
-          farmstrong_day_name: activeDay.dayName,
-          capacity_score: capacityScore || null,
-          athletic_score: athleticScore || null,
+          farmstrong_day_name: activeDay?.dayName || null,
         }),
       });
 
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(json?.error || "Failed to save session");
+        throw new Error(json?.error || "Failed to update lift");
       }
 
-      setSaveOk("Session saved.");
-      setStrengthValues({});
-      setCapacityScore("");
-      setAthleticScore("");
-      setSessionNotes("");
+      setLiftValues((prev) => ({
+        ...prev,
+        "",
+      }));
 
+      setExpandedLiftKey(key);
+      setMessage(`${exerciseName} updated.`);
       await mutate();
     } catch (err: any) {
-      setSaveError(err?.message || "Failed to save session");
+      setErrorMessage(err?.message || "Failed to update lift");
     } finally {
-      setSaving(false);
+      setSavingKey("");
     }
   }
 
@@ -636,7 +523,7 @@ export default function FarmStrongPage() {
         <title>Farm Strong</title>
       </Head>
 
-      {!session && (
+      {!session ? (
         <div className="ia-modal-backdrop">
           <div className="ia-modal-card" style={{ maxWidth: 460 }}>
             <div className="ia-kicker">
@@ -647,7 +534,7 @@ export default function FarmStrongPage() {
             <div className="ia-page-title mt-2">Member Login</div>
 
             <div className="ia-page-subtitle mt-2">
-              Access your block, today’s training and strength progress.
+              Access this week’s Farm Strong training and update your tracked lifts.
             </div>
 
             <button
@@ -674,26 +561,21 @@ export default function FarmStrongPage() {
             </button>
           </div>
         </div>
-      )}
-
-      {session && (
+      ) : (
         <main className="container py-2 iron-acre-home fs-page">
-          <section className="ia-tile ia-tile-pad mb-2 fs-hero-card">
+          <section className="ia-tile ia-tile-pad mb-2 fs-hero">
             <div className="ia-kicker">
               <i className="fas fa-tractor" />
               FARM STRONG
             </div>
 
             <div className="fs-hero-row mt-2">
-              <div>
-                <div className="ia-page-title">
-                  {activeBlock?.title || activeBlock?.name || "Farm Strong"}
-                </div>
-
-                <div className="ia-page-subtitle">{activeBlock?.focus || "Block training and progress."}</div>
+              <div className="fs-hero-copy">
+                <div className="ia-page-title">{activeBlock?.title || activeBlock?.name || "Farm Strong"}</div>
+                <div className="ia-page-subtitle">{activeBlock?.focus || "This week’s programmed training."}</div>
               </div>
 
-              <div className="fs-week-badge">
+              <div className="fs-week-box">
                 <span>Week</span>
                 <strong>{currentWeekNumber}</strong>
               </div>
@@ -706,16 +588,16 @@ export default function FarmStrongPage() {
             <section className="ia-tile ia-tile-pad mb-2">
               <div className="ia-card-title-compact">No active block</div>
               <div className="text-dim small mt-2">
-                No Farm Strong workout block is active yet. Set an active block in admin to show member programming here.
+                There is no active Farm Strong block yet. Set one in admin to show this week’s training.
               </div>
             </section>
           ) : null}
 
           {activeBlock && !activeDay ? (
             <section className="ia-tile ia-tile-pad mb-2">
-              <div className="ia-card-title-compact">No week programming found</div>
+              <div className="ia-card-title-compact">No workouts found this week</div>
               <div className="text-dim small mt-2">
-                The active block is loaded, but the current week has no days to display.
+                The active block is loaded, but the current week has no programmed days.
               </div>
             </section>
           ) : null}
@@ -723,7 +605,7 @@ export default function FarmStrongPage() {
           {activeDay ? (
             <>
               <section className="ia-tile ia-tile-pad mb-2">
-                <div className="ia-card-title-compact">This week</div>
+                <div className="ia-card-title-compact">This week’s workouts</div>
 
                 <div className="ia-week-chip-row mt-2">
                   {days.map((day) => (
@@ -739,131 +621,93 @@ export default function FarmStrongPage() {
                 </div>
               </section>
 
-              <section className="ia-tile ia-tile-pad mb-2 fs-session-header">
-                <div className="fs-session-day">{activeDay.dayName}</div>
-                <div className="fs-session-title">{activeDay.theme || "Farm Strong Session"}</div>
+              <section className="ia-tile ia-tile-pad mb-2 fs-day-header">
+                <div className="fs-day-kicker">{activeDay.dayName}</div>
+                <div className="fs-day-title">{activeDay.theme || "Farm Strong Session"}</div>
                 <div className="text-dim small mt-1">
-                  Complete the programmed strength, log the tracked lifts, then add your capacity and athletic scores.
+                  Read the session, update the main tracked lifts if needed, then crack on.
                 </div>
               </section>
 
-              <StrengthLogCard
-                day={activeDay}
-                lifts={lifts}
-                values={strengthValues}
-                onChange={updateStrengthValue}
+              <section className="ia-tile ia-tile-pad mb-2 fs-section-card">
+                <div className="fs-section-top">
+                  <div>
+                    <div className="ia-kicker">
+                      <i className="fas fa-chart-line" />
+                      TRACKED LIFTS
+                    </div>
+
+                    {sectionLabel(activeDay.sections?.strength) ? (
+                      <div className="fs-pill-row mt-2">
+                        <span className="fs-pill">{sectionLabel(activeDay.sections?.strength)}</span>
+                        {sectionDuration(activeDay.sections?.strength) ? (
+                          <span className="fs-pill fs-pill-muted">{sectionDuration(activeDay.sections?.strength)}</span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                {trackedExercises.length ? (
+                  <div className="fs-lift-list mt-3">
+                    {trackedExercises.map((exercise, index) => {
+                      const key = String(exercise.strength_exercise_id || exercise.name || index);
+                      const lift = findLift(lifts, exercise.strength_exercise_id, exercise.name);
+
+                      return (
+                        <TrackedLiftCard
+                          key={`${key}-${index}`}
+                          exercise={exercise}
+                          lift={lift}
+                          value={liftValues[key] || ""}
+                          saving={savingKey === key}
+                          expanded={expandedLiftKey === key}
+                          onToggle={() => setExpandedLiftKey((prev) => (prev === key ? "" : key))}
+                          onChange={(value) => updateLiftValue(key, value)}
+                          onSave={() => saveLift(exercise)}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="fs-empty mt-3">
+                    No tracked lifts have been set for this day yet. Add tracked strength exercises in the block editor.
+                  </div>
+                )}
+
+                {message ? <div className="fs-alert fs-alert-ok mt-3">{message}</div> : null}
+                {errorMessage ? <div className="fs-alert fs-alert-error mt-3">{errorMessage}</div> : null}
+              </section>
+
+              <WorkoutSection
+                title="Strength work"
+                icon="fa-dumbbell"
+                section={activeDay.sections?.strength}
+                fallback={activeDay.strength || []}
               />
 
-              <SectionCard
+              <WorkoutSection
                 title="Capacity"
                 icon="fa-fire"
                 section={activeDay.sections?.capacity}
                 fallback={activeDay.capacity || []}
-                scoreLabel="Capacity score"
-                scoreValue={capacityScore}
-                onScoreChange={setCapacityScore}
               />
 
-              <SectionCard
+              <WorkoutSection
                 title="Athletic"
                 icon="fa-bolt"
                 section={activeDay.sections?.athletic}
                 fallback={activeDay.athletic || []}
-                scoreLabel="Athletic score"
-                scoreValue={athleticScore}
-                onScoreChange={setAthleticScore}
               />
 
-              <SectionCard
+              <WorkoutSection
                 title="Notes"
                 icon="fa-clipboard"
                 section={activeDay.sections?.notes}
                 fallback={activeDay.notes || []}
               />
-
-              <section className="ia-tile ia-tile-pad mb-2 fs-complete-card">
-                <label className="fs-label">Session notes</label>
-                <textarea
-                  className="fs-textarea"
-                  value={sessionNotes}
-                  onChange={(e) => setSessionNotes(e.target.value)}
-                  placeholder="How did it feel? Anything to remember for next week?"
-                />
-
-                {saveError ? <div className="fs-alert fs-alert-error mt-3">{saveError}</div> : null}
-                {saveOk ? <div className="fs-alert fs-alert-ok mt-3">{saveOk}</div> : null}
-
-                <button className="ia-btn-primary w-100 mt-3 fs-complete-btn" disabled={saving} onClick={saveSession}>
-                  {saving ? "Saving..." : "Complete session"}
-                </button>
-              </section>
             </>
           ) : null}
-
-          <section className="ia-tile ia-tile-pad mb-2">
-            <div className="ia-card-title-compact">Strength progress</div>
-
-            {lifts.length ? (
-              <>
-                <div className="ia-week-chip-row mt-2">
-                  {lifts.map((lift) => (
-                    <button
-                      key={lift.exerciseId}
-                      type="button"
-                      className={selectedLift?.exerciseId === lift.exerciseId ? "ia-week-chip ia-week-chip-active" : "ia-week-chip"}
-                      onClick={() => setSelectedLiftId(lift.exerciseId)}
-                    >
-                      {lift.exerciseName}
-                    </button>
-                  ))}
-                </div>
-
-                {selectedLift ? (
-                  <>
-                    <div className="row g-2 mt-2">
-                      <div className="col-6">
-                        <div className="ia-stat-mini">
-                          <div className="ia-stat-mini-value">{formatKg(selectedLift.current)}</div>
-                          <div className="ia-stat-mini-label">Current</div>
-                        </div>
-                      </div>
-
-                      <div className="col-6">
-                        <div className="ia-stat-mini">
-                          <div className="ia-stat-mini-value">{formatKg(selectedLift.best)}</div>
-                          <div className="ia-stat-mini-label">Best ever</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ height: 240, marginTop: 14 }}>
-                      {liftChart ? (
-                        <Line data={liftChart.data} options={liftChart.options} />
-                      ) : (
-                        <div className="fs-empty-chart">No strength history yet.</div>
-                      )}
-                    </div>
-                  </>
-                ) : null}
-              </>
-            ) : (
-              <div className="text-dim small mt-2">
-                Tracked lifts will appear here once the active block has tracked strength movements.
-              </div>
-            )}
-          </section>
-
-          <section className="ia-tile ia-tile-pad mb-2">
-            <div className="ia-card-title-compact">Weight progress</div>
-
-            <div style={{ height: 220, marginTop: 12 }}>
-              {weightChart ? (
-                <Line data={weightChart.data} options={weightChart.options} />
-              ) : (
-                <div className="fs-empty-chart">No weight history yet.</div>
-              )}
-            </div>
-          </section>
         </main>
       )}
 
@@ -875,7 +719,7 @@ export default function FarmStrongPage() {
           padding-bottom: 96px !important;
         }
 
-        .fs-hero-card {
+        .fs-hero {
           background:
             radial-gradient(circle at top right, rgba(24, 255, 154, 0.12), transparent 34%),
             linear-gradient(180deg, rgba(14, 19, 27, 0.96) 0%, rgba(10, 14, 20, 0.96) 100%);
@@ -883,35 +727,41 @@ export default function FarmStrongPage() {
 
         .fs-hero-row {
           display: flex;
-          align-items: flex-start;
           justify-content: space-between;
+          align-items: flex-start;
           gap: 12px;
         }
 
-        .fs-week-badge {
-          min-width: 68px;
-          border-radius: 16px;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          padding: 8px 10px;
-          text-align: center;
+        .fs-hero-copy {
+          min-width: 0;
         }
 
-        .fs-week-badge span {
+        .fs-week-box {
+          min-width: 64px;
+          border-radius: 16px;
+          padding: 8px 10px;
+          text-align: center;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          flex: 0 0 auto;
+        }
+
+        .fs-week-box span {
           display: block;
           color: var(--ia-muted);
           font-size: 0.68rem;
           text-transform: uppercase;
           letter-spacing: 0.08em;
           font-weight: 800;
+          line-height: 1;
         }
 
-        .fs-week-badge strong {
+        .fs-week-box strong {
           display: block;
           color: var(--ia-neon);
           font-size: 1.25rem;
           line-height: 1;
-          margin-top: 4px;
+          margin-top: 5px;
         }
 
         .fs-week-theme {
@@ -924,56 +774,169 @@ export default function FarmStrongPage() {
           font-weight: 650;
         }
 
-        .fs-session-header {
-          border-color: rgba(24, 255, 154, 0.14);
+        .fs-day-header {
+          border-color: rgba(24, 255, 154, 0.15);
         }
 
-        .fs-session-day {
+        .fs-day-kicker {
           color: var(--ia-neon);
-          font-size: 0.78rem;
+          font-size: 0.74rem;
+          font-weight: 900;
           text-transform: uppercase;
           letter-spacing: 0.08em;
-          font-weight: 900;
+          line-height: 1;
         }
 
-        .fs-session-title {
-          font-size: 1.2rem;
-          line-height: 1.1;
+        .fs-day-title {
+          font-size: 1.12rem;
           font-weight: 900;
-          margin-top: 4px;
+          line-height: 1.1;
+          margin-top: 6px;
+          color: #fff;
         }
 
         .fs-section-card {
           overflow: hidden;
         }
 
-        .fs-section-head {
+        .fs-section-top {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
           gap: 12px;
         }
 
-        .fs-scheme-pill,
-        .fs-duration-pill {
+        .fs-pill-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px;
+        }
+
+        .fs-pill {
           display: inline-flex;
           align-items: center;
           justify-content: center;
           border-radius: 999px;
-          padding: 6px 10px;
-          background: rgba(24, 255, 154, 0.09);
+          min-height: 26px;
+          padding: 0 10px;
+          background: rgba(24, 255, 154, 0.1);
           border: 1px solid rgba(24, 255, 154, 0.18);
           color: #d9fff5;
-          font-size: 0.76rem;
+          font-size: 0.74rem;
           font-weight: 850;
           line-height: 1;
         }
 
-        .fs-duration-pill {
-          flex: 0 0 auto;
+        .fs-pill-muted {
           background: rgba(255, 255, 255, 0.06);
           border-color: rgba(255, 255, 255, 0.1);
+          color: rgba(255, 255, 255, 0.82);
+        }
+
+        .fs-lift-list {
+          display: grid;
+          gap: 10px;
+        }
+
+        .fs-lift-card {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(120px, 150px);
+          gap: 10px;
+          align-items: center;
+          border-radius: 14px;
+          padding: 11px;
+          background: rgba(255, 255, 255, 0.045);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .fs-lift-main {
+          appearance: none;
+          border: none;
+          background: transparent;
+          color: inherit;
+          text-align: left;
+          padding: 0;
+          min-width: 0;
+          cursor: pointer;
+        }
+
+        .fs-lift-title-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .fs-lift-title {
+          font-weight: 850;
           color: #fff;
+          line-height: 1.15;
+        }
+
+        .fs-expand-icon {
+          color: var(--ia-muted);
+          font-size: 0.74rem;
+          flex: 0 0 auto;
+        }
+
+        .fs-lift-meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-top: 7px;
+          color: var(--ia-muted);
+          font-size: 0.73rem;
+          line-height: 1;
+        }
+
+        .fs-lift-meta span {
+          border-radius: 999px;
+          padding: 4px 7px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .fs-lift-action {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+
+        .fs-lift-input {
+          width: 100%;
+          min-height: 42px;
+          border-radius: 12px;
+          border: 1px solid rgba(24, 255, 154, 0.2);
+          background: rgba(0, 0, 0, 0.24);
+          color: #fff;
+          text-align: center;
+          font-weight: 900;
+          outline: none;
+        }
+
+        .fs-lift-input:focus {
+          border-color: rgba(24, 255, 154, 0.45);
+          box-shadow: 0 0 0 3px rgba(24, 255, 154, 0.12);
+        }
+
+        .fs-save-lift-btn {
+          min-height: 36px !important;
+          border-radius: 12px !important;
+          width: 100%;
+        }
+
+        .fs-lift-expanded {
+          grid-column: 1 / -1;
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          padding-top: 10px;
+        }
+
+        .fs-graph-wrap {
+          height: 210px;
+          border-radius: 14px;
+          padding: 10px;
+          background: rgba(0, 0, 0, 0.18);
+          border: 1px solid rgba(255, 255, 255, 0.06);
         }
 
         .fs-work-list {
@@ -981,7 +944,7 @@ export default function FarmStrongPage() {
           gap: 8px;
         }
 
-        .fs-work-row {
+        .fs-work-line {
           display: flex;
           gap: 9px;
           align-items: flex-start;
@@ -994,7 +957,7 @@ export default function FarmStrongPage() {
           line-height: 1.35;
         }
 
-        .fs-work-dot {
+        .fs-dot {
           width: 7px;
           height: 7px;
           border-radius: 50%;
@@ -1004,124 +967,11 @@ export default function FarmStrongPage() {
           box-shadow: 0 0 10px rgba(24, 255, 154, 0.36);
         }
 
-        .fs-track-list {
-          display: grid;
-          gap: 10px;
-        }
-
-        .fs-track-row {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 92px;
-          gap: 10px;
-          align-items: center;
-          border-radius: 14px;
-          background: rgba(255, 255, 255, 0.045);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          padding: 11px;
-        }
-
-        .fs-track-title {
-          color: #fff;
-          font-weight: 800;
-          line-height: 1.15;
-        }
-
-        .fs-track-meta {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-          margin-top: 6px;
-          color: var(--ia-muted);
-          font-size: 0.74rem;
-          line-height: 1;
-        }
-
-        .fs-track-meta span {
-          border-radius: 999px;
-          padding: 4px 7px;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .fs-track-input {
-          width: 100%;
-          min-height: 44px;
-          border: 1px solid rgba(24, 255, 154, 0.18);
-          border-radius: 12px;
-          background: rgba(0, 0, 0, 0.25);
-          color: #fff;
-          font-weight: 900;
-          text-align: center;
-          outline: none;
-        }
-
-        .fs-track-input:focus,
-        .fs-input:focus,
-        .fs-textarea:focus {
-          border-color: rgba(24, 255, 154, 0.42);
-          box-shadow: 0 0 0 3px rgba(24, 255, 154, 0.12);
-        }
-
-        .fs-label {
-          display: block;
-          color: rgba(255, 255, 255, 0.84);
-          font-size: 0.8rem;
-          font-weight: 800;
-          margin-bottom: 7px;
-        }
-
-        .fs-input,
-        .fs-textarea {
-          width: 100%;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 12px;
-          background: rgba(0, 0, 0, 0.24);
-          color: #fff;
-          padding: 11px 12px;
-          outline: none;
-          font-size: 0.9rem;
-        }
-
-        .fs-textarea {
-          min-height: 92px;
-          resize: vertical;
-        }
-
-        .fs-complete-card {
-          border-color: rgba(24, 255, 154, 0.14);
-        }
-
-        .fs-complete-btn {
-          min-height: 44px !important;
-          font-size: 0.92rem !important;
-          border-radius: 14px !important;
-        }
-
-        .fs-alert {
-          border-radius: 12px;
-          padding: 10px 12px;
-          font-size: 0.86rem;
-          font-weight: 700;
-        }
-
-        .fs-alert-error {
-          background: rgba(255, 95, 115, 0.1);
-          border: 1px solid rgba(255, 95, 115, 0.26);
-          color: #ffb8c1;
-        }
-
-        .fs-alert-ok {
-          background: rgba(24, 255, 154, 0.1);
-          border: 1px solid rgba(24, 255, 154, 0.22);
-          color: #d9fff5;
-        }
-
-        .fs-empty-note,
-        .fs-empty-chart {
+        .fs-empty {
           display: flex;
           align-items: center;
           justify-content: center;
-          min-height: 78px;
+          min-height: 76px;
           text-align: center;
           border-radius: 14px;
           background: rgba(255, 255, 255, 0.03);
@@ -1131,24 +981,35 @@ export default function FarmStrongPage() {
           padding: 12px;
         }
 
-        @media (max-width: 520px) {
-          .fs-hero-row {
-            align-items: stretch;
-          }
+        .fs-alert {
+          border-radius: 12px;
+          padding: 10px 12px;
+          font-size: 0.84rem;
+          font-weight: 750;
+        }
 
-          .fs-week-badge {
-            min-width: 62px;
-          }
+        .fs-alert-ok {
+          background: rgba(24, 255, 154, 0.1);
+          border: 1px solid rgba(24, 255, 154, 0.22);
+          color: #d9fff5;
+        }
 
-          .fs-track-row {
+        .fs-alert-error {
+          background: rgba(255, 95, 115, 0.1);
+          border: 1px solid rgba(255, 95, 115, 0.26);
+          color: #ffb8c1;
+        }
+
+        @media (max-width: 560px) {
+          .fs-lift-card {
             grid-template-columns: 1fr;
           }
 
-          .fs-track-input-wrap {
-            width: 100%;
+          .fs-lift-action {
+            grid-template-columns: minmax(0, 1fr) 110px;
           }
 
-          .fs-track-input {
+          .fs-lift-input {
             text-align: left;
             padding-left: 12px;
           }
