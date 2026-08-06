@@ -587,7 +587,7 @@ function updateDaySection(
               day.dayName === dayName
                 ? {
                     ...day,
-                    textToLines(value)}
+                   [section]: textToLines(value)}
                 : day
             ),
           }
