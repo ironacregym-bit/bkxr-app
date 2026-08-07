@@ -107,25 +107,6 @@ export default function FarmStrongAdminPage() {
     alert("Active block updated");
   }
 
-  async function activateBlock(id: string) {
-    const r = await fetch(
-      "/api/admin/farmstrong/set-active",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          block_id: id,
-        }),
-      }
-    );
-
-    if (r.ok) {
-      mutate();
-    }
-  }
-
   if (status === "loading") {
     return (
       <main className="container py-3">
@@ -359,20 +340,6 @@ export default function FarmStrongAdminPage() {
                 ? "Update Block"
                 : "Create Block"}
             </button>
-            {isActive ? (
-              <span className="ia-badge-neon">
-                ACTIVE
-              </span>
-            ) : (
-              <button
-                className="ia-btn-primary"
-                onClick={() =>
-                  makeActive(block.block_id)
-                }
-              >
-                Set Active
-              </button>
-            )}
           </div>
         </section>
 
@@ -456,16 +423,14 @@ export default function FarmStrongAdminPage() {
                     Edit
                   </button>
 
-                  <button
-                    className="btn btn-success btn-sm"
-                    onClick={() =>
-                      activateBlock(
-                        block.id
-                      )
-                    }
-                  >
-                    Activate
-                  </button>
+                <button
+                  className="btn btn-success btn-sm"
+                  onClick={() =>
+                    makeActive(block.id)
+                  }
+                >
+                  Set Active
+                </button>
                 </div>
               </div>
             )
