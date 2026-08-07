@@ -103,7 +103,9 @@ export default function FarmStrongAdminPage() {
       alert(json?.error || "Failed");
       return;
     }
-  
+    
+    await mutate();
+    
     alert("Active block updated");
   }
 
