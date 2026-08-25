@@ -49,18 +49,29 @@ export default function RegisterPage() {
   const callbackUrl = useMemo(() => {
     return safeCallbackUrl(queryCallbackUrl || "/");
   }, [queryCallbackUrl]);
-
+  
+  const isSiteBuilderFlow = useMemo(() => {
+    return callbackUrl.startsWith("/sitebuilder");
+    }, [callbackUrl]);
+  
   const gymIdToJoin = useMemo(() => {
-    return queryGymId || "g1";
+    return queryGymId || "";
   }, [queryGymId]);
-
+  
   useEffect(() => {
     if (!mounted) return;
     if (typeof window === "undefined") return;
 
-    localStorage.setItem("app_brand", "iron-acre");
+    localStorage.setItem(
+      "app_brand",
+      isSiteBuilderFlow ? "sitebuilder" : "iron-acre"
+    );
+    
     localStorage.setItem("post_login_callback", callbackUrl);
-    localStorage.setItem("pending_gym_id", gymIdToJoin);
+    
+    if (gymIdToJoin) {
+      localStorage.setItem("pending_gym_id", gymIdToJoin);
+    }
 
     if (queryRef) {
       localStorage.setItem("iron_acre_ref", queryRef);
@@ -72,14 +83,21 @@ export default function RegisterPage() {
     if (!mounted) return;
     if (status !== "authenticated") return;
     if (didRedirectRef.current) return;
-
+  
     const run = async () => {
       didRedirectRef.current = true;
-
+  
       try {
+        // SiteBuilder login
+        if (isSiteBuilderFlow) {
+          router.replace(callbackUrl);
+          return;
+        }
+  
+        // Iron Acre login
         if (gymIdToJoin) {
           setLinkingGym(true);
-
+  
           await fetch("/api/profile/join-gym", {
             method: "POST",
             headers: {
@@ -95,11 +113,18 @@ export default function RegisterPage() {
         router.replace(callbackUrl || "/");
       }
     };
-
+  
     run().catch(() => {
       router.replace(callbackUrl || "/");
     });
-  }, [mounted, status, gymIdToJoin, callbackUrl, router]);
+  }, [
+    mounted,
+    status,
+    gymIdToJoin,
+    callbackUrl,
+    isSiteBuilderFlow,
+    router,
+  ]);
 
   async function handleGoogleSignIn() {
     setError(null);
