@@ -143,7 +143,7 @@ export const authOptions: NextAuthOptions = {
        (token as any).accessToken as string;
    
      return session;
-   }
+   },
 
 
     async redirect({ url, baseUrl }) {
