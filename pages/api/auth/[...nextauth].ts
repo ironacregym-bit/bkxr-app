@@ -112,27 +112,39 @@ export const authOptions: NextAuthOptions = {
       if (token.email) {
         const snap = await firestore.collection("users").doc(token.email).get();
         const data = snap.exists ? snap.data() ?? {} : {};
+      
         (token as any).role = (data.role as string) || "user";
         (token as any).gym_id = (data.gym_id as string) || null;
+      
+        (token as any).permissions = Array.isArray(data.permissions)
+          ? data.permissions
+          : ["iron-acre"];
       }
 
       return token;
     },
+   
+  async session({ session, token }) {
+     if (session.user) {
+       (session.user as any).email =
+         (session.user as any).email || (token.email as string) || null;
+   
+       (session.user as any).role =
+         ((token as any).role as string) || "user";
+   
+       (session.user as any).gym_id =
+         ((token as any).gym_id as string) || null;
+   
+       (session.user as any).permissions =
+         ((token as any).permissions as string[]) || ["iron-acre"];
+     }
+   
+     (session as any).accessToken =
+       (token as any).accessToken as string;
+   
+     return session;
+   }
 
-    async session({ session, token }) {
-      if (session.user) {
-        (session.user as any).email =
-          (session.user as any).email || (token.email as string) || null;
-
-        (session.user as any).role = ((token as any).role as string) || "user";
-        (session.user as any).gym_id =
-          ((token as any).gym_id as string) || null;
-      }
-
-      (session as any).accessToken = (token as any).accessToken as string;
-
-      return session;
-    },
 
     async redirect({ url, baseUrl }) {
       try {
