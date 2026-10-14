@@ -416,7 +416,17 @@ const faviconHref = faviconUrl
         ) : null}
       </Head>
 
-      <div className="sb-wrap">
+      <div className="sb-wrap"
+        style={ { "--sb-bg": bg,
+                 "--sb-text": text,
+                 "--sb-muted": muted,
+                 "--sb-border": border,
+                 "--sb-card-bg": cardBg,
+                 "--sb-top-bg": topBg,
+                 "--sb-accent": accent,
+                 "--sb-mark-bg": markBg,
+                 "--sb-hero-overlay": heroOverlay, 
+                } as React.CSSProperties }>
         {canEdit && isDraft ? (
           <div className="sb-draftBanner" role="status" aria-label="Draft banner">
             <div className="sb-draftDot" aria-hidden="true" />
