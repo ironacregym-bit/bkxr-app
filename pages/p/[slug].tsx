@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../api/auth/[...nextauth]";
 import firestore from "../../lib/firestoreClient";
 import { renderRichText } from "../../lib/sitebuilder/renderRichText";
-import "../../styles/sitebuilder.css";
+
 
 type PublicSite = {
   id: string;
