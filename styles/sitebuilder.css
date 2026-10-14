@@ -7,6 +7,77 @@ body,
 .sb-wrap {
   min-height: 100vh;
 }
+.sb-wrap {
+  min-height: 100vh;
+  background: var(--sb-bg);
+  color: var(--sb-text);
+}
+
+.sb-top {
+  background: var(--sb-top-bg);
+  border-bottom: 1px solid var(--sb-border);
+}
+
+.sb-mark {
+  background: var(--sb-mark-bg);
+}
+
+.sb-section {
+  border: 1px solid var(--sb-border);
+  background: var(--sb-card-bg);
+}
+
+.sb-galleryItem {
+  border: 1px solid var(--sb-border);
+  background: var(--sb-card-bg);
+}
+
+.sb-docCard {
+  border: 1px solid var(--sb-border);
+  background: var(--sb-card-bg);
+}
+
+.sb-mapCard {
+  border: 1px solid var(--sb-border);
+}
+
+.sb-tableBlock {
+  border: 1px solid var(--sb-border);
+}
+
+.sb-tableScroll {
+  border: 1px solid var(--sb-border);
+}
+
+.sb-table th,
+.sb-table td {
+  border-bottom: 1px solid var(--sb-border);
+}
+
+.sb-cta {
+  background: var(--sb-accent);
+}
+
+.sb-docTitle {
+  color: var(--sb-text);
+}
+
+.sb-docLink {
+  color: var(--sb-accent);
+}
+
+.sb-p,
+.sb-line,
+.sb-muted,
+.sb-sectionIntro,
+.sb-galleryText,
+.sb-docDescription,
+.sb-richParagraph,
+.sb-richList,
+.sb-table td {
+  color: var(--sb-muted);
+}
+
 
 .sb-draftBanner {
   position: sticky;
