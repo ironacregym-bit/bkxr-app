@@ -188,6 +188,7 @@ body,
   border-radius: 18px;
   overflow: hidden;
   min-height: 360px;
+  position: relative;
 }
 
 .sb-heroMedia {
