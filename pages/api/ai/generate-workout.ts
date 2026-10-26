@@ -6,13 +6,11 @@ import type {
 import { generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 
-// Tool 1: Equipment retrieval
 import { getEquipment } from "../../../lib/ai/getEquipment";
-
-// Tool 2: Historical workout retrieval
 import { getRecentWorkouts } from "../../../lib/ai/getRecentWorkouts";
+import { getExercises } from "../../../lib/ai/getExercises";
+import { saveDraft } from "../../../lib/ai/saveDraft";
 
-// Create Gemini client using environment variable
 const googleAI = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
@@ -21,7 +19,6 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  // Only allow POST requests
   if (req.method !== "POST") {
     return res.status(405).json({
       error: "Method not allowed",
@@ -29,14 +26,18 @@ export default async function handler(
   }
 
   try {
-    // Validate configuration
+    /*
+     * Ensure Gemini has been configured.
+     */
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({
         error: "GEMINI_API_KEY is not configured",
       });
     }
 
-    // User input from the UI
+    /*
+     * User-supplied workout requirements.
+     */
     const {
       classType,
       classSize,
@@ -47,44 +48,45 @@ export default async function handler(
     } = req.body;
 
     /*
-     * TOOL CALL #1
-     * Retrieve current equipment from Firestore
+     * TOOL #1
+     * Retrieve all available equipment.
+     *
+     * This forms part of the agent's
+     * retrieval layer and prevents
+     * the AI from programming
+     * unavailable kit.
      */
     const equipment = await getEquipment();
 
-    /*
-     * Convert equipment into
-     * human-readable prompt context
-     */
     const equipmentText =
       equipment.length > 0
         ? equipment
-            .map((item: any) => {
-              return `- ${item.name}${
-                item.quantity
-                  ? ` (x${item.quantity})`
-                  : ""
-              }${
-                item.notes
-                  ? ` - ${item.notes}`
-                  : ""
-              }`;
-            })
+            .map(
+              (item: any) =>
+                `- ${item.name}${
+                  item.quantity
+                    ? ` (x${item.quantity})`
+                    : ""
+                }${
+                  item.notes
+                    ? ` - ${item.notes}`
+                    : ""
+                }`
+            )
             .join("\n")
         : "No equipment found";
 
     /*
-     * TOOL CALL #2
-     * Retrieve recent workouts so the agent
-     * can avoid creating duplicates
+     * TOOL #2
+     * Retrieve recent workouts.
+     *
+     * This allows the agent to
+     * avoid repetition and create
+     * more intelligent programming.
      */
     const recentWorkouts =
       await getRecentWorkouts(10);
 
-    /*
-     * Convert workout history into
-     * prompt context
-     */
     const recentWorkoutText =
       recentWorkouts.length > 0
         ? recentWorkouts
@@ -112,16 +114,46 @@ ${workout.notes || "No workout notes"}
         : "No recent workouts found";
 
     /*
-     * AGENT CONTEXT
+     * TOOL #3
+     * Retrieve approved exercises.
      *
-     * This is where we combine:
-     * 1. User request
-     * 2. Equipment
-     * 3. Workout history
+     * The agent should only use
+     * exercises that exist in the
+     * Farm Strong exercise library.
+     */
+    const exercises =
+      await getExercises("Farm Strong");
+
+    const exerciseText =
+      exercises.length > 0
+        ? exercises
+            .map(
+              (exercise: any) => `
+EXERCISE:
+${exercise.exercise_name}
+
+EQUIPMENT:
+${exercise.equipment}
+
+TYPE:
+${exercise.type}
+`
+            )
+            .join("\n")
+        : "No approved exercises found";
+
+    /*
+     * Compose the complete AI context.
      *
-     * This effectively creates a
-     * Retrieval Augmented Generation (RAG)
-     * system backed by Firestore.
+     * This is effectively RAG:
+     *
+     * User Input
+     * +
+     * Equipment
+     * +
+     * Exercise Library
+     * +
+     * Workout History
      */
     const prompt = `
 You are the Head Coach at Iron Acre.
@@ -134,6 +166,10 @@ RECENT WORKOUT HISTORY
 
 ${recentWorkoutText}
 
+APPROVED FARM STRONG EXERCISES
+
+${exerciseText}
+
 PROGRAMMING RULES
 
 - Avoid generic bootcamp workouts
@@ -145,8 +181,11 @@ PROGRAMMING RULES
 - Avoid repeating recent workouts
 - Avoid repeating recent formats
 - Avoid repeating recent movement patterns
+- Only use exercises from the approved exercise library
+- Do not invent exercises
+- Match exercises to available equipment
 - Vary training stimulus across sessions
-- Prioritise strongman and functional fitness principles where appropriate
+- Prioritise strongman and functional fitness principles
 - Create workouts that would genuinely be delivered at Iron Acre
 
 CLASS DETAILS
@@ -188,8 +227,7 @@ SCALING OPTIONS
 `;
 
     /*
-     * Generate workout using Gemini
-     * with all retrieved context
+     * Generate the workout draft.
      */
     const { text } = await generateText({
       model: googleAI("gemini-2.5-flash"),
@@ -197,12 +235,47 @@ SCALING OPTIONS
     });
 
     /*
-     * Return response to UI
+     * Save the generated workout
+     * as a draft awaiting approval.
+     */
+    const draftId = await saveDraft({
+      classType,
+      classSize,
+      duration,
+      format,
+      focus,
+
+      prompt: requirements,
+
+      generated_workout: text,
+
+      equipmentCount:
+        equipment.length,
+
+      exerciseCount:
+        exercises.length,
+
+      recentWorkoutCount:
+        recentWorkouts.length,
+    });
+
+    /*
+     * Return workout and draft
+     * information to the UI.
      */
     return res.status(200).json({
       workout: text,
+
+      draftId,
+
+      status: "draft",
+
       equipmentCount:
         equipment.length,
+
+      exerciseCount:
+        exercises.length,
+
       recentWorkoutCount:
         recentWorkouts.length,
     });
