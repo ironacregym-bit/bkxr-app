@@ -11,6 +11,9 @@ import { getRecentWorkouts } from "../../../lib/ai/getRecentWorkouts";
 import { getExercises } from "../../../lib/ai/getExercises";
 import { saveDraft } from "../../../lib/ai/saveDraft";
 
+import { loadAgent } from "../../../lib/agents/loadAgent";
+import { buildPrompt } from "../../../lib/agents/buildPrompt";
+
 const googleAI = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
@@ -26,8 +29,8 @@ export default async function handler(
   }
 
   try {
-    /*
-     * Ensure Gemini has been configured.
+    /**
+     * Validate Gemini configuration.
      */
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({
@@ -35,8 +38,9 @@ export default async function handler(
       });
     }
 
-    /*
-     * User-supplied workout requirements.
+    /**
+     * User input supplied from
+     * the AI Workout Coach page.
      */
     const {
       classType,
@@ -47,16 +51,24 @@ export default async function handler(
       requirements,
     } = req.body;
 
-    /*
-     * TOOL #1
-     * Retrieve all available equipment.
+    /**
+     * Load the agent definition.
      *
-     * This forms part of the agent's
-     * retrieval layer and prevents
-     * the AI from programming
-     * unavailable kit.
+     * This agent lives in Firestore
+     * so behaviour can be changed
+     * without deploying code.
      */
-    const equipment = await getEquipment();
+    const agent =
+      await loadAgent("farm-strong");
+
+    /**
+     * ==================================================
+     * TOOL #1
+     * EQUIPMENT
+     * ==================================================
+     */
+    const equipment =
+      await getEquipment();
 
     const equipmentText =
       equipment.length > 0
@@ -76,13 +88,11 @@ export default async function handler(
             .join("\n")
         : "No equipment found";
 
-    /*
+    /**
+     * ==================================================
      * TOOL #2
-     * Retrieve recent workouts.
-     *
-     * This allows the agent to
-     * avoid repetition and create
-     * more intelligent programming.
+     * RECENT WORKOUT HISTORY
+     * ==================================================
      */
     const recentWorkouts =
       await getRecentWorkouts(10);
@@ -113,13 +123,11 @@ ${workout.notes || "No workout notes"}
             )
         : "No recent workouts found";
 
-    /*
+    /**
+     * ==================================================
      * TOOL #3
-     * Retrieve approved exercises.
-     *
-     * The agent should only use
-     * exercises that exist in the
-     * Farm Strong exercise library.
+     * EXERCISE LIBRARY
+     * ==================================================
      */
     const exercises =
       await getExercises("Farm Strong");
@@ -142,126 +150,76 @@ ${exercise.type}
             .join("\n")
         : "No approved exercises found";
 
-    /*
-     * Compose the complete AI context.
+    /**
+     * Build the final prompt.
      *
-     * This is effectively RAG:
+     * Prompt construction is no longer
+     * hardcoded in this file.
      *
+     * Firestore Agent
+     * +
+     * Tool Context
+     * +
      * User Input
-     * +
-     * Equipment
-     * +
-     * Exercise Library
-     * +
-     * Workout History
      */
-    const prompt = `
-You are the Head Coach at Iron Acre.
+    const prompt = buildPrompt(
+      agent,
+      {
+        equipmentText,
+        recentWorkoutText,
+        exerciseText,
+      },
+      {
+        classType,
+        classSize,
+        duration,
+        format,
+        focus,
+        requirements,
+      }
+    );
 
-AVAILABLE EQUIPMENT
-
-${equipmentText}
-
-RECENT WORKOUT HISTORY
-
-${recentWorkoutText}
-
-APPROVED FARM STRONG EXERCISES
-
-${exerciseText}
-
-PROGRAMMING RULES
-
-- Avoid generic bootcamp workouts
-- Respect participant numbers
-- Respect equipment limitations
-- Use realistic work/rest periods
-- Use available equipment efficiently
-- Ensure all athletes can participate
-- Avoid repeating recent workouts
-- Avoid repeating recent formats
-- Avoid repeating recent movement patterns
-- Only use exercises from the approved exercise library
-- Do not invent exercises
-- Match exercises to available equipment
-- Vary training stimulus across sessions
-- Prioritise strongman and functional fitness principles
-- Create workouts that would genuinely be delivered at Iron Acre
-
-CLASS DETAILS
-
-Class Type:
-${classType}
-
-Class Size:
-${classSize}
-
-Duration:
-${duration} minutes
-
-Format:
-${format}
-
-Focus:
-${focus}
-
-SPECIAL REQUIREMENTS
-
-${requirements}
-
-OUTPUT FORMAT
-
-SESSION TITLE
-
-OVERVIEW
-
-WARM UP
-
-MAIN SESSION
-
-FINISHER
-
-COACHING NOTES
-
-SCALING OPTIONS
-`;
-
-    /*
-     * Generate the workout draft.
+    /**
+     * Generate workout from Gemini.
      */
     const { text } = await generateText({
-      model: googleAI("gemini-2.5-flash"),
+      model: googleAI(
+        agent.model ||
+          "gemini-2.5-flash"
+      ),
       prompt,
     });
 
-    /*
-     * Save the generated workout
-     * as a draft awaiting approval.
+    /**
+     * Save generated workout
+     * as an approval draft.
      */
-    const draftId = await saveDraft({
-      classType,
-      classSize,
-      duration,
-      format,
-      focus,
+    const draftId =
+      await saveDraft({
+        agentName: agent.name,
 
-      prompt: requirements,
+        classType,
+        classSize,
+        duration,
+        format,
+        focus,
 
-      generated_workout: text,
+        prompt: requirements,
 
-      equipmentCount:
-        equipment.length,
+        generated_workout: text,
 
-      exerciseCount:
-        exercises.length,
+        equipmentCount:
+          equipment.length,
 
-      recentWorkoutCount:
-        recentWorkouts.length,
-    });
+        exerciseCount:
+          exercises.length,
 
-    /*
-     * Return workout and draft
-     * information to the UI.
+        recentWorkoutCount:
+          recentWorkouts.length,
+      });
+
+    /**
+     * Return draft to UI.
      */
     return res.status(200).json({
       workout: text,
@@ -269,6 +227,8 @@ SCALING OPTIONS
       draftId,
 
       status: "draft",
+
+      agent: agent.name,
 
       equipmentCount:
         equipment.length,
