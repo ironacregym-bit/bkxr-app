@@ -4,13 +4,29 @@ import type {
 } from "next";
 
 import { generateText } from "ai";
-import { google } from "@ai-sdk/google";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+
+const googleAI = createGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY,
+});
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  if (req.method !== "POST") {
+    return res.status(405).json({
+      error: "Method not allowed",
+    });
+  }
+
   try {
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({
+        error: "GEMINI_API_KEY is not configured",
+      });
+    }
+
     const {
       classType,
       classSize,
@@ -22,42 +38,74 @@ export default async function handler(
     } = req.body;
 
     const prompt = `
-You are an elite functional fitness coach.
+You are the Head Coach at Iron Acre.
 
-Create a complete workout.
+Create a complete, ready-to-run workout.
 
-Class Type: ${classType}
-Class Size: ${classSize}
-Duration: ${duration} minutes
-Format: ${format}
-Focus: ${focus}
+RULES:
+- Avoid generic bootcamp workouts
+- Make the session engaging and well structured
+- Respect participant numbers
+- Respect equipment limitations
+- Use realistic work/rest periods
+- Include coaching notes
+- Keep transitions practical
+- Make the workout suitable for real delivery
+
+CLASS DETAILS
+
+Class Type:
+${classType}
+
+Class Size:
+${classSize}
+
+Duration:
+${duration} minutes
+
+Format:
+${format}
+
+Focus:
+${focus}
 
 Equipment:
 ${equipmentNotes}
 
-Requirements:
+Special Requirements:
 ${requirements}
 
-The workout should include:
+OUTPUT FORMAT
 
-1. Warm Up
-2. Main Workout
-3. Finisher (if appropriate)
-4. Coaching Notes
+SESSION TITLE
 
-Make it practical and ready to deliver.
+OVERVIEW
+
+WARM UP
+
+MAIN SESSION
+
+FINISHER
+
+COACHING NOTES
+
+SCALING OPTIONS
 `;
 
     const { text } = await generateText({
-      model: google("gemini-2.5-flash"),
+      model: googleAI("gemini-2.5-flash"),
       prompt,
+      maxTokens: 2000,
     });
 
     return res.status(200).json({
       workout: text,
     });
   } catch (error: any) {
-    console.error(error);
+    console.error(
+      "[AI WORKOUT ERROR]",
+      error
+    );
 
     return res.status(500).json({
       error:
