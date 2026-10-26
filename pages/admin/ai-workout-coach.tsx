@@ -398,53 +398,214 @@ export default function AIWorkoutCoachPage() {
 
         <section className="ia-tile ia-tile-pad">
           <div className="ia-card-title-compact">
-            Generated Workout
+            AI Generated Workout
           </div>
-
-          <div
-            className="mt-3"
-            style={{
-              minHeight: 250,
-            }}
-          >
-            {!result && (
-              <div>
-                No workout generated yet.
+        
+          {!result && (
+            <div
+              className="mt-3"
+              style={{
+                minHeight: 150,
+              }}
+            >
+              No workout generated yet.
+            </div>
+          )}
+        
+          {result && (
+            <div className="mt-3">
+        
+              <div className="mb-4">
+                <h2>{result.title}</h2>
+        
+                <p
+                  style={{
+                    opacity: 0.8,
+                  }}
+                >
+                  {result.overview}
+                </p>
               </div>
-            )}
-          
-            {result && (
-              <pre
-                style={{
-                  whiteSpace: "pre-wrap",
-                  color: "#fff",
-                }}
-              >
-                {JSON.stringify(
-                  result,
-                  null,
-                  2
+        
+              <div className="ia-tile p-3 mb-3">
+                <h4>🔥 Warm Up</h4>
+        
+                {result.warmup?.map(
+                  (
+                    item: any,
+                    index: number
+                  ) => (
+                    <div
+                      key={index}
+                      className="mb-2"
+                    >
+                      <strong>
+                        {item.exercise}
+                      </strong>
+        
+                      {item.instructions && (
+                        <div>
+                          {item.instructions}
+                        </div>
+                      )}
+                    </div>
+                  )
                 )}
-              </pre>
-            )}
-          </div>
-
+              </div>
+        
+              <div className="ia-tile p-3 mb-3">
+                <h4>💪 Strength</h4>
+        
+                {result.strength?.map(
+                  (
+                    item: any,
+                    index: number
+                  ) => (
+                    <div
+                      key={index}
+                      className="mb-3"
+                    >
+                      <strong>
+                        {item.exercise}
+                      </strong>
+        
+                      {item.sets && (
+                        <div>
+                          Sets:
+                          {" "}
+                          {item.sets}
+                        </div>
+                      )}
+        
+                      {item.reps && (
+                        <div>
+                          Reps:
+                          {" "}
+                          {item.reps}
+                        </div>
+                      )}
+        
+                      {item.instructions && (
+                        <div>
+                          {item.instructions}
+                        </div>
+                      )}
+                    </div>
+                  )
+                )}
+              </div>
+        
+              <div className="ia-tile p-3 mb-3">
+                <h4>🏃 Conditioning</h4>
+        
+                {result.conditioning?.map(
+                  (
+                    item: any,
+                    index: number
+                  ) => (
+                    <div
+                      key={index}
+                      className="mb-2"
+                    >
+                      <strong>
+                        {item.exercise}
+                      </strong>
+        
+                      {item.instructions && (
+                        <div>
+                          {item.instructions}
+                        </div>
+                      )}
+                    </div>
+                  )
+                )}
+              </div>
+        
+              <div className="ia-tile p-3 mb-3">
+                <h4>🎯 Core</h4>
+        
+                {result.core?.map(
+                  (
+                    item: any,
+                    index: number
+                  ) => (
+                    <div
+                      key={index}
+                      className="mb-2"
+                    >
+                      <strong>
+                        {item.exercise}
+                      </strong>
+        
+                      {item.instructions && (
+                        <div>
+                          {item.instructions}
+                        </div>
+                      )}
+                    </div>
+                  )
+                )}
+              </div>
+        
+              <div className="ia-tile p-3 mb-3">
+                <h4>🧘 Cool Down</h4>
+        
+                {result.cooldown?.map(
+                  (
+                    item: any,
+                    index: number
+                  ) => (
+                    <div
+                      key={index}
+                      className="mb-2"
+                    >
+                      <strong>
+                        {item.exercise}
+                      </strong>
+        
+                      {item.instructions && (
+                        <div>
+                          {item.instructions}
+                        </div>
+                      )}
+                    </div>
+                  )
+                )}
+              </div>
+        
+              {result.coach_notes?.length >
+                0 && (
+                <div className="ia-tile p-3">
+                  <h4>📝 Coach Notes</h4>
+        
+                  {result.coach_notes.map(
+                    (
+                      note: string,
+                      index: number
+                    ) => (
+                      <div
+                        key={index}
+                        className="mb-2"
+                      >
+                        • {note}
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        
           {draftId && (
             <div className="mt-4">
-              <div
-                className="small text-success mb-3"
-              >
-                Draft Saved:
-                {" "}
-                {draftId}
+              <div className="small text-success mb-3">
+                Draft Saved: {draftId}
               </div>
-
+        
               <button
                 className="btn btn-success"
                 disabled={approving}
-                onClick={
-                  approveWorkout
-                }
+                onClick={approveWorkout}
               >
                 {approving
                   ? "Publishing..."
