@@ -385,10 +385,9 @@ export default function AIWorkoutCoachPage() {
 
           <div className="mt-4">
             <button
-              className="ia      disabled={loading}
-              onClick={
-                generateWorkout
-              }
+              className="ia-btn"
+              disabled={loading}
+              onClick={generateWorkout}
             >
               {loading
                 ? "Generating..."
