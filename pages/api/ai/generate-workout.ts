@@ -13,6 +13,9 @@ import { buildPrompt } from "../../../lib/agents/buildPrompt";
 
 import { saveDraft } from "../../../lib/ai/saveDraft";
 
+import { getAgentModel }
+  from "../../../lib/agents/getAgentModel";
+
 const googleAI = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
@@ -126,9 +129,7 @@ export default async function handler(
      */
     const { text } =
       await generateText({
-        model: googleAI(
-          agent.model ||
-            "gemini-2.5-flash"
+        model: getAgentModel(agent)
         ),
         prompt,
       });
