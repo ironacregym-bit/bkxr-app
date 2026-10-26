@@ -12,7 +12,7 @@ export interface Exercise {
   id: string;
 
   // Farm Strong, Strength, Conditioning etc.
-  class?: string;
+  Class?: string;
 
   // Equipment needed to perform exercise
   equipment?: string;
