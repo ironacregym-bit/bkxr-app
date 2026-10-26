@@ -4,35 +4,29 @@ import type {
 } from "next";
 
 import { generateText } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 
 import { loadAgent } from "../../../lib/agents/loadAgent";
 import { loadAgentContext } from "../../../lib/agents/loadAgentContext";
 import { buildContext } from "../../../lib/agents/buildContext";
 import { buildPrompt } from "../../../lib/agents/buildPrompt";
+import { getAgentModel } from "../../../lib/agents/getAgentModel";
 
 import { saveDraft } from "../../../lib/ai/saveDraft";
 
-import { getAgentModel }
-  from "../../../lib/agents/getAgentModel";
-
-const googleAI = createGoogleGenerativeAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
-
 /**
- * Agent Runner
+ * Generic Agent Runner
  *
- * Responsibilities:
+ * Responsibilities
+ * ----------------
+ * 1. Load agent definition from Firestore
+ * 2. Execute the tools assigned to that agent
+ * 3. Build AI context dynamically
+ * 4. Construct a prompt from agent configuration
+ * 5. Generate a response using the configured model
+ * 6. Save a draft for approval
  *
- * 1. Load Agent Definition
- * 2. Execute Agent Tools
- * 3. Build Agent Context
- * 4. Construct Prompt
- * 5. Generate Response
- * 6. Save Draft
- *
- * No workout logic is hardcoded here.
+ * This route contains no Farm Strong specific logic.
+ * The behaviour is controlled by the agent definition.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -46,7 +40,7 @@ export default async function handler(
 
   try {
     /**
-     * Ensure API key exists.
+     * Validate configuration.
      */
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({
@@ -55,7 +49,7 @@ export default async function handler(
     }
 
     /**
-     * User input from UI.
+     * User supplied input from UI.
      */
     const {
       classType,
@@ -67,37 +61,32 @@ export default async function handler(
     } = req.body;
 
     /**
-     * Load the Farm Strong Agent
-     * from Firestore.
+     * Load Firestore agent definition.
      *
-     * This contains:
-     * - prompt
-     * - rules
-     * - tools
-     * - model
-     * - output format
+     * Future:
+     *
+     * farm-strong
+     * hyrox
+     * nutrition
+     * programming-review
      */
     const agent =
       await loadAgent("farm-strong");
 
     /**
-     * Execute all tools
-     * configured on the agent.
+     * Execute all configured tools.
      *
-     * Example:
-     * [
-     *   "equipment",
-     *   "recentWorkouts",
-     *   "exercises"
-     * ]
+     * Example tools:
+     * - equipment
+     * - recentWorkouts
+     * - exercises
      */
     const context =
       await loadAgentContext(agent);
 
     /**
-     * Convert raw tool responses
-     * into a structured block
-     * to be supplied to the LLM.
+     * Convert tool output into a format
+     * suitable for the LLM.
      */
     const agentContext =
       buildContext(context);
@@ -105,11 +94,10 @@ export default async function handler(
     /**
      * Build final prompt.
      *
-     * Prompt is now:
-     *
-     * Agent Definition
-     * + Agent Context
-     * + User Input
+     * Prompt =
+     * Agent Definition +
+     * Tool Context +
+     * User Input
      */
     const prompt = buildPrompt(
       agent,
@@ -125,20 +113,21 @@ export default async function handler(
     );
 
     /**
-     * Generate workout draft.
+     * Generate response using
+     * the model configured on
+     * the agent definition.
      */
     const { text } =
       await generateText({
-        model: getAgentModel(agent)
-        ),
+        model: getAgentModel(agent),
         prompt,
       });
 
     /**
-     * Persist draft.
+     * Save generated workout as a draft.
      *
-     * Human approval occurs later
-     * before publication.
+     * Human approval happens later
+     * before publishing.
      */
     const draftId =
       await saveDraft({
