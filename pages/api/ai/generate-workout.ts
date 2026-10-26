@@ -6,18 +6,31 @@ import type {
 import { generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 
-import { getEquipment } from "../../../lib/ai/getEquipment";
-import { getRecentWorkouts } from "../../../lib/ai/getRecentWorkouts";
-import { getExercises } from "../../../lib/ai/getExercises";
-import { saveDraft } from "../../../lib/ai/saveDraft";
-
 import { loadAgent } from "../../../lib/agents/loadAgent";
+import { loadAgentContext } from "../../../lib/agents/loadAgentContext";
+import { buildContext } from "../../../lib/agents/buildContext";
 import { buildPrompt } from "../../../lib/agents/buildPrompt";
+
+import { saveDraft } from "../../../lib/ai/saveDraft";
 
 const googleAI = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
+/**
+ * Agent Runner
+ *
+ * Responsibilities:
+ *
+ * 1. Load Agent Definition
+ * 2. Execute Agent Tools
+ * 3. Build Agent Context
+ * 4. Construct Prompt
+ * 5. Generate Response
+ * 6. Save Draft
+ *
+ * No workout logic is hardcoded here.
+ */
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -30,7 +43,7 @@ export default async function handler(
 
   try {
     /**
-     * Validate Gemini configuration.
+     * Ensure API key exists.
      */
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({
@@ -39,8 +52,7 @@ export default async function handler(
     }
 
     /**
-     * User input supplied from
-     * the AI Workout Coach page.
+     * User input from UI.
      */
     const {
       classType,
@@ -52,123 +64,53 @@ export default async function handler(
     } = req.body;
 
     /**
-     * Load the agent definition.
+     * Load the Farm Strong Agent
+     * from Firestore.
      *
-     * This agent lives in Firestore
-     * so behaviour can be changed
-     * without deploying code.
+     * This contains:
+     * - prompt
+     * - rules
+     * - tools
+     * - model
+     * - output format
      */
     const agent =
       await loadAgent("farm-strong");
 
     /**
-     * ==================================================
-     * TOOL #1
-     * EQUIPMENT
-     * ==================================================
-     */
-    const equipment =
-      await getEquipment();
-
-    const equipmentText =
-      equipment.length > 0
-        ? equipment
-            .map(
-              (item: any) =>
-                `- ${item.name}${
-                  item.quantity
-                    ? ` (x${item.quantity})`
-                    : ""
-                }${
-                  item.notes
-                    ? ` - ${item.notes}`
-                    : ""
-                }`
-            )
-            .join("\n")
-        : "No equipment found";
-
-    /**
-     * ==================================================
-     * TOOL #2
-     * RECENT WORKOUT HISTORY
-     * ==================================================
-     */
-    const recentWorkouts =
-      await getRecentWorkouts(10);
-
-    const recentWorkoutText =
-      recentWorkouts.length > 0
-        ? recentWorkouts
-            .map(
-              (workout: any) => `
-WORKOUT NAME:
-${workout.workout_name || "Unknown"}
-
-FOCUS:
-${workout.focus || "Not specified"}
-
-DAY:
-${workout.recurring_day || "Not specified"}
-
-BENCHMARK:
-${workout.is_benchmark ? "Yes" : "No"}
-
-WORKOUT DETAILS:
-${workout.notes || "No workout notes"}
-`
-            )
-            .join(
-              "\n\n---------------------------------\n\n"
-            )
-        : "No recent workouts found";
-
-    /**
-     * ==================================================
-     * TOOL #3
-     * EXERCISE LIBRARY
-     * ==================================================
-     */
-    const exercises =
-      await getExercises("Farm Strong");
-
-    const exerciseText =
-      exercises.length > 0
-        ? exercises
-            .map(
-              (exercise: any) => `
-EXERCISE:
-${exercise.exercise_name}
-
-EQUIPMENT:
-${exercise.equipment}
-
-TYPE:
-${exercise.type}
-`
-            )
-            .join("\n")
-        : "No approved exercises found";
-
-    /**
-     * Build the final prompt.
+     * Execute all tools
+     * configured on the agent.
      *
-     * Prompt construction is no longer
-     * hardcoded in this file.
+     * Example:
+     * [
+     *   "equipment",
+     *   "recentWorkouts",
+     *   "exercises"
+     * ]
+     */
+    const context =
+      await loadAgentContext(agent);
+
+    /**
+     * Convert raw tool responses
+     * into a structured block
+     * to be supplied to the LLM.
+     */
+    const agentContext =
+      buildContext(context);
+
+    /**
+     * Build final prompt.
      *
-     * Firestore Agent
-     * +
-     * Tool Context
-     * +
-     * User Input
+     * Prompt is now:
+     *
+     * Agent Definition
+     * + Agent Context
+     * + User Input
      */
     const prompt = buildPrompt(
       agent,
-      {
-        equipmentText,
-        recentWorkoutText,
-        exerciseText,
-      },
+      agentContext,
       {
         classType,
         classSize,
@@ -180,23 +122,29 @@ ${exercise.type}
     );
 
     /**
-     * Generate workout from Gemini.
+     * Generate workout draft.
      */
-    const { text } = await generateText({
-      model: googleAI(
-        agent.model ||
-          "gemini-2.5-flash"
-      ),
-      prompt,
-    });
+    const { text } =
+      await generateText({
+        model: googleAI(
+          agent.model ||
+            "gemini-2.5-flash"
+        ),
+        prompt,
+      });
 
     /**
-     * Save generated workout
-     * as an approval draft.
+     * Persist draft.
+     *
+     * Human approval occurs later
+     * before publication.
      */
     const draftId =
       await saveDraft({
-        agentName: agent.name,
+        agentId: "farm-strong",
+
+        agentName:
+          agent.name,
 
         classType,
         classSize,
@@ -204,18 +152,17 @@ ${exercise.type}
         format,
         focus,
 
-        prompt: requirements,
+        prompt:
+          requirements,
 
-        generated_workout: text,
+        generated_workout:
+          text,
 
-        equipmentCount:
-          equipment.length,
+        toolContext:
+          context,
 
-        exerciseCount:
-          exercises.length,
-
-        recentWorkoutCount:
-          recentWorkouts.length,
+        status:
+          "draft",
       });
 
     /**
@@ -229,19 +176,10 @@ ${exercise.type}
       status: "draft",
 
       agent: agent.name,
-
-      equipmentCount:
-        equipment.length,
-
-      exerciseCount:
-        exercises.length,
-
-      recentWorkoutCount:
-        recentWorkouts.length,
     });
   } catch (error: any) {
     console.error(
-      "[AI WORKOUT ERROR]",
+      "[AI WORKOUT AGENT ERROR]",
       error
     );
 
