@@ -11,8 +11,8 @@ import { getRecentWorkouts } from "../ai/getRecentWorkouts";
 import { getExercises } from "../ai/getExercises";
 import { saveDraft } from "../ai/saveDraft";
 
-import { loadAgent } from "loadAgent";
-import { buildPrompt } from "buildPrompt";
+import { loadAgent } from "./loadAgent";
+import { buildPrompt } from "./buildPrompt";
 
 const googleAI = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
