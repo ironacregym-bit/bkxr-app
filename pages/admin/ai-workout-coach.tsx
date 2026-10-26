@@ -35,7 +35,7 @@ export default function AIWorkoutCoachPage() {
     useState("");
 
   const [result, setResult] =
-    useState("");
+    useState<any>(null);
 
   const [draftId, setDraftId] =
     useState("");
@@ -49,7 +49,7 @@ export default function AIWorkoutCoachPage() {
   async function generateWorkout() {
     try {
       setLoading(true);
-      setResult("");
+      setResult(null);
       setDraftId("");
 
       const response = await fetch(
@@ -404,13 +404,29 @@ export default function AIWorkoutCoachPage() {
           <div
             className="mt-3"
             style={{
-              whiteSpace:
-                "pre-wrap",
               minHeight: 250,
             }}
           >
-            {result ||
-              "No workout generated yet."}
+            {!result && (
+              <div>
+                No workout generated yet.
+              </div>
+            )}
+          
+            {result && (
+              <pre
+                style={{
+                  whiteSpace: "pre-wrap",
+                  color: "#fff",
+                }}
+              >
+                {JSON.stringify(
+                  result,
+                  null,
+                  2
+                )}
+              </pre>
+            )}
           </div>
 
           {draftId && (
