@@ -37,13 +37,20 @@ export default function AIWorkoutCoachPage() {
   const [result, setResult] =
     useState("");
 
+  const [draftId, setDraftId] =
+    useState("");
+
   const [loading, setLoading] =
+    useState(false);
+
+  const [approving, setApproving] =
     useState(false);
 
   async function generateWorkout() {
     try {
       setLoading(true);
       setResult("");
+      setDraftId("");
 
       const response = await fetch(
         "/api/ai/generate-workout",
@@ -78,6 +85,10 @@ export default function AIWorkoutCoachPage() {
         json?.workout ||
           "No workout returned."
       );
+
+      setDraftId(
+        json?.draftId || ""
+      );
     } catch (err: any) {
       alert(
         err?.message ||
@@ -85,6 +96,53 @@ export default function AIWorkoutCoachPage() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function approveWorkout() {
+    try {
+      if (!draftId) {
+        return;
+      }
+
+      setApproving(true);
+
+      const response = await fetch(
+        "/api/ai/approve-workout",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            draftId,
+          }),
+        }
+      );
+
+      const json =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          json?.error ||
+            "Approval failed"
+        );
+      }
+
+      alert(
+        "Workout approved and published."
+      );
+
+      setDraftId("");
+    } catch (err: any) {
+      alert(
+        err?.message ||
+          "Failed to approve workout"
+      );
+    } finally {
+      setApproving(false);
     }
   }
 
@@ -132,9 +190,11 @@ export default function AIWorkoutCoachPage() {
               </div>
 
               <div className="ia-page-subtitle">
-                Generate workouts
-                using AI and your
-                gym equipment.
+                Agent-powered workout
+                generation using
+                equipment, workout
+                history and approved
+                exercises.
               </div>
             </div>
 
@@ -203,8 +263,7 @@ export default function AIWorkoutCoachPage() {
 
           <div className="mt-3">
             <label className="form-label">
-              Duration
-              (Minutes)
+              Duration (Minutes)
             </label>
 
             <input
@@ -242,12 +301,8 @@ export default function AIWorkoutCoachPage() {
               <option>
                 Individual
               </option>
-              <option>
-                Pairs
-              </option>
-              <option>
-                Teams
-              </option>
+              <option>Pairs</option>
+              <option>Teams</option>
               <option>
                 Stations
               </option>
@@ -283,9 +338,7 @@ export default function AIWorkoutCoachPage() {
               <option>
                 Strongman
               </option>
-              <option>
-                Hyrox
-              </option>
+              <option>Hyrox</option>
               <option>Mixed</option>
             </select>
           </div>
@@ -306,7 +359,7 @@ export default function AIWorkoutCoachPage() {
                   e.target.value
                 )
               }
-              placeholder="Available equipment..."
+              placeholder="Optional additional equipment information..."
             />
           </div>
 
@@ -316,7 +369,7 @@ export default function AIWorkoutCoachPage() {
             </label>
 
             <textarea
-              rows={4}
+              rows={5}
               className="form-control"
               value={
                 requirements
@@ -326,14 +379,13 @@ export default function AIWorkoutCoachPage() {
                   e.target.value
                 )
               }
-              placeholder="Anything specific..."
+              placeholder="Competitive finish, partner workout, strongman focus, avoid sleds etc..."
             />
           </div>
 
           <div className="mt-4">
             <button
-              className="ia-btn"
-              disabled={loading}
+              className="ia      disabled={loading}
               onClick={
                 generateWorkout
               }
@@ -361,6 +413,30 @@ export default function AIWorkoutCoachPage() {
             {result ||
               "No workout generated yet."}
           </div>
+
+          {draftId && (
+            <div className="mt-4">
+              <div
+                className="small text-success mb-3"
+              >
+                Draft Saved:
+                {" "}
+                {draftId}
+              </div>
+
+              <button
+                className="btn btn-success"
+                disabled={approving}
+                onClick={
+                  approveWorkout
+                }
+              >
+                {approving
+                  ? "Publishing..."
+                  : "Approve & Publish Workout"}
+              </button>
+            </div>
+          )}
         </section>
       </main>
 
