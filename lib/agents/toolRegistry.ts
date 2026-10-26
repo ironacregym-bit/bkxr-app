@@ -6,13 +6,13 @@ import type {
 import { generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 
-import { getEquipment } from "../../../lib/ai/getEquipment";
-import { getRecentWorkouts } from "../../../lib/ai/getRecentWorkouts";
-import { getExercises } from "../../../lib/ai/getExercises";
-import { saveDraft } from "../../../lib/ai/saveDraft";
+import { getEquipment } from "../ai/getEquipment";
+import { getRecentWorkouts } from "../ai/getRecentWorkouts";
+import { getExercises } from "../ai/getExercises";
+import { saveDraft } from "../ai/saveDraft";
 
-import { loadAgent } from "../../../lib/agents/loadAgent";
-import { buildPrompt } from "../../../lib/agents/buildPrompt";
+import { loadAgent } from "loadAgent";
+import { buildPrompt } from "buildPrompt";
 
 const googleAI = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
