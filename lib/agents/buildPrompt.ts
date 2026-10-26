@@ -1,23 +1,8 @@
 import { AIAgent } from "./loadAgent";
 
-/**
- * Builds a complete prompt from:
- *
- * 1. Agent definition
- * 2. Retrieved Firestore context
- * 3. User request
- *
- * This allows agent behaviour to be
- * controlled from Firestore instead
- * of being hardcoded into API routes.
- */
 export function buildPrompt(
   agent: AIAgent,
-  context: {
-    equipmentText: string;
-    recentWorkoutText: string;
-    exerciseText: string;
-  },
+  agentContext: string,
   userInput: {
     classType: string;
     classSize: number;
@@ -30,17 +15,9 @@ export function buildPrompt(
   return `
 ${agent.system_prompt}
 
-AVAILABLE EQUIPMENT
+AGENT CONTEXT
 
-${context.equipmentText}
-
-RECENT WORKOUT HISTORY
-
-${context.recentWorkoutText}
-
-APPROVED EXERCISES
-
-${context.exerciseText}
+${agentContext}
 
 RULES
 
@@ -65,8 +42,7 @@ ${userInput.format}
 Focus:
 ${userInput.focus}
 
-SPECIAL REQUIREMENTS
-
+Requirements:
 ${userInput.requirements}
 
 OUTPUT FORMAT
