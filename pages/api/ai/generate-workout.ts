@@ -95,7 +95,6 @@ SCALING OPTIONS
     const { text } = await generateText({
       model: googleAI("gemini-2.5-flash"),
       prompt,
-      maxTokens: 2000,
     });
 
     return res.status(200).json({
