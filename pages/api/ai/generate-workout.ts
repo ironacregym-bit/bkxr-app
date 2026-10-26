@@ -6,6 +6,8 @@ import type {
 import { generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 
+import { getEquipment } from "../../../lib/ai/getEquipment";
+
 const googleAI = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
@@ -33,24 +35,46 @@ export default async function handler(
       duration,
       format,
       focus,
-      equipmentNotes,
       requirements,
     } = req.body;
+
+    const equipment = await getEquipment();
+
+    const equipmentText =
+      equipment.length > 0
+        ? equipment
+            .map((item: any) => {
+              return `- ${item.name}${
+                item.quantity
+                  ? ` (x${item.quantity})`
+                  : ""
+              }${
+                item.notes
+                  ? ` - ${item.notes}`
+                  : ""
+              }`;
+            })
+            .join("\n")
+        : "No equipment found";
 
     const prompt = `
 You are the Head Coach at Iron Acre.
 
-Create a complete, ready-to-run workout.
+AVAILABLE EQUIPMENT
 
-RULES:
+${equipmentText}
+
+GYM RULES
+
 - Avoid generic bootcamp workouts
-- Make the session engaging and well structured
 - Respect participant numbers
 - Respect equipment limitations
 - Use realistic work/rest periods
 - Include coaching notes
-- Keep transitions practical
-- Make the workout suitable for real delivery
+- Create sessions that are practical to coach
+- Use available equipment efficiently
+- Ensure all athletes can participate
+- Prioritise strongman and functional fitness principles where appropriate
 
 CLASS DETAILS
 
@@ -69,10 +93,8 @@ ${format}
 Focus:
 ${focus}
 
-Equipment:
-${equipmentNotes}
+SPECIAL REQUIREMENTS
 
-Special Requirements:
 ${requirements}
 
 OUTPUT FORMAT
@@ -99,6 +121,7 @@ SCALING OPTIONS
 
     return res.status(200).json({
       workout: text,
+      equipmentUsed: equipment.length,
     });
   } catch (error: any) {
     console.error(
