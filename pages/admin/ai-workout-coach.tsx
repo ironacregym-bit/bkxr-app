@@ -46,12 +46,86 @@ export default function AIWorkoutCoachPage() {
   const [approving, setApproving] =
     useState(false);
 
+  const [activityLog, setActivityLog] =
+  useState<string[]>([]);
+
+  const [agentStage, setAgentStage] =
+    useState("");
+
+  function addActivity(
+    message: string
+  ) {
+    setActivityLog((prev) => [
+      ...prev,
+      message,
+    ]);
+  }
+  
   async function generateWorkout() {
     try {
       setLoading(true);
       setResult(null);
       setDraftId("");
 
+      setActivityLog([]);
+    
+        setAgentStage(
+          "Loading Agent"
+        );
+        
+        addActivity(
+          "Loading agent definition"
+        );
+        
+        setTimeout(() => {
+          setAgentStage(
+            "Equipment"
+          );
+        
+          addActivity(
+            "Retrieving equipment"
+          );
+        }, 500);
+        
+        setTimeout(() => {
+          setAgentStage(
+            "Exercises"
+          );
+        
+          addActivity(
+            "Loading exercise library"
+          );
+        }, 1000);
+        
+        setTimeout(() => {
+          setAgentStage(
+            "History"
+          );
+        
+          addActivity(
+            "Checking previous workouts"
+          );
+        }, 1500);
+
+          setTimeout(() => {
+            setAgentStage(
+              "Context"
+            );
+          
+            addActivity(
+              "Building workout context"
+            );
+          }, 2200);
+          
+          setTimeout(() => {
+            setAgentStage(
+              "Generation"
+            );
+          
+            addActivity(
+              "Generating workout"
+            );
+          }, 2800);
       const response = await fetch(
         "/api/ai/generate-workout",
         {
@@ -89,6 +163,20 @@ export default function AIWorkoutCoachPage() {
       setDraftId(
         json?.draftId || ""
       );
+
+      addActivity(
+        "Workout generated"
+      );
+      
+      addActivity(
+        `Draft saved (${json?.draftId})`
+      );
+      
+      setAgentStage(
+        "Complete"
+      );
+
+      
     } catch (err: any) {
       alert(
         err?.message ||
@@ -206,7 +294,7 @@ export default function AIWorkoutCoachPage() {
 
         <section className="ia-tile ia-tile-pad mb-3">
           <div className="ia-card-title-compact">
-            Workout Brief
+            🤖 AI Coach
           </div>
 
           <div className="mt-3">
@@ -383,19 +471,80 @@ export default function AIWorkoutCoachPage() {
             />
           </div>
 
+          <div
+            className="alert alert-dark mt-4"
+          >
+            Generate a
+            {" "}
+            {duration}
+            {" "}
+            minute
+            {" "}
+            {classType}
+            {" "}
+            session for
+            {" "}
+            {classSize}
+            {" "}
+            athletes
+            {focus
+              ? ` focused on ${focus}`
+              : ""}
+            {format
+              ? ` in a ${format} format`
+              : ""}.
+          </div>
           <div className="mt-4">
             <button
               className="ia-btn"
               disabled={loading}
               onClick={generateWorkout}
             >
-              {loading
-                ? "Generating..."
-                : "Generate Workout"}
+              🤖 Generate Workout
             </button>
           </div>
         </section>
-
+        {loading && (
+          <section className="ia-tile ia-tile-pad mb-3">
+            <div className="d-flex align-items-center mb-4">
+              <div
+                className="spinner-border text-success me-3"
+                style={{
+                  width: 50,
+                  height: 50,
+                }}
+              />
+        
+              <div>
+                <h4 className="mb-1">
+                  AI Coach Working
+                </h4>
+        
+                <div
+                  style={{
+                    opacity: 0.75,
+                  }}
+                >
+                  {agentStage}
+                </div>
+              </div>
+            </div>
+        
+            {activityLog.map(
+              (
+                item,
+                index
+              ) => (
+                <div
+                  key={index}
+                  className="mb-2"
+                >
+                  ✅ {item}
+                </div>
+              )
+            )}
+          </section>
+        )}
         <section className="ia-tile ia-tile-pad">
           <div className="ia-card-title-compact">
             AI Generated Workout
@@ -595,7 +744,27 @@ export default function AIWorkoutCoachPage() {
               )}
             </div>
           )}
-        
+          {activityLog.length > 0 && (
+            <div className="mt-4">
+              <h5>
+                Agent Activity
+              </h5>
+          
+              {activityLog.map(
+                (
+                  item,
+                  index
+                ) => (
+                  <div
+                    key={index}
+                    className="small mb-1"
+                  >
+                    ✅ {item}
+                  </div>
+                )
+              )}
+            </div>
+          )}
           {draftId && (
             <div className="mt-4">
               <div className="small text-success mb-3">
@@ -610,6 +779,12 @@ export default function AIWorkoutCoachPage() {
                 {approving
                   ? "Publishing..."
                   : "Approve & Publish Workout"}
+              </button>
+              <button
+                className="btn btn-outline-light ms-2"
+                onClick={generateWorkout}
+              >
+                Regenerate
               </button>
             </div>
           )}
