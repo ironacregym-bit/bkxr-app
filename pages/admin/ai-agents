@@ -1,0 +1,227 @@
+import Head from "next/head";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
+interface Agent {
+  id: string;
+
+  name: string;
+
+  description?: string;
+
+  active?: boolean;
+
+  provider?: string;
+
+  model?: string;
+
+  tools?: string[];
+
+  agent_type?: string;
+}
+
+/**
+ * =====================================================
+ * AI AGENTS PAGE
+ * =====================================================
+ *
+ * Purpose
+ * -------
+ * Display all configured AI agents
+ * stored in Firestore.
+ *
+ * This page is the entry point into
+ * the agent management experience.
+ *
+ * Future Features
+ * ---------------
+ *
+ * - Agent metrics
+ * - Execution history
+ * - Cost tracking
+ * - Tenant ownership
+ * - Agent cloning
+ * - Export / import
+ *
+ */
+export default function AIAgentsPage() {
+  const [agents, setAgents] =
+    useState<Agent[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  /**
+   * Load all agent definitions.
+   */
+  useEffect(() => {
+    loadAgents();
+  }, []);
+
+  async function loadAgents() {
+    try {
+      const response =
+        await fetch(
+          "/api/agents/list"
+        );
+
+      const json =
+        await response.json();
+
+      setAgents(
+        json.agents || []
+      );
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <Head>
+        <title>
+          AI Agents
+        </title>
+      </Head>
+
+      <main
+        className="container py-3"
+        style={{
+          color: "#fff",
+        }}
+      >
+        <div className="ia-tile ia-tile-pad mb-3">
+
+          <div className="d-flex justify-content-between align-items-center">
+
+            <div>
+              <div className="ia-kicker">
+                🤖 AGENTS
+              </div>
+
+              <div className="ia-page-title">
+                AI Agent Builder
+              </div>
+
+              <div className="ia-page-subtitle">
+                Create and manage
+                platform agents.
+              </div>
+            </div>
+
+            <Link
+              href="/admin/ai-agents/new"
+              className="btn btn-success"
+            >
+              + New Agent
+            </Link>
+
+          </div>
+
+        </div>
+
+        {loading && (
+          <div>
+            Loading agents...
+          </div>
+        )}
+
+        {!loading &&
+          agents.map(
+            (agent) => (
+              <div
+                key={agent.id}
+                className="ia-tile ia-tile-pad mb-3"
+              >
+                <div className="d-flex justify-content-between">
+
+                  <div>
+
+                    <h4>
+                      {agent.name}
+                    </h4>
+
+                    <div>
+                      {
+                        agent.description
+                      }
+                    </div>
+
+                    <div className="mt-2 small">
+
+                      <div>
+                        Type:
+                        {" "}
+                        {
+                          agent.agent_type
+                        }
+                      </div>
+
+                      <div>
+                        Provider:
+                        {" "}
+                        {
+                          agent.provider
+                        }
+                      </div>
+
+                      <div>
+                        Model:
+                        {" "}
+                        {
+                          agent.model
+                        }
+                      </div>
+
+                      <div>
+                        Tools:
+                        {" "}
+                        {
+                          agent.tools
+                            ?.length || 0
+                        }
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  <div>
+
+                    <div
+                      className={`badge ${
+                        agent.active
+                          ? "bg-success"
+                          : "bg-secondary"
+                      }`}
+                    >
+                      {agent.active
+                        ? "Active"
+                        : "Inactive"}
+                    </div>
+
+                    <div className="mt-3">
+
+                      <Link
+                        href={`/admin/ai-agents/${agent.id}`}
+                        className="btn btn-sm btn-outline-light"
+                      >
+                        Edit
+                      </Link>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              </div>
+            )
+          )}
+
+      </main>
+    </>
+  );
+}
