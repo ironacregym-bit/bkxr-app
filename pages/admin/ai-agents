@@ -205,7 +205,7 @@ export default function AIAgentsPage() {
                     <div className="mt-3">
 
                       <Link
-                        href={`/admin/ai-agents/${agent.id}`}
+                        href={`/admin/ai/${agent.id}`}
                         className="btn btn-sm btn-outline-light"
                       >
                         Edit
