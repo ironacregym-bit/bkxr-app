@@ -3,40 +3,115 @@
  * AVAILABLE AGENT TOOLS
  * =====================================================
  *
+ * Purpose
+ * -------
+ *
  * Single source of truth for all
- * platform tools.
+ * agent tools available on the platform.
  *
- * Every agent references tools
- * from this list.
+ * All Agent Builder screens should
+ * load tools from here.
  *
- * Future:
+ * Future
+ * -------
  *
  * - Categories
- * - Permissions
- * - Tenant restrictions
- * - Pricing tiers
+ * - Tenant Restrictions
+ * - Pricing Tiers
+ * - Tool Permissions
+ * - Tool Groups
  *
  */
 
-export const AVAILABLE_TOOLS = [
+export interface AgentToolDefinition {
+  id: string;
+
+  name: string;
+
+  description: string;
+
+  category?: string;
+}
+
+export const AVAILABLE_TOOLS: AgentToolDefinition[] = [
   {
     id: "equipment",
+
     name: "Equipment",
+
     description:
-      "Returns available equipment",
+      "Returns available gym equipment",
+
+    category: "Workout",
   },
 
   {
     id: "exercises",
+
     name: "Exercises",
+
     description:
-      "Returns approved exercises",
+      "Returns approved exercise library",
+
+    category: "Workout",
   },
 
   {
     id: "recentWorkouts",
+
     name: "Recent Workouts",
+
     description:
-      "Returns workout history",
+      "Returns previously generated workouts",
+
+    category: "Workout",
+  },
+
+  /**
+   * Future Platform Tools
+   */
+
+  {
+    id: "attendance",
+
+    name: "Attendance",
+
+    description:
+      "Returns member attendance information",
+
+    category: "Members",
+  },
+
+  {
+    id: "members",
+
+    name: "Members",
+
+    description:
+      "Returns member data",
+
+    category: "Members",
+  },
+
+  {
+    id: "assets",
+
+    name: "Assets",
+
+    description:
+      "Returns asset register information",
+
+    category: "Business",
+  },
+
+  {
+    id: "inspections",
+
+    name: "Inspections",
+
+    description:
+      "Returns inspection records",
+
+    category: "Business",
   },
 ];
