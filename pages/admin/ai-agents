@@ -112,7 +112,7 @@ export default function AIAgentsPage() {
             </div>
 
             <Link
-              href="/admin/ai-agents/new"
+              href="/admin/ai/new"
               className="btn btn-success"
             >
               + New Agent
