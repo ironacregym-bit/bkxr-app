@@ -233,15 +233,13 @@ export default async function handler(
     if (result.usage) {
 
       const promptTokens =
-        result.usage.promptTokens || 0;
-    
+        result.usage.inputTokens || 0;
+      
       const completionTokens =
-        result.usage
-          .completionTokens || 0;
-    
+        result.usage.outputTokens || 0;
+      
       const totalTokens =
-        result.usage.totalTokens ||
-        0;
+        result.usage.totalTokens || 0;
     
       const estimatedCost =
         totalTokens *
