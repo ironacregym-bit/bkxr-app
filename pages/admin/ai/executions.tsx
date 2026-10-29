@@ -1,4 +1,5 @@
 import Head from "next/head";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 /**
@@ -9,23 +10,33 @@ import { useEffect, useState } from "react";
  * Purpose
  * -------
  *
- * Provides visibility into every
- * agent execution within the platform.
+ * Central observability dashboard.
+ *
+ * Shows:
+ *
+ * - Agent Runs
+ * - Duration
+ * - Status
+ * - Tools Used
+ * - Draft Created
+ * - Runtime Trace Links
  *
  * Future
  * -------
  *
- * - Filters
  * - Search
- * - Runtime Explorer
+ * - Filters
  * - Cost Tracking
- * - Token Tracking
- * - Tenant Isolation
+ * - Token Usage
+ * - Agent Metrics
+ * - Tenant Metrics
  *
  */
 
 interface Execution {
   id: string;
+
+  executionId?: string;
 
   agentName?: string;
 
@@ -89,6 +100,7 @@ export default function AgentExecutionsPage() {
         className="container py-3"
         style={{
           color: "#fff",
+          paddingBottom: 100,
         }}
       >
         <div className="ia-tile ia-tile-pad mb-3">
@@ -103,7 +115,9 @@ export default function AgentExecutionsPage() {
 
           <div className="ia-page-subtitle">
             Track execution history,
-            performance and outcomes.
+            runtime performance and
+            outcomes across all
+            platform agents.
           </div>
 
         </div>
@@ -131,7 +145,7 @@ export default function AgentExecutionsPage() {
 
                 <div>
 
-                  <h5>
+                  <h5 className="mb-2">
                     {
                       execution.agentName
                     }
@@ -140,7 +154,19 @@ export default function AgentExecutionsPage() {
                   <div className="small">
 
                     <div>
-                      Type:
+                      <strong>
+                        Execution:
+                      </strong>
+                      {" "}
+                      {
+                        execution.executionId
+                      }
+                    </div>
+
+                    <div>
+                      <strong>
+                        Type:
+                      </strong>
                       {" "}
                       {
                         execution.executionType
@@ -148,7 +174,9 @@ export default function AgentExecutionsPage() {
                     </div>
 
                     <div>
-                      Duration:
+                      <strong>
+                        Duration:
+                      </strong>
                       {" "}
                       {
                         execution.durationMs
@@ -157,17 +185,22 @@ export default function AgentExecutionsPage() {
                     </div>
 
                     <div>
-                      Tools:
+                      <strong>
+                        Tools:
+                      </strong>
                       {" "}
-                      {
-                        execution
-                          .toolsUsed
-                          ?.join(", ")
-                      }
+                      {execution.toolsUsed
+                        ?.length
+                        ? execution.toolsUsed.join(
+                            ", "
+                          )
+                        : "None"}
                     </div>
 
                     <div>
-                      Draft:
+                      <strong>
+                        Draft:
+                      </strong>
                       {" "}
                       {
                         execution.draftId ||
@@ -179,20 +212,34 @@ export default function AgentExecutionsPage() {
 
                 </div>
 
-                <div>
+                <div className="text-end">
 
-                  <span
-                    className={
-                      execution.status ===
-                      "success"
-                        ? "badge bg-success"
-                        : "badge bg-danger"
-                    }
-                  >
-                    {
-                      execution.status
-                    }
-                  </span>
+                  <div>
+
+                    <span
+                      className={
+                        execution.status ===
+                        "success"
+                          ? "badge bg-success"
+                          : "badge bg-danger"
+                      }
+                    >
+                      {
+                        execution.status
+                      }
+                    </span>
+
+                  </div>
+
+                  {execution.executionId && (
+                    <div className="mt-3">
+
+                      {`/admin/ai/executions/${execution.executionId}`}
+                        View Trace
+                      </Link>
+
+                    </div>
+                  )}
 
                 </div>
 
