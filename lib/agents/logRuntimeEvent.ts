@@ -13,7 +13,8 @@ import firestore from "../firestoreClient";
  *
  * One execution can have many runtime logs.
  *
- * Example:
+ * Example
+ * -------
  *
  * Execution
  * ├── Agent Loaded
@@ -29,6 +30,7 @@ import firestore from "../firestoreClient";
  * - Distributed Tracing
  * - Cost Analysis
  * - API Monitoring
+ * - Multi-Agent Workflow Tracking
  *
  */
 
@@ -47,6 +49,8 @@ export interface RuntimeEvent {
   message: string;
 
   metadata?: any;
+
+  durationMs?: number;
 }
 
 export async function logRuntimeEvent(
@@ -59,12 +63,20 @@ export async function logRuntimeEvent(
       )
       .add({
         ...event,
-        timestamp: new Date(),
+
+        timestamp:
+          new Date(),
+
+        createdAt:
+          new Date(),
       });
+
   } catch (error) {
+
     console.error(
       "[RUNTIME LOG ERROR]",
       error
     );
+
   }
 }
