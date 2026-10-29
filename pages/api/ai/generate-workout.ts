@@ -4,6 +4,7 @@ import type {
 } from "next";
 
 import { generateText } from "ai";
+import { v4 as uuidv4 } from "uuid";
 
 import { loadAgent } from "../../../lib/agents/loadAgent";
 import { loadAgentContext } from "../../../lib/agents/loadAgentContext";
@@ -17,6 +18,10 @@ import {
   logExecution,
 } from "../../../lib/agents/logExecution";
 
+import {
+  logRuntimeEvent,
+} from "../../../lib/agents/logRuntimeEvent";
+
 /**
  * =====================================================
  * WORKOUT GENERATION AGENT
@@ -25,27 +30,29 @@ import {
  * Purpose
  * -------
  *
- * Executes the Farm Strong agent.
+ * Executes the Farm Strong Agent.
  *
- * Responsibilities
- * ----------------
+ * Flow
+ * ----
  *
- * 1. Load agent definition
- * 2. Load tool context
- * 3. Build prompt
- * 4. Call model
- * 5. Parse JSON response
- * 6. Save draft
- * 7. Log execution
+ * 1. Load Agent Definition
+ * 2. Load Tool Context
+ * 3. Build Context
+ * 4. Build Prompt
+ * 5. Execute LLM
+ * 6. Parse Response
+ * 7. Save Draft
+ * 8. Log Runtime Events
+ * 9. Log Execution
  *
  * Future
  * -------
  *
- * - Runtime Logs
- * - Token Usage
+ * - Multi-Agent Workflows
  * - Cost Tracking
- * - Multi-Agent Flows
- * - Workflow Execution
+ * - Token Tracking
+ * - Evaluation Scoring
+ * - Workflow Orchestration
  *
  */
 
@@ -54,6 +61,9 @@ export default async function handler(
   res: NextApiResponse
 ) {
   const startedAt = new Date();
+
+  const executionId =
+    uuidv4();
 
   if (req.method !== "POST") {
     return res.status(405).json({
@@ -79,30 +89,84 @@ export default async function handler(
     } = req.body;
 
     /**
-     * Load Agent Definition
+     * Load Agent
      */
+
     const agent =
       await loadAgent(
         "farm-strong"
       );
 
+    await logRuntimeEvent({
+      executionId,
+
+      agentId:
+        "farm-strong",
+
+      level: "info",
+
+      step:
+        "agent_load",
+
+      message:
+        "Agent definition loaded",
+    });
+
     /**
-     * Load Agent Tool Context
+     * Load Context
      */
+
     const context =
       await loadAgentContext(
         agent
       );
 
+    await logRuntimeEvent({
+      executionId,
+
+      agentId:
+        "farm-strong",
+
+      level: "info",
+
+      step:
+        "context_load",
+
+      message:
+        "Agent context loaded",
+
+      metadata: {
+        tools:
+          agent.tools || [],
+      },
+    });
+
     /**
-     * Transform Context
+     * Build Context
      */
+
     const agentContext =
       buildContext(context);
+
+    await logRuntimeEvent({
+      executionId,
+
+      agentId:
+        "farm-strong",
+
+      level: "info",
+
+      step:
+        "context_build",
+
+      message:
+        "Agent context built",
+    });
 
     /**
      * Build Prompt
      */
+
     const prompt =
       buildPrompt(
         agent,
@@ -117,9 +181,40 @@ export default async function handler(
         }
       );
 
+    await logRuntimeEvent({
+      executionId,
+
+      agentId:
+        "farm-strong",
+
+      level: "info",
+
+      step:
+        "prompt_generation",
+
+      message:
+        "Prompt generated successfully",
+    });
+
     /**
-     * Execute LLM
+     * Execute Model
      */
+
+    await logRuntimeEvent({
+      executionId,
+
+      agentId:
+        "farm-strong",
+
+      level: "info",
+
+      step:
+        "model_execution",
+
+      message:
+        "Calling Gemini model",
+    });
+
     const { text } =
       await generateText({
         model:
@@ -129,15 +224,63 @@ export default async function handler(
         prompt,
       });
 
+    await logRuntimeEvent({
+      executionId,
+
+      agentId:
+        "farm-strong",
+
+      level: "info",
+
+      step:
+        "model_response",
+
+      message:
+        "Model response received",
+    });
+
     /**
-     * Parse JSON Output
+     * Parse JSON
      */
+
     let workout;
 
     try {
       workout =
         JSON.parse(text);
+
+      await logRuntimeEvent({
+        executionId,
+
+        agentId:
+          "farm-strong",
+
+        level: "info",
+
+        step:
+          "json_parse",
+
+        message:
+          "Model response parsed successfully",
+      });
+
     } catch (error) {
+
+      await logRuntimeEvent({
+        executionId,
+
+        agentId:
+          "farm-strong",
+
+        level: "error",
+
+        step:
+          "json_parse",
+
+        message:
+          "Invalid JSON returned by model",
+      });
+
       console.error(
         "[INVALID JSON RESPONSE]",
         text
@@ -152,6 +295,7 @@ export default async function handler(
     /**
      * Save Draft
      */
+
     const draftId =
       await saveDraft({
         agentId:
@@ -178,9 +322,29 @@ export default async function handler(
           "draft",
       });
 
+    await logRuntimeEvent({
+      executionId,
+
+      agentId:
+        "farm-strong",
+
+      level: "info",
+
+      step:
+        "draft_creation",
+
+      message:
+        "Workout draft created",
+
+      metadata: {
+        draftId,
+      },
+    });
+
     /**
-     * Log Successful Execution
+     * Execution Log
      */
+
     const completedAt =
       new Date();
 
@@ -226,9 +390,25 @@ export default async function handler(
       draftId,
     });
 
+    await logRuntimeEvent({
+      executionId,
+
+      agentId:
+        "farm-strong",
+
+      level: "info",
+
+      step:
+        "completed",
+
+      message:
+        "Execution completed successfully",
+    });
+
     return res.status(200).json({
       workout,
       draftId,
+      executionId,
       status:
         "draft",
       agent:
@@ -242,9 +422,6 @@ export default async function handler(
       error
     );
 
-    /**
-     * Log Failed Execution
-     */
     const completedAt =
       new Date();
 
@@ -275,6 +452,22 @@ export default async function handler(
         error:
           error?.message,
       },
+    });
+
+    await logRuntimeEvent({
+      executionId,
+
+      agentId:
+        "farm-strong",
+
+      level: "error",
+
+      step:
+        "execution_failed",
+
+      message:
+        error?.message ||
+        "Unknown error",
     });
 
     return res.status(500).json({
