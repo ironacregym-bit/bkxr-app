@@ -383,28 +383,30 @@ export default async function handler(
       new Date();
 
     await logExecution({
+      executionId,
+    
       agentId:
         "farm-strong",
-
+    
       agentName:
         "Farm Strong Agent",
-
+    
       executionType:
         "generate_workout",
-
+    
       status:
         "failed",
-
+    
       startedAt,
-
+    
       completedAt,
-
+    
       durationMs:
         completedAt.getTime() -
         startedAt.getTime(),
-
+    
       toolsUsed: [],
-
+    
       input: {
         error:
           error?.message,
