@@ -21,6 +21,10 @@ import {
   logRuntimeEvent,
 } from "../../../lib/agents/logRuntimeEvent";
 
+import {
+  logTokenUsage,
+} from "../../../lib/agents/logTokenUsage";
+
 /**
  * =====================================================
  * WORKOUT GENERATION AGENT
@@ -214,7 +218,7 @@ export default async function handler(
         "Calling Gemini model",
     });
 
-    const { text } =
+    const result =
       await generateText({
         model:
           getAgentModel(
@@ -222,6 +226,48 @@ export default async function handler(
           ),
         prompt,
       });
+
+    const text =
+      result.text;
+
+    if (result.usage) {
+
+      const promptTokens =
+        result.usage.promptTokens || 0;
+    
+      const completionTokens =
+        result.usage
+          .completionTokens || 0;
+    
+      const totalTokens =
+        result.usage.totalTokens ||
+        0;
+    
+      const estimatedCost =
+        totalTokens *
+        0.0000005;
+    
+      await logTokenUsage({
+        executionId,
+    
+        agentId:
+          "farm-strong",
+    
+        agentName:
+          agent.name,
+    
+        model:
+          agent.model,
+    
+        promptTokens,
+    
+        completionTokens,
+    
+        totalTokens,
+    
+        estimatedCost,
+      });
+    }
 
     await logRuntimeEvent({
       executionId,
@@ -389,13 +435,13 @@ export default async function handler(
         "farm-strong",
     
       agentName:
-        "Farm Strong Agent",
+        agent.name,
     
       executionType:
         "generate_workout",
     
       status:
-        "failed",
+        "success",
     
       startedAt,
     
@@ -405,12 +451,25 @@ export default async function handler(
         completedAt.getTime() -
         startedAt.getTime(),
     
-      toolsUsed: [],
+      toolsUsed:
+        agent.tools || [],
     
       input: {
-        error:
-          error?.message,
+        classType,
+        classSize,
+        duration,
+        format,
+        focus,
+        requirements,
       },
+    
+      outputSummary: {
+        workoutTitle:
+          workout?.title ||
+          null,
+      },
+    
+      draftId,
     });
 
     await logRuntimeEvent({
