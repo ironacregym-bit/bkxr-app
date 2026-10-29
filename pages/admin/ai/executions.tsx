@@ -234,7 +234,7 @@ export default function AgentExecutionsPage() {
                   {execution.executionId && (
                     <div className="mt-3">
 
-                      {`/admin/ai/executions/${execution.executionId}`}
+                      <Link href={`/admin/ai/executions/${execution.executionId}`}>
                         View Trace
                       </Link>
 
