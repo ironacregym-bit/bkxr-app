@@ -347,48 +347,6 @@ export default async function handler(
     const completedAt =
       new Date();
 
-    await logExecution({
-      agentId:
-        "farm-strong",
-
-      agentName:
-        agent.name,
-
-      executionType:
-        "generate_workout",
-
-      status:
-        "success",
-
-      startedAt,
-
-      completedAt,
-
-      durationMs:
-        completedAt.getTime() -
-        startedAt.getTime(),
-
-      toolsUsed:
-        agent.tools || [],
-
-      input: {
-        classType,
-        classSize,
-        duration,
-        format,
-        focus,
-        requirements,
-      },
-
-      outputSummary: {
-        workoutTitle:
-          workout?.title ||
-          null,
-      },
-
-      draftId,
-    });
-
     await logRuntimeEvent({
       executionId,
 
