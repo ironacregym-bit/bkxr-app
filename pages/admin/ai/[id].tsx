@@ -35,11 +35,10 @@ import { useEffect, useState } from "react";
  *
  */
 
-const AVAILABLE_TOOLS = [
-  "equipment",
-  "exercises",
-  "recentWorkouts",
-];
+import {
+  AVAILABLE_TOOLS,
+} from "../../../lib/agents/availableTools";
+
 
 export default function EditAgentPage() {
   const router = useRouter();
@@ -470,30 +469,57 @@ export default function EditAgentPage() {
           {AVAILABLE_TOOLS.map(
             (tool) => (
               <div
-                key={tool}
-                className="form-check"
+                key={tool.id}
+                className="card bg-dark border-secondary mb-2"
               >
-                <input
-                  type="checkbox"
-                  className="form-check-input"
-                  checked={
-                    tools.includes(
-                      tool
-                    )
-                  }
-                  onChange={() =>
-                    toggleTool(
-                      tool
-                    )
-                  }
-                />
-
-                <label
-                  className="form-check-label"
-                >
-                  {tool}
-                </label>
-
+                <div className="card-body">
+          
+                  <div className="form-check">
+          
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={tools.includes(
+                        tool.id
+                      )}
+                      onChange={() =>
+                        toggleTool(
+                          tool.id
+                        )
+                      }
+                    />
+          
+                    <label
+                      className="form-check-label"
+                    >
+                      <strong>
+                        {tool.name}
+                      </strong>
+                    </label>
+          
+                  </div>
+          
+                  <div
+                    className="small mt-2"
+                    style={{
+                      opacity: 0.75,
+                    }}
+                  >
+                    {tool.description}
+                  </div>
+          
+                  <div
+                    className="small mt-1"
+                    style={{
+                      color: "#9ca3af",
+                    }}
+                  >
+                    Category:
+                    {" "}
+                    {tool.category}
+                  </div>
+          
+                </div>
               </div>
             )
           )}
