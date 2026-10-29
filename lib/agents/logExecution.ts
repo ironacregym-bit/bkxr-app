@@ -6,31 +6,16 @@ import firestore
  * AGENT EXECUTION LOGGER
  * =====================================================
  *
- * Purpose
- * -------
+ * Records one execution per run.
  *
- * Records every agent execution.
- *
- * Enables:
- *
- * - Audit Trails
- * - Usage Tracking
- * - Cost Analysis
- * - Monitoring
- * - Multi-Agent Observability
- *
- * Future
- * -------
- *
- * - Token Tracking
- * - Cost Calculations
- * - User Tracking
- * - Tenant Tracking
- * - Workflow Tracking
+ * Runtime logs are separate and
+ * linked by executionId.
  *
  */
 
 export interface LogExecutionInput {
+  executionId: string;
+
   agentId: string;
 
   agentName: string;
@@ -70,9 +55,11 @@ export async function logExecution(
       });
 
   } catch (error) {
+
     console.error(
       "[EXECUTION LOG ERROR]",
       error
     );
+
   }
 }
