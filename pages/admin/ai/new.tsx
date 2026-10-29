@@ -2,21 +2,35 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useState } from "react";
 
+import {
+  AVAILABLE_TOOLS,
+} from "../../../lib/agents/availableTools";
+
 /**
  * =====================================================
  * CREATE AGENT PAGE
  * =====================================================
  *
- * Allows platform administrators
- * to create new agents without
- * editing Firestore manually.
+ * Purpose
+ * -------
  *
- * Future:
+ * Create new AI Agents without
+ * needing direct Firestore access.
  *
- * - Templates
- * - Auto Prompt Generation
- * - AI Agent Wizard
- * - Tool Discovery
+ * Agents created here become
+ * immediately available throughout
+ * the platform.
+ *
+ * Future Enhancements
+ * -------------------
+ *
+ * - Agent Templates
+ * - AI Generated Prompts
+ * - Tool Categories
+ * - Agent Wizard
+ * - Tenant Ownership
+ * - Cost Controls
+ * - Schema Builder
  *
  */
 
@@ -49,6 +63,34 @@ export default function NewAgentPage() {
     "workout_generator"
   );
 
+  const [tools, setTools] =
+    useState<string[]>([]);
+
+  /**
+   * Toggle Tool Selection
+   */
+  function toggleTool(
+    toolId: string
+  ) {
+    if (
+      tools.includes(toolId)
+    ) {
+      setTools(
+        tools.filter(
+          (t) => t !== toolId
+        )
+      );
+    } else {
+      setTools([
+        ...tools,
+        toolId,
+      ]);
+    }
+  }
+
+  /**
+   * Create Agent
+   */
   async function createAgent() {
     try {
       setSaving(true);
@@ -78,7 +120,7 @@ export default function NewAgentPage() {
               model:
                 "gemini-2.5-flash",
 
-              tools: [],
+              tools,
 
               rules: [],
 
@@ -100,13 +142,10 @@ export default function NewAgentPage() {
       router.push(
         "/admin/ai-agents"
       );
-
     } catch (error: any) {
-
       alert(
         error.message
       );
-
     } finally {
       setSaving(false);
     }
@@ -116,7 +155,7 @@ export default function NewAgentPage() {
     <>
       <Head>
         <title>
-          New Agent
+          Create Agent
         </title>
       </Head>
 
@@ -124,6 +163,7 @@ export default function NewAgentPage() {
         className="container py-3"
         style={{
           color: "#fff",
+          paddingBottom: 100,
         }}
       >
         <div className="ia-tile ia-tile-pad">
@@ -132,7 +172,17 @@ export default function NewAgentPage() {
             🤖 Create Agent
           </h2>
 
-          <div className="mt-3">
+          <p
+            style={{
+              opacity: 0.7,
+            }}
+          >
+            Create a new platform
+            agent and define its
+            behaviour.
+          </p>
+
+          <div className="mt-4">
 
             <label>
               Agent Id
@@ -148,6 +198,11 @@ export default function NewAgentPage() {
               }
               placeholder="workout-import"
             />
+
+            <div className="small mt-1">
+              Used as Firestore
+              document id.
+            </div>
 
           </div>
 
@@ -235,7 +290,7 @@ export default function NewAgentPage() {
             </label>
 
             <textarea
-              rows={10}
+              rows={12}
               className="form-control"
               value={
                 systemPrompt
@@ -245,9 +300,91 @@ export default function NewAgentPage() {
                   e.target.value
                 )
               }
+              placeholder="Describe exactly what this agent should do..."
             />
 
           </div>
+
+          <hr />
+
+          <h4>
+            Available Tools
+          </h4>
+
+          <p
+            className="small"
+            style={{
+              opacity: 0.7,
+            }}
+          >
+            Select tools this agent
+            is allowed to use.
+          </p>
+
+          {AVAILABLE_TOOLS.map(
+            (tool) => (
+              <div
+                key={tool.id}
+                className="card bg-dark border-secondary mb-2"
+              >
+                <div className="card-body">
+
+                  <div className="form-check">
+
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={
+                        tools.includes(
+                          tool.id
+                        )
+                      }
+                      onChange={() =>
+                        toggleTool(
+                          tool.id
+                        )
+                      }
+                    />
+
+                    <label
+                      className="form-check-label"
+                    >
+                      <strong>
+                        {tool.name}
+                      </strong>
+                    </label>
+
+                  </div>
+
+                  <div
+                    className="small mt-2"
+                    style={{
+                      opacity: 0.75,
+                    }}
+                  >
+                    {
+                      tool.description
+                    }
+                  </div>
+
+                  <div
+                    className="small"
+                    style={{
+                      color:
+                        "#9ca3af",
+                    }}
+                  >
+                    Category:
+                    {" "}
+                    {
+                      tool.category
+                    }
+                  </div>
+
+                </div>
+              </div>
+            )
+          )}
 
           <div className="mt-4">
 
@@ -259,8 +396,19 @@ export default function NewAgentPage() {
               disabled={saving}
             >
               {saving
-                ? "Creating..."
+                ? "Creating Agent..."
                 : "Create Agent"}
+            </button>
+
+            <button
+              className="btn btn-outline-light ms-2"
+              onClick={() =>
+                router.push(
+                  "/admin/ai-agents"
+                )
+              }
+            >
+              Cancel
             </button>
 
           </div>
