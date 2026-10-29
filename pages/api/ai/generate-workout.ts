@@ -4,7 +4,6 @@ import type {
 } from "next";
 
 import { generateText } from "ai";
-import { v4 as uuidv4 } from "uuid";
 
 import { loadAgent } from "../../../lib/agents/loadAgent";
 import { loadAgentContext } from "../../../lib/agents/loadAgentContext";
@@ -63,7 +62,7 @@ export default async function handler(
   const startedAt = new Date();
 
   const executionId =
-    uuidv4();
+    crypto.randomUUID();
 
   if (req.method !== "POST") {
     return res.status(405).json({
