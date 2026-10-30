@@ -433,7 +433,7 @@ export default async function handler(
         "farm-strong",
     
       agentName:
-        agent.name,
+        "Farm Strong Agent",
     
       executionType:
         "generate_workout",
