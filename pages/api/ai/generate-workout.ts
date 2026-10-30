@@ -67,7 +67,22 @@ export default async function handler(
 
   const executionId =
     crypto.randomUUID();
+  
+  let agent: any = null;
+  let workout: any = null;
+  let draftId: string | null = null;
+  
+  const {
+    classType,
+    classSize,
+    duration,
+    format,
+    focus,
+    requirements,
+  } = req.body || {};
 
+
+  
   if (req.method !== "POST") {
     return res.status(405).json({
       error: "Method not allowed",
@@ -82,20 +97,11 @@ export default async function handler(
       });
     }
 
-    const {
-      classType,
-      classSize,
-      duration,
-      format,
-      focus,
-      requirements,
-    } = req.body;
-
     /**
      * Load Agent
      */
 
-    const agent =
+    agent =
       await loadAgent(
         "farm-strong"
       );
@@ -232,14 +238,23 @@ export default async function handler(
 
     if (result.usage) {
 
+      const usage =
+  result.usage as any;
+
       const promptTokens =
-        result.usage.inputTokens || 0;
+        usage?.inputTokens ||
+        usage?.promptTokens ||
+        0;
       
       const completionTokens =
-        result.usage.outputTokens || 0;
+        usage?.outputTokens ||
+        usage?.completionTokens ||
+        0;
       
       const totalTokens =
-        result.usage.totalTokens || 0;
+        usage?.totalTokens ||
+        promptTokens +
+        completionTokens;
     
       const estimatedCost =
         totalTokens *
@@ -339,7 +354,7 @@ export default async function handler(
      * Save Draft
      */
 
-    const draftId =
+    draftId =
       await saveDraft({
         agentId:
           "farm-strong",
@@ -405,27 +420,7 @@ export default async function handler(
       message:
         "Execution completed successfully",
     });
-
-    return res.status(200).json({
-      workout,
-      draftId,
-      executionId,
-      status:
-        "draft",
-      agent:
-        agent.name,
-    });
-
-  } catch (error: any) {
-
-    console.error(
-      "[AI WORKOUT AGENT ERROR]",
-      error
-    );
-
-    const completedAt =
-      new Date();
-
+    
     await logExecution({
       executionId,
     
@@ -433,7 +428,7 @@ export default async function handler(
         "farm-strong",
     
       agentName:
-        "Farm Strong Agent",
+        agent.name,
     
       executionType:
         "generate_workout",
@@ -449,7 +444,8 @@ export default async function handler(
         completedAt.getTime() -
         startedAt.getTime(),
     
-      toolsUsed: [],
+      toolsUsed:
+        agent.tools || [],
     
       input: {
         classType,
@@ -462,29 +458,82 @@ export default async function handler(
     
       outputSummary: {
         workoutTitle:
-          workout?.title ||
-          null,
+          workout?.title || null,
       },
     
-      draftId,
+      draftId:
+        draftId || undefined,
     });
 
-    await logRuntimeEvent({
+    return res.status(200).json({
+      workout,
+      draftId,
       executionId,
+      status:
+        "draft",
+      agent:
+        agent.name,
+    });
 
+} catch (error: any) {
+
+    console.error(
+      "[AI WORKOUT AGENT ERROR]",
+      error
+    );
+  
+    const completedAt =
+      new Date();
+  
+    await logExecution({
+      executionId,
+  
       agentId:
         "farm-strong",
-
+  
+      agentName:
+        agent?.name ||
+        "Farm Strong Agent",
+  
+      executionType:
+        "generate_workout",
+  
+      status:
+        "failed",
+  
+      startedAt,
+  
+      completedAt,
+  
+      durationMs:
+        completedAt.getTime() -
+        startedAt.getTime(),
+  
+      toolsUsed:
+        agent?.tools || [],
+  
+      input: {
+        error:
+          error?.message,
+      },
+    });
+  
+    await logRuntimeEvent({
+      executionId,
+  
+      agentId:
+        "farm-strong",
+  
       level: "error",
-
+  
       step:
         "execution_failed",
-
+  
       message:
         error?.message ||
         "Unknown error",
     });
-
+  
     return res.status(500).json({
       error:
         error?.message ||
