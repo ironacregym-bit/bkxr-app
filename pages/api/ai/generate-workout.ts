@@ -450,7 +450,7 @@ export default async function handler(
         startedAt.getTime(),
     
       toolsUsed:
-        agent.tools || [],
+        toolsUsed || [],
     
       input: {
         classType,
