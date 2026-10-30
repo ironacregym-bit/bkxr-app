@@ -449,8 +449,7 @@ export default async function handler(
         completedAt.getTime() -
         startedAt.getTime(),
     
-      toolsUsed:
-        toolsUsed || [],
+      toolsUsed: [],
     
       input: {
         classType,
