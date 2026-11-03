@@ -14,6 +14,11 @@
     "jsx": "preserve",
     "incremental": true,
     "types": ["node", "react", "react-dom"]
+    "paths": {
+      "@pt/firebase": [
+        "./packages/firebase/src"
+      ]
+    },
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "types/next-auth.d.ts"],
   "exclude": ["node_modules"]
