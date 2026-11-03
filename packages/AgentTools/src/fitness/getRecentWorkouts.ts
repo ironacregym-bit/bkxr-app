@@ -1,4 +1,6 @@
-import firestore from "../firestoreClient";
+import {
+  firestore
+} from "@pt/firebase";
 
 export interface RecentWorkout {
   id: string;
