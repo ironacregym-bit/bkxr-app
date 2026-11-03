@@ -20,6 +20,9 @@
       ],
       "@pt/agents": [
         "./packages/agents/src"
+      ],
+      "@pt/tools": [
+        "./packages/tools/src"
       ]
     }
   },
