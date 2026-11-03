@@ -1,6 +1,8 @@
-import { getEquipment } from "../ai/getEquipment";
-import { getRecentWorkouts } from "../ai/getRecentWorkouts";
-import { getExercises } from "../ai/getExercises";
+import {
+  getEquipment,
+  getExercises,
+  getRecentWorkouts,
+} from "@pt/tools";
 
 export const toolRegistry = {
   equipment: async () => {
