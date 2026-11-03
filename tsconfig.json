@@ -13,7 +13,7 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    "types": ["node", "react", "react-dom"]
+    "types": ["node", "react", "react-dom"],
     "paths": {
       "@pt/firebase": [
         "./packages/firebase/src"
