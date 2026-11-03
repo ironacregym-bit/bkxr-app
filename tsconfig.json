@@ -17,6 +17,9 @@
     "paths": {
       "@pt/firebase": [
         "./packages/firebase/src"
+      ],
+      "@pt/agents": [
+        "./packages/agents/src"
       ]
     }
   },
