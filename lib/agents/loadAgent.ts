@@ -1,4 +1,4 @@
-import firestore from "../firestoreClient";
+import firestore from "../../firestoreClient";
 
 /**
  * Represents an AI agent definition
