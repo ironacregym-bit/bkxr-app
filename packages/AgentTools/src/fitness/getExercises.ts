@@ -87,7 +87,7 @@ export async function getExercises(
    * Convert Firestore documents
    * into strongly typed Exercise objects.
    */
-  return snapshot.docs.map((doc) => ({
+  return snapshot.docs.map((doc: any) => ({
     id: doc.id,
     ...doc.data(),
   })) as Exercise[];
