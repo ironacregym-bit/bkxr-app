@@ -17,8 +17,8 @@ export async function getEquipment(): Promise<
     .collection("equipment")
     .get();
 
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as EquipmentItem[];
+return snapshot.docs.map((doc: any) => ({
+  id: doc.id,
+  ...doc.data(),
+})) as EquipmentItem[];
 }
