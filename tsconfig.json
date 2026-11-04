@@ -22,7 +22,7 @@
         "./packages/agents/src"
       ],
       "@pt/tools": [
-        "./packages/tools/src"
+        "./packages/AgentTools/src"
       ]
     }
   },
