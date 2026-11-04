@@ -1,5 +1,5 @@
 export { default as firestore }
-from "./firestore/firestoreClient";
+from "./firestoreClient";
 
 export { default as firebaseAdmin }
-from "./auth/firebaseAdmin";
+from "./firebaseAdmin";
