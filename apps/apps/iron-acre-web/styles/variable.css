@@ -1,0 +1,22 @@
+:root {
+  --bg: #141a15;
+  --bg-alt: #1b231c;
+
+  --text: #e8eae2;
+  --muted: #a3ad9f;
+
+  --primary: #cc5500;
+  --primary-hover: #db6712;
+
+  --border: #2e3a2f;
+
+  --container: 1200px;
+
+  --display:
+    "Big Shoulders Display",
+    sans-serif;
+
+  --body:
+    "Figtree",
+    sans-serif;
+}
