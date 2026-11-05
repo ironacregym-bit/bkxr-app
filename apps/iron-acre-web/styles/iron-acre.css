@@ -1,0 +1,45 @@
+:root {
+  --bg: #141a15;
+  --bg2: #1b231c;
+
+  --ink: #e8eae2;
+  --mute: #a3ad9f;
+
+  --hay: #cc5500;
+
+  --line: #2e3a2f;
+
+  --container: 1120px;
+}
+
+.ia-container {
+  max-width: var(--container);
+
+  margin: 0 auto;
+
+  padding: 0 1.5rem;
+}
+
+.ia-section {
+  padding: 6rem 0;
+}
+
+.ia-btn {
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  padding: 1rem 1.5rem;
+
+  background: var(--hay);
+
+  color: white;
+
+  text-decoration: none;
+
+  border-radius: 6px;
+
+  font-weight: 700;
+}
