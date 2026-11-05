@@ -1,0 +1,44 @@
+.container {
+  max-width: var(--container);
+
+  margin: 0 auto;
+
+  padding: 0 1.25rem;
+}
+
+.section {
+  padding: 5rem 0;
+}
+
+.sectionAlt {
+  background: var(--bg-alt);
+}
+
+.btn {
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  border: 0;
+
+  border-radius: 4px;
+
+  background: var(--primary);
+
+  color: white;
+
+  font-weight: 700;
+
+  padding: 1rem 1.5rem;
+
+  text-decoration: none;
+
+  cursor: pointer;
+}
+
+.btn:hover {
+  background:
+    var(--primary-hover);
+}
