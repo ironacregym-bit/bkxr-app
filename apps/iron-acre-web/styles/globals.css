@@ -1,0 +1,17 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+
+  background: #141a15;
+
+  color: #e8eae2;
+
+  font-family:
+    "Figtree",
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
