@@ -1,10 +1,10 @@
 export default function Hero() {
   return (
-    <section className="hero">
+    <section className="ia-hero">
 
       <div className="ia-container">
 
-        <div className="eyebrow">
+        <div className="ia-eyebrow">
           Westerfield, Ipswich
         </div>
 
@@ -12,18 +12,26 @@ export default function Hero() {
           Get Farm Strong.
         </h1>
 
-        <p>
-          Outdoor strength and
-          conditioning overlooking
-          the meadow.
+        <p className="ia-lead">
+          Outdoor strength and conditioning
+          overlooking the meadow.
         </p>
 
-        <a
-          href="#book"
-          className="ia-btn"
-        >
-          Claim Free Class
-        </a>
+        <div className="ia-actions">
+          <a
+            href="#book"
+            className="ia-btn"
+          >
+            Claim Free Class
+          </a>
+
+          <a
+            href="#coach"
+            className="ia-btn ia-btn-ghost"
+          >
+            Meet Rob
+          </a>
+        </div>
 
       </div>
 
