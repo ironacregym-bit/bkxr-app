@@ -32,11 +32,33 @@
 }
 
 .ia-hero {
-  min-height: 80vh;
+  min-height: 92vh;
 
   display: flex;
 
   align-items: center;
+
+  background:
+    linear-gradient(
+      to bottom,
+      #1b231c 0%,
+      #141a15 100%
+    );
+}
+
+.ia-hero-grid {
+  display: grid;
+
+  gap: 4rem;
+
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .ia-hero-grid {
+    grid-template-columns:
+      1.15fr 0.85fr;
+  }
 }
 
 .ia-eyebrow {
@@ -46,16 +68,36 @@
 
   font-weight: 700;
 
+  letter-spacing: 0.12em;
+
   margin-bottom: 1rem;
 }
 
 .ia-hero h1 {
   font-size:
-    clamp(4rem, 12vw, 8rem);
+    clamp(4.5rem, 16vw, 9rem);
+
+  line-height: 0.88;
 
   margin-bottom: 1rem;
+}
 
-  text-transform: uppercase;
+.ia-lead {
+  font-size: 1.4rem;
+
+  font-weight: 600;
+
+  max-width: 700px;
+
+  margin-bottom: 1rem;
+}
+
+.ia-copy {
+  max-width: 650px;
+
+  color: var(--ia-muted);
+
+  margin-bottom: 2rem;
 }
 
 .ia-lead {
@@ -161,6 +203,8 @@
 
 .ia-card p {
   color: var(--ia-muted);
+
+  margin: 0;
 }
 .ia-lead-form {
   max-width: 420px;
@@ -307,4 +351,83 @@
     sans-serif;
   font-size: 2rem;
   font-weight: 900;
+}
+.ia-section h2 {
+  font-size:
+    clamp(3rem, 8vw, 5rem);
+
+  margin-bottom: 1rem;
+}
+
+.ia-section p {
+  max-width: 700px;
+}
+.ia-lead-form {
+  max-width: 420px;
+
+  padding: 1.5rem;
+
+  border: 1px solid
+    var(--ia-border);
+
+  background:
+    rgba(20, 26, 21, 0.85);
+
+  backdrop-filter:
+    blur(8px);
+
+  border-radius: 8px;
+}
+
+.ia-lead-form h3 {
+  font-size: 2rem;
+
+  margin-bottom: 0.5rem;
+}
+
+.ia-lead-form p {
+  color: var(--ia-muted);
+
+  margin-bottom: 1rem;
+}
+
+.ia-lead-form input {
+  width: 100%;
+
+  padding: 1rem;
+
+  margin-bottom: 1rem;
+
+  border-radius: 6px;
+
+  border: 1px solid
+    var(--ia-border);
+
+  background:
+    var(--ia-bg);
+
+  color:
+    var(--ia-text);
+}
+
+.ia-error {
+  color: #ff6b6b;
+}
+.ia-footer {
+  border-top: 1px solid
+    var(--ia-border);
+
+  padding: 3rem 0;
+
+  color: var(--ia-muted);
+}
+
+.ia-footer .ia-container {
+  display: flex;
+
+  justify-content: space-between;
+
+  flex-wrap: wrap;
+
+  gap: 1rem;
 }
