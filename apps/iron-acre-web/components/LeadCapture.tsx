@@ -1,27 +1,19 @@
-import {
-  useState,
-} from "react";
+import { useState } from "react";
 
 export default function LeadCapture() {
-  const [
-    email,
-    setEmail,
-  ] = useState("");
+  const [name, setName] = useState("");
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(false);
+  const [email, setEmail] =
+    useState("");
 
-  const [
-    success,
-    setSuccess,
-  ] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
 
-  const [
-    error,
-    setError,
-  ] = useState("");
+  const [success, setSuccess] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
 
   async function handleSubmit(
     e: React.FormEvent
@@ -32,7 +24,6 @@ export default function LeadCapture() {
     setError("");
 
     try {
-
       const response =
         await fetch(
           "/api/leads/create",
@@ -45,6 +36,7 @@ export default function LeadCapture() {
             },
 
             body: JSON.stringify({
+              name,
               email,
             }),
           }
@@ -55,39 +47,39 @@ export default function LeadCapture() {
 
       if (!response.ok) {
         throw new Error(
-          json.error
+          json.error ||
+            "Failed to submit"
         );
       }
 
       setSuccess(true);
-
     } catch (err: any) {
-
       setError(
         err.message ||
           "Something went wrong"
       );
-
     } finally {
-
       setLoading(false);
-
     }
   }
 
   if (success) {
     return (
       <div className="ia-lead-success">
-
         <h3>
-          You're in.
+          You're In.
         </h3>
 
         <p>
-          Check your email for the
-          next steps.
+          We've saved your details.
+          We'll be in touch about
+          your free class and next
+          steps.
         </p>
 
+        <p className="ia-fine">
+          Keep an eye on your inbox.
+        </p>
       </div>
     );
   }
@@ -97,15 +89,32 @@ export default function LeadCapture() {
       onSubmit={handleSubmit}
       className="ia-lead-form"
     >
-
       <h3>
-        Start Your Free Week
+        Claim Your Free Class
       </h3>
+
+      <p>
+        Join the Iron Acre
+        community and book your
+        first session free.
+      </p>
+
+      <input
+        type="text"
+        placeholder="First name"
+        value={name}
+        onChange={(e) =>
+          setName(
+            e.target.value
+          )
+        }
+        required
+      />
 
       <input
         type="email"
+        placeholder="Email address"
         value={email}
-        placeholder="Your email"
         onChange={(e) =>
           setEmail(
             e.target.value
@@ -121,20 +130,14 @@ export default function LeadCapture() {
       >
         {loading
           ? "Submitting..."
-          : "Start Free"}
+          : "Claim Free Class"}
       </button>
 
       {error && (
-        <p
-          style={{
-            color:
-              "#ff6b6b",
-          }}
-        >
+        <p className="ia-error">
           {error}
         </p>
       )}
-
     </form>
   );
 }
