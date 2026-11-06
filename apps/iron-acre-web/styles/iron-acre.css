@@ -6,10 +6,13 @@
   --ia-muted: #a3ad9f;
 
   --ia-primary: #cc5500;
+  --ia-primary-hover: #db6712;
 
   --ia-border: #2e3a2f;
 
-  --ia-container: 1200px;
+  --ia-sage: #8fa58a;
+
+  --ia-container: 1120px;
 }
 
 .ia-container {
