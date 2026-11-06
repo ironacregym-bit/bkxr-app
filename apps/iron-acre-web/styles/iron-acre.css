@@ -1,3 +1,7 @@
+/* =====================================================
+   IRON ACRE DESIGN SYSTEM
+   ===================================================== */
+
 :root {
   --ia-bg: #141a15;
   --ia-bg-alt: #1b231c;
@@ -9,13 +13,17 @@
   --ia-primary-hover: #db6712;
 
   --ia-border: #2e3a2f;
-
   --ia-sage: #8fa58a;
 
   --ia-container: 1120px;
 }
 
+/* =====================================================
+   LAYOUT
+   ===================================================== */
+
 .ia-container {
+  width: 100%;
   max-width: var(--ia-container);
 
   margin: 0 auto;
@@ -31,53 +39,24 @@
   background: var(--ia-bg-alt);
 }
 
-.ia-hero {
-  min-height: 92vh;
-
-  display: flex;
-
-  align-items: center;
-
-  background:
-    linear-gradient(
-      to bottom,
-      #1b231c 0%,
-      #141a15 100%
-    );
-}
-
-.ia-hero-grid {
-  display: grid;
-
-  gap: 4rem;
-
-  align-items: center;
-}
-
-@media (min-width: 1024px) {
-  .ia-hero-grid {
-    grid-template-columns:
-      1.15fr 0.85fr;
-  }
-}
+/* =====================================================
+   TYPOGRAPHY
+   ===================================================== */
 
 .ia-eyebrow {
   color: var(--ia-primary);
 
   text-transform: uppercase;
 
-  font-weight: 700;
+  letter-spacing: 0.14em;
 
-  letter-spacing: 0.12em;
+  font-weight: 700;
 
   margin-bottom: 1rem;
 }
 
-.ia-hero h1 {
-  font-size:
-    clamp(4.5rem, 16vw, 9rem);
-
-  line-height: 0.88;
+.ia-section h2 {
+  font-size: clamp(3rem, 8vw, 5rem);
 
   margin-bottom: 1rem;
 }
@@ -87,73 +66,176 @@
 
   font-weight: 600;
 
+  line-height: 1.5;
+
   max-width: 700px;
 
   margin-bottom: 1rem;
 }
 
 .ia-copy {
-  max-width: 650px;
-
   color: var(--ia-muted);
+
+  max-width: 650px;
 
   margin-bottom: 2rem;
 }
 
-.ia-lead {
-  font-size: 1.25rem;
+/* =====================================================
+   BUTTONS
+   ===================================================== */
 
-  max-width: 600px;
+.ia-btn {
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  padding: 1rem 1.5rem;
+
+  border: 0;
+
+  border-radius: 4px;
+
+  text-decoration: none;
+
+  font-weight: 700;
+
+  cursor: pointer;
+
+  background: var(--ia-primary);
+
+  color: white;
+
+  transition: 0.2s ease;
+}
+
+.ia-btn:hover {
+  background: var(--ia-primary-hover);
+}
+
+.ia-btn-ghost {
+  background: transparent;
+
+  border: 2px solid var(--ia-border);
+
+  color: var(--ia-text);
+}
+
+/* =====================================================
+   HERO
+   ===================================================== */
+
+.ia-hero {
+  position: relative;
+
+  min-height: 100vh;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: center;
+
+  background:
+    linear-gradient(
+      rgba(20, 26, 21, 0.75),
+      rgba(20, 26, 21, 0.9)
+    ),
+    url("/images/hero.jpg");
+
+  background-size: cover;
+
+  background-position: center;
+
+  background-repeat: no-repeat;
+}
+
+.ia-hero-grid {
+  display: grid;
+
+  gap: 5rem;
+
+  align-items: center;
+
+  min-height: calc(100vh - 120px);
+}
+
+@media (min-width: 1024px) {
+  .ia-hero-grid {
+    grid-template-columns:
+      1.15fr 0.85fr;
+  }
+}
+
+.ia-hero h1 {
+  font-size:
+    clamp(5rem, 17vw, 10rem);
+
+  line-height: 0.82;
+
+  margin-bottom: 1.5rem;
 }
 
 .ia-actions {
   display: flex;
+
+  flex-wrap: wrap;
 
   gap: 1rem;
 
   margin-top: 2rem;
 }
 
-.ia-btn {
-  display: inline-flex;
-  align-items: center;
+/* =====================================================
+   TOP NAV
+   ===================================================== */
+
+.ia-nav {
+  display: flex;
+
   justify-content: center;
-  padding: 1rem 1.6rem;
-  border-radius: 4px;
-  background: var(--ia-primary);
-  color: white;
-  text-decoration: none;
-  font-weight: 700;
-  border: 0;
-  cursor: pointer;
-  transition: 0.2s ease;
+
+  align-items: center;
+
+  gap: 2rem;
+
+  padding-top: 2rem;
 }
 
-.ia-btn:hover {
-  background:
-    var(--ia-primary-hover);
+.ia-brand {
+  display: flex;
+
+  align-items: center;
+
+  gap: 0.8rem;
+
+  text-transform: uppercase;
+
+  font-size: 2rem;
+
+  font-weight: 900;
 }
 
-.ia-btn-ghost {
-  background: transparent;
+.ia-brand img {
+  width: 48px;
 
-  border: 2px solid
-    var(--ia-border);
+  height: 48px;
+
+  object-fit: contain;
 }
 
-.ia-btn-ghost {
-  background: transparent;
-
-  border: 2px solid
-    var(--ia-border);
-}
+/* =====================================================
+   TRUST BAR
+   ===================================================== */
 
 .ia-trust {
   padding: 2rem 0;
-  border-top: 1px solid
-    var(--ia-border);
-  border-bottom: 1px solid
-    var(--ia-border);
+
+  border-top: 1px solid var(--ia-border);
+
+  border-bottom: 1px solid var(--ia-border);
 }
 
 .ia-trust-grid {
@@ -170,14 +252,20 @@
 }
 
 .ia-trust-grid > div {
-  border-left: 3px solid
-    var(--ia-primary);
+  border-left: 3px solid var(--ia-primary);
+
   padding-left: 0.8rem;
 }
 
+/* =====================================================
+   CARD SECTIONS
+   ===================================================== */
+
 .ia-cards {
   display: grid;
-  gap: 1rem;
+
+  gap: 2rem;
+
   margin-top: 2rem;
 }
 
@@ -189,8 +277,7 @@
 }
 
 .ia-card {
-  border-left: 3px solid
-    var(--ia-primary);
+  border-left: 3px solid var(--ia-primary);
 
   padding-left: 1rem;
 }
@@ -202,187 +289,38 @@
 }
 
 .ia-card p {
-  color: var(--ia-muted);
-
   margin: 0;
-}
-.ia-lead-form {
-  max-width: 420px;
 
-  padding: 1.5rem;
-
-  border: 1px solid
-    var(--ia-border);
-
-  background:
-    rgba(20, 26, 21, 0.9);
-
-  border-radius: 8px;
-}
-
-.ia-lead-form h3 {
-  margin-bottom: 1rem;
-}
-
-.ia-lead-form input {
-  width: 100%;
-
-  padding: 1rem;
-
-  border-radius: 6px;
-
-  border: 1px solid
-    var(--ia-border);
-
-  margin-bottom: 1rem;
-
-  background:
-    var(--ia-bg);
-
-  color:
-    var(--ia-text);
-}
-
-.ia-lead-success {
-  max-width: 420px;
-
-  padding: 1.5rem;
-
-  border-radius: 8px;
-
-  border: 1px solid
-    var(--ia-primary);
-
-  background:
-    rgba(20, 26, 21, 0.9);
-}
-.ia-hero {
-  min-height: 85vh;
-
-  display: flex;
-
-  align-items: center;
-
-  background: linear-gradient(
-    180deg,
-    #1b231c 0%,
-    #141a15 100%
-  );
-}
-
-.ia-hero-grid {
-  display: grid;
-
-  gap: 3rem;
-
-  align-items: center;
-}
-
-@media (min-width: 1024px) {
-  .ia-hero-grid {
-    grid-template-columns:
-      1.2fr 0.8fr;
-  }
-}
-
-.ia-eyebrow {
-  color: var(--ia-primary);
-
-  text-transform: uppercase;
-
-  letter-spacing: 0.1em;
-
-  font-weight: 700;
-
-  margin-bottom: 1rem;
-}
-
-.ia-hero h1 {
-  font-size:
-    clamp(4rem, 14vw, 8rem);
-
-  line-height: 0.9;
-
-  margin-bottom: 1rem;
-
-  text-transform: uppercase;
-}
-
-.ia-lead {
-  font-size: 1.4rem;
-
-  font-weight: 600;
-
-  max-width: 700px;
-
-  margin-bottom: 1rem;
-}
-
-.ia-copy {
   color: var(--ia-muted);
-  max-width: 650px;
-  margin-bottom: 2rem;
 }
 
-.ia-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
+/* =====================================================
+   LEAD CAPTURE
+   ===================================================== */
 
-.ia-header {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  z-index: 20;
-  padding: 1.5rem 0;
-}
-
-.ia-header .ia-container {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.ia-brand {
-  font-family:
-    "Big Shoulders Display",
-    sans-serif;
-  font-size: 2rem;
-  font-weight: 900;
-}
-.ia-section h2 {
-  font-size:
-    clamp(3rem, 8vw, 5rem);
-
-  margin-bottom: 1rem;
-}
-
-.ia-section p {
-  max-width: 700px;
-}
-.ia-lead-form {
-  max-width: 420px;
+.ia-lead-form,
+.ia-lead-success {
+  max-width: 520px;
 
   padding: 1.5rem;
 
+  border-radius: 8px;
+
   border: 1px solid
-    var(--ia-border);
+    rgba(255, 255, 255, 0.15);
 
   background:
-    rgba(20, 26, 21, 0.85);
+    rgba(20, 26, 21, 0.84);
 
   backdrop-filter:
     blur(8px);
-
-  border-radius: 8px;
 }
 
-.ia-lead-form h3 {
-  font-size: 2rem;
+.ia-lead-form h3,
+.ia-lead-success h3 {
+  margin-bottom: 1rem;
 
-  margin-bottom: 0.5rem;
+  font-size: 2rem;
 }
 
 .ia-lead-form p {
@@ -400,26 +338,67 @@
 
   border-radius: 6px;
 
-  border: 1px solid
-    var(--ia-border);
+  border: 1px solid var(--ia-border);
 
-  background:
-    var(--ia-bg);
+  background: var(--ia-bg);
 
-  color:
-    var(--ia-text);
+  color: var(--ia-text);
 }
 
 .ia-error {
+  margin-top: 1rem;
+
   color: #ff6b6b;
 }
-.ia-footer {
-  border-top: 1px solid
-    var(--ia-border);
 
-  padding: 3rem 0;
+/* =====================================================
+   COMMUNITY
+   ===================================================== */
+
+.ia-community {
+  background: var(--ia-bg-alt);
+}
+
+/* =====================================================
+   TESTIMONIALS
+   ===================================================== */
+
+.ia-testimonials {
+  background: var(--ia-bg);
+}
+
+/* =====================================================
+   FAQ
+   ===================================================== */
+
+.ia-faq details {
+  padding: 1rem 0;
+
+  border-bottom: 1px solid var(--ia-border);
+}
+
+.ia-faq summary {
+  cursor: pointer;
+
+  font-weight: 700;
+}
+
+.ia-faq p {
+  color: var(--ia-muted);
+
+  margin-top: 0.75rem;
+}
+
+/* =====================================================
+   FOOTER
+   ===================================================== */
+
+.ia-footer {
+  border-top: 1px solid var(--ia-border);
 
   color: var(--ia-muted);
+
+  padding: 3rem 0;
 }
 
 .ia-footer .ia-container {
