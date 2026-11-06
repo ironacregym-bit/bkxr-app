@@ -1,6 +1,7 @@
 html,
 body {
   margin: 0;
+
   padding: 0;
 
   background: #141a15;
@@ -10,8 +11,39 @@ body {
   font-family:
     "Figtree",
     sans-serif;
+
+  line-height: 1.6;
+
+  -webkit-font-smoothing:
+    antialiased;
 }
 
 * {
   box-sizing: border-box;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+
+  font-family:
+    "Big Shoulders Display",
+    sans-serif;
+
+  font-weight: 900;
+
+  text-transform: uppercase;
+
+  line-height: 0.92;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+a {
+  color: inherit;
 }
