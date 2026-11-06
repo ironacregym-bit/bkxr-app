@@ -74,22 +74,29 @@
 
 .ia-btn {
   display: inline-flex;
-
   align-items: center;
-
   justify-content: center;
-
-  padding: 1rem 1.5rem;
-
-  border-radius: 6px;
-
-  text-decoration: none;
-
-  font-weight: 700;
-
+  padding: 1rem 1.6rem;
+  border-radius: 4px;
   background: var(--ia-primary);
-
   color: white;
+  text-decoration: none;
+  font-weight: 700;
+  border: 0;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.ia-btn:hover {
+  background:
+    var(--ia-primary-hover);
+}
+
+.ia-btn-ghost {
+  background: transparent;
+
+  border: 2px solid
+    var(--ia-border);
 }
 
 .ia-btn-ghost {
@@ -100,13 +107,11 @@
 }
 
 .ia-trust {
+  padding: 2rem 0;
   border-top: 1px solid
     var(--ia-border);
-
   border-bottom: 1px solid
     var(--ia-border);
-
-  padding: 2rem 0;
 }
 
 .ia-trust-grid {
@@ -122,11 +127,15 @@
   }
 }
 
+.ia-trust-grid > div {
+  border-left: 3px solid
+    var(--ia-primary);
+  padding-left: 0.8rem;
+}
+
 .ia-cards {
   display: grid;
-
   gap: 1rem;
-
   margin-top: 2rem;
 }
 
@@ -138,12 +147,20 @@
 }
 
 .ia-card {
-  border: 1px solid
-    var(--ia-border);
+  border-left: 3px solid
+    var(--ia-primary);
 
-  padding: 1.5rem;
+  padding-left: 1rem;
+}
 
-  border-radius: 8px;
+.ia-card h3 {
+  font-size: 2rem;
+
+  margin-bottom: 0.5rem;
+}
+
+.ia-card p {
+  color: var(--ia-muted);
 }
 .ia-lead-form {
   max-width: 420px;
@@ -259,16 +276,35 @@
 
 .ia-copy {
   color: var(--ia-muted);
-
   max-width: 650px;
-
   margin-bottom: 2rem;
 }
 
 .ia-actions {
   display: flex;
-
   flex-wrap: wrap;
-
   gap: 1rem;
+}
+
+.ia-header {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 20;
+  padding: 1.5rem 0;
+}
+
+.ia-header .ia-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ia-brand {
+  font-family:
+    "Big Shoulders Display",
+    sans-serif;
+  font-size: 2rem;
+  font-weight: 900;
 }
