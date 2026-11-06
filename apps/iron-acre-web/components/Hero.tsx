@@ -4,7 +4,33 @@ export default function Hero() {
   return (
     <section className="ia-hero">
 
+      <div className="ia-overlay" />
+
       <div className="ia-container">
+
+        <div className="ia-nav">
+
+          <div className="ia-brand">
+
+            <img
+              src="/images/logo-white.png"
+              alt="Iron Acre Gym"
+            />
+
+            <span>
+              Iron Acre Gym
+            </span>
+
+          </div>
+
+          <a
+            href="#start"
+            className="ia-btn"
+          >
+            Start Free
+          </a>
+
+        </div>
 
         <div className="ia-hero-grid">
 
@@ -15,36 +41,18 @@ export default function Hero() {
             </div>
 
             <h1>
-              Get Farm Strong.
+              GET FARM
+              <br />
+              STRONG.
             </h1>
 
             <p className="ia-lead">
-              Outdoor farm strength and conditioning
-              overlooking the meadow.
+              An outdoor gym in Westerfield,
+              Ipswich, overlooking an open
+              meadow. Sandbags, kettlebells,
+              yokes and sleds, coached for
+              everyday people.
             </p>
-
-            <p className="ia-copy">
-              Sandbags. Sleds. Yokes. Kettlebells.
-              Real coaching. Real community.
-              Train outdoors in Westerfield and build
-              strength that carries into everyday life.
-            </p>
-
-            <div className="ia-actions">
-              <a
-                href="#class"
-                className="ia-btn"
-              >
-                View Classes
-              </a>
-
-              <a
-                href="#coach"
-                className="ia-btn ia-btn-ghost"
-              >
-                Meet Rob
-              </a>
-            </div>
 
           </div>
 
