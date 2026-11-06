@@ -192,3 +192,80 @@
   background:
     rgba(20, 26, 21, 0.9);
 }
+.ia-hero {
+  min-height: 85vh;
+
+  display: flex;
+
+  align-items: center;
+
+  background: linear-gradient(
+    180deg,
+    #1b231c 0%,
+    #141a15 100%
+  );
+}
+
+.ia-hero-grid {
+  display: grid;
+
+  gap: 3rem;
+
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .ia-hero-grid {
+    grid-template-columns:
+      1.2fr 0.8fr;
+  }
+}
+
+.ia-eyebrow {
+  color: var(--ia-primary);
+
+  text-transform: uppercase;
+
+  letter-spacing: 0.1em;
+
+  font-weight: 700;
+
+  margin-bottom: 1rem;
+}
+
+.ia-hero h1 {
+  font-size:
+    clamp(4rem, 14vw, 8rem);
+
+  line-height: 0.9;
+
+  margin-bottom: 1rem;
+
+  text-transform: uppercase;
+}
+
+.ia-lead {
+  font-size: 1.4rem;
+
+  font-weight: 600;
+
+  max-width: 700px;
+
+  margin-bottom: 1rem;
+}
+
+.ia-copy {
+  color: var(--ia-muted);
+
+  max-width: 650px;
+
+  margin-bottom: 2rem;
+}
+
+.ia-actions {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 1rem;
+}
