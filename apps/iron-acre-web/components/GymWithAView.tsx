@@ -1,11 +1,49 @@
-A Gym With A View
+export default function GymWithAView() {
+  return (
+    <section
+      className="ia-section ia-section-alt"
+      id="gym"
+    >
+      <div className="ia-container">
 
-Iron Acre Gym is an outdoor gym in Westerfield, Ipswich overlooking an open meadow.
+        <div className="ia-content">
 
-Training takes place on a working farm with livestock in the surrounding fields and a farm shop nearby.
+          <h2>
+            A Gym With A View
+          </h2>
 
-No mirrors.
-No queues.
-No corporate gym music.
+          <p className="ia-lead">
+            Iron Acre Gym is an outdoor gym
+            in Westerfield, Ipswich,
+            overlooking an open meadow.
+          </p>
 
-Just strength training in a place you'll actually look forward to turning up to.
+          <p>
+            Train in fresh air using real
+            strength equipment. Sandbags,
+            kettlebells, sleds, yokes and
+            carries, all in an environment
+            built for progress rather than
+            distractions.
+          </p>
+
+          <p>
+            Set on a working farm, every
+            session feels different from a
+            traditional commercial gym.
+            No mirrors. No queues. No waiting
+            for machines.
+          </p>
+
+          <p>
+            Just proper training, good people
+            and a place you'll actually look
+            forward to turning up to.
+          </p>
+
+        </div>
+
+      </div>
+    </section>
+  );
+}
