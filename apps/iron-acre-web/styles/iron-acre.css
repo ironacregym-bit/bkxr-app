@@ -410,3 +410,19 @@
 
   gap: 1rem;
 }
+
+/* =====================================================
+   GYM WITH A VIEW
+   ===================================================== */
+
+.ia-content {
+  max-width: 820px;
+}
+
+.ia-content p {
+  margin-bottom: 1.5rem;
+}
+
+.ia-content p:last-child {
+  margin-bottom: 0;
+}
