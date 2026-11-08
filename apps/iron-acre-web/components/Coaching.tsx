@@ -2,48 +2,64 @@ export default function Coaching() {
   return (
     <section
       className="ia-section ia-section-alt"
+      id="coaching"
     >
       <div className="ia-container">
 
+        <div className="ia-eyebrow">
+          ONLINE COACHING
+        </div>
+
         <h2>
-          Online Coaching
+          £75 Per Month
         </h2>
 
-        <h3>
-          £75/month
-        </h3>
+        <p className="ia-lead">
+          Personalised coaching built
+          around your equipment,
+          goals and lifestyle.
+        </p>
 
-        <ul>
-          <li>
-            Personalised workouts
-          </li>
+        <div className="ia-cards">
 
-          <li>
-            Weekly check-ins
-          </li>
+          <div className="ia-card">
+            <h3>
+              Training Plan
+            </h3>
 
-          <li>
-            Macro targets
-          </li>
+            <p>
+              Individual programming
+              focused on strength,
+              conditioning and consistency.
+            </p>
+          </div>
 
-          <li>
-            App access
-          </li>
+          <div className="ia-card">
+            <h3>
+              Weekly Support
+            </h3>
 
-          <li>
-            Community access
-          </li>
-        </ul>
+            <p>
+              Check-ins, accountability and
+              direct coach feedback.
+            </p>
+          </div>
 
-        <a
-          href="#apply"
-          className="ia-btn"
-        >
-          Apply Now
-        </a>
+          <div className="ia-card">
+            <h3>
+              Community Access
+            </h3>
+
+            <p>
+              Challenges, support and a
+              group of people all working
+              towards similar goals.
+            </p>
+          </div>
+
+        </div>
 
       </div>
-
     </section>
   );
 }
