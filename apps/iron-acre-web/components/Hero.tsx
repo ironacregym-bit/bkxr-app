@@ -13,7 +13,7 @@ export default function Hero() {
           <div className="ia-brand">
 
             <img
-              src="/images/logo-white.png"
+              src="/images/iron_acre_logo_transparent.png"
               alt="Iron Acre Gym"
             />
 
