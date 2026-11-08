@@ -1,5 +1,9 @@
 import { useState } from "react";
 
+import { Card } from "./ui/card";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
+
 export default function LeadCapture() {
   const [name, setName] = useState("");
 
@@ -53,91 +57,108 @@ export default function LeadCapture() {
       }
 
       setSuccess(true);
+
     } catch (err: any) {
+
       setError(
         err.message ||
           "Something went wrong"
       );
+
     } finally {
+
       setLoading(false);
+
     }
   }
 
   if (success) {
     return (
-      <div className="ia-lead-success">
+      <Card>
+
         <h3>
           You're In.
         </h3>
 
         <p>
           We've saved your details.
-          We'll be in touch about
-          your free class and next
-          steps.
+          We'll be in touch about your
+          free class and next steps.
         </p>
 
-        <p className="ia-fine">
+        <p>
           Keep an eye on your inbox.
         </p>
-      </div>
+
+      </Card>
     );
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="ia-lead-form"
-    >
-      <h3>
-        Claim Your Free Class
-      </h3>
+    <Card>
 
-      <p>
-        Join the Iron Acre
-        community and book your
-        first session free.
-      </p>
-
-      <input
-        type="text"
-        placeholder="First name"
-        value={name}
-        onChange={(e) =>
-          setName(
-            e.target.value
-          )
-        }
-        required
-      />
-
-      <input
-        type="email"
-        placeholder="Email address"
-        value={email}
-        onChange={(e) =>
-          setEmail(
-            e.target.value
-          )
-        }
-        required
-      />
-
-      <button
-        type="submit"
-        className="ia-btn"
-        disabled={loading}
+      <form
+        onSubmit={handleSubmit}
       >
-        {loading
-          ? "Submitting..."
-          : "Claim Free Class"}
-      </button>
 
-      {error && (
-        <p className="ia-error">
-          {error}
+        <h3>
+          Start Your Free Week
+        </h3>
+
+        <p>
+          Join the Iron Acre community,
+          train outdoors and claim your
+          free first class.
         </p>
-      )}
-    </form>
+
+        <Input
+          type="text"
+          placeholder="First name"
+          value={name}
+          onChange={(e) =>
+            setName(
+              e.target.value
+            )
+          }
+          required
+        />
+
+        <div className="h-3" />
+
+        <Input
+          type="email"
+          placeholder="Email address"
+          value={email}
+          onChange={(e) =>
+            setEmail(
+              e.target.value
+            )
+          }
+          required
+        />
+
+        <div className="h-4" />
+
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={loading}
+        >
+          {loading
+            ? "Submitting..."
+            : "Claim Free Class"}
+        </Button>
+
+        {error && (
+          <p
+            className="mt-4 text-red-400"
+          >
+            {error}
+          </p>
+        )}
+
+      </form>
+
+    </Card>
   );
 }
