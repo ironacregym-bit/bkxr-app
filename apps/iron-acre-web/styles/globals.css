@@ -1,3 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Existing global styles below */
+
+
 html,
 body {
   margin: 0;
