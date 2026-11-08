@@ -5,7 +5,7 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start"
-  }
+  },
   "devDependencies": {
   "autoprefixer": "^10.4.20",
   "postcss": "^8.5.6",
