@@ -155,7 +155,7 @@
 .ia-hero-grid {
   display: grid;
 
-  gap: 5rem;
+  gap: 4rem;
 
   align-items: center;
 
@@ -165,7 +165,8 @@
 @media (min-width: 1024px) {
   .ia-hero-grid {
     grid-template-columns:
-      1.15fr 0.85fr;
+      minmax(0, 1.3fr)
+      minmax(420px, 520px);
   }
 }
 
@@ -195,13 +196,19 @@
 .ia-nav {
   display: flex;
 
-  justify-content: center;
-
   align-items: center;
+
+  justify-content: center;
 
   gap: 2rem;
 
   padding-top: 2rem;
+}
+
+@media (max-width: 768px) {
+  .ia-nav {
+    justify-content: space-between;
+  }
 }
 
 .ia-brand {
@@ -209,13 +216,29 @@
 
   align-items: center;
 
-  gap: 0.8rem;
+  gap: 1rem;
 
-  text-transform: uppercase;
+  flex-shrink: 0;
 
-  font-size: 2rem;
+  white-space: nowrap;
+
+  font-family:
+    "Big Shoulders Display",
+    sans-serif;
+
+  font-size: clamp(
+    1.75rem,
+    3vw,
+    2.5rem
+  );
 
   font-weight: 900;
+
+  text-transform: uppercase;
+}
+
+.ia-brand span {
+  white-space: nowrap;
 }
 
 .ia-brand img {
