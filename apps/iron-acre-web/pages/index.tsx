@@ -3,6 +3,7 @@ import TrustBar from "../components/TrustBar";
 import MeetRob from "../components/MeetRob";
 import FarmStrength from "../components/FarmStrength";
 import GymWithAView from "../components/GymWithAView";
+import Community from "../components/Community";
 
 export default function Home() {
   return (
