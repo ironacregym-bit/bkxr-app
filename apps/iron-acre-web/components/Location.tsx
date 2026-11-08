@@ -1,31 +1,50 @@
 export default function Location() {
   return (
-    <section className="ia-section">
-
+    <section
+      className="ia-section"
+      id="location"
+    >
       <div className="ia-container">
 
+        <div className="ia-eyebrow">
+          FIND US
+        </div>
+
         <h2>
-          Find Us
+          Westerfield, Ipswich
         </h2>
 
-        <p>
-          Westerfield, Ipswich
+        <p className="ia-lead">
+          Train outdoors overlooking
+          the meadow in a unique farm
+          setting.
         </p>
 
         <p>
-          Mondays & Wednesdays
-          6:30pm - 7:30pm
+          Classes run every Monday and
+          Wednesday from 6:30pm until
+          7:30pm.
         </p>
 
-        <a
-          className="ia-btn"
-          href="https://www.google.com/maps/search/?api=1&query=Iron+Acre+Gym+Westerfield+Ipswich"
-        >
-          Directions
-        </a>
+        <div className="ia-actions">
+
+          <a
+            className="ia-btn"
+            href="tel:07860861120"
+          >
+            Call Us
+          </a>
+
+          <a
+            className="ia-btn ia-btn-ghost"
+            href="mailto:ironacregym@gmail.com"
+          >
+            Email Us
+          </a>
+
+        </div>
 
       </div>
-
     </section>
   );
 }
