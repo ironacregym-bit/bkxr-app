@@ -1,25 +1,24 @@
 export default function TrustBar() {
   return (
-    <section className="ia-trust">
+    <section className="border-y border-[#2e3a2f] py-8">
 
-      <div className="ia-container">
+      <div className="mx-auto max-w-7xl px-6">
 
-        <div className="ia-trust-grid">
+        <div className="grid gap-4 md:grid-cols-4">
 
-          <div>
-            Train outdoors overlooking
-            the meadow
+          <div className="border-l-4 border-[#cc5500] pl-4">
+            Train outdoors overlooking the meadow
           </div>
 
-          <div>
+          <div className="border-l-4 border-[#cc5500] pl-4">
             First class free
           </div>
 
-          <div>
+          <div className="border-l-4 border-[#cc5500] pl-4">
             Sandbags, sleds and yokes
           </div>
 
-          <div>
+          <div className="border-l-4 border-[#cc5500] pl-4">
             Friendly coaching
           </div>
 
