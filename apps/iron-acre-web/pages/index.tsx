@@ -8,6 +8,7 @@ import Coaching from "../components/Coaching";
 import Testimonials from "../components/Testimonials";
 import Faq from "../components/Faq";
 import Location from "../components/Location";
+import FreeProgram from "../components/FreeProgram";
 
 export default function Home() {
   return (
@@ -21,6 +22,8 @@ export default function Home() {
   <FarmStrength />
 
   <HowItWorks />
+
+  <FreeProgram />
 
   <Community />
 
