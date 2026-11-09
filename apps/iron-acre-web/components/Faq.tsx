@@ -1,109 +1,94 @@
 export default function Faq() {
-  return (
-    <section
-      id="faq"
-      className="ia-section ia-faq"
-    >
-      <div className="ia-container">
+  const items = [
+    {
+      question:
+        "What is a class like?",
+      answer:
+        "Farm Strength & Conditioning is an hour of coached outdoor training using sandbags, kettlebells, carries, sleds and conditioning equipment.",
+    },
+    {
+      question:
+        "Is this suitable for beginners?",
+      answer:
+        "Absolutely. Every workout scales to your ability, making it suitable for complete beginners and experienced lifters.",
+    },
+    {
+      question:
+        "When are classes?",
+      answer:
+        "Mondays and Wednesdays from 6:30pm to 7:30pm.",
+    },
+    {
+      question:
+        "How much does it cost?",
+      answer:
+        "Classes are £10 per session.",
+    },
+    {
+      question:
+        "Where are you based?",
+      answer:
+        "Westerfield, Ipswich.",
+    },
+  ];
 
-        <div className="ia-eyebrow">
-          FAQ
+  return (
+    <section className="bg-[#1b231c] py-24">
+
+      <div className="mx-auto max-w-5xl px-6">
+
+        <div className="mb-12">
+
+          <div className="mb-4 uppercase tracking-[0.15em] text-[#cc5500] font-bold">
+            FAQ
+          </div>
+
+          <h2
+            className="
+              font-['Big_Shoulders_Display']
+              text-[clamp(3rem,8vw,5rem)]
+              font-black
+              uppercase
+              leading-none
+            "
+          >
+            Quick Answers
+          </h2>
+
         </div>
 
-        <h2>
-          Quick Answers
-        </h2>
+        <div className="space-y-4">
 
-        <details>
-          <summary>
-            What is a class like?
-          </summary>
+          {items.map((item) => (
+            <details
+              key={item.question}
+              className="
+                border-b
+                border-[#2e3a2f]
+                pb-4
+              "
+            >
+              <summary
+                className="
+                  cursor-pointer
+                  font-semibold
+                  text-white
+                "
+              >
+                {item.question}
+              </summary>
 
-          <p>
-            Farm Strength & Conditioning is an hour of coached,
-            strongman-inspired outdoor training using sandbags,
-            kettlebells, yokes, sleds, carries and conditioning equipment.
-          </p>
-        </details>
+              <p className="mt-3 text-[#a3ad9f]">
+                {item.answer}
+              </p>
 
-        <details>
-          <summary>
-            I'm a beginner. Is this for me?
-          </summary>
+            </details>
+          ))}
 
-          <p>
-            Absolutely. Every exercise can be scaled to your ability.
-            Beginners and experienced lifters train together.
-          </p>
-        </details>
-
-        <details>
-          <summary>
-            When are classes?
-          </summary>
-
-          <p>
-            Classes run on Mondays and Wednesdays from
-            6:30pm until 7:30pm.
-          </p>
-        </details>
-
-        <details>
-          <summary>
-            How much is it?
-          </summary>
-
-          <p>
-            Farm Strength & Conditioning classes are £10 per session.
-          </p>
-        </details>
-
-        <details>
-          <summary>
-            What should I bring?
-          </summary>
-
-          <p>
-            Comfortable training clothes, water and a willingness
-            to work hard. We'll take care of everything else.
-          </p>
-        </details>
-
-        <details>
-          <summary>
-            Do I need gym experience?
-          </summary>
-
-          <p>
-            No. Many members started with little or no training
-            experience. Everything is coached from the ground up.
-          </p>
-        </details>
-
-        <details>
-          <summary>
-            Where are you based?
-          </summary>
-
-          <p>
-            Iron Acre Gym is located in Westerfield, Ipswich,
-            overlooking the surrounding meadow and farmland.
-          </p>
-        </details>
-
-        <details>
-          <summary>
-            What does online coaching include?
-          </summary>
-
-          <p>
-            Personalised training, accountability, community access,
-            weekly coach support, nutrition guidance and app access
-            for £75 per month.
-          </p>
-        </details>
+        </div>
 
       </div>
+
     </section>
   );
 }
