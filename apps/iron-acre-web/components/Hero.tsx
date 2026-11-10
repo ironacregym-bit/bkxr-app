@@ -47,7 +47,7 @@ export default function Hero() {
           relative
           z-10
           mx-auto
-          max-w-[1180px]
+          max-w-[1400px]
           px-5
         "
       >
@@ -112,12 +112,13 @@ export default function Hero() {
             grid
             min-h-[calc(100vh-110px)]
             items-center
-            gap-12
-            lg:grid-cols-[650px_380px]
+            gap-16
+            lg:grid-cols-[700px_380px]
             lg:justify-center
           "
         >
-          <div>
+          <div className="lg:pl-32">
+
             <div
               className="
                 mb-5
@@ -160,6 +161,7 @@ export default function Hero() {
               Start free: 7 days of training plus
               a free class.
             </p>
+
           </div>
 
           <div
