@@ -6,7 +6,7 @@ export default function Coaching() {
   return (
     <section
       id="coaching"
-      className="bg-[#d7d9ce] py-24 text-[#0f1812]"
+      className="bg-[#141a15] py-24 text-white"
     >
       <div className="mx-auto max-w-6xl px-6">
 
@@ -27,13 +27,13 @@ export default function Coaching() {
             20 Places.
           </h2>
 
-          <p className="max-w-4xl text-xl text-black/70">
+          <p className="max-w-4xl text-xl text-white/70">
             A coach, a plan and a crew,
             adapted to the equipment you have.
             Whatever you train with, the aim
             is farm strength.
             We cap coaching at 20 members so
-            everyone gets real attention.
+            everyone receives personal attention.
           </p>
 
         </div>
@@ -42,9 +42,9 @@ export default function Coaching() {
           className="
             border-2
             border-[#cc5500]
-            bg-transparent
+            bg-[#1b231c]
             p-8
-            text-[#0f1812]
+            text-white
             shadow-none
           "
         >
@@ -60,7 +60,7 @@ export default function Coaching() {
 
                 <div className="flex flex-wrap items-end gap-3">
 
-                  <span className="text-4xl text-black/30 line-through">
+                  <span className="text-4xl text-white/30 line-through">
                     £100
                   </span>
 
@@ -76,7 +76,7 @@ export default function Coaching() {
                     £75
                   </span>
 
-                  <span className="mb-2 text-3xl text-black/60">
+                  <span className="mb-2 text-3xl text-white/60">
                     / month
                   </span>
 
@@ -84,11 +84,10 @@ export default function Coaching() {
 
               </div>
 
-              <ul className="space-y-5 text-xl text-black/80">
+              <ul className="space-y-5 text-xl text-white/80">
 
                 <li>
-                  • Training adapted to your equipment,
-                  aimed at farm strength
+                  • Training adapted to your equipment and goals
                 </li>
 
                 <li>
@@ -121,9 +120,18 @@ export default function Coaching() {
 
             <div>
 
-              <h3 className="mb-8 text-3xl font-semibold">
+              <h3
+                className="
+                  mb-8
+                  font-['Big_Shoulders_Display']
+                  text-4xl
+                  font-black
+                  uppercase
+                "
+              >
                 Only 20 places.
-                Apply now to be considered.
+                <br />
+                Apply now.
               </h3>
 
               <div className="space-y-4">
@@ -152,7 +160,7 @@ export default function Coaching() {
 
               </div>
 
-              <p className="mt-6 text-black/50">
+              <p className="mt-6 text-white/50">
                 Not ready?
                 Start with the free 7 day program first.
               </p>
@@ -164,7 +172,6 @@ export default function Coaching() {
         </Card>
 
       </div>
-
     </section>
   );
 }
