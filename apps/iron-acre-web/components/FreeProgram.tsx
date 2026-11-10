@@ -1,112 +1,159 @@
-import { Card } from "./ui/card";
-
 export default function FreeProgram() {
   const days = [
     {
-      day: "01",
-      title: "Build The Base",
+      day: "1",
+      title: "BUILD THE BASE",
+      subtitle: "Full-body strength · 30 min",
       description:
-        "Full body strength session focusing on movement quality and getting started.",
+        "Learn the fundamentals and build confidence with simple full-body strength work.",
     },
     {
-      day: "02",
-      title: "Get Moving",
-      description:
-        "Conditioning workout designed to improve fitness and work capacity.",
+      day: "2",
+      title: "GET MOVING",
+      subtitle: "Conditioning · 25 min",
     },
     {
-      day: "03",
-      title: "Carry It",
-      description:
-        "Carries, grip strength and core training.",
+      day: "3",
+      title: "CARRY IT",
+      subtitle: "Carries & Core · 25 min",
     },
     {
-      day: "04",
-      title: "Legs & Hinge",
-      description:
-        "Lower body strength using simple but effective movements.",
+      day: "4",
+      title: "LEGS AND HINGE",
+      subtitle: "Lower Body · 35 min",
     },
     {
-      day: "05",
-      title: "Push & Pull",
-      description:
-        "Upper body strength and muscular endurance.",
+      day: "5",
+      title: "PUSH AND PULL",
+      subtitle: "Upper Body · 35 min",
     },
     {
-      day: "06",
-      title: "The Finisher",
-      description:
-        "Full body conditioning session.",
+      day: "6",
+      title: "FINISHER",
+      subtitle: "Conditioning · 30 min",
     },
     {
-      day: "07",
-      title: "Get Outside",
-      description:
-        "Recovery, walking and mobility work.",
+      day: "7",
+      title: "GET OUTSIDE",
+      subtitle: "Recovery Day",
     },
   ];
 
   return (
-    <section className="bg-[#1b231c] py-24">
+    <section className="py-24">
       <div className="mx-auto max-w-7xl px-6">
 
-        <div className="mb-12">
-          <div className="mb-4 uppercase tracking-[0.15em] text-[#cc5500] font-bold">
-            FREE PROGRAM
-          </div>
+        <h2
+          className="
+            mb-6
+            font-['Big_Shoulders_Display']
+            text-[clamp(4rem,10vw,7rem)]
+            font-black
+            uppercase
+            leading-[0.85]
+          "
+        >
+          Your Free
+          <br />
+          7-Day Program
+        </h2>
 
-          <h2
-            className="
-              mb-6
-              font-['Big_Shoulders_Display']
-              text-[clamp(3rem,8vw,5rem)]
-              font-black
-              uppercase
-              leading-none
-            "
-          >
-            Your Free
-            <br />
-            7 Day Program
-          </h2>
+        <p className="mb-8 max-w-4xl text-xl text-white/70">
+          Six short sessions and one recovery day.
+          Scale it down if you're new.
+        </p>
 
-          <p className="max-w-3xl text-xl text-white/90">
-            Six short sessions and one recovery day.
-            Designed to get you moving immediately.
-          </p>
+        <div className="mb-12 flex flex-wrap gap-3">
+
+          <span className="rounded-full border border-white/10 px-5 py-2 text-white/70">
+            One kettlebell or loaded backpack
+          </span>
+
+          <span className="rounded-full border border-white/10 px-5 py-2 text-white/70">
+            Floor space
+          </span>
+
+          <span className="rounded-full border border-white/10 px-5 py-2 text-white/70">
+            A timer
+          </span>
+
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div className="border-t border-white/10">
 
-          {days.map((item) => (
-            <Card
+          {days.map((item, index) => (
+            <div
               key={item.day}
               className="
-                border-[#2e3a2f]
-                bg-[#141a15]
+                grid
+                gap-6
+                border-b
+                border-white/10
+                py-8
+                md:grid-cols-[60px_1fr]
               "
             >
-              <div className="mb-2 text-sm font-bold tracking-[0.15em] text-[#cc5500]">
-                DAY {item.day}
-              </div>
 
-              <h3
+              <div
                 className="
-                  mb-3
                   font-['Big_Shoulders_Display']
-                  text-3xl
+                  text-5xl
                   font-black
-                  uppercase
+                  text-[#cc5500]
                 "
               >
-                {item.title}
-              </h3>
+                {item.day}
+              </div>
 
-              <p className="text-[#a3ad9f]">
-                {item.description}
-              </p>
+              <div>
 
-            </Card>
+                <h3
+                  className="
+                    font-['Big_Shoulders_Display']
+                    text-4xl
+                    font-black
+                    uppercase
+                  "
+                >
+                  {item.title}
+                </h3>
+
+                <p className="mt-1 text-white/50">
+                  {item.subtitle}
+                </p>
+
+                {index === 0 && item.description && (
+                  <div className="mt-6">
+
+                    <ul className="space-y-3 text-lg text-white/80">
+
+                      <li>
+                        • Warm up:
+                        easy marching,
+                        hip hinges
+                        and arm circles.
+                      </li>
+
+                      <li>
+                        • Goblet squats,
+                        push-ups,
+                        rows
+                        and plank work.
+                      </li>
+
+                      <li>
+                        • Finish with
+                        a short walk.
+                      </li>
+
+                    </ul>
+
+                  </div>
+                )}
+
+              </div>
+
+            </div>
           ))}
 
         </div>
