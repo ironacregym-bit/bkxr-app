@@ -26,7 +26,7 @@ export default function Hero() {
         "
       >
         <source
-          src="/video/hero-video.mov"
+          src="/video/HeroVideo.mp4"
           type="video/mp4"
         />
       </video>
