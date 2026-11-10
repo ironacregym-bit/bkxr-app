@@ -9,6 +9,7 @@ import Testimonials from "../components/Testimonials";
 import Faq from "../components/Faq";
 import Location from "../components/Location";
 import FreeProgram from "../components/FreeProgram";
+import MeetRob from "../components/MeetRob";
 
 export default function Home() {
   return (
