@@ -1,87 +1,81 @@
+import { Button } from "./ui/button";
+
 export default function FreeProgram() {
   const days = [
     {
       day: "1",
-      title: "BUILD THE BASE",
-      subtitle: "Full-body strength · 30 min",
-      description:
-        "Learn the fundamentals and build confidence with simple full-body strength work.",
+      title: "Build The Base",
+      subtitle: "Full Body Strength · 30 mins",
     },
     {
       day: "2",
-      title: "GET MOVING",
-      subtitle: "Conditioning · 25 min",
+      title: "Get Moving",
+      subtitle: "Conditioning · 25 mins",
     },
     {
       day: "3",
-      title: "CARRY IT",
-      subtitle: "Carries & Core · 25 min",
+      title: "Carry It",
+      subtitle: "Carries & Core · 25 mins",
     },
     {
       day: "4",
-      title: "LEGS AND HINGE",
-      subtitle: "Lower Body · 35 min",
+      title: "Legs & Hinge",
+      subtitle: "Lower Body Strength · 35 mins",
     },
     {
       day: "5",
-      title: "PUSH AND PULL",
-      subtitle: "Upper Body · 35 min",
+      title: "Push & Pull",
+      subtitle: "Upper Body Strength · 35 mins",
     },
     {
       day: "6",
-      title: "FINISHER",
-      subtitle: "Conditioning · 30 min",
+      title: "The Finisher",
+      subtitle: "Conditioning · 30 mins",
     },
     {
       day: "7",
-      title: "GET OUTSIDE",
+      title: "Get Outside",
       subtitle: "Recovery Day",
     },
   ];
 
   return (
-    <section className="py-24">
-      <div className="mx-auto max-w-7xl px-6">
+    <section className="bg-[#141a15] py-24">
 
-        <h2
-          className="
-            mb-6
-            font-['Big_Shoulders_Display']
-            text-[clamp(4rem,10vw,7rem)]
-            font-black
-            uppercase
-            leading-[0.85]
-          "
-        >
-          Your Free
-          <br />
-          7-Day Program
-        </h2>
+      <div className="mx-auto max-w-6xl px-6">
 
-        <p className="mb-8 max-w-4xl text-xl text-white/70">
-          Six short sessions and one recovery day.
-          Scale it down if you're new.
-        </p>
+        <div className="mb-16">
 
-        <div className="mb-12 flex flex-wrap gap-3">
+          <div className="mb-4 uppercase tracking-[0.2em] text-[#cc5500] font-bold">
+            FREE PROGRAM
+          </div>
 
-          <span className="rounded-full border border-white/10 px-5 py-2 text-white/70">
-            One kettlebell or loaded backpack
-          </span>
+          <h2
+            className="
+              mb-6
+              font-['Big_Shoulders_Display']
+              text-[clamp(4rem,10vw,7rem)]
+              font-black
+              uppercase
+              leading-[0.85]
+            "
+          >
+            Your Free
+            <br />
+            7 Day Program
+          </h2>
 
-          <span className="rounded-full border border-white/10 px-5 py-2 text-white/70">
-            Floor space
-          </span>
-
-          <span className="rounded-full border border-white/10 px-5 py-2 text-white/70">
-            A timer
-          </span>
+          <p className="max-w-3xl text-xl text-white/70">
+            Seven simple days designed to get you moving,
+            exercising and building momentum immediately.
+            No gym membership required.
+          </p>
 
         </div>
 
         <div className="border-t border-white/10">
 
-          {days.map((item, index) => (
+          {days.map((item) => (
             <div
               key={item.day}
               className="
@@ -90,14 +84,14 @@ export default function FreeProgram() {
                 border-b
                 border-white/10
                 py-8
-                md:grid-cols-[60px_1fr]
+                md:grid-cols-[80px_1fr]
               "
             >
 
               <div
                 className="
                   font-['Big_Shoulders_Display']
-                  text-5xl
+                  text-6xl
                   font-black
                   text-[#cc5500]
                 "
@@ -118,38 +112,9 @@ export default function FreeProgram() {
                   {item.title}
                 </h3>
 
-                <p className="mt-1 text-white/50">
+                <p className="mt-2 text-lg text-white/60">
                   {item.subtitle}
                 </p>
-
-                {index === 0 && item.description && (
-                  <div className="mt-6">
-
-                    <ul className="space-y-3 text-lg text-white/80">
-
-                      <li>
-                        • Warm up:
-                        easy marching,
-                        hip hinges
-                        and arm circles.
-                      </li>
-
-                      <li>
-                        • Goblet squats,
-                        push-ups,
-                        rows
-                        and plank work.
-                      </li>
-
-                      <li>
-                        • Finish with
-                        a short walk.
-                      </li>
-
-                    </ul>
-
-                  </div>
-                )}
 
               </div>
 
@@ -158,7 +123,54 @@ export default function FreeProgram() {
 
         </div>
 
+        <div
+          className="
+            mt-16
+            flex
+            flex-col
+            gap-6
+            md:flex-row
+            md:items-center
+            md:justify-between
+          "
+        >
+
+          <div>
+
+            <h3
+              className="
+                font-['Big_Shoulders_Display']
+                text-4xl
+                font-black
+                uppercase
+              "
+            >
+              Ready To Start?
+            </h3>
+
+            <p className="text-white/60">
+              Claim your free class and get the full program.
+            </p>
+
+          </div>
+
+          <Button
+            size="lg"
+            onClick={() =>
+              document
+                .getElementById("start")
+                ?.scrollIntoView({
+                  behavior: "smooth",
+                })
+            }
+          >
+            Get The Program
+          </Button>
+
+        </div>
+
       </div>
+
     </section>
   );
 }
