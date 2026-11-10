@@ -74,91 +74,117 @@ export default function LeadCapture() {
 
   if (success) {
     return (
-      <Card>
-
-        <h3>
+      <Card
+        className="
+          border-[#cc5500]
+          bg-[#1b231c]
+        "
+      >
+        <h3
+          className="
+            mb-4
+            font-['Big_Shoulders_Display']
+            text-5xl
+            font-black
+            uppercase
+            text-[#cc5500]
+          "
+        >
           You're In.
         </h3>
 
-        <p>
-          We've saved your details.
-          We'll be in touch about your
-          free class and next steps.
+        <p className="mb-4 text-white/80">
+          We've saved your details
+          and will be in touch shortly.
         </p>
 
-        <p>
+        <p className="text-white/60">
           Keep an eye on your inbox.
         </p>
-
       </Card>
     );
   }
 
   return (
-    <Card>
+    <Card
+      className="
+        border-white/10
+        bg-[#141a15]/80
+        backdrop-blur-md
+      "
+    >
+      <form onSubmit={handleSubmit}>
 
-      <form
-        onSubmit={handleSubmit}
-      >
-
-        <h3>
-          Start Your Free Week
+        <h3
+          className="
+            mb-2
+            font-['Big_Shoulders_Display']
+            text-4xl
+            font-black
+            uppercase
+            leading-none
+          "
+        >
+          Start Your
+          <br />
+          Free Week
         </h3>
 
-        <p>
+        <p className="mb-6 text-white/70">
           Join the Iron Acre community,
           train outdoors and claim your
-          free first class.
+          first class free.
         </p>
 
-        <Input
-          type="text"
-          placeholder="First name"
-          value={name}
-          onChange={(e) =>
-            setName(
-              e.target.value
-            )
-          }
-          required
-        />
+        <div className="space-y-4">
 
-        <div className="h-3" />
+          <Input
+            type="text"
+            placeholder="First name"
+            value={name}
+            onChange={(e) =>
+              setName(
+                e.target.value
+              )
+            }
+            required
+          />
 
-        <Input
-          type="email"
-          placeholder="Email address"
-          value={email}
-          onChange={(e) =>
-            setEmail(
-              e.target.value
-            )
-          }
-          required
-        />
+          <Input
+            type="email"
+            placeholder="Email address"
+            value={email}
+            onChange={(e) =>
+              setEmail(
+                e.target.value
+              )
+            }
+            required
+          />
 
-        <div className="h-4" />
+        </div>
 
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={loading}
-        >
-          {loading
-            ? "Submitting..."
-            : "Claim Free Class"}
-        </Button>
+        <div className="mt-5">
+
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={loading}
+          >
+            {loading
+              ? "Claiming..."
+              : "Claim Free Class"}
+          </Button>
+
+        </div>
 
         {error && (
-          <p
-            className="mt-4 text-red-400"
-          >
+          <p className="mt-4 text-red-400">
             {error}
           </p>
         )}
 
       </form>
-
     </Card>
   );
 }
