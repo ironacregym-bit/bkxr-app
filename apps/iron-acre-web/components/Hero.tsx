@@ -47,8 +47,8 @@ export default function Hero() {
           relative
           z-10
           mx-auto
-          max-w-7xl
-          px-6
+          max-w-[1180px]
+          px-5
         "
       >
         <div
@@ -56,14 +56,14 @@ export default function Hero() {
             flex
             items-center
             justify-between
-            py-6
+            py-5
           "
         >
           <div
             className="
               flex
               items-center
-              gap-4
+              gap-3
               whitespace-nowrap
             "
           >
@@ -71,8 +71,8 @@ export default function Hero() {
               src="/images/iron_acre_logo_transparent.png"
               alt="Iron Acre Gym"
               className="
-                h-16
-                w-16
+                h-12
+                w-12
                 object-contain
               "
             />
@@ -110,16 +110,17 @@ export default function Hero() {
         <div
           className="
             grid
-            min-h-[calc(100vh-120px)]
+            min-h-[calc(100vh-110px)]
             items-center
-            gap-16
-            lg:grid-cols-[1fr_430px]
+            gap-12
+            lg:grid-cols-[650px_380px]
+            lg:justify-center
           "
         >
           <div>
             <div
               className="
-                mb-4
+                mb-5
                 uppercase
                 tracking-[0.15em]
                 text-[#cc5500]
@@ -133,7 +134,7 @@ export default function Hero() {
               className="
                 mb-6
                 font-['Big_Shoulders_Display']
-                text-[clamp(5rem,17vw,10rem)]
+                text-[clamp(4.5rem,12vw,8rem)]
                 font-black
                 uppercase
                 leading-[0.82]
@@ -146,56 +147,24 @@ export default function Hero() {
 
             <p
               className="
-                max-w-2xl
+                max-w-lg
                 text-xl
-                font-medium
+                leading-relaxed
                 text-white/90
               "
             >
-              Outdoor strength and conditioning
-              overlooking the meadow. Sandbags,
-              kettlebells, sleds and yokes,
+              An outdoor gym in Westerfield,
+              Ipswich, overlooking an open meadow.
+              Sandbags, kettlebells, yokes and sleds,
               coached for everyday people.
+              Start free: 7 days of training plus
+              a free class.
             </p>
-
-            <div className="mt-8 flex flex-wrap gap-4">
-
-              <a
-                href="#start"
-                className="
-                  rounded-md
-                  bg-[#cc5500]
-                  px-6
-                  py-3
-                  font-semibold
-                  transition-colors
-                  hover:bg-[#db6712]
-                "
-              >
-                Claim Free Class
-              </a>
-
-              <a
-                href="#coach"
-                className="
-                  rounded-md
-                  border
-                  border-white/20
-                  px-6
-                  py-3
-                  font-semibold
-                  backdrop-blur-sm
-                "
-              >
-                Meet Rob
-              </a>
-
-            </div>
           </div>
 
           <div
             id="start"
-            className="w-full max-w-[430px]"
+            className="w-full max-w-[380px]"
           >
             <LeadCapture />
           </div>
