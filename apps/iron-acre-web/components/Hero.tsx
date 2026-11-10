@@ -92,18 +92,18 @@ export default function Hero() {
           <a
             href="#start"
             className="
+              hidden
+              md:inline-flex
               rounded-md
               bg-[#cc5500]
               px-5
               py-3
               font-semibold
-              text-white
-              transition
-              hover:bg-[#db6712]
             "
           >
             Start Free
           </a>
+
         </div>
 
         <div
