@@ -6,7 +6,7 @@ export default function Location() {
       id="location"
       className="bg-[#1b231c] py-24"
     >
-      <div className="mx-auto max-w-6xl px-6">
+      <div className="mx-auto max-w-5xl px-5">
 
         <div className="mb-16">
 
@@ -41,7 +41,7 @@ export default function Location() {
           <div className="overflow-hidden rounded-lg border border-white/10">
 
             <iframe
-              src="https://www.google.com/maps?q=Westerfield%20Ipswich&output=embed"
+              src="https://www.google.com/maps?q=Iron%20Acre%20Gym&output=embed"
               className="h-[450px] w-full"
               loading="lazy"
             />
