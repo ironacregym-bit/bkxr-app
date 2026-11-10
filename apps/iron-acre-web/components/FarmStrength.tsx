@@ -4,6 +4,12 @@ export default function FarmStrength() {
   return (
     <BackgroundSection
       image="/images/farm-strength.jpg"
+      overlayClassName="
+        bg-gradient-to-b
+        from-black/80
+        via-black/60
+        to-black/90
+      "
     >
       <div className="mx-auto max-w-7xl px-6">
 
