@@ -1,3 +1,5 @@
+import { Card } from "./ui/card";
+
 export default function FreeProgram() {
   const days = [
     {
@@ -45,17 +47,24 @@ export default function FreeProgram() {
   ];
 
   return (
-    <section className="py-24 bg-[#1b231c]">
-
+    <section className="bg-[#1b231c] py-24">
       <div className="mx-auto max-w-7xl px-6">
 
         <div className="mb-12">
-
           <div className="mb-4 uppercase tracking-[0.15em] text-[#cc5500] font-bold">
             FREE PROGRAM
           </div>
 
-          <h2 className="mb-6 font-['Big_Shoulders_Display'] text-[clamp(3rem,8vw,5rem)] font-black uppercase leading-none">
+          <h2
+            className="
+              mb-6
+              font-['Big_Shoulders_Display']
+              text-[clamp(3rem,8vw,5rem)]
+              font-black
+              uppercase
+              leading-none
+            "
+          >
             Your Free
             <br />
             7 Day Program
@@ -65,26 +74,31 @@ export default function FreeProgram() {
             Six short sessions and one recovery day.
             Designed to get you moving immediately.
           </p>
-
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
 
           {days.map((item) => (
-            <div
+            <Card
               key={item.day}
               className="
-                border
-                border-white/10
-                bg-black/20
-                p-6
+                border-[#2e3a2f]
+                bg-[#141a15]
               "
             >
-              <div className="mb-2 text-[#cc5500] font-bold">
+              <div className="mb-2 text-sm font-bold tracking-[0.15em] text-[#cc5500]">
                 DAY {item.day}
               </div>
 
-              <h3 className="mb-3 font-['Big_Shoulders_Display'] text-3xl font-black uppercase">
+              <h3
+                className="
+                  mb-3
+                  font-['Big_Shoulders_Display']
+                  text-3xl
+                  font-black
+                  uppercase
+                "
+              >
                 {item.title}
               </h3>
 
@@ -92,13 +106,12 @@ export default function FreeProgram() {
                 {item.description}
               </p>
 
-            </div>
+            </Card>
           ))}
 
         </div>
 
       </div>
-
     </section>
   );
 }
