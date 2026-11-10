@@ -27,36 +27,70 @@ export default function HowItWorks() {
   ];
 
   return (
-    <section className="ia-section">
-      <div className="ia-container">
+    <section className="py-24">
+      <div className="mx-auto max-w-7xl px-6">
 
-        <div className="ia-eyebrow">
-          HOW IT WORKS
+        <div className="mb-12">
+
+          <div className="mb-4 uppercase tracking-[0.15em] text-[#cc5500] font-bold">
+            HOW IT WORKS
+          </div>
+
+          <h2
+            className="
+              mb-6
+              font-['Big_Shoulders_Display']
+              text-[clamp(3rem,8vw,5rem)]
+              font-black
+              uppercase
+              leading-none
+            "
+          >
+            Your Journey
+            Starts Here
+          </h2>
+
+          <p className="max-w-3xl text-xl text-white/90">
+            Everything is designed to help you build strength,
+            fitness and consistency without feeling overwhelmed.
+          </p>
+
         </div>
 
-        <h2>
-          Your Journey Starts Here
-        </h2>
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
 
-        <div className="ia-cards">
           {steps.map((step) => (
             <div
               key={step.title}
-              className="ia-card"
+              className="
+                border-l-4
+                border-[#cc5500]
+                pl-4
+              "
             >
-              <div className="ia-eyebrow">
+              <div className="mb-2 text-sm uppercase tracking-[0.15em] text-[#cc5500] font-bold">
                 {step.label}
               </div>
 
-              <h3>
+              <h3
+                className="
+                  mb-3
+                  font-['Big_Shoulders_Display']
+                  text-3xl
+                  font-black
+                  uppercase
+                "
+              >
                 {step.title}
               </h3>
 
-              <p>
+              <p className="text-[#a3ad9f]">
                 {step.description}
               </p>
+
             </div>
           ))}
+
         </div>
 
       </div>
