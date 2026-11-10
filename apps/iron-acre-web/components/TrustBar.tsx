@@ -1,27 +1,37 @@
 export default function TrustBar() {
   return (
-    <section className="border-y border-[#2e3a2f] py-8">
+    <section className="border-y border-white/10">
 
-      <div className="mx-auto max-w-7xl px-6">
+      <div className="mx-auto max-w-[1400px] px-5">
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div
+          className="
+            flex
+            flex-wrap
+            items-center
+            justify-center
+            gap-x-12
+            gap-y-4
+            py-8
 
-          <div className="border-l-4 border-[#cc5500] pl-4">
-            Train outdoors overlooking the meadow
-          </div>
+            uppercase
+            tracking-[0.15em]
+            text-white/70
+          "
+        >
+          <span>Outdoor Gym</span>
 
-          <div className="border-l-4 border-[#cc5500] pl-4">
-            First class free
-          </div>
+          <span>•</span>
 
-          <div className="border-l-4 border-[#cc5500] pl-4">
-            Sandbags, sleds and yokes
-          </div>
+          <span>First Class Free</span>
 
-          <div className="border-l-4 border-[#cc5500] pl-4">
-            Friendly coaching
-          </div>
+          <span>•</span>
 
+          <span>Mon & Wed 6:30pm</span>
+
+          <span>•</span>
+
+          <span>Coached Sessions</span>
         </div>
 
       </div>
