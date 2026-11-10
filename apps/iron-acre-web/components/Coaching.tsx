@@ -6,11 +6,11 @@ export default function Coaching() {
   return (
     <section
       id="coaching"
-      className="py-24"
+      className="bg-[#d7d9ce] py-24 text-[#0f1812]"
     >
-      <div className="mx-auto max-w-7xl px-6">
+      <div className="mx-auto max-w-6xl px-6">
 
-        <div className="mb-12">
+        <div className="mb-16">
 
           <h2
             className="
@@ -27,67 +27,80 @@ export default function Coaching() {
             20 Places.
           </h2>
 
-          <p className="max-w-4xl text-xl text-white/70">
-            A coach, a plan and a community,
+          <p className="max-w-4xl text-xl text-black/70">
+            A coach, a plan and a crew,
             adapted to the equipment you have.
+            Whatever you train with, the aim
+            is farm strength.
             We cap coaching at 20 members so
-            everyone receives personal attention.
+            everyone gets real attention.
           </p>
 
         </div>
 
         <Card
           className="
+            border-2
             border-[#cc5500]
             bg-transparent
-            p-10
+            p-8
+            text-[#0f1812]
+            shadow-none
           "
         >
           <div className="grid gap-12 lg:grid-cols-2">
 
             <div>
 
-              <div className="mb-6">
+              <div className="mb-8">
 
-                <span className="mr-3 text-4xl text-white/30 line-through">
-                  £100
-                </span>
+                <div className="mb-2 uppercase tracking-[0.15em] text-[#cc5500] font-bold">
+                  Founding Member Rate
+                </div>
 
-                <span
-                  className="
-                    font-['Big_Shoulders_Display']
-                    text-8xl
-                    font-black
-                    text-[#cc5500]
-                  "
-                >
-                  £75
-                </span>
+                <div className="flex flex-wrap items-end gap-3">
 
-                <span className="ml-2 text-2xl text-white/60">
-                  / month
-                </span>
+                  <span className="text-4xl text-black/30 line-through">
+                    £100
+                  </span>
+
+                  <span
+                    className="
+                      font-['Big_Shoulders_Display']
+                      text-8xl
+                      font-black
+                      leading-none
+                      text-[#cc5500]
+                    "
+                  >
+                    £75
+                  </span>
+
+                  <span className="mb-2 text-3xl text-black/60">
+                    / month
+                  </span>
+
+                </div>
 
               </div>
 
-              <ul className="space-y-4 text-lg text-white/80">
+              <ul className="space-y-5 text-xl text-black/80">
 
                 <li>
-                  • Training adapted to your
-                  equipment and goals
+                  • Training adapted to your equipment,
+                  aimed at farm strength
                 </li>
 
                 <li>
-                  • 2 to 4 strength sessions
-                  each week
+                  • 2 to 3 strength sessions each week
                 </li>
 
                 <li>
-                  • Cardio guidance
+                  • 1 to 2 cardio sessions each week
                 </li>
 
                 <li>
-                  • Nutrition support
+                  • Calories and macros worked out for you
                 </li>
 
                 <li>
@@ -108,13 +121,7 @@ export default function Coaching() {
 
             <div>
 
-              <h3
-                className="
-                  mb-6
-                  font-semibold
-                  text-2xl
-                "
-              >
+              <h3 className="mb-8 text-3xl font-semibold">
                 Only 20 places.
                 Apply now to be considered.
               </h3>
@@ -123,17 +130,21 @@ export default function Coaching() {
 
                 <Input
                   placeholder="First name"
+                  className="bg-white"
                 />
 
                 <Input
                   placeholder="Email address"
+                  className="bg-white"
                 />
 
                 <Button
                   className="
-                    h-12
+                    h-14
                     w-full
+                    bg-[#cc5500]
                     text-lg
+                    hover:bg-[#db6712]
                   "
                 >
                   Apply For My Place
@@ -141,10 +152,9 @@ export default function Coaching() {
 
               </div>
 
-              <p className="mt-4 text-white/50">
+              <p className="mt-6 text-black/50">
                 Not ready?
-                Start with the free 7 day
-                program first.
+                Start with the free 7 day program first.
               </p>
 
             </div>
@@ -154,6 +164,7 @@ export default function Coaching() {
         </Card>
 
       </div>
+
     </section>
   );
 }
