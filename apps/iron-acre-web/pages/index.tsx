@@ -13,29 +13,33 @@ import FreeProgram from "../components/FreeProgram";
 export default function Home() {
   return (
     <>
-  <div className="mx-auto max-w-[1800px] px-4 lg:px-8">
-    <Hero />
-  
-    <TrustBar />
-  
-    <GymWithAView />
-  
-    <FarmStrength />
-  
-    <HowItWorks />
-  
-    <FreeProgram />
-  
-    <Community />
-  
-    <Coaching />
-  
-    <Testimonials />
-  
-    <Faq />
-  
-    <Location />
-  <div/>
+      <div className="mx-auto max-w-[1800px] px-4 lg:px-8">
+
+        <Hero />
+
+        <TrustBar />
+
+        <MeetRob />
+
+        <GymWithAView />
+
+        <FarmStrength />
+
+        <HowItWorks />
+
+        <FreeProgram />
+
+        <Community />
+
+        <Coaching />
+
+        <Testimonials />
+
+        <Faq />
+
+        <Location />
+
+      </div>
     </>
   );
 }
