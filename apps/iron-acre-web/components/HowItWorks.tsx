@@ -1,92 +1,99 @@
 export default function HowItWorks() {
   const steps = [
     {
-      label: "Today",
-      title: "Claim Your Free Class",
+      label: "TODAY",
+      title: "GET YOUR PLAN",
       description:
-        "Register your details and we'll send you everything you need to get started.",
+        "Your 7-day program unlocks instantly. Claim your free class spot to use in your first week.",
     },
     {
-      label: "Week 1",
-      title: "Train With Us",
+      label: "DAYS 1 TO 3",
+      title: "TRAIN. CHECK IN.",
       description:
-        "Join your first class, meet the community and learn how we coach.",
+        "Complete your sessions, learn the basics and share your progress with the community.",
     },
     {
-      label: "Month 1",
-      title: "Build Momentum",
+      label: "DAY 4",
+      title: "SEE INSIDE COACHING",
       description:
-        "Start building strength, fitness and consistency with support from the group.",
+        "Discover what personalised coaching looks like with no pressure or commitment.",
     },
     {
-      label: "Long Term",
-      title: "Get Farm Strong",
+      label: "DAY 7",
+      title: "CHOOSE YOUR NEXT STEP",
       description:
-        "Become stronger, fitter and more resilient for everyday life.",
+        "Look back at your week, then continue with coaching, classes or community support.",
     },
   ];
 
   return (
     <section className="py-24">
+
       <div className="mx-auto max-w-7xl px-6">
 
-        <div className="mb-12">
+        <h2
+          className="
+            mb-8
+            font-['Big_Shoulders_Display']
+            text-[clamp(4rem,10vw,7rem)]
+            font-black
+            uppercase
+            leading-[0.85]
+          "
+        >
+          How It Works
+        </h2>
 
-          <div className="mb-4 uppercase tracking-[0.15em] text-[#cc5500] font-bold">
-            HOW IT WORKS
-          </div>
+        <p className="mb-16 max-w-3xl text-xl text-white/70">
+          It all runs from the day you join,
+          so there's never a wrong time to start.
+        </p>
 
-          <h2
-            className="
-              mb-6
-              font-['Big_Shoulders_Display']
-              text-[clamp(3rem,8vw,5rem)]
-              font-black
-              uppercase
-              leading-none
-            "
-          >
-            Your Journey
-            Starts Here
-          </h2>
-
-          <p className="max-w-3xl text-xl text-white/90">
-            Everything is designed to help you build strength,
-            fitness and consistency without feeling overwhelmed.
-          </p>
-
-        </div>
-
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+        <div className="border-t border-white/10">
 
           {steps.map((step) => (
             <div
-              key={step.title}
+              key={step.label}
               className="
-                border-l-4
-                border-[#cc5500]
-                pl-4
+                grid
+                gap-6
+                border-b
+                border-white/10
+                py-10
+                md:grid-cols-[180px_1fr]
               "
             >
-              <div className="mb-2 text-sm uppercase tracking-[0.15em] text-[#cc5500] font-bold">
+              <div
+                className="
+                  font-['Big_Shoulders_Display']
+                  text-4xl
+                  font-black
+                  uppercase
+                  text-[#cc5500]
+                "
+              >
                 {step.label}
               </div>
 
-              <h3
-                className="
-                  mb-3
-                  font-['Big_Shoulders_Display']
-                  text-3xl
-                  font-black
-                  uppercase
-                "
-              >
-                {step.title}
-              </h3>
+              <div>
 
-              <p className="text-[#a3ad9f]">
-                {step.description}
-              </p>
+                <h3
+                  className="
+                    mb-3
+                    font-['Big_Shoulders_Display']
+                    text-4xl
+                    font-black
+                    uppercase
+                  "
+                >
+                  {step.title}
+                </h3>
+
+                <p className="max-w-4xl text-xl text-white/70">
+                  {step.description}
+                </p>
+
+              </div>
 
             </div>
           ))}
@@ -94,6 +101,7 @@ export default function HowItWorks() {
         </div>
 
       </div>
+
     </section>
   );
 }
