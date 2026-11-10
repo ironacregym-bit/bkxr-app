@@ -1,3 +1,5 @@
+import { Container } from "./ui/container";
+
 export default function HowItWorks() {
   const steps = [
     {
@@ -29,78 +31,87 @@ export default function HowItWorks() {
   return (
     <section className="py-24">
 
-      <div className="mx-auto max-w-7xl px-6">
+      <Container>
 
-        <h2
-          className="
-            mb-8
-            font-['Big_Shoulders_Display']
-            text-[clamp(4rem,10vw,7rem)]
-            font-black
-            uppercase
-            leading-[0.85]
-          "
-        >
-          How It Works
-        </h2>
+        <div className="lg:pl-32">
 
-        <p className="mb-16 max-w-3xl text-xl text-white/70">
-          It all runs from the day you join,
-          so there's never a wrong time to start.
-        </p>
+          <div className="mb-4 uppercase tracking-[0.15em] text-[#cc5500] font-bold">
+            HOW IT WORKS
+          </div>
 
-        <div className="border-t border-white/10">
+          <h2
+            className="
+              mb-8
+              font-['Big_Shoulders_Display']
+              text-[clamp(4rem,8vw,7rem)]
+              font-black
+              uppercase
+              leading-[0.85]
+            "
+          >
+            Your Journey
+            Starts Here
+          </h2>
 
-          {steps.map((step) => (
-            <div
-              key={step.label}
-              className="
-                grid
-                gap-6
-                border-b
-                border-white/10
-                py-10
-                md:grid-cols-[180px_1fr]
-              "
-            >
+          <p className="mb-16 max-w-3xl text-xl text-white/70">
+            It all runs from the day you join,
+            so there's never a wrong time to start.
+          </p>
+
+          <div className="border-t border-white/10">
+
+            {steps.map((step) => (
               <div
+                key={step.label}
                 className="
-                  font-['Big_Shoulders_Display']
-                  text-4xl
-                  font-black
-                  uppercase
-                  text-[#cc5500]
+                  grid
+                  gap-6
+                  border-b
+                  border-white/10
+                  py-10
+                  md:grid-cols-[220px_1fr]
                 "
               >
-                {step.label}
-              </div>
-
-              <div>
-
-                <h3
+                <div
                   className="
-                    mb-3
                     font-['Big_Shoulders_Display']
                     text-4xl
                     font-black
                     uppercase
+                    text-[#cc5500]
                   "
                 >
-                  {step.title}
-                </h3>
+                  {step.label}
+                </div>
 
-                <p className="max-w-4xl text-xl text-white/70">
-                  {step.description}
-                </p>
+                <div>
+
+                  <h3
+                    className="
+                      mb-3
+                      font-['Big_Shoulders_Display']
+                      text-4xl
+                      font-black
+                      uppercase
+                    "
+                  >
+                    {step.title}
+                  </h3>
+
+                  <p className="max-w-3xl text-xl text-white/70">
+                    {step.description}
+                  </p>
+
+                </div>
 
               </div>
+            ))}
 
-            </div>
-          ))}
+          </div>
 
         </div>
 
-      </div>
+      </Container>
 
     </section>
   );
