@@ -4,6 +4,7 @@ export default function Community() {
   return (
     <BackgroundSection
       image="/images/community.jpg"
+      overlayClassName="bg-black/65"
     >
       <div className="mx-auto max-w-7xl px-6">
 
