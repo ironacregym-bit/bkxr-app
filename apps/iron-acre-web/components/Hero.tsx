@@ -36,8 +36,8 @@ export default function Hero() {
           absolute
           inset-0
           bg-gradient-to-b
-          from-black/40
-          via-black/30
+          from-black/60
+          via-black/40
           to-[#141a15]
         "
       />
@@ -56,7 +56,7 @@ export default function Hero() {
             flex
             items-center
             justify-between
-            py-8
+            py-6
           "
         >
           <div
@@ -71,8 +71,8 @@ export default function Hero() {
               src="/images/iron_acre_logo_transparent.png"
               alt="Iron Acre Gym"
               className="
-                h-14
-                w-14
+                h-16
+                w-16
                 object-contain
               "
             />
@@ -80,7 +80,7 @@ export default function Hero() {
             <span
               className="
                 font-['Big_Shoulders_Display']
-                text-3xl
+                text-[2rem]
                 font-black
                 uppercase
               "
@@ -99,11 +99,12 @@ export default function Hero() {
               px-5
               py-3
               font-semibold
+              transition-colors
+              hover:bg-[#db6712]
             "
           >
             Start Free
           </a>
-
         </div>
 
         <div
@@ -112,7 +113,7 @@ export default function Hero() {
             min-h-[calc(100vh-120px)]
             items-center
             gap-16
-            lg:grid-cols-[1.2fr_0.8fr]
+            lg:grid-cols-[1fr_430px]
           "
         >
           <div>
@@ -151,18 +152,55 @@ export default function Hero() {
                 text-white/90
               "
             >
-              An outdoor gym in Westerfield,
-              Ipswich, overlooking an open
-              meadow. Sandbags, kettlebells,
-              yokes and sleds, coached for
-              everyday people.
+              Outdoor strength and conditioning
+              overlooking the meadow. Sandbags,
+              kettlebells, sleds and yokes,
+              coached for everyday people.
             </p>
+
+            <div className="mt-8 flex flex-wrap gap-4">
+
+              <a
+                href="#start"
+                className="
+                  rounded-md
+                  bg-[#cc5500]
+                  px-6
+                  py-3
+                  font-semibold
+                  transition-colors
+                  hover:bg-[#db6712]
+                "
+              >
+                Claim Free Class
+              </a>
+
+              <a
+                href="#coach"
+                className="
+                  rounded-md
+                  border
+                  border-white/20
+                  px-6
+                  py-3
+                  font-semibold
+                  backdrop-blur-sm
+                "
+              >
+                Meet Rob
+              </a>
+
+            </div>
           </div>
 
-          <div id="start">
+          <div
+            id="start"
+            className="w-full max-w-[430px]"
+          >
             <LeadCapture />
           </div>
         </div>
+
       </div>
     </section>
   );
