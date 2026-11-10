@@ -1,74 +1,79 @@
+import { BackgroundSection } from "./ui/background-section";
+
 export default function Community() {
   return (
-    <section
-      id="community"
-      className="py-24"
+    <BackgroundSection
+      image="/images/community.jpg"
     >
       <div className="mx-auto max-w-7xl px-6">
 
-        <div className="max-w-3xl mb-12">
+        <div className="max-w-4xl">
 
           <div className="mb-4 uppercase tracking-[0.15em] text-[#cc5500] font-bold">
             COMMUNITY
           </div>
 
-          <h2 className="mb-6 font-['Big_Shoulders_Display'] text-[clamp(3rem,8vw,5rem)] font-black uppercase leading-none">
-            Nobody Trains
-            <br />
-            Alone Here.
+          <h2
+            className="
+              mb-6
+              font-['Big_Shoulders_Display']
+              text-[clamp(4rem,8vw,7rem)]
+              font-black
+              uppercase
+              leading-none
+            "
+          >
+            Nobody
+            Trains Alone
           </h2>
 
-          <p className="text-xl text-white/90">
-            The Iron Acre community is free
-            from day one.
+          <p className="max-w-3xl text-xl text-white/90">
+            The reason most people fail
+            isn't effort.
+            It's trying to do everything
+            alone.
           </p>
 
         </div>
 
-        <div className="grid gap-10 md:grid-cols-3">
+        <div className="mt-12 grid gap-8 md:grid-cols-3">
 
-          <div className="border-l-4 border-[#cc5500] pl-4">
-
+          <div>
             <h3 className="mb-3 font-['Big_Shoulders_Display'] text-3xl font-black uppercase">
               Daily Check Ins
             </h3>
 
-            <p className="text-[#a3ad9f]">
-              Stay accountable and support
-              each other.
+            <p className="text-white/80">
+              Accountability and support
+              from people on the same journey.
             </p>
-
           </div>
 
-          <div className="border-l-4 border-[#cc5500] pl-4">
-
+          <div>
             <h3 className="mb-3 font-['Big_Shoulders_Display'] text-3xl font-black uppercase">
               Coach Access
             </h3>
 
-            <p className="text-[#a3ad9f]">
-              Get answers and guidance
+            <p className="text-white/80">
+              Ask questions and get support
               from a real coach.
             </p>
-
           </div>
 
-          <div className="border-l-4 border-[#cc5500] pl-4">
-
+          <div>
             <h3 className="mb-3 font-['Big_Shoulders_Display'] text-3xl font-black uppercase">
               Challenges
             </h3>
 
-            <p className="text-[#a3ad9f]">
-              Monthly events and goals to
-              keep progressing.
+            <p className="text-white/80">
+              Monthly events and goals
+              that keep momentum high.
             </p>
-
           </div>
 
         </div>
 
       </div>
-    </section>
+    </BackgroundSection>
   );
 }
