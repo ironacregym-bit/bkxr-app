@@ -14,7 +14,6 @@ import MeetRob from "../components/MeetRob";
 export default function Home() {
   return (
     <>
-      <div className="mx-auto max-w-[1800px] px-4 lg:px-8">
 
         <Hero />
 
@@ -40,7 +39,6 @@ export default function Home() {
 
         <Location />
 
-      </div>
     </>
   );
 }
