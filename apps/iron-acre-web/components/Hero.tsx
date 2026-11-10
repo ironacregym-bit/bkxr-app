@@ -11,19 +11,25 @@ export default function Hero() {
         text-white
       "
     >
-      <div
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
         className="
           absolute
           inset-0
-          bg-cover
-          bg-center
+          h-full
+          w-full
+          object-cover
           opacity-40
         "
-        style={{
-          backgroundImage:
-            "url('/images/hero.jpg')",
-        }}
-      />
+      >
+        <source
+          src="/video/hero-video.mov"
+          type="video/mp4"
+        />
+      </video>
 
       <div
         className="
