@@ -1,12 +1,14 @@
+import { Container } from "./ui/container";
+
 export default function MeetRob() {
   return (
     <section
       id="coach"
-      className="bg-[#141a15] py-24"
+      className="bg-[#141a15] py-16"
     >
-      <div className="mx-auto max-w-5xl px-5">
+      <Container>
 
-        <div className="grid gap-16 lg:grid-cols-[420px_1fr] lg:items-center">
+        <div className="grid gap-8 lg:grid-cols-[280px_1fr] lg:items-center">
 
           <div>
 
@@ -14,11 +16,11 @@ export default function MeetRob() {
               src="/images/rob.jpg"
               alt="Rob coaching at Iron Acre Gym"
               className="
-                h-[550px]
+                h-[360px]
                 w-full
                 rounded-lg
                 object-cover
-                shadow-2xl
+                shadow-xl
               "
             />
 
@@ -26,114 +28,50 @@ export default function MeetRob() {
 
           <div>
 
-            <div className="mb-4 uppercase tracking-[0.15em] text-[#cc5500] font-bold">
-              Meet Your Coach
+            <div className="mb-3 uppercase tracking-[0.15em] text-[#cc5500] text-sm font-bold">
+              MEET YOUR COACH
             </div>
 
             <h2
               className="
-                mb-6
+                mb-4
                 font-['Big_Shoulders_Display']
-                text-[clamp(4rem,8vw,7rem)]
+                text-[clamp(2.5rem,5vw,4rem)]
                 font-black
                 uppercase
-                leading-[0.85]
+                leading-none
               "
             >
               Meet Rob
             </h2>
 
-            <p className="mb-8 text-xl text-white/90">
+            <p className="mb-4 text-base text-white/80">
               Level 3 Personal Trainer,
               outdoor strength coach and
               founder of Iron Acre Gym.
             </p>
 
-            <div className="space-y-6 text-lg text-white/70">
+            <div className="space-y-3 text-base text-white/65">
 
               <p>
                 Rob specialises in practical,
                 functional strength training using
                 sandbags, kettlebells, sleds,
-                yokes and carries rather than
-                rows of machines.
+                yokes and carries.
               </p>
 
               <p>
                 Every session is coached.
                 Every member matters.
                 Every workout can be scaled
-                to your current fitness level.
+                to your ability.
               </p>
 
               <p>
-                Whether you're completely new to
-                training or have years of experience,
-                the goal is the same:
-                become stronger, fitter and more
-                capable in everyday life.
+                The goal is simple:
+                become stronger, fitter and
+                more capable in everyday life.
               </p>
-
-            </div>
-
-            <div className="mt-10 grid gap-6 sm:grid-cols-3">
-
-              <div className="border-l-2 border-[#cc5500] pl-4">
-
-                <div
-                  className="
-                    font-['Big_Shoulders_Display']
-                    text-3xl
-                    font-black
-                    uppercase
-                  "
-                >
-                  Level 3
-                </div>
-
-                <p className="text-sm text-white/60">
-                  Personal Trainer
-                </p>
-
-              </div>
-
-              <div className="border-l-2 border-[#cc5500] pl-4">
-
-                <div
-                  className="
-                    font-['Big_Shoulders_Display']
-                    text-3xl
-                    font-black
-                    uppercase
-                  "
-                >
-                  Outdoor
-                </div>
-
-                <p className="text-sm text-white/60">
-                  Strength Coach
-                </p>
-
-              </div>
-
-              <div className="border-l-2 border-[#cc5500] pl-4">
-
-                <div
-                  className="
-                    font-['Big_Shoulders_Display']
-                    text-3xl
-                    font-black
-                    uppercase
-                  "
-                >
-                  Founder
-                </div>
-
-                <p className="text-sm text-white/60">
-                  Iron Acre Gym
-                </p>
-
-              </div>
 
             </div>
 
@@ -141,7 +79,7 @@ export default function MeetRob() {
 
         </div>
 
-      </div>
+      </Container>
     </section>
   );
 }
