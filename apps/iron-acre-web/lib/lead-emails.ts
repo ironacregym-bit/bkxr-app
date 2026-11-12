@@ -62,24 +62,28 @@ export async function sendFreeProgramEmail(
       </p>
 
       <p>
-        Thanks for claiming your
-        free 7 day program.
+        Thanks for claiming your free
+        7 day program.
       </p>
 
       <p>
-        Download it here:
+        Download your guide here:
       </p>
 
       <p>
         <a href="${process.env.IRON_ACRE_PROGRAM_URL}">
-          Get Your Program
+          Download Program
         </a>
       </p>
 
       <p>
-        If you'd like to claim
-        your free class, simply
-        reply to this email.
+        You also qualify for a
+        free class.
+      </p>
+
+      <p>
+        Simply reply to this
+        email to book your spot.
       </p>
     `,
   });
