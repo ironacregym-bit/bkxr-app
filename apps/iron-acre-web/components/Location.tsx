@@ -1,48 +1,47 @@
 import { Button } from "./ui/button";
+import { Container } from "./ui/container";
 
 export default function Location() {
   return (
     <section
       id="location"
-      className="bg-[#1b231c] py-24"
+      className="bg-[#1b231c] py-16"
     >
-      <div className="mx-auto max-w-5xl px-5">
+      <Container>
 
-        <div className="mb-16">
+        <div className="mb-10">
 
-          <div className="mb-4 uppercase tracking-[0.15em] text-[#cc5500] font-bold">
+          <div className="mb-3 uppercase tracking-[0.15em] text-[#cc5500] text-sm font-bold">
             FIND US
           </div>
 
           <h2
             className="
-              mb-6
+              mb-4
               font-['Big_Shoulders_Display']
-              text-[clamp(4rem,8vw,7rem)]
+              text-[clamp(2.5rem,5vw,4rem)]
               font-black
               uppercase
-              leading-[0.85]
+              leading-none
             "
           >
-            Westerfield.
-            <br />
-            Ipswich.
+            Westerfield, Ipswich
           </h2>
 
-          <p className="max-w-3xl text-xl text-white/70">
+          <p className="max-w-2xl text-base text-white/65">
             Train outdoors overlooking the meadow,
             surrounded by farmland and open space.
           </p>
 
         </div>
 
-        <div className="grid gap-12 lg:grid-cols-2">
+        <div className="grid gap-8 lg:grid-cols-2">
 
           <div className="overflow-hidden rounded-lg border border-white/10">
 
             <iframe
               src="https://www.google.com/maps?q=Iron%20Acre%20Gym&output=embed"
-              className="h-[450px] w-full"
+              className="h-[350px] w-full"
               loading="lazy"
             />
 
@@ -50,7 +49,7 @@ export default function Location() {
 
           <div>
 
-            <div className="space-y-8">
+            <div className="space-y-6">
 
               <div>
 
@@ -58,7 +57,7 @@ export default function Location() {
                   className="
                     mb-2
                     font-['Big_Shoulders_Display']
-                    text-4xl
+                    text-2xl
                     font-black
                     uppercase
                   "
@@ -66,7 +65,7 @@ export default function Location() {
                   Classes
                 </h3>
 
-                <p className="text-white/70">
+                <p className="text-white/65">
                   Monday & Wednesday
                   <br />
                   6:30pm to 7:30pm
@@ -80,7 +79,7 @@ export default function Location() {
                   className="
                     mb-2
                     font-['Big_Shoulders_Display']
-                    text-4xl
+                    text-2xl
                     font-black
                     uppercase
                   "
@@ -88,7 +87,9 @@ export default function Location() {
                   Location
                 </h3>
 
-                <p className="text-white/70">
+                <p className="text-white/65">
+                  Iron Acre Gym
+                  <br />
                   Westerfield
                   <br />
                   Ipswich
@@ -96,32 +97,10 @@ export default function Location() {
 
               </div>
 
-              <div>
-
-                <h3
-                  className="
-                    mb-2
-                    font-['Big_Shoulders_Display']
-                    text-4xl
-                    font-black
-                    uppercase
-                  "
-                >
-                  Contact
-                </h3>
-
-                <p className="text-white/70">
-                  Claim your free class and
-                  we'll get in touch.
-                </p>
-
-              </div>
-
               <Button
                 className="
-                  h-14
+                  h-11
                   bg-[#cc5500]
-                  px-8
                   hover:bg-[#db6712]
                 "
               >
@@ -134,7 +113,8 @@ export default function Location() {
 
         </div>
 
-      </div>
+      </Container>
+
     </section>
   );
 }
