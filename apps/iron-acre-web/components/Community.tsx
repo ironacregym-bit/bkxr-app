@@ -1,4 +1,5 @@
 import { BackgroundSection } from "./ui/background-section";
+import { Container } from "./ui/container";
 
 export default function Community() {
   return (
@@ -11,116 +12,76 @@ export default function Community() {
         to-black/80
       "
     >
-      <div className="mx-auto max-w-6xl px-6">
+      <Container>
 
-        <div className="max-w-4xl">
+        <div className="mb-10">
 
-          <div className="mb-4 uppercase tracking-[0.15em] text-[#cc5500] font-bold">
+          <div className="mb-3 uppercase tracking-[0.15em] text-[#cc5500] text-sm font-bold">
             COMMUNITY
           </div>
 
           <h2
             className="
-              mb-6
+              mb-4
               font-['Big_Shoulders_Display']
-              text-[clamp(4rem,10vw,7rem)]
+              text-[clamp(2.5rem,5vw,4rem)]
               font-black
               uppercase
-              leading-[0.85]
+              leading-none
             "
           >
-            Nobody Trains
-            <br />
-            Alone.
+            Nobody Trains Alone.
           </h2>
 
-          <p className="max-w-3xl text-xl text-white/90">
-            The reason most people fail isn't a lack of effort.
+          <p className="max-w-2xl text-base text-white/80">
+            The reason most people fail isn't effort.
             It's trying to do everything alone.
           </p>
 
-          <p className="mt-6 max-w-3xl text-lg text-white/70">
-            Iron Acre is built around accountability,
-            support and showing up consistently.
-            Whether you're lifting for the first time
-            or you've trained for years, there is
-            always somebody in your corner.
-          </p>
-
         </div>
 
-        <div className="mt-20 grid gap-10 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-3">
 
-          <div className="border-l-2 border-[#cc5500] pl-5">
+          <div>
 
-            <h3
-              className="
-                mb-4
-                font-['Big_Shoulders_Display']
-                text-4xl
-                font-black
-                uppercase
-              "
-            >
-              Daily
-              Check-ins
+            <h3 className="mb-2 font-['Big_Shoulders_Display'] text-xl font-black uppercase">
+              Daily Check-ins
             </h3>
 
-            <p className="text-white/80">
-              Stay accountable. Share your wins,
-              ask questions and keep momentum
-              moving forward.
+            <p className="text-white/65">
+              Accountability and support
+              from people on the same journey.
             </p>
 
           </div>
 
-          <div className="border-l-2 border-[#cc5500] pl-5">
+          <div>
 
-            <h3
-              className="
-                mb-4
-                font-['Big_Shoulders_Display']
-                text-4xl
-                font-black
-                uppercase
-              "
-            >
-              Coach
-              Access
+            <h3 className="mb-2 font-['Big_Shoulders_Display'] text-xl font-black uppercase">
+              Coach Access
             </h3>
 
-            <p className="text-white/80">
-              Direct support from a real coach
-              whenever you need guidance.
+            <p className="text-white/65">
+              Direct support from a real coach.
             </p>
 
           </div>
 
-          <div className="border-l-2 border-[#cc5500] pl-5">
+          <div>
 
-            <h3
-              className="
-                mb-4
-                font-['Big_Shoulders_Display']
-                text-4xl
-                font-black
-                uppercase
-              "
-            >
-              Events &
+            <h3 className="mb-2 font-['Big_Shoulders_Display'] text-xl font-black uppercase">
               Challenges
             </h3>
 
-            <p className="text-white/80">
-              Monthly challenges, community events
-              and opportunities to train together.
+            <p className="text-white/65">
+              Monthly events and community goals.
             </p>
 
           </div>
 
         </div>
 
-      </div>
+      </Container>
     </BackgroundSection>
   );
 }
