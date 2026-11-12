@@ -1,4 +1,5 @@
 import { Card } from "./ui/card";
+import { Container } from "./ui/container";
 
 const testimonials = [
   {
@@ -25,55 +26,47 @@ const testimonials = [
 
 export default function Testimonials() {
   return (
-    <section className="py-24 bg-[#141a15]">
+    <section className="bg-[#141a15] py-16">
 
-      <div className="mx-auto max-w-7xl px-6">
+      <Container>
 
-        <div className="max-w-3xl mb-12">
+        <div className="mb-10">
 
-          <div className="mb-4 uppercase tracking-[0.15em] text-[#cc5500] font-bold">
+          <div className="mb-3 uppercase tracking-[0.15em] text-[#cc5500] text-sm font-bold">
             TESTIMONIALS
           </div>
 
           <h2
             className="
-              mb-6
+              mb-4
               font-['Big_Shoulders_Display']
-              text-[clamp(3rem,8vw,5rem)]
+              text-[clamp(2.5rem,5vw,4rem)]
               font-black
               uppercase
               leading-none
             "
           >
-            Members
-            Stick Around
+            What Members Say
           </h2>
-
-          <p className="text-xl text-white/90">
-            Real people. Real results.
-          </p>
 
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
 
           {testimonials.map((item) => (
             <Card
               key={item.name}
               className="
-                border-[#2e3a2f]
+                border-white/10
                 bg-[#1b231c]
+                p-5
               "
             >
-              <div className="text-5xl text-[#cc5500] leading-none">
-                "
-              </div>
-
-              <p className="mt-4 text-lg text-white/90">
-                {item.quote}
+              <p className="mb-4 text-base text-white/80">
+                "{item.quote}"
               </p>
 
-              <div className="mt-6 font-semibold text-[#cc5500]">
+              <div className="text-sm uppercase tracking-wide text-[#cc5500]">
                 {item.name}
               </div>
 
@@ -82,7 +75,7 @@ export default function Testimonials() {
 
         </div>
 
-      </div>
+      </Container>
 
     </section>
   );
