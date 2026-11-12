@@ -19,20 +19,9 @@ export async function sendLeadNotification(
     html: `
       <h2>New Lead</h2>
 
-      <p>
-        <strong>Name:</strong>
-        ${name}
-      </p>
-
-      <p>
-        <strong>Email:</strong>
-        ${email}
-      </p>
-
-      <p>
-        <strong>Source:</strong>
-        ${source}
-      </p>
+      <p><strong>Name:</strong> ${name}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Source:</strong> ${source}</p>
     `,
   });
 }
@@ -53,9 +42,7 @@ export async function sendFreeProgramEmail(
       "Your Free 7 Day Program",
 
     html: `
-      <h1>
-        Welcome to Iron Acre
-      </h1>
+      <h1>Welcome to Iron Acre</h1>
 
       <p>
         Hi ${name},
@@ -67,7 +54,7 @@ export async function sendFreeProgramEmail(
       </p>
 
       <p>
-        Download your guide here:
+        Download it here:
       </p>
 
       <p>
@@ -77,13 +64,75 @@ export async function sendFreeProgramEmail(
       </p>
 
       <p>
-        You also qualify for a
-        free class.
+        Your first class is free.
+        Simply reply to this email
+        if you'd like to book in.
+      </p>
+    `,
+  });
+}
+
+export async function sendCoachingApplicationNotification(
+  {
+    name,
+    email,
+  }: {
+    name: string;
+    email: string;
+  }
+) {
+  return sendMail({
+    to:
+      process.env.IRON_ACRE_NOTIFY_EMAIL!,
+    subject:
+      "New Coaching Application",
+    html: `
+      <h2>New Coaching Application</h2>
+
+      <p><strong>Name:</strong> ${name}</p>
+
+      <p><strong>Email:</strong> ${email}</p>
+    `,
+  });
+}
+
+export async function sendCoachingApplicationReceivedEmail(
+  {
+    name,
+    email,
+  }: {
+    name: string;
+    email: string;
+  }
+) {
+  return sendMail({
+    to: email,
+
+    subject:
+      "Your Coaching Application",
+
+    html: `
+      <h1>Application Received</h1>
+
+      <p>
+        Hi ${name},
       </p>
 
       <p>
-        Simply reply to this
-        email to book your spot.
+        Thanks for applying for
+        Iron Acre Online Coaching.
+      </p>
+
+      <p>
+        I'll review your application
+        personally and get back to
+        you shortly.
+      </p>
+
+      <p>
+        Speak soon,
+        <br/>
+        Rob
       </p>
     `,
   });
