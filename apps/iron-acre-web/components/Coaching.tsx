@@ -2,6 +2,7 @@ import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Container } from "./ui/container";
+import CoachingLeadCapture from "./CoachingLeadCapture";
 
 export default function Coaching() {
   return (
@@ -136,32 +137,8 @@ export default function Coaching() {
                 Only 20 Places. Apply Now.
               </h3>
 
-              <div className="space-y-3">
-
-                <Input
-                  placeholder="First name"
-                  className="bg-white"
-                />
-
-                <Input
-                  placeholder="Email address"
-                  className="bg-white"
-                />
-
-                <Button
-                  className="
-                    h-11
-                    w-full
-                    bg-[#cc5500]
-                    text-sm
-                    hover:bg-[#db6712]
-                  "
-                >
-                  Apply For My Place
-                </Button>
-
-              </div>
-
+              <CoachingLeadCapture />
+              
               <p className="mt-4 text-sm text-white/50">
                 Not ready? Start with the free
                 7 day program first.
