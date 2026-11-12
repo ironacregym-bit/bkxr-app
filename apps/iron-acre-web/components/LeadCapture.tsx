@@ -6,9 +6,7 @@ import { Button } from "./ui/button";
 
 export default function LeadCapture() {
   const [name, setName] = useState("");
-
-  const [email, setEmail] =
-    useState("");
+  const [email, setEmail] = useState("");
 
   const [loading, setLoading] =
     useState(false);
@@ -28,23 +26,23 @@ export default function LeadCapture() {
     setError("");
 
     try {
-      const response =
-        await fetch(
-          "/api/leads/create",
-          {
-            method: "POST",
+      const response = await fetch(
+        "/api/leads/create",
+        {
+          method: "POST",
 
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
 
-            body: JSON.stringify({
-              name,
-              email,
-            }),
-          }
-        );
+          body: JSON.stringify({
+            name,
+            email,
+            source: "hero",
+          }),
+        }
+      );
 
       const json =
         await response.json();
@@ -59,16 +57,12 @@ export default function LeadCapture() {
       setSuccess(true);
 
     } catch (err: any) {
-
       setError(
         err.message ||
           "Something went wrong"
       );
-
     } finally {
-
       setLoading(false);
-
     }
   }
 
@@ -76,15 +70,17 @@ export default function LeadCapture() {
     return (
       <Card
         className="
+          border
           border-[#cc5500]
           bg-[#1b231c]
+          p-5
         "
       >
         <h3
           className="
-            mb-4
+            mb-3
             font-['Big_Shoulders_Display']
-            text-5xl
+            text-3xl
             font-black
             uppercase
             text-[#cc5500]
@@ -93,13 +89,10 @@ export default function LeadCapture() {
           You're In.
         </h3>
 
-        <p className="mb-4 text-white/80">
-          We've saved your details
-          and will be in touch shortly.
-        </p>
-
-        <p className="text-white/60">
-          Keep an eye on your inbox.
+        <p className="text-white/70">
+          Your details have been saved.
+          Check your inbox for your
+          free 7 day program.
         </p>
       </Card>
     );
@@ -109,34 +102,36 @@ export default function LeadCapture() {
     <Card
       className="
         border-white/10
-        bg-[#141a15]/80
-        backdrop-blur-md
+        bg-[#1b231c]
+        p-5
       "
     >
       <form onSubmit={handleSubmit}>
 
-        <h3
-          className="
-            mb-2
-            font-['Big_Shoulders_Display']
-            text-4xl
-            font-black
-            uppercase
-            leading-none
-          "
-        >
-          Start Your
-          <br />
-          Free Week
-        </h3>
+        <div className="mb-5">
 
-        <p className="mb-6 text-white/70">
-          Join the Iron Acre community,
-          train outdoors and claim your
-          first class free.
-        </p>
+          <h3
+            className="
+              mb-2
+              font-['Big_Shoulders_Display']
+              text-3xl
+              font-black
+              uppercase
+              leading-none
+            "
+          >
+            Start Free
+          </h3>
 
-        <div className="space-y-4">
+          <p className="text-sm text-white/65">
+            Claim your free class and
+            get instant access to the
+            7 day program.
+          </p>
+
+        </div>
+
+        <div className="space-y-3">
 
           <Input
             type="text"
@@ -162,24 +157,25 @@ export default function LeadCapture() {
             required
           />
 
-        </div>
-
-        <div className="mt-5">
-
           <Button
             type="submit"
-            className="w-full"
+            className="
+              h-11
+              w-full
+              bg-[#cc5500]
+              hover:bg-[#db6712]
+            "
             disabled={loading}
           >
             {loading
-              ? "Claiming..."
-              : "Claim Free Class"}
+              ? "Submitting..."
+              : "Get My Free Program"}
           </Button>
 
         </div>
 
         {error && (
-          <p className="mt-4 text-red-400">
+          <p className="mt-4 text-sm text-red-400">
             {error}
           </p>
         )}
