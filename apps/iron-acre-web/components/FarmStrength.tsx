@@ -14,102 +14,77 @@ export default function FarmStrength() {
     >
       <Container>
 
-        <div className="lg:pl-32">
+        <div className="mb-10">
 
-          <div className="mb-4 uppercase tracking-[0.15em] text-[#cc5500] font-bold">
+          <div className="mb-3 uppercase tracking-[0.15em] text-[#cc5500] text-sm font-bold">
             MON & WED · 6:30PM
           </div>
 
           <h2
             className="
-              mb-6
+              mb-4
               font-['Big_Shoulders_Display']
-              text-[clamp(4rem,8vw,7rem)]
+              text-[clamp(2.5rem,5vw,4rem)]
               font-black
               uppercase
-              leading-[0.85]
+              leading-none
             "
           >
-            Farm Strength &
-            Conditioning
+            Farm Strength & Conditioning
           </h2>
 
-          <p className="max-w-3xl text-xl text-white/90">
+          <p className="max-w-2xl text-base text-white/80">
             Strongman-inspired outdoor
             training for everyday people.
           </p>
 
-          <div className="mt-16 grid gap-10 md:grid-cols-3">
+        </div>
 
-            <div className="border-l-2 border-[#cc5500] pl-5">
+        <div className="grid gap-6 md:grid-cols-3">
 
-              <h3
-                className="
-                  mb-4
-                  font-['Big_Shoulders_Display']
-                  text-4xl
-                  font-black
-                  uppercase
-                "
-              >
-                Strength
-              </h3>
+          <div>
 
-              <p className="text-white/80">
-                Sandbags, kettlebells,
-                yokes and sled pushes.
-              </p>
+            <h3 className="mb-2 font-['Big_Shoulders_Display'] text-xl font-black uppercase">
+              Strength
+            </h3>
 
-            </div>
+            <p className="text-white/65">
+              Sandbags, kettlebells,
+              yokes and sled pushes.
+            </p>
 
-            <div className="border-l-2 border-[#cc5500] pl-5">
+          </div>
 
-              <h3
-                className="
-                  mb-4
-                  font-['Big_Shoulders_Display']
-                  text-4xl
-                  font-black
-                  uppercase
-                "
-              >
-                Conditioning
-              </h3>
+          <div>
 
-              <p className="text-white/80">
-                Carries, circuits,
-                SkiErg and BikeErg work.
-              </p>
+            <h3 className="mb-2 font-['Big_Shoulders_Display'] text-xl font-black uppercase">
+              Conditioning
+            </h3>
 
-            </div>
+            <p className="text-white/65">
+              Carries, circuits,
+              SkiErg and BikeErg work.
+            </p>
 
-            <div className="border-l-2 border-[#cc5500] pl-5">
+          </div>
 
-              <h3
-                className="
-                  mb-4
-                  font-['Big_Shoulders_Display']
-                  text-4xl
-                  font-black
-                  uppercase
-                "
-              >
-                For Everyone
-              </h3>
+          <div>
 
-              <p className="text-white/80">
-                Complete beginner or
-                experienced lifter,
-                everything scales.
-              </p>
+            <h3 className="mb-2 font-['Big_Shoulders_Display'] text-xl font-black uppercase">
+              For Everyone
+            </h3>
 
-            </div>
+            <p className="text-white/65">
+              Complete beginner or experienced lifter,
+              everything scales.
+            </p>
 
           </div>
 
         </div>
 
       </Container>
+
     </BackgroundSection>
   );
 }
