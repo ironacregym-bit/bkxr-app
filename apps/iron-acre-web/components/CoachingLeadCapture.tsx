@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { Button } from "./ui/button";
 
 export default function CoachingLeadCapture() {
   const [name, setName] =
@@ -33,16 +33,15 @@ export default function CoachingLeadCapture() {
           "/api/leads/coaching",
           {
             method: "POST",
-
             headers: {
               "Content-Type":
                 "application/json",
             },
-
             body: JSON.stringify({
               name,
               email,
-              source: "coaching",
+              source:
+                "coaching",
             }),
           }
         );
@@ -57,7 +56,6 @@ export default function CoachingLeadCapture() {
       }
 
       setSuccess(true);
-
     } catch (err: any) {
       setError(
         err.message ||
@@ -70,7 +68,7 @@ export default function CoachingLeadCapture() {
 
   if (success) {
     return (
-      <div className="text-white/80">
+      <div className="text-white/70">
         Application received.
         We'll be in touch soon.
       </div>
@@ -90,6 +88,7 @@ export default function CoachingLeadCapture() {
             e.target.value
           )
         }
+        required
       />
 
       <Input
@@ -100,6 +99,7 @@ export default function CoachingLeadCapture() {
             e.target.value
           )
         }
+        required
       />
 
       <Button
