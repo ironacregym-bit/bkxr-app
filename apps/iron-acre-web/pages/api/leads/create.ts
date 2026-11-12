@@ -4,63 +4,70 @@ import type {
 } from "next";
 
 import {
-  firestore,
-} from "@pt/firebase";
+  addDoc,
+  collection,
+  serverTimestamp,
+} from "firebase/firestore";
+
+import { db } from "@/lib/firebase";
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
   if (req.method !== "POST") {
-    return res.status(405).json({
-      error: "Method not allowed",
-    });
+    return res
+      .status(405)
+      .json({
+        error:
+          "Method not allowed",
+      });
   }
 
   try {
-    const { email } = req.body;
+    const {
+      name,
+      email,
+      source,
+    } = req.body;
 
-    if (!email) {
-      return res.status(400).json({
-        error: "Email is required",
-      });
+    if (!name || !email) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Name and email are required",
+        });
     }
 
-    const doc =
-      await firestore
-        .collection(
-          "iron-acre-web_leads"
-        )
-        .add({
-          email,
-
-          source:
-            "landing-page",
-
-          status:
-            "new",
-
-          createdAt:
-            new Date(),
-        });
+    const docRef = await addDoc(
+      collection(
+        db,
+        "iron-acre-web_leads"
+      ),
+      {
+        name,
+        email,
+        source,
+        status: "new",
+        createdAt:
+          serverTimestamp(),
+      }
+    );
 
     return res.status(200).json({
       success: true,
-      leadId: doc.id,
+      id: docRef.id,
     });
 
-  } catch (error: any) {
+  } catch (error) {
+    console.error(error);
 
-    console.error(
-      "[CREATE LEAD]",
-      error
-    );
-
-    return res.status(500).json({
-      error:
-        error.message ||
-        "Failed to save lead",
-    });
-
+    return res
+      .status(500)
+      .json({
+        error:
+          "Failed to save lead",
+      });
   }
 }
