@@ -4,9 +4,7 @@ export function Container({
   return (
     <div
       className="
-        mx-auto
-        max-w-7xl
-        px-6
+        mx-auto max-w-5xl px-5
       "
     >
       {children}
