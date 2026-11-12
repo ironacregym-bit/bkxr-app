@@ -1,5 +1,6 @@
 import { sendMail } from "../../../lib/email";
 
+
 export async function sendLeadNotification(
   {
     name,
