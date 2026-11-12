@@ -1,4 +1,4 @@
-import { sendMail } from "@/lib/email";
+import { sendMail } from "../../../lib/email";
 
 export async function sendLeadNotification(
   {
