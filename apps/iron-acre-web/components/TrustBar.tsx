@@ -1,8 +1,10 @@
+import { Container } from "./ui/container";
+
 export default function TrustBar() {
   return (
     <section className="border-y border-white/10">
 
-      <div className="mx-auto max-w-[1400px] px-5">
+      <Container>
 
         <div
           className="
@@ -10,31 +12,32 @@ export default function TrustBar() {
             flex-wrap
             items-center
             justify-center
-            gap-x-12
-            gap-y-4
-            py-8
+            gap-x-8
+            gap-y-3
+            py-6
 
+            text-sm
             uppercase
             tracking-[0.15em]
-            text-white/70
+            text-white/60
           "
         >
           <span>Outdoor Gym</span>
 
-          <span>•</span>
+          <span className="hidden md:block">•</span>
 
           <span>First Class Free</span>
 
-          <span>•</span>
+          <span className="hidden md:block">•</span>
 
           <span>Mon & Wed 6:30pm</span>
 
-          <span>•</span>
+          <span className="hidden md:block">•</span>
 
           <span>Coached Sessions</span>
         </div>
 
-      </div>
+      </Container>
 
     </section>
   );
