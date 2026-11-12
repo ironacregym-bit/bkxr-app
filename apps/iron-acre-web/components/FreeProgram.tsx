@@ -1,74 +1,43 @@
 import { Button } from "./ui/button";
+import { Container } from "./ui/container";
 
 export default function FreeProgram() {
   const days = [
-    {
-      day: "1",
-      title: "Build The Base",
-      subtitle: "Full Body Strength · 30 mins",
-    },
-    {
-      day: "2",
-      title: "Get Moving",
-      subtitle: "Conditioning · 25 mins",
-    },
-    {
-      day: "3",
-      title: "Carry It",
-      subtitle: "Carries & Core · 25 mins",
-    },
-    {
-      day: "4",
-      title: "Legs & Hinge",
-      subtitle: "Lower Body Strength · 35 mins",
-    },
-    {
-      day: "5",
-      title: "Push & Pull",
-      subtitle: "Upper Body Strength · 35 mins",
-    },
-    {
-      day: "6",
-      title: "The Finisher",
-      subtitle: "Conditioning · 30 mins",
-    },
-    {
-      day: "7",
-      title: "Get Outside",
-      subtitle: "Recovery Day",
-    },
+    { day: "1", title: "Build The Base", subtitle: "Full Body Strength" },
+    { day: "2", title: "Get Moving", subtitle: "Conditioning" },
+    { day: "3", title: "Carry It", subtitle: "Carries & Core" },
+    { day: "4", title: "Legs & Hinge", subtitle: "Lower Body Strength" },
+    { day: "5", title: "Push & Pull", subtitle: "Upper Body Strength" },
+    { day: "6", title: "The Finisher", subtitle: "Conditioning" },
+    { day: "7", title: "Get Outside", subtitle: "Recovery Day" },
   ];
 
   return (
-    <section className="bg-[#141a15] py-24">
+    <section className="bg-[#141a15] py-16">
 
-      <div className="mx-auto max-w-6xl px-6">
+      <Container>
 
-        <div className="mb-16">
+        <div className="mb-10">
 
-          <div className="mb-4 uppercase tracking-[0.2em] text-[#cc5500] font-bold">
+          <div className="mb-3 uppercase tracking-[0.15em] text-[#cc5500] text-sm font-bold">
             FREE PROGRAM
           </div>
 
           <h2
             className="
-              mb-6
+              mb-4
               font-['Big_Shoulders_Display']
-              text-[clamp(4rem,10vw,7rem)]
+              text-[clamp(2.5rem,5vw,4rem)]
               font-black
               uppercase
-              leading-[0.85]
+              leading-none
             "
           >
-            Your Free
-            <br />
-            7 Day Program
+            Your Free 7 Day Program
           </h2>
 
-          <p className="max-w-3xl text-xl text-white/70">
-            Seven simple days designed to get you moving,
-            exercising and building momentum immediately.
-            No gym membership required.
+          <p className="max-w-2xl text-base text-white/65">
+            Seven simple days designed to get you moving immediately.
           </p>
 
         </div>
@@ -80,18 +49,17 @@ export default function FreeProgram() {
               key={item.day}
               className="
                 grid
-                gap-6
+                gap-4
                 border-b
                 border-white/10
-                py-8
-                md:grid-cols-[80px_1fr]
+                py-6
+                md:grid-cols-[60px_1fr]
               "
             >
-
               <div
                 className="
                   font-['Big_Shoulders_Display']
-                  text-6xl
+                  text-3xl
                   font-black
                   text-[#cc5500]
                 "
@@ -104,7 +72,7 @@ export default function FreeProgram() {
                 <h3
                   className="
                     font-['Big_Shoulders_Display']
-                    text-4xl
+                    text-2xl
                     font-black
                     uppercase
                   "
@@ -112,7 +80,7 @@ export default function FreeProgram() {
                   {item.title}
                 </h3>
 
-                <p className="mt-2 text-lg text-white/60">
+                <p className="text-white/60">
                   {item.subtitle}
                 </p>
 
@@ -123,53 +91,15 @@ export default function FreeProgram() {
 
         </div>
 
-        <div
-          className="
-            mt-16
-            flex
-            flex-col
-            gap-6
-            md:flex-row
-            md:items-center
-            md:justify-between
-          "
-        >
+        <div className="mt-10">
 
-          <div>
-
-            <h3
-              className="
-                font-['Big_Shoulders_Display']
-                text-4xl
-                font-black
-                uppercase
-              "
-            >
-              Ready To Start?
-            </h3>
-
-            <p className="text-white/60">
-              Claim your free class and get the full program.
-            </p>
-
-          </div>
-
-          <Button
-            size="lg"
-            onClick={() =>
-              document
-                .getElementById("start")
-                ?.scrollIntoView({
-                  behavior: "smooth",
-                })
-            }
-          >
+          <Button>
             Get The Program
           </Button>
 
         </div>
 
-      </div>
+      </Container>
 
     </section>
   );
