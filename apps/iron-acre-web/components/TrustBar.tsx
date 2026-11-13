@@ -9,30 +9,27 @@ export default function TrustBar() {
         <div
           className="
             flex
-            flex-wrap
             items-center
             justify-center
-            gap-x-8
-            gap-y-3
-            py-6
+            gap-4
+            overflow-x-auto
+            py-5
 
-            text-sm
+            text-xs
             uppercase
             tracking-[0.15em]
+            whitespace-nowrap
             text-white/60
           "
         >
           <span>Outdoor Gym</span>
-
-          <span className="hidden md:block">•</span>
+          <span>•</span>
 
           <span>First Class Free</span>
-
-          <span className="hidden md:block">•</span>
+          <span>•</span>
 
           <span>Mon & Wed 6:30pm</span>
-
-          <span className="hidden md:block">•</span>
+          <span>•</span>
 
           <span>Coached Sessions</span>
         </div>
