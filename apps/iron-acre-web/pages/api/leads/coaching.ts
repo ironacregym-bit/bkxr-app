@@ -3,7 +3,7 @@ import type {
   NextApiResponse,
 } from "next";
 
-import firestore from "../../../../lib/firestoreClient";
+import firestore from "../../../../../lib/firestoreClient";
 
 import {
   sendCoachingApplicationNotification,
