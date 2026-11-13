@@ -3,13 +3,7 @@ import type {
   NextApiResponse,
 } from "next";
 
-import {
-  addDoc,
-  collection,
-  serverTimestamp,
-} from "firebase/firestore";
-
-import { db } from "@/lib/firebase";
+import firestore from "@/lib/firestoreClient";
 
 import {
   sendLeadNotification,
@@ -39,20 +33,15 @@ export default async function handler(
       });
     }
 
-    const docRef = await addDoc(
-      collection(
-        db,
-        "iron-acre-web_leads"
-      ),
-      {
+    const docRef = await firestore
+      .collection("iron-acre-web_leads")
+      .add({
         name,
         email,
         source,
         status: "new",
-        emailSent: false,
-        createdAt: serverTimestamp(),
-      }
-    );
+        createdAt: new Date(),
+      });
 
     await sendLeadNotification({
       name,
