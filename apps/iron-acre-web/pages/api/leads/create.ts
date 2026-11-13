@@ -3,24 +3,66 @@ import type {
   NextApiResponse,
 } from "next";
 
+import firestore from "../../../../../lib/firestoreClient";
+
+import {
+  sendLeadNotification,
+  sendFreeProgramEmail,
+} from "../../../lib/lead-emails";
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  return res.status(200).json({
-    GOOGLE_PROJECT_ID:
-      process.env.GOOGLE_PROJECT_ID,
+  if (req.method !== "POST") {
+    return res.status(405).json({
+      error: "Method not allowed",
+    });
+  }
 
-    HAS_CLIENT_EMAIL:
-      !!process.env.GOOGLE_CLIENT_EMAIL,
+  try {
+    const {
+      name,
+      email,
+      source = "hero",
+    } = req.body;
 
-    HAS_PRIVATE_KEY:
-      !!process.env.GOOGLE_PRIVATE_KEY,
+    if (!name || !email) {
+      return res.status(400).json({
+        error: "Name and email are required",
+      });
+    }
 
-    PRIVATE_KEY_START:
-      process.env.GOOGLE_PRIVATE_KEY?.substring(
-        0,
-        50
-      ),
-  });
+    const docRef = await firestore
+      .collection("iron-acre-web_leads")
+      .add({
+        name,
+        email,
+        source,
+        status: "new",
+        createdAt: new Date(),
+      });
+
+    await sendLeadNotification({
+      name,
+      email,
+      source,
+    });
+
+    await sendFreeProgramEmail({
+      name,
+      email,
+    });
+
+    return res.status(200).json({
+      success: true,
+      id: docRef.id,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      error: "Failed to create lead",
+    });
+  }
 }
