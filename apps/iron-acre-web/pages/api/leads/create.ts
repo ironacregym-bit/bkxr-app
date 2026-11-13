@@ -33,6 +33,10 @@ export default async function handler(
       });
     }
 
+    console.log(
+      "Creating Firestore lead..."
+    );
+
     const docRef = await firestore
       .collection("iron-acre-web_leads")
       .add({
@@ -43,23 +47,61 @@ export default async function handler(
         createdAt: new Date(),
       });
 
-    await sendLeadNotification({
-      name,
-      email,
-      source,
-    });
+    console.log(
+      "Lead saved:",
+      docRef.id
+    );
 
-    await sendFreeProgramEmail({
-      name,
-      email,
-    });
+    try {
+      console.log(
+        "Sending admin notification..."
+      );
+
+      await sendLeadNotification({
+        name,
+        email,
+        source,
+      });
+
+      console.log(
+        "Admin notification sent"
+      );
+    } catch (error) {
+      console.error(
+        "Admin notification failed:",
+        error
+      );
+    }
+
+    try {
+      console.log(
+        "Sending free program email..."
+      );
+
+      await sendFreeProgramEmail({
+        name,
+        email,
+      });
+
+      console.log(
+        "Free program email sent"
+      );
+    } catch (error) {
+      console.error(
+        "Free program email failed:",
+        error
+      );
+    }
 
     return res.status(200).json({
       success: true,
       id: docRef.id,
     });
   } catch (error) {
-    console.error(error);
+    console.error(
+      "Lead creation failed:",
+      error
+    );
 
     return res.status(500).json({
       error: "Failed to create lead",
