@@ -8,7 +8,7 @@ import firestore from "../../../../../lib/firestoreClient";
 import {
   sendLeadNotification,
   sendFreeProgramEmail,
-} from "../../lib/lead-emails";
+} from "../../../lib/lead-emails";
 
 export default async function handler(
   req: NextApiRequest,
