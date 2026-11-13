@@ -42,7 +42,7 @@ export default function GymWithAView() {
           <div>
 
             <img
-              src="/images/meadow.jpg"
+              src="../public/images/GymFrontView.jpeg"
               alt="Iron Acre meadow"
               className="
                 h-[320px]
