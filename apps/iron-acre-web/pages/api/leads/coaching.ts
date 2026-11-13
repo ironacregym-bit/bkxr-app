@@ -3,13 +3,7 @@ import type {
   NextApiResponse,
 } from "next";
 
-import {
-  addDoc,
-  collection,
-  serverTimestamp,
-} from "firebase/firestore";
-
-import { db } from "../../../../../lib/firebase";
+import firestore from "@/lib/firestoreClient";
 
 import {
   sendCoachingApplicationNotification,
@@ -35,39 +29,31 @@ export default async function handler(
 
     if (!name || !email) {
       return res.status(400).json({
-        error:
-          "Name and email are required",
+        error: "Name and email are required",
       });
     }
 
-    const docRef = await addDoc(
-      collection(
-        db,
+    const docRef = await firestore
+      .collection(
         "iron-acre-web_coaching_leads"
-      ),
-      {
+      )
+      .add({
         name,
         email,
         source,
         status: "new",
-        createdAt:
-          serverTimestamp(),
-      }
-    );
+        createdAt: new Date(),
+      });
 
-    await sendCoachingApplicationNotification(
-      {
-        name,
-        email,
-      }
-    );
+    await sendCoachingApplicationNotification({
+      name,
+      email,
+    });
 
-    await sendCoachingApplicationReceivedEmail(
-      {
-        name,
-        email,
-      }
-    );
+    await sendCoachingApplicationReceivedEmail({
+      name,
+      email,
+    });
 
     return res.status(200).json({
       success: true,
