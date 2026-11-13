@@ -1,6 +1,5 @@
 import { sendMail } from "../../../lib/email";
 
-
 export async function sendLeadNotification(
   {
     name,
@@ -20,9 +19,20 @@ export async function sendLeadNotification(
     html: `
       <h2>New Lead</h2>
 
-      <p><strong>Name:</strong> ${name}</p>
-      <p><strong>Email:</strong> ${email}</p>
-      <p><strong>Source:</strong> ${source}</p>
+      <p>
+        <strong>Name:</strong>
+        ${name}
+      </p>
+
+      <p>
+        <strong>Email:</strong>
+        ${email}
+      </p>
+
+      <p>
+        <strong>Source:</strong>
+        ${source}
+      </p>
     `,
   });
 }
@@ -90,9 +100,15 @@ export async function sendCoachingApplicationNotification(
     html: `
       <h2>New Coaching Application</h2>
 
-      <p><strong>Name:</strong> ${name}</p>
+      <p>
+        <strong>Name:</strong>
+        ${name}
+      </p>
 
-      <p><strong>Email:</strong> ${email}</p>
+      <p>
+        <strong>Email:</strong>
+        ${email}
+      </p>
     `,
   });
 }
@@ -104,6 +120,40 @@ export async function sendCoachingApplicationReceivedEmail(
   }: {
     name: string;
     email: string;
+  }
+) {
+  return sendMail({
+    to: email,
+
+    subject:
+      "Your Coaching Application",
+
+    html: `
+      <h1>Application Received</h1>
+
+      <p>
+        Hi ${name},
+      </p>
+
+      <p>
+        Thanks for applying for
+        Iron Acre Online Coaching.
+      </p>
+
+      <p>
+        I'll review your application
+        personally and get back to
+        you shortly.
+      </p>
+
+      <p>
+        Speak soon,
+        <br/>
+        Rob
+      </p>
+    `,
+  });
+}
   }
 ) {
   return sendMail({
