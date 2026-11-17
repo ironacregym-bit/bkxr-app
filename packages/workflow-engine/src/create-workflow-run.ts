@@ -7,29 +7,23 @@ export async function createWorkflowRun({
 }: {
   tenantId: string;
   workflowId: string;
-  payload: Record<
-    string,
-    unknown
-  >;
+  payload: Record<string, unknown>;
 }) {
-  const doc =
-    await firestore
-      .collection(
-        "workflow_runs"
-      )
-      .add({
-        tenantId,
-        workflowId,
-        payload,
+  const doc = await firestore
+    .collection("workflow_runs")
+    .add({
+      tenantId,
+      workflowId,
 
-        status: "pending",
+      status: "pending",
 
-        createdAt:
-          new Date(),
+      currentStep: 0,
 
-        updatedAt:
-          new Date(),
-      });
+      payload,
+
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
   return doc.id;
 }
