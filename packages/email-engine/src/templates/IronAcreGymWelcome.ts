@@ -1,29 +1,34 @@
-export function welcomeTemplate(
-  variables: Record<
-    string,
-    string | number
-  >
-) {
+export function getWelcomeTemplate({
+  firstName,
+}: {
+  firstName: string;
+}) {
   return {
     subject:
-      "Welcome To Iron Acre Gym",
+      "Welcome To Iron Acre",
 
     html: `
       <h1>
-        Welcome to Iron Acre Gym
+        Welcome To Iron Acre
       </h1>
 
       <p>
-        Hi ${variables.firstName},
+        Hi ${firstName},
       </p>
 
       <p>
-        Thanks for joining.
+        Thanks for joining Iron Acre.
       </p>
 
       <p>
-        Your free 7 day program
-        is on the way.
+        We will be sending your free
+        7 day programme shortly.
+      </p>
+
+      <p>
+        Speak soon,
+        <br />
+        Rob
       </p>
     `,
   };
