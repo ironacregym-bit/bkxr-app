@@ -5,11 +5,6 @@ import type {
 
 import firestore from "../../../../../lib/firestoreClient";
 
-import {
-  sendLeadNotification,
-  sendFreeProgramEmail,
-} from "../../../lib/lead-emails";
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -33,75 +28,36 @@ export default async function handler(
       });
     }
 
-    console.log(
-      "Creating Firestore lead..."
-    );
-
     const docRef = await firestore
       .collection("iron-acre-web_leads")
       .add({
         name,
         email,
         source,
+
         status: "new",
+
+        welcomeEmailSent: false,
+
+        day1Sent: false,
+        day2Sent: false,
+        day3Sent: false,
+        day4Sent: false,
+        day5Sent: false,
+        day6Sent: false,
+        day7Sent: false,
+
+        coachingOfferSent: false,
+
         createdAt: new Date(),
       });
-
-    console.log(
-      "Lead saved:",
-      docRef.id
-    );
-
-    try {
-      console.log(
-        "Sending admin notification..."
-      );
-
-      await sendLeadNotification({
-        name,
-        email,
-        source,
-      });
-
-      console.log(
-        "Admin notification sent"
-      );
-    } catch (error) {
-      console.error(
-        "Admin notification failed:",
-        error
-      );
-    }
-
-    try {
-      console.log(
-        "Sending free program email..."
-      );
-
-      await sendFreeProgramEmail({
-        name,
-        email,
-      });
-
-      console.log(
-        "Free program email sent"
-      );
-    } catch (error) {
-      console.error(
-        "Free program email failed:",
-        error
-      );
-    }
 
     return res.status(200).json({
       success: true,
       id: docRef.id,
     });
   } catch (error) {
-    console.error(
-      "Lead creation failed:",
-      error
-    );
+    console.error(error);
 
     return res.status(500).json({
       error: "Failed to create lead",
