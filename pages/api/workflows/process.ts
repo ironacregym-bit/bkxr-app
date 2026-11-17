@@ -3,6 +3,18 @@ import type {
   NextApiResponse,
 } from "next";
 
+import {
+  getPendingWorkflowRuns,
+} from "../../../packages/workflow-engine/src/getPendingWorkflowRuns";
+
+import {
+  claimWorkflowRun,
+} from "../../../packages/workflow-engine/src/claimWorkflowRun";
+
+import {
+  completeWorkflowRun,
+} from "../../../packages/workflow-engine/src/completeWorkflowRun";
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -24,11 +36,26 @@ export default async function handler(
     });
   }
 
+  const runs =
+    await getPendingWorkflowRuns();
+
+  for (const run of runs) {
+    if (!run.id) {
+      continue;
+    }
+
+    await claimWorkflowRun(
+      run.id
+    );
+
+    await completeWorkflowRun(
+      run.id
+    );
+  }
+
   return res.status(200).json({
     success: true,
-    message:
-      "Workflow processor online",
-    timestamp:
-      new Date().toISOString(),
+    processed:
+      runs.length,
   });
 }
