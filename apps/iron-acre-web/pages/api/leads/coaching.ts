@@ -5,11 +5,6 @@ import type {
 
 import firestore from "../../../../../lib/firestoreClient";
 
-import {
-  sendCoachingApplicationNotification,
-  sendCoachingApplicationReceivedEmail,
-} from "../../../lib/lead-emails";
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -34,26 +29,20 @@ export default async function handler(
     }
 
     const docRef = await firestore
-      .collection(
-        "iron-acre-web_coaching_leads"
-      )
+      .collection("iron-acre-web_coaching_leads")
       .add({
         name,
         email,
         source,
+
         status: "new",
+
+        applicationEmailSent: false,
+
+        reviewed: false,
+
         createdAt: new Date(),
       });
-
-    await sendCoachingApplicationNotification({
-      name,
-      email,
-    });
-
-    await sendCoachingApplicationReceivedEmail({
-      name,
-      email,
-    });
 
     return res.status(200).json({
       success: true,
