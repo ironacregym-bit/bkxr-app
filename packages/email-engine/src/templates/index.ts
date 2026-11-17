@@ -1,5 +1,5 @@
-import { getWelcomeTemplate } from "./IronAcreGymWelcome";
-import { getCoachingTemplate } from "./IronAcreGymCoaching";
+import { getWelcomeTemplate } from "./welcome";
+import { getCoachingTemplate } from "./coaching";
 
 export function getTemplate(
   template: string,
@@ -10,14 +10,18 @@ export function getTemplate(
 ) {
   switch (template) {
     case "welcome":
-      return getWelcomeTemplate(
-        variables
-      );
+      return getWelcomeTemplate({
+        firstName: String(
+          variables.firstName ?? ""
+        ),
+      });
 
     case "coaching":
-      return getCoachingTemplate(
-        variables
-      );
+      return getCoachingTemplate({
+        firstName: String(
+          variables.firstName ?? ""
+        ),
+      });
 
     default:
       throw new Error(
