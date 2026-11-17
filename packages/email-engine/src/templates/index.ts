@@ -1,5 +1,5 @@
 import { getWelcomeTemplate } from "./IronAcreGymWelcome";
-import { coachingTemplate } from "./IronAcreGymCoaching";
+import { getCoachingTemplate } from "./IronAcreGymCoaching";
 
 export function getTemplate(
   template: string,
