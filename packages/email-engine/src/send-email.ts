@@ -1,19 +1,17 @@
 import { sendMail } from "../../../../lib/email";
 
-export interface SendEmailRequest {
+export async function sendEmail({
+  to,
+  subject,
+  html,
+}: {
   to: string;
   subject: string;
   html: string;
-  text?: string;
-}
-
-export async function sendEmail(
-  request: SendEmailRequest
-) {
+}) {
   return sendMail({
-    to: request.to,
-    subject: request.subject,
-    html: request.html,
-    text: request.text,
+    to,
+    subject,
+    html,
   });
 }
