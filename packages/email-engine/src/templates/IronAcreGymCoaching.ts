@@ -1,9 +1,8 @@
-export function coachingTemplate(
-  variables: Record<
-    string,
-    string | number
-  >
-) {
+export function getCoachingTemplate({
+  firstName,
+}: {
+  firstName: string;
+}) {
   return {
     subject:
       "Coaching Application Received",
@@ -14,16 +13,22 @@ export function coachingTemplate(
       </h1>
 
       <p>
-        Hi ${variables.firstName},
+        Hi ${firstName},
       </p>
 
       <p>
-        Thanks for applying
-        for coaching.
+        Thanks for applying for
+        Iron Acre Online Coaching.
       </p>
 
       <p>
-        We will be in touch soon.
+        I'll personally review your
+        application and get back
+        to you soon.
+      </p>
+
+      <p>
+        Rob
       </p>
     `,
   };
