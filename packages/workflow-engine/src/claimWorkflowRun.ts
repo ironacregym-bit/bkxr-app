@@ -1,4 +1,4 @@
-import firestore from "../../../../lib/firestoreClient";
+import firestore from "../../../lib/firestoreClient";
 
 export async function claimWorkflowRun(
   workflowRunId: string
