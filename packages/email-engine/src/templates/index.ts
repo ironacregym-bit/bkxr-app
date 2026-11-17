@@ -10,12 +10,12 @@ export function getTemplate(
 ) {
   switch (template) {
     case "welcome":
-      return welcomeTemplate(
+      return GetWelcomeTemplate(
         variables
       );
 
     case "coaching":
-      return coachingTemplate(
+      return GetCoachingTemplate(
         variables
       );
 
