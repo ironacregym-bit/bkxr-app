@@ -9,6 +9,7 @@ export async function getPendingWorkflowRuns() {
         "==",
         "pending"
       )
+      .limit(25)
       .get();
 
   return snapshot.docs.map(
