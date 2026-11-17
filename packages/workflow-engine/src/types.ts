@@ -11,6 +11,8 @@ export interface WorkflowRun {
     | "completed"
     | "failed";
 
+  currentStep: number;
+
   payload: Record<
     string,
     unknown
