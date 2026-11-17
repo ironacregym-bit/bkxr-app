@@ -1,0 +1,35 @@
+name: Iron Acre Workflow Processor
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+
+  workflow_dispatch: {}
+
+jobs:
+  process-workflows:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call workflow processor
+
+        env:
+          WORKFLOW_URL: ${{ secrets.IRON_ACRE_WORKFLOW_URL }}
+          CRON_KEY: ${{ secrets.CRON_KEY }}
+
+        run: |
+          echo "Calling workflow processor..."
+
+          http_code=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
+            -X POST "$WORKFLOW_URL" \
+            -H "x-cron-key: $CRON_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+
+          echo "HTTP $http_code"
+
+          cat /tmp/resp.json || true
+
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            exit 1
+          fi
