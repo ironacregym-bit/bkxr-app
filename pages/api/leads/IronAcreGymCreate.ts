@@ -5,7 +5,7 @@ import type {
 
 import firestore from "../../../../../lib/firestoreClient";
 
-import { createWorkflowRun } from "../../../../../packages/workflow-engine/src/create-workflow-run";
+import { createWorkflowRun } from "../../../packages/workflow-engine/src/createWorkflowRun";
 
 export default async function handler(
   req: NextApiRequest,
@@ -25,29 +25,24 @@ export default async function handler(
     } = req.body;
 
     if (!name || !email) {
-      return res.status(
-        400
-      ).json({
+      return res.status(400).json({
         error:
           "Name and email are required",
       });
     }
 
-    const lead =
-      await firestore
-        .collection(
-          "iron-acre-web_leads"
-        )
-        .add({
-          name,
-          email,
-          source,
+    const lead = await firestore
+      .collection("iron-acre-web_leads")
+      .add({
+        name,
+        email,
+        source,
 
-          status: "new",
+        status: "new",
 
-          createdAt:
-            new Date(),
-        });
+        createdAt:
+          new Date(),
+      });
 
     await createWorkflowRun({
       tenantId:
@@ -61,18 +56,14 @@ export default async function handler(
       },
     });
 
-    return res.status(
-      200
-    ).json({
+    return res.status(200).json({
       success: true,
-      id: lead.id,
+      leadId: lead.id,
     });
   } catch (error) {
     console.error(error);
 
-    return res.status(
-      500
-    ).json({
+    return res.status(500).json({
       error:
         "Failed to create lead",
     });
