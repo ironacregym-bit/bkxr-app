@@ -3,7 +3,7 @@ import type {
   NextApiResponse,
 } from "next";
 
-import firestore from "../../../../../lib/firestoreClient";
+import firestore from "../../../lib/firestoreClient";
 
 import { createWorkflowRun } from "../../../packages/workflow-engine/src/createWorkflowRun";
 
