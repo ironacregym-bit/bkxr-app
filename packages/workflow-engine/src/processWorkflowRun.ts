@@ -1,6 +1,6 @@
 import firestore from "../../../lib/firestoreClient";
 
-import { sendEmail } from "../../email-engine/src/send-Email";
+import { sendEmail } from "../../email-engine/src/send-email";
 
 import { getWelcomeTemplate } from "../../email-engine/src/templates/IronAcreGymWelcome";
 
