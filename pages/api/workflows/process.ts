@@ -12,8 +12,12 @@ import {
 } from "../../../packages/workflow-engine/src/claimWorkflowRun";
 
 import {
-  completeWorkflowRun,
-} from "../../../packages/workflow-engine/src/completeWorkflowRun";
+  failWorkflowRun,
+} from "../../../packages/workflow-engine/src/failWorkflowRun";
+
+import {
+  processWorkflowRun,
+} from "../../../packages/workflow-engine/src/processWorkflowRun";
 
 export default async function handler(
   req: NextApiRequest,
@@ -40,17 +44,26 @@ export default async function handler(
     await getPendingWorkflowRuns();
 
   for (const run of runs) {
-    if (!run.id) {
-      continue;
+    try {
+      if (!run.id) {
+        continue;
+      }
+
+      await claimWorkflowRun(
+        run.id
+      );
+
+      await processWorkflowRun(
+        run.id
+      );
+    } catch (error) {
+      await failWorkflowRun(
+        String(run.id),
+        error instanceof Error
+          ? error.message
+          : "Unknown error"
+      );
     }
-
-    await claimWorkflowRun(
-      run.id
-    );
-
-    await completeWorkflowRun(
-      run.id
-    );
   }
 
   return res.status(200).json({
