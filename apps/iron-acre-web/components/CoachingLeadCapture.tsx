@@ -30,18 +30,32 @@ export default function CoachingLeadCapture() {
     try {
       const response =
         await fetch(
-          "/api/leads/coaching",
+          "/api/capture",
           {
             method: "POST",
+
             headers: {
               "Content-Type":
                 "application/json",
             },
+
             body: JSON.stringify({
-              name,
-              email,
-              source:
-                "coaching",
+              formId:
+                "coachingLead",
+
+              payload: {
+                name,
+                email,
+
+                source:
+                  "coaching",
+
+                applicationEmailSent:
+                  false,
+
+                reviewed:
+                  false,
+              },
             }),
           }
         );
@@ -51,7 +65,8 @@ export default function CoachingLeadCapture() {
 
       if (!response.ok) {
         throw new Error(
-          result.error
+          result.error ||
+            "Failed to submit"
         );
       }
 
@@ -92,6 +107,7 @@ export default function CoachingLeadCapture() {
       />
 
       <Input
+        type="email"
         placeholder="Email address"
         value={email}
         onChange={(e) =>
@@ -108,6 +124,7 @@ export default function CoachingLeadCapture() {
           h-11
           w-full
           bg-[#cc5500]
+          hover:bg-[#db6712]
         "
         disabled={loading}
       >
