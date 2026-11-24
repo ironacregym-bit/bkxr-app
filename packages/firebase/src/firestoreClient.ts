@@ -7,12 +7,24 @@ function normalizeKey(key?: string): string {
   return key.replace(/\\n/g, "\n").replace(/^"+|"+$/g, "").trim();
 }
 
+const projectId =
+  process.env.GOOGLE_PROJECT_ID ||
+  process.env.FIREBASE_PROJECT_ID ||
+  process.env.GOOGLE_CLOUD_PROJECT ||
+  process.env.GCLOUD_PROJECT;
+const clientEmail =
+  process.env.GOOGLE_CLIENT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL;
+const privateKey = normalizeKey(
+  process.env.GOOGLE_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY
+);
+const credentials =
+  clientEmail && privateKey
+    ? { client_email: clientEmail, private_key: privateKey }
+    : undefined;
+
 const firestore = new Firestore({
-  projectId: process.env.GOOGLE_PROJECT_ID,
-  credentials: {
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: normalizeKey(process.env.GOOGLE_PRIVATE_KEY),
-  },
+  projectId,
+  ...(credentials ? { credentials } : {}),
 });
 
 // Prevent undefined properties from being sent (safer merges)
