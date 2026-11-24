@@ -84,21 +84,20 @@ export default function Hero() {
               </span>
             </div>
 
-            <a
-              href="#start"
-              className="
-                hidden
-                md:inline-flex
-                rounded-md
-                bg-[#cc5500]
-                px-4
-                py-2
-                text-sm
-                font-semibold
-              "
-            >
-              Start Free
-            </a>
+            <div className="flex items-center gap-3">
+              <a
+                href="/winter-arc"
+                className="rounded-md border border-white/25 px-3 py-2 text-xs font-bold sm:px-4 sm:text-sm"
+              >
+                Winter Arc 2027
+              </a>
+              <a
+                href="#start"
+                className="hidden rounded-md bg-[#cc5500] px-4 py-2 text-sm font-semibold md:inline-flex"
+              >
+                Start Free
+              </a>
+            </div>
           </div>
 
           <div

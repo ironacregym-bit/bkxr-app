@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { GetServerSideProps } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import firestore from "@root/lib/firestoreClient";
+import { firestore } from "@pt/firebase";
 import { renderRichText } from "../../lib/sitebuilder/renderRichText";
 
 

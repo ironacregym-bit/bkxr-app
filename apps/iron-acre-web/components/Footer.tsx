@@ -4,7 +4,7 @@ export default function Footer() {
 
       <div className="mx-auto max-w-6xl px-6">
 
-        <div className="flex flex-col gap-3 md:flex-row md:justify-between">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
 
           <div
             className="
@@ -20,6 +20,18 @@ export default function Footer() {
           <div className="text-white/60">
             Westerfield, Ipswich
           </div>
+
+          <nav
+            aria-label="Footer"
+            className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/70"
+          >
+            <a href="/winter-arc" className="hover:text-white">
+              Winter Arc 2027
+            </a>
+            <a href="/#location" className="hover:text-white">
+              Location
+            </a>
+          </nav>
 
         </div>
 

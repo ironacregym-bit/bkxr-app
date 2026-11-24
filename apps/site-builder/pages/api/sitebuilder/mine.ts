@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import firestore from "@root/lib/firestoreClient";
+import { firestore } from "@pt/firebase";
 
 type SiteRow = {
   id: string;

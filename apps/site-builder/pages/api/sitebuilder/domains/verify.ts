@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { authOptions } from "@/lib/auth";
-import firestore from "@root/lib/firestoreClient";
+import { firestore } from "@pt/firebase";
 import { normalizeHost, nowIso } from "@/lib/sitebuilder/model";
 import dns from "dns/promises";
 

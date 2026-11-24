@@ -1,1 +1,1 @@
-export { authOptions } from "@root/pages/api/auth/[...nextauth]";
+export { authOptions } from "@root/apps/iron-acre-app/pages/api/auth/[...nextauth]";

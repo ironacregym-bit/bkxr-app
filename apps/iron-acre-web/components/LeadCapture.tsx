@@ -4,7 +4,23 @@ import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 
-export default function LeadCapture() {
+type LeadCaptureProps = {
+  source?: string;
+  heading?: string;
+  description?: string;
+  buttonLabel?: string;
+  successHeading?: string;
+  successMessage?: string;
+};
+
+export default function LeadCapture({
+  source = "hero",
+  heading = "Start Free",
+  description = "Claim your free class and get instant access to the 7 day program.",
+  buttonLabel = "Get My Free Program",
+  successHeading = "You're In.",
+  successMessage = "Your details have been saved.",
+}: LeadCaptureProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
 
@@ -12,6 +28,9 @@ export default function LeadCapture() {
     useState(false);
 
   const [success, setSuccess] =
+    useState(false);
+
+  const [confirmationEmailSent, setConfirmationEmailSent] =
     useState(false);
 
   const [error, setError] =
@@ -27,7 +46,7 @@ export default function LeadCapture() {
 
     try {
       const response = await fetch(
-        "/api/capture",
+        "/api/leads/create",
         {
           method: "POST",
 
@@ -37,26 +56,9 @@ export default function LeadCapture() {
           },
 
           body: JSON.stringify({
-            formId: "heroLead",
-
-            payload: {
-              name,
-              email,
-
-              source: "hero",
-
-              welcomeEmailSent: false,
-
-              day1Sent: false,
-              day2Sent: false,
-              day3Sent: false,
-              day4Sent: false,
-              day5Sent: false,
-              day6Sent: false,
-              day7Sent: false,
-
-              coachingOfferSent: false,
-            },
+            name,
+            email,
+            source,
           }),
         }
       );
@@ -71,6 +73,9 @@ export default function LeadCapture() {
         );
       }
 
+      setConfirmationEmailSent(
+        json.confirmationEmailSent === true
+      );
       setSuccess(true);
     } catch (err: any) {
       setError(
@@ -102,14 +107,21 @@ export default function LeadCapture() {
             text-[#cc5500]
           "
         >
-          You're In.
+          {successHeading}
         </h3>
 
         <p className="text-white/70">
-          Your details have been saved.
-          Check your inbox shortly for
-          your free 7 day program.
+          {successMessage}
         </p>
+
+        {!confirmationEmailSent && (
+          <p
+            className="mt-3 text-sm text-white/55"
+            role="status"
+          >
+            Your signup is saved, but we couldn't send the confirmation email yet.
+          </p>
+        )}
       </Card>
     );
   }
@@ -134,13 +146,11 @@ export default function LeadCapture() {
               leading-none
             "
           >
-            Start Free
+            {heading}
           </h3>
 
           <p className="text-sm text-white/65">
-            Claim your free class and
-            get instant access to the
-            7 day program.
+            {description}
           </p>
         </div>
 
@@ -149,6 +159,8 @@ export default function LeadCapture() {
             type="text"
             placeholder="First name"
             value={name}
+            maxLength={100}
+            autoComplete="given-name"
             onChange={(e) =>
               setName(
                 e.target.value
@@ -161,6 +173,8 @@ export default function LeadCapture() {
             type="email"
             placeholder="Email address"
             value={email}
+            maxLength={254}
+            autoComplete="email"
             onChange={(e) =>
               setEmail(
                 e.target.value
@@ -181,7 +195,7 @@ export default function LeadCapture() {
           >
             {loading
               ? "Submitting..."
-              : "Get My Free Program"}
+              : buttonLabel}
           </Button>
         </div>
 

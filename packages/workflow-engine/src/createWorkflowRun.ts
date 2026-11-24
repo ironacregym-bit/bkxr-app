@@ -1,4 +1,4 @@
-import firestore from "../../../lib/firestoreClient";
+import { firestore } from "@pt/firebase";
 
 export async function createWorkflowRun({
   tenantId,

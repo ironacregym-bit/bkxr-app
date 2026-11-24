@@ -24,6 +24,11 @@
       "@root/*": ["../../*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "../../types/next-auth.d.ts"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "../iron-acre-app/types/next-auth.d.ts"
+  ],
   "exclude": ["node_modules"]
 }
