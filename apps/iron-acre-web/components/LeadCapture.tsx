@@ -27,7 +27,7 @@ export default function LeadCapture() {
 
     try {
       const response = await fetch(
-        "/api/leads/create",
+        "/api/capture",
         {
           method: "POST",
 
@@ -37,9 +37,26 @@ export default function LeadCapture() {
           },
 
           body: JSON.stringify({
-            name,
-            email,
-            source: "hero",
+            formId: "heroLead",
+
+            payload: {
+              name,
+              email,
+
+              source: "hero",
+
+              welcomeEmailSent: false,
+
+              day1Sent: false,
+              day2Sent: false,
+              day3Sent: false,
+              day4Sent: false,
+              day5Sent: false,
+              day6Sent: false,
+              day7Sent: false,
+
+              coachingOfferSent: false,
+            },
           }),
         }
       );
@@ -55,7 +72,6 @@ export default function LeadCapture() {
       }
 
       setSuccess(true);
-
     } catch (err: any) {
       setError(
         err.message ||
@@ -91,8 +107,8 @@ export default function LeadCapture() {
 
         <p className="text-white/70">
           Your details have been saved.
-          Check your inbox for your
-          free 7 day program.
+          Check your inbox shortly for
+          your free 7 day program.
         </p>
       </Card>
     );
@@ -107,9 +123,7 @@ export default function LeadCapture() {
       "
     >
       <form onSubmit={handleSubmit}>
-
         <div className="mb-5">
-
           <h3
             className="
               mb-2
@@ -128,11 +142,9 @@ export default function LeadCapture() {
             get instant access to the
             7 day program.
           </p>
-
         </div>
 
         <div className="space-y-3">
-
           <Input
             type="text"
             placeholder="First name"
@@ -171,7 +183,6 @@ export default function LeadCapture() {
               ? "Submitting..."
               : "Get My Free Program"}
           </Button>
-
         </div>
 
         {error && (
@@ -179,7 +190,6 @@ export default function LeadCapture() {
             {error}
           </p>
         )}
-
       </form>
     </Card>
   );
