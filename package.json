@@ -16,7 +16,9 @@
     "dev": "next dev -p 3000",
 
     "turbo:build": "turbo run build",
-    "turbo:dev": "turbo run dev"
+    "turbo:dev": "turbo run dev",
+    "sitebuilder:build": "turbo run build --filter=@pt/site-builder",
+    "sitebuilder:dev": "turbo run dev --filter=@pt/site-builder"
   },
 
   "dependencies": {
