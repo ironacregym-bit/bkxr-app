@@ -1,22 +1,64 @@
 import Head from "next/head";
 import Link from "next/link";
 import type { GetServerSideProps } from "next";
+import type { CSSProperties, ReactNode } from "react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { firestore } from "@pt/firebase";
+import { sanitizePublicPayments } from "@/lib/sitebuilder/payments";
+import ProductCheckoutButton from "@/components/sitebuilder/ProductCheckoutButton";
 import { renderRichText } from "../../lib/sitebuilder/renderRichText";
 
+type GalleryImage = {
+  id?: string;
+  imageUrl?: string | null;
+  title?: string;
+  caption?: string;
+  alt?: string;
+};
+
+type MediaGallery = {
+  title?: string;
+  intro?: string;
+  images?: GalleryImage[];
+};
+
+type CustomTable = {
+  id?: string;
+  title?: string;
+  intro?: string;
+  columns?: string[];
+  rows?: string[][];
+};
+
+type SiteDocument = {
+  id?: string;
+  title?: string;
+  description?: string;
+  fileUrl?: string;
+};
+
+type PublicPaymentProduct = {
+  id: string;
+  name: string;
+  description: string;
+  amountMinor: number;
+  currency: string;
+};
 
 type PublicSite = {
   id: string;
   slug: string;
   published: boolean;
-  owner_email: string;
-  editor_emails: string[];
+  payments?: {
+    enabled: boolean;
+    products: PublicPaymentProduct[];
+  };
   updated_at?: string;
   mediaGallery?: MediaGallery;
   documents?: SiteDocument[];
   theme?: {
+    template?: "studio" | "editorial" | string;
     accent?: string | null;
     mode?: "dark" | "light" | string;
   };
@@ -43,10 +85,7 @@ type PublicSite = {
     faq?: string;
     contact?: string;
   };
-  customTables?: CustomTable[] | {
-  order?: string[];
-  items?: Record<string, any>;
-};
+  customTables?: CustomTable[] | { order?: string[]; items?: Record<string, any> };
   promotion?: {
     enabled?: boolean;
     title?: string;
@@ -54,7 +93,6 @@ type PublicSite = {
     buttonText?: string;
     buttonUrl?: string;
   };
-
   newsletter?: {
     enabled?: boolean;
     title?: string;
@@ -63,53 +101,18 @@ type PublicSite = {
     subscribeUrl?: string;
   };
 };
-type GalleryImage = {
-  id?: string;
-  imageUrl?: string | null;
-  title?: string;
-  caption?: string;
-  alt?: string;
-};
 
-type MediaGallery = {
-  title?: string;
-  intro?: string;
-  images?: GalleryImage[];
-};
-type CustomTable = {
-  id?: string;
-  title?: string;
-  intro?: string;
-  columns?: string[];
-  rows?: string[][];
-};
-type SiteDocument = {
-  id?: string;
-  title?: string;
-  description?: string;
-  fileUrl?: string;
-};
 function normalizeHost(host: string) {
   return String(host || "").trim().toLowerCase().split(":")[0];
 }
 
-function safeText(v: any) {
-  return String(v || "").trim();
+function safeText(value: any) {
+  return String(value || "").trim();
 }
 
-function splitParagraphs(v: any) {
-  const s = safeText(v);
-  if (!s) return [];
-  return s
-    .split(/\n{2,}/g)
-    .map((p) => p.trim())
-    .filter(Boolean);
-}
 function normaliseGallery(site: PublicSite) {
   const gallery = site?.mediaGallery || {};
-  const imagesRaw = Array.isArray(gallery.images) ? gallery.images : [];
-
-  const images = imagesRaw
+  const images = (Array.isArray(gallery.images) ? gallery.images : [])
     .map((image, index) => ({
       id: safeText(image?.id) || `gallery_${index}`,
       imageUrl: safeText(image?.imageUrl),
@@ -125,21 +128,18 @@ function normaliseGallery(site: PublicSite) {
     images,
   };
 }
+
 function normaliseTables(site: PublicSite) {
-  const raw = (site as any)?.customTables;
+  const raw = site.customTables;
   if (Array.isArray(raw)) {
     return raw
-      .map((table: any, tableIndex: number) => {
+      .map((table, tableIndex) => {
         const columns = Array.isArray(table?.columns)
-          ? table.columns.map((column: any) => safeText(column)).filter(Boolean)
+          ? table.columns.map((column) => safeText(column)).filter(Boolean)
           : [];
-        const rowsRaw = Array.isArray(table?.rows) ? table.rows : [];
-        const rows = rowsRaw
-          .map((row: any) => {
-            const rowArray = Array.isArray(row) ? row : [];
-            return columns.map((column: string, columnIndex: number) => safeText(rowArray[columnIndex]));
-          })
-          .filter((row: string[]) => row.some(Boolean));
+        const rows = (Array.isArray(table?.rows) ? table.rows : [])
+          .map((row) => columns.map((_, columnIndex) => safeText(row?.[columnIndex])))
+          .filter((row) => row.some(Boolean));
         return {
           id: safeText(table?.id) || `table_${tableIndex}`,
           title: safeText(table?.title),
@@ -148,137 +148,73 @@ function normaliseTables(site: PublicSite) {
           rows,
         };
       })
-      .filter((table: any) => table.title || table.rows.length > 0);
+      .filter((table) => table.title || table.rows.length > 0);
   }
-  if (!raw || typeof raw !== "object") {
-    return [];
-  }
+
+  if (!raw || typeof raw !== "object") return [];
   const order = Array.isArray(raw.order) ? raw.order : [];
   const items = raw.items && typeof raw.items === "object" ? raw.items : {};
+
   return order
-    .map((tableId: string, tableIndex: number) => {
+    .map((tableId, tableIndex) => {
       const table = items[tableId];
       if (!table || typeof table !== "object") return null;
       const columnOrder = Array.isArray(table.columnOrder) ? table.columnOrder : [];
       const columnsMap = table.columns && typeof table.columns === "object" ? table.columns : {};
-      const columns = columnOrder
-        .map((columnId: string) => safeText(columnsMap[columnId]))
-        .filter(Boolean);
+      const columns = columnOrder.map((id: string) => safeText(columnsMap[id])).filter(Boolean);
       const rowOrder = Array.isArray(table.rowOrder) ? table.rowOrder : [];
       const rowsMap = table.rows && typeof table.rows === "object" ? table.rows : {};
       const rows = rowOrder
         .map((rowId: string) => {
           const row = rowsMap[rowId] || {};
           const cells = row.cells && typeof row.cells === "object" ? row.cells : {};
-          return columnOrder.map((columnId: string) => safeText(cells[columnId]));
+          return columnOrder.map((id: string) => safeText(cells[id]));
         })
         .filter((row: string[]) => row.some(Boolean));
       return {
-        id: safeText(table?.id) || safeText(tableId) || `table_${tableIndex}`,
-        title: safeText(table?.title),
-        intro: safeText(table?.intro),
+        id: safeText(table.id) || safeText(tableId) || `table_${tableIndex}`,
+        title: safeText(table.title),
+        intro: safeText(table.intro),
         columns,
         rows,
       };
     })
     .filter((table: any) => table && (table.title || table.rows.length > 0));
 }
-function normaliseDocuments(site: PublicSite) {
-  const docs = Array.isArray(
-    (site as any)?.documents
-  )
-    ? (site as any).documents
-    : [];
 
-  return docs.filter(
-    (x: any) =>
-      x?.title &&
-      x?.fileUrl
+function normaliseDocuments(site: PublicSite) {
+  return (Array.isArray(site.documents) ? site.documents : []).filter(
+    (document) => document?.title && document?.fileUrl
   );
 }
+
 function renderContactLine(line: string, accent: string) {
   const lower = line.toLowerCase();
-
   if (lower.startsWith("email:")) {
     const email = line.replace(/email:/i, "").trim();
-
-    return (
-      <>
-        Email:{" "}
-        <a
-        href={`mailto:${email}`}
-        className="sb-contactLink"
-        style={{ color: accent }}>
-          {email}
-        </a>
-      </>
-    );
+    return <>Email: <a href={`mailto:${email}`} className="font-medium underline underline-offset-4" style={{ color: accent }}>{email}</a></>;
   }
-
   if (lower.startsWith("phone:")) {
     const phone = line.replace(/phone:/i, "").trim();
-
-    return (
-      <>
-        Phone:{" "}
-        <a
-          href={`tel:${phone}`}
-          className="sb-contactLink"
-          style={{ color: accent }}
-        >
-          {phone}
-        </a>
-      </>
-    );
+    return <>Phone: <a href={`tel:${phone}`} className="font-medium underline underline-offset-4" style={{ color: accent }}>{phone}</a></>;
   }
-
   if (lower.startsWith("instagram:")) {
     const handle = line.replace(/instagram:/i, "").trim();
-
-    return (
-      <>
-        Instagram:{" "}
-        <a
-          href={`https://instagram.com/${handle.replace(/^@/, "")}`}
-          target="_blank"
-          rel="noreferrer"
-          className="sb-contactLink"
-          style={{ color: accent }}
-        >
-          {handle}
-        </a>
-      </>
-    );
+    return <>Instagram: <a href={`https://instagram.com/${handle.replace(/^@/, "")}`} target="_blank" rel="noreferrer" className="font-medium underline underline-offset-4" style={{ color: accent }}>{handle}</a></>;
   }
-
   if (lower.startsWith("address:")) {
     const address = line.replace(/address:/i, "").trim();
-
-    return (
-      <>
-        Address:{" "}
-        <a
-          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`}
-          target="_blank"
-          rel="noreferrer"
-          className="sb-contactLink"
-          style={{ color: accent }}
-        >
-          {address}
-        </a>
-      </>
-    );
+    return <>Address: <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer" className="font-medium underline underline-offset-4" style={{ color: accent }}>{address}</a></>;
   }
-
   return line;
 }
 
-function isAuthorized(site: PublicSite, email: string) {
-  const e = String(email || "").toLowerCase();
-  if (!e) return false;
-  if (String(site.owner_email || "").toLowerCase() === e) return true;
+function isAuthorized(site: { owner_email?: string; editor_emails?: string[] }, email: string) {
+  const normalizedEmail = String(email || "").toLowerCase();
+  if (!normalizedEmail) return false;
+  if (String(site.owner_email || "").toLowerCase() === normalizedEmail) return true;
   const editors = Array.isArray(site.editor_emails) ? site.editor_emails : [];
-  return editors.map((x) => String(x || "").toLowerCase()).includes(e);
+  return editors.map((item) => String(item || "").toLowerCase()).includes(normalizedEmail);
 }
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
@@ -287,39 +223,45 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 
   const session = await getServerSession(context.req, context.res, authOptions);
   const email = session?.user?.email ? String(session.user.email).toLowerCase() : "";
-
   const host = normalizeHost(String(context.req.headers.host || ""));
   const baseHost = normalizeHost(String(process.env.SITEBUILDER_BASE_HOST || ""));
 
   try {
-    const slugSnap = await firestore.collection("sitebuilder_slugs").doc(slug).get();
-    if (!slugSnap.exists) return { notFound: true };
+    const slugSnapshot = await firestore.collection("sitebuilder_slugs").doc(slug).get();
+    if (!slugSnapshot.exists) return { notFound: true };
 
-    const slugData: any = slugSnap.data() || {};
+    const slugData: any = slugSnapshot.data() || {};
     const siteId = String(slugData.siteId || "").trim();
     if (!siteId) return { notFound: true };
 
-    const siteSnap = await firestore.collection("sitebuilder_sites").doc(siteId).get();
-    if (!siteSnap.exists) return { notFound: true };
+    const siteSnapshot = await firestore.collection("sitebuilder_sites").doc(siteId).get();
+    if (!siteSnapshot.exists) return { notFound: true };
 
-    const site = siteSnap.data() as PublicSite;
+    const site = siteSnapshot.data() as PublicSite;
     const canEdit = isAuthorized(site, email);
-    const published = Boolean(site.published);
+    if (!site.published && !canEdit) return { notFound: true };
 
-    // Drafts are visible only to owner/editors
-    if (!published && !canEdit) return { notFound: true };
-
+    const {
+      owner_email: _ownerEmail,
+      editor_emails: _editorEmails,
+      domains: _domains,
+      tenantId: _tenantId,
+      ...publicSite
+    } = site;
     return {
       props: {
-        site: { ...(site as any), id: siteId, slug },
+        site: {
+          ...(publicSite as any),
+          id: siteId,
+          slug,
+          payments: sanitizePublicPayments(site.payments),
+        },
         canEdit,
-        servedHost: host,
         isCustomDomain: Boolean(host && baseHost && host !== baseHost),
       },
     };
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error("[p/[slug]] SSR failed:", e);
+  } catch (error) {
+    console.error("[p/[slug]] SSR failed:", error);
     return { notFound: true };
   }
 };
@@ -327,73 +269,66 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 export default function PublicSitePage(props: {
   site: PublicSite;
   canEdit: boolean;
-  servedHost: string;
   isCustomDomain: boolean;
 }) {
   const { site, canEdit, isCustomDomain } = props;
-
-  const accent = site?.theme?.accent || "#1fe0a5";
-  const mode = String(site?.theme?.mode || "dark").toLowerCase() === "light" ? "light" : "dark";
-  const isLight = mode === "light";
-
-  const title = safeText(site?.seo?.title) || safeText(site?.brand?.name) || "Site";
-  const description = safeText(site?.seo?.description) || "";
-  const ogImage = site?.seo?.image || site?.hero?.imageUrl || null;
-
-  const brandName = safeText(site?.brand?.name) || "Site";
-  const logoUrl = site?.brand?.logoUrl || null;
-
-  const faviconUrl =
-    safeText(site?.brand?.faviconUrl) ||
-    safeText(site?.brand?.logoUrl) ||
-    "";
-
-const faviconHref = faviconUrl
-  ? `${faviconUrl}?v=${encodeURIComponent(site.updated_at || Date.now().toString())}`
-  : "";
-
-  const heroHeadline = safeText(site?.hero?.headline) || brandName;
-  const heroSub = safeText(site?.hero?.subheadline) || "";
-  const heroImage = site?.hero?.imageUrl || null;
-  const promotion = site?.promotion;
-  const newsletter = site?.newsletter;
-  const ctaText = safeText(site?.hero?.ctaText) || "Get started";
-  const ctaHref = safeText(site?.hero?.ctaHref) || "#contact";
-
-  const aboutContent = site?.sections?.about || "";
-  const servicesContent = site?.sections?.services || "";
-  const faqContent = site?.sections?.faq || "";
-
-  const contactLines = safeText(site?.sections?.contact)
-    .split("\n")
-    .map((x) => x.trim())
-    .filter(Boolean);
-  const gallery = normaliseGallery(site);
-  const hasGallery = gallery.images.length > 0;
-  const customTables = normaliseTables(site);
-  const hasTables = customTables.length > 0;
-  const isDraft = !Boolean(site.published);
-  const documents = normaliseDocuments(site);
-  const hasDocuments = documents.length > 0;
-  const addressLine = contactLines.find((line) =>
-    line.toLowerCase().startsWith("address:")
-  );
-
-  const addressValue = addressLine
-    ? addressLine.replace(/address:/i, "").trim()
+  const accent = safeText(site.theme?.accent) || "#1fe0a5";
+  const isLight = String(site.theme?.mode || "dark").toLowerCase() === "light";
+  const isEditorial = site.theme?.template === "editorial";
+  const title = safeText(site.seo?.title) || safeText(site.brand?.name) || "Site";
+  const description = safeText(site.seo?.description);
+  const ogImage = site.seo?.image || site.hero?.imageUrl || null;
+  const brandName = safeText(site.brand?.name) || "Site";
+  const logoUrl = site.brand?.logoUrl || null;
+  const faviconUrl = safeText(site.brand?.faviconUrl) || safeText(site.brand?.logoUrl);
+  const faviconHref = faviconUrl
+    ? `${faviconUrl}${faviconUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(site.updated_at || "1")}`
     : "";
-
-  const bg = isLight ? "#ffffff" : "#06090d";
-  const text = isLight ? "#111318" : "#ffffff";
-  const muted = isLight ? "rgba(17,19,24,0.68)" : "rgba(255,255,255,0.70)";
-  const border = isLight ? "rgba(17,19,24,0.08)" : "rgba(255,255,255,0.06)";
-  const cardBg = isLight ? "#f6f7f9" : "#0b0f14";
-  const topBg = isLight ? "rgba(255,255,255,0.82)" : "rgba(6,9,13,0.82)";
-  const heroOverlay = isLight
-    ? "linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.72) 100%)"
-    : "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.75) 100%)";
-
-  const markBg = `linear-gradient(135deg, ${accent}, rgba(110, 168, 255, 0.75))`;
+  const heroHeadline = safeText(site.hero?.headline) || brandName;
+  const heroSubheadline = safeText(site.hero?.subheadline);
+  const heroImage = site.hero?.imageUrl || null;
+  const ctaText = safeText(site.hero?.ctaText) || "Get started";
+  const ctaHref = safeText(site.hero?.ctaHref) || "#contact";
+  const promotion = site.promotion;
+  const newsletter = site.newsletter;
+  const contactLines = safeText(site.sections?.contact).split("\n").map((line) => line.trim()).filter(Boolean);
+  const addressLine = contactLines.find((line) => line.toLowerCase().startsWith("address:"));
+  const address = addressLine ? addressLine.replace(/address:/i, "").trim() : "";
+  const gallery = normaliseGallery(site);
+  const tables = normaliseTables(site);
+  const documents = normaliseDocuments(site);
+  const products = site.payments?.enabled ? site.payments.products : [];
+  const isDraft = !site.published;
+  const pageBackground = isLight ? "#ffffff" : "#070b10";
+  const surfaceBackground = isLight ? "#f7f8fa" : "#0d131b";
+  const foreground = isLight ? "#171b22" : "#f4f6f8";
+  const mutedForeground = isLight ? "rgba(23,27,34,0.68)" : "rgba(244,246,248,0.68)";
+  const borderColor = isLight ? "rgba(23,27,34,0.1)" : "rgba(244,246,248,0.12)";
+  const pageStyle: CSSProperties = { backgroundColor: pageBackground, color: foreground };
+  const surfaceStyle: CSSProperties = { backgroundColor: surfaceBackground, borderColor };
+  const sectionClass = isEditorial
+    ? "border-b py-10 last:border-b-0 md:py-14"
+    : "rounded-2xl border px-5 py-7 shadow-sm sm:px-8 md:py-9";
+  const headingClass = isEditorial
+    ? "mb-5 font-serif text-3xl font-semibold tracking-tight sm:text-4xl"
+    : "mb-5 text-2xl font-semibold tracking-tight sm:text-3xl";
+  const CTA = ({ href, children, secondary = false }: { href: string; children: ReactNode; secondary?: boolean }) => (
+    <a
+      href={href}
+      className={`inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold transition-opacity hover:opacity-85 ${
+        secondary ? "border border-current bg-transparent" : ""
+      }`}
+      style={secondary ? { borderColor, color: foreground } : { backgroundColor: accent, color: isLight ? "#101820" : "#071018" }}
+    >
+      {children}
+    </a>
+  );
+  const Section = ({ id, title: sectionTitle, children }: { id?: string; title: string; children: ReactNode }) => (
+    <section id={id} className={sectionClass} style={isEditorial ? { borderColor } : surfaceStyle}>
+      <h2 className={headingClass}>{sectionTitle}</h2>
+      {children}
+    </section>
+  );
 
   return (
     <>
@@ -405,297 +340,237 @@ const faviconHref = faviconUrl
         <meta property="og:type" content="website" />
         {ogImage ? <meta property="og:image" content={String(ogImage)} /> : null}
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-        {faviconHref ? (
-          <>
-            {faviconHref}
-            {faviconHref}
-            {faviconHref}
-          </>
-        ) : null}
+        {isDraft ? <meta name="robots" content="noindex,nofollow" /> : null}
+        {faviconHref ? <link rel="icon" href={faviconHref} /> : null}
       </Head>
 
-      <div className="sb-wrap"
-        style={ { "--sb-bg": bg,
-                 "--sb-text": text,
-                 "--sb-muted": muted,
-                 "--sb-border": border,
-                 "--sb-card-bg": cardBg,
-                 "--sb-top-bg": topBg,
-                 "--sb-accent": accent,
-                 "--sb-mark-bg": markBg,
-                 "--sb-hero-overlay": heroOverlay,
-                } as React.CSSProperties }>
+      <div className="min-h-screen" style={pageStyle}>
         {canEdit && isDraft ? (
-          <div className="sb-draftBanner" role="status" aria-label="Draft banner">
-            <div className="sb-draftDot" aria-hidden="true" />
-            <div className="sb-draftText">
-              Draft page. Only you and editors can see this. Publish it in settings when ready.
+          <div className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm backdrop-blur sm:px-6">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-amber-400" aria-hidden="true" />
+              Draft page: only you and your editors can see this.
             </div>
-            <div className="sb-draftActions">
-              <Link className="sb-draftLink" href={`/sitebuilder/${encodeURIComponent(String(site.id))}`}>
-                Open settings
-              </Link>
-            </div>
+            <Link className="font-semibold underline underline-offset-4" href={`/sitebuilder/${encodeURIComponent(String(site.id))}`}>
+              Open editor
+            </Link>
           </div>
         ) : null}
 
-        <header className="sb-top">
-          <div className="sb-brand">
-            {logoUrl ? (
-              <img src={logoUrl} alt={`${brandName} logo`} className="sb-logo" />
-            ) : (
-              <div className="sb-mark" aria-hidden="true" />
-            )}
-            <div className="sb-brandText">{brandName}</div>
-          </div>
-
-          <div className="sb-actions">
-            {canEdit ? (
-              <Link className="sb-edit" href={`/sitebuilder/${encodeURIComponent(String(site.id))}`}>
-                Edit
-              </Link>
-            ) : null}
+        <header className="border-b" style={{ borderColor, backgroundColor: isLight ? "rgba(255,255,255,.92)" : "rgba(7,11,16,.92)" }}>
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-8">
+            <a href="#top" className="flex min-w-0 items-center gap-3">
+              {logoUrl ? (
+                <img src={logoUrl} alt={`${brandName} logo`} className="h-10 w-auto max-w-40 object-contain" />
+              ) : (
+                <span className="h-9 w-9 rounded-xl" style={{ background: `linear-gradient(135deg, ${accent}, #6ea8ff)` }} aria-hidden="true" />
+              )}
+              <span className="truncate font-semibold">{brandName}</span>
+            </a>
+            <nav aria-label="Main navigation" className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" style={{ color: mutedForeground }}>
+              <a className="hover:underline" href="#about">About</a>
+              <a className="hover:underline" href="#services">Services</a>
+              {gallery.images.length ? <a className="hover:underline" href="#gallery">Gallery</a> : null}
+              {products.length ? <a className="hover:underline" href="#payments">Buy</a> : null}
+              <a className="hover:underline" href="#contact">Contact</a>
+              {canEdit ? (
+                <Link
+                  className="rounded-full border px-4 py-2 font-semibold"
+                  style={{ borderColor, color: foreground }}
+                  href={`/sitebuilder/${encodeURIComponent(String(site.id))}`}
+                >
+                  Edit site
+                </Link>
+              ) : null}
+            </nav>
           </div>
         </header>
 
-        <main className="sb-main">
-          <section className="sb-hero">
-            {heroImage ? (
-              <div className="sb-heroMedia" aria-hidden="true">
-                <img src={heroImage} alt="" className="sb-heroImg" />
-                <div className="sb-heroOverlay" aria-hidden="true" />
-              </div>
+        <main id="top" className="mx-auto max-w-6xl space-y-6 px-5 py-7 sm:px-8 sm:py-10">
+          <section
+            className={`relative isolate overflow-hidden rounded-3xl ${isEditorial ? "grid gap-8 border-b py-8 md:grid-cols-2 md:items-center md:py-14" : "flex min-h-[440px] items-center border"}`}
+            style={!heroImage || isEditorial ? { ...surfaceStyle, borderColor } : { borderColor }}
+          >
+            {heroImage && !isEditorial ? (
+              <>
+                <img src={heroImage} alt="" className="absolute inset-0 -z-20 h-full w-full object-cover" />
+                <div
+                  className={`absolute inset-0 -z-10 ${isLight ? "bg-gradient-to-t from-white/95 via-white/65 to-white/10" : "bg-gradient-to-t from-black/90 via-black/55 to-black/20"}`}
+                  aria-hidden="true"
+                />
+              </>
             ) : null}
-
-            <div className="sb-heroInner">
-              <h1 className="sb-h1">{heroHeadline}</h1>
-
-              {heroSub ? <p className="sb-lead">{heroSub}</p> : null}
-
-              <div className="sb-ctaRow">
-                <a className="sb-cta" href={ctaHref}>
-                  {ctaText}
-                </a>
-                <a className="sb-ctaGhost" href="#about">
-                  Learn more
-                </a>
+            <div className={`relative z-10 max-w-3xl ${isEditorial ? "py-6 md:py-0" : "px-6 py-16 sm:px-10 md:px-14"}`}>
+              <div className="mb-4 text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: accent }}>
+                {brandName}
+              </div>
+              <h1 className={`${isEditorial ? "font-serif" : ""} text-4xl font-semibold leading-tight tracking-tight sm:text-5xl md:text-6xl`}>
+                {heroHeadline}
+              </h1>
+              {heroSubheadline ? (
+                <p className="mt-5 max-w-2xl text-base leading-7 sm:text-lg" style={{ color: mutedForeground }}>
+                  {heroSubheadline}
+                </p>
+              ) : null}
+              <div className="mt-8 flex flex-wrap gap-3">
+                <CTA href={ctaHref}>{ctaText}</CTA>
+                <CTA href="#about" secondary>Learn more</CTA>
               </div>
             </div>
+            {heroImage && isEditorial ? (
+              <div className="overflow-hidden rounded-2xl border" style={{ borderColor }}>
+                <img src={heroImage} alt="" className="max-h-[520px] min-h-64 w-full object-cover" />
+              </div>
+            ) : null}
           </section>
+
           {promotion?.enabled ? (
-            <section className="sb-section">
-              <h2 className="sb-h2">
-                {promotion.title}
-              </h2>
-
-              <p className="sb-sectionIntro">
-                {promotion.description}
-              </p>
-
-              {promotion.buttonUrl ? (
-                <a
-                  href={promotion.buttonUrl}
-                  className="sb-cta"
-                >
-                  {promotion.buttonText || "Learn More"}
-                </a>
-              ) : null}
-            </section>
+            <Section title={safeText(promotion.title) || "Featured"}>
+              <p className="mb-5 leading-7" style={{ color: mutedForeground }}>{promotion.description}</p>
+              {promotion.buttonUrl ? <CTA href={promotion.buttonUrl}>{promotion.buttonText || "Learn more"}</CTA> : null}
+            </Section>
           ) : null}
-          <section id="about" className="sb-section">
-            <h2 className="sb-h2">About</h2>
-            {aboutContent ? (
-              <div className="sb-body">
-                {renderRichText(aboutContent)}
-              </div>
-            ) : (
-              <div className="sb-muted">No content yet.</div>
-            )}
-          </section>
 
-          <section id="services" className="sb-section">
-            <h2 className="sb-h2">Services</h2>
-            {servicesContent ? (
-              <div className="sb-body">
-                {renderRichText(servicesContent)}
-              </div>
-            ) : (
-              <div className="sb-muted">No content yet.</div>
-            )}
-          </section>
+          <Section id="about" title="About">
+            {site.sections?.about ? <div>{renderRichText(site.sections.about)}</div> : <p style={{ color: mutedForeground }}>No content yet.</p>}
+          </Section>
+          <Section id="services" title="Services">
+            {site.sections?.services ? <div>{renderRichText(site.sections.services)}</div> : <p style={{ color: mutedForeground }}>No content yet.</p>}
+          </Section>
 
-          {hasTables ? (
-          <section id="tables" className="sb-section">
-            <h2 className="sb-h2">Information</h2>
-            <div className="sb-tableList">
-              {customTables.map((table: any) => (
-                <div key={table.id} className="sb-tableBlock">
-                  {table.title ? <h3 className="sb-h3">{table.title}</h3> : null}
-                  {table.intro ? <p className="sb-sectionIntro">{table.intro}</p> : null}
-                  {table.columns.length > 0 && table.rows.length > 0 ? (
-                    <div className="sb-tableScroll">
-                      <table className="sb-table">
-                        <thead>
-                          <tr>
-                            {table.columns.map((column: string, columnIndex: number) => (
-                              <th key={`${table.id}_head_${columnIndex}`}>{column}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {table.rows.map((row: string[], rowIndex: number) => (
-                            <tr key={`${table.id}_row_${rowIndex}`}>
-                              {table.columns.map((column: string, columnIndex: number) => (
-                                <td key={`${table.id}_cell_${rowIndex}_${columnIndex}`}>
-                                  {row[columnIndex] || "—"}
-                                </td>
+          {tables.length ? (
+            <Section id="tables" title="Information">
+              <div className="space-y-6">
+                {tables.map((table: any) => (
+                  <div key={table.id} className="rounded-xl border p-4 sm:p-5" style={{ borderColor }}>
+                    {table.title ? <h3 className="mb-2 text-lg font-semibold">{table.title}</h3> : null}
+                    {table.intro ? <p className="mb-4 text-sm leading-6" style={{ color: mutedForeground }}>{table.intro}</p> : null}
+                    {table.columns.length && table.rows.length ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[480px] border-collapse text-sm">
+                          <thead>
+                            <tr className="border-b" style={{ borderColor }}>
+                              {table.columns.map((column: string, index: number) => (
+                                <th key={`${table.id}_head_${index}`} className="px-3 py-3 text-left font-semibold">{column}</th>
                               ))}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="sb-muted">No table entries yet.</div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-        {hasGallery ? (
-          <section id="gallery" className="sb-section">
-            <h2 className="sb-h2">{gallery.title}</h2>
-
-            {gallery.intro ? (
-              <p className="sb-sectionIntro">{gallery.intro}</p>
-            ) : null}
-
-            <div className="sb-galleryGrid">
-              {gallery.images.map((image) => (
-                <figure key={image.id} className="sb-galleryItem">
-                  <div className="sb-galleryMedia">
-                    <img
-                      src={image.imageUrl || ""}
-                      alt={image.alt || image.title || ""}
-                      className="sb-galleryImg"
-                    />
+                          </thead>
+                          <tbody>
+                            {table.rows.map((row: string[], rowIndex: number) => (
+                              <tr key={`${table.id}_row_${rowIndex}`} className="border-b last:border-0" style={{ borderColor }}>
+                                {table.columns.map((_: string, columnIndex: number) => (
+                                  <td key={`${table.id}_cell_${rowIndex}_${columnIndex}`} className="px-3 py-3" style={{ color: mutedForeground }}>{row[columnIndex] || "—"}</td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : <p style={{ color: mutedForeground }}>No table entries yet.</p>}
                   </div>
-
-                  {image.title || image.caption ? (
-                    <figcaption className="sb-galleryCaption">
-                      {image.title ? (
-                        <div className="sb-galleryTitle">{image.title}</div>
-                      ) : null}
-
-                      {image.caption ? (
-                        <div className="sb-galleryText">{image.caption}</div>
-                      ) : null}
-                    </figcaption>
-                  ) : null}
-                </figure>
-              ))}
-            </div>
-          </section>
-        ) : null}
-        {hasDocuments ? (
-          <section
-            id="documents"
-            className="sb-section"
-          >
-            <h2 className="sb-h2">
-              Documents
-            </h2>
-          <div className="sb-docGrid">
-            {documents.map((doc: any) => (
-              <a
-                key={doc.id}
-                href={doc.fileUrl}
-                target="_blank"
-                rel="noopener noreferrer">
-
-                <div className="sb-docTitle">
-                  {doc.title}
-                </div>
-                <div className="sb-docDescription">
-                  {doc.description}
-                </div>
-
-                <div className="sb-docLink">
-                  Download Document →
-                </div>
-              </a>
-            ))}
-          </div>
-          </section>
-          ) : null}
-          <section id="faq" className="sb-section">
-            <h2 className="sb-h2">FAQ</h2>
-            {faqContent ? (
-              <div className="sb-body">
-                {renderRichText(faqContent)}
+                ))}
               </div>
-            ) : (
-              <div className="sb-muted">No content yet.</div>
-            )}
-          </section>
+            </Section>
+          ) : null}
 
-          <section id="contact" className="sb-section">
-            <h2 className="sb-h2">Contact</h2>
+          {gallery.images.length ? (
+            <Section id="gallery" title={gallery.title}>
+              {gallery.intro ? <p className="mb-6 leading-7" style={{ color: mutedForeground }}>{gallery.intro}</p> : null}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {gallery.images.map((image: any) => (
+                  <figure key={image.id} className="overflow-hidden rounded-xl border" style={{ borderColor, backgroundColor: pageBackground }}>
+                    <img src={image.imageUrl} alt={image.alt || image.title || ""} className="aspect-[4/3] w-full object-cover" />
+                    {image.title || image.caption ? (
+                      <figcaption className="p-4">
+                        {image.title ? <div className="font-semibold">{image.title}</div> : null}
+                        {image.caption ? <div className="mt-1 text-sm leading-relaxed" style={{ color: mutedForeground }}>{image.caption}</div> : null}
+                      </figcaption>
+                    ) : null}
+                  </figure>
+                ))}
+              </div>
+            </Section>
+          ) : null}
 
+          {documents.length ? (
+            <Section id="documents" title="Documents">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {documents.map((document: any, index: number) => (
+                  <a
+                    key={document.id || index}
+                    href={document.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`rounded-xl border p-4 transition-colors ${isLight ? "hover:bg-black/5" : "hover:bg-white/5"}`}
+                    style={{ borderColor }}
+                  >
+                    <div className="font-semibold">{document.title}</div>
+                    {document.description ? <div className="mt-1 text-sm leading-relaxed" style={{ color: mutedForeground }}>{document.description}</div> : null}
+                    <div className="mt-4 text-sm font-semibold" style={{ color: accent }}>Download document <span aria-hidden="true">→</span></div>
+                  </a>
+                ))}
+              </div>
+            </Section>
+          ) : null}
+
+          {products.length ? (
+            <section id="payments" className={sectionClass} style={isEditorial ? { borderColor } : surfaceStyle}>
+              <h2 className={headingClass}>Products & services</h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {products.map((product) => (
+                  <article key={product.id} className="flex flex-col rounded-xl border p-5" style={{ borderColor, backgroundColor: pageBackground }}>
+                    <h3 className="text-lg font-semibold">{product.name}</h3>
+                    {product.description ? <p className="mt-2 flex-1 text-sm leading-relaxed" style={{ color: mutedForeground }}>{product.description}</p> : <div className="flex-1" />}
+                    <div className="my-5 text-2xl font-semibold">
+                      {new Intl.NumberFormat("en-GB", {
+                        style: "currency",
+                        currency: product.currency.toUpperCase(),
+                      }).format(product.amountMinor / 100)}
+                    </div>
+                    <ProductCheckoutButton slug={site.slug} productId={product.id} />
+                  </article>
+                ))}
+              </div>
+              <p className="mt-4 text-xs" style={{ color: mutedForeground }}>Secure payments are processed by Stripe.</p>
+            </section>
+          ) : null}
+
+          <Section id="faq" title="FAQ">
+            {site.sections?.faq ? <div>{renderRichText(site.sections.faq)}</div> : <p style={{ color: mutedForeground }}>No content yet.</p>}
+          </Section>
+
+          <Section id="contact" title="Contact">
             {contactLines.length ? (
               <>
-                <div className="sb-body">
-                  {contactLines.map((line, i) => (
-                    <div key={i} className="sb-line">
-                      {renderContactLine(line, accent)}
-                    </div>
-                  ))}
+                <div className="space-y-2 leading-7" style={{ color: mutedForeground }}>
+                  {contactLines.map((line, index) => <div key={index}>{renderContactLine(line, accent)}</div>)}
                 </div>
-
-                {addressValue ? (
-                  <div className="sb-mapCard">
+                {address ? (
+                  <div className="mt-6 overflow-hidden rounded-xl border" style={{ borderColor }}>
                     <iframe
                       title="Location map"
-                      src={`https://www.google.com/maps?q=${encodeURIComponent(addressValue)}&output=embed`}
+                      src={`https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`}
                       loading="lazy"
-                      className="sb-map"
+                      className="h-72 w-full"
                     />
                   </div>
                 ) : null}
               </>
-            ) : (
-              <div className="sb-muted">No contact details yet.</div>
-            )}
-          </section>
+            ) : <p style={{ color: mutedForeground }}>No contact details yet.</p>}
+          </Section>
+
           {newsletter?.enabled ? (
-            <section className="sb-section">
-              <h2 className="sb-h2">
-                {newsletter.title}
-              </h2>
-
-              <p className="sb-sectionIntro">
-                {newsletter.description}
-              </p>
-
+            <Section title={safeText(newsletter.title) || "Join our newsletter"}>
+              <p className="mb-5 leading-7" style={{ color: mutedForeground }}>{newsletter.description}</p>
               {newsletter.subscribeUrl ? (
-                <a
-                  href={newsletter.subscribeUrl}
-                  className="sb-cta"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {newsletter.buttonText || "Subscribe"}
-                </a>
+                <CTA href={newsletter.subscribeUrl}>{newsletter.buttonText || "Subscribe"}</CTA>
               ) : null}
-            </section>
+            </Section>
           ) : null}
-          <footer className="sb-foot">
-            <div className="sb-footInner">
-              <div className="sb-footText">{isCustomDomain ? "" : "Powered by SiteBuilder"}</div>
-              <div className="sb-footText">© {new Date().getFullYear()}</div>
-            </div>
+
+          <footer className="flex flex-wrap items-center justify-between gap-3 border-t py-6 text-sm" style={{ borderColor, color: mutedForeground }}>
+            <span>{isCustomDomain ? "" : "Powered by SiteBuilder"}</span>
+            <span>© {new Date().getFullYear()} {brandName}</span>
           </footer>
         </main>
       </div>

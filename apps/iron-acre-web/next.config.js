@@ -12,6 +12,7 @@ const nextConfig = {
     "@pt/agents",
     "@pt/tools",
     "@pt/types",
+    "@pt/email-engine",
   ],
 };
 

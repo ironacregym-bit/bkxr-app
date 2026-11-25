@@ -7,5 +7,5 @@ module.exports = {
     externalDir: true,
     outputFileTracingRoot: path.join(__dirname, "../.."),
   },
-  transpilePackages: ["@pt/firebase"],
+  transpilePackages: ["@pt/firebase", "@pt/email-engine"],
 };

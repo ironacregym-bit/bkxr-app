@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import CollapsiblePanel from "./CollapsiblePanel";
 
 type DomainRow = {
   host: string;
@@ -185,68 +186,67 @@ export default function SiteDomainsCard(props: {
   }, [siteId]);
 
   return (
-    <div className="sd-card">
-      <div className="sd-title">Custom domains</div>
-      <div className="sd-sub">
-        Add a client domain, verify ownership via TXT, then map the host to this slug for root serving.
-      </div>
+    <CollapsiblePanel
+      title="Custom domains"
+      description="Add a client domain, verify ownership via TXT, then map the host to this slug for root serving."
+    >
+      <div className="space-y-5">
 
-      <div className="sd-form">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <Input
-          className="sd-input"
           placeholder="example.com"
           value={host}
           onChange={(e) => setHost(e.target.value)}
           disabled={!canEdit || busy}
         />
 
-        <Button className="sd-btn" onClick={add} disabled={!canEdit || busy}>
+        <Button onClick={add} disabled={!canEdit || busy}>
           {busy ? "Working…" : "Add domain"}
         </Button>
 
-        <Button className="sd-btn sd-btnGhost" onClick={refresh} disabled={busy}>
+        <Button variant="outline" onClick={refresh} disabled={busy}>
           Refresh
         </Button>
       </div>
 
-      {msg ? <div className="sd-msg">{msg}</div> : null}
+      {msg ? <div role="status" className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{msg}</div> : null}
 
       {txtName && txtValue ? (
-        <div className="sd-instructions">
-          <div className="sd-instructionsTitle">TXT verification</div>
+        <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+          <div className="font-semibold">TXT verification</div>
 
-          <div className="sd-monoRow">
-            <div className="sd-monoLabel">Name</div>
-            <div className="sd-monoValue">{txtName}</div>
+          <div className="grid gap-1 sm:grid-cols-[5rem_minmax(0,1fr)]">
+            <div className="text-xs font-medium text-muted-foreground">Name</div>
+            <div className="break-all font-mono text-xs">{txtName}</div>
           </div>
 
-          <div className="sd-monoRow">
-            <div className="sd-monoLabel">Value</div>
-            <div className="sd-monoValue">{txtValue}</div>
+          <div className="grid gap-1 sm:grid-cols-[5rem_minmax(0,1fr)]">
+            <div className="text-xs font-medium text-muted-foreground">Value</div>
+            <div className="break-all font-mono text-xs">{txtValue}</div>
           </div>
 
-          <div className="sd-help">
+          <div className="text-xs leading-relaxed text-muted-foreground">
             Add this TXT record in DNS, wait for propagation, then click Verify on the domain row below.
           </div>
         </div>
       ) : null}
 
-      <div className="sd-list">
-        {domains.length === 0 ? <div className="sd-muted">No domains added yet.</div> : null}
+      <div className="space-y-2">
+        {domains.length === 0 ? <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">No domains added yet.</div> : null}
 
         {domains.map((domain) => (
-          <div key={domain.host} className="sd-row">
-            <div className="sd-rowLeft">
-              <div className="sd-host">{domain.host}</div>
+          <div key={domain.host} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
+            <div className="min-w-0">
+              <div className="break-all font-medium">{domain.host}</div>
 
-              <div className="sd-meta">
+              <div className="mt-1">
                 <span
                   className={
                     domain.status === "active"
-                      ? "sd-pill sd-pillOn"
+                      ? "inline-flex rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300"
                       : domain.status === "verified"
-                      ? "sd-pill sd-pillMid"
-                      : "sd-pill"
+                      ? "inline-flex rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-blue-300"
+                      : "inline-flex rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
                   }
                 >
                   {domain.status}
@@ -254,9 +254,10 @@ export default function SiteDomainsCard(props: {
               </div>
             </div>
 
-            <div className="sd-rowRight">
+            <div>
               <Button
-                className="sd-link"
+                variant="outline"
+                size="sm"
                 onClick={() => verify(domain.host)}
                 disabled={!canEdit || busy || domain.status === "verified" || domain.status === "active"}
               >
@@ -268,24 +269,25 @@ export default function SiteDomainsCard(props: {
       </div>
 
       {hostMapHint ? (
-        <div className="sd-instructions">
-          <div className="sd-instructionsTitle">Host mapping (Vercel env)</div>
+        <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+          <div className="font-semibold">Host mapping (Vercel env)</div>
 
-          <div className="sd-help">
+          <div className="text-xs leading-relaxed text-muted-foreground">
             After verification and once the domain is added to your Vercel project, add this mapping to{" "}
-            <span className="sd-monoInline">SITEBUILDER_HOSTS_JSON</span>.
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">SITEBUILDER_HOSTS_JSON</code>.
           </div>
 
-          <pre className="sd-pre">{hostMapHint.jsonSnippet}</pre>
+          <pre className="overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs">{hostMapHint.jsonSnippet}</pre>
 
-          <div className="sd-help">
-            This will serve the site at <span className="sd-monoInline">{hostMapHint.base}</span> and{" "}
-            <span className="sd-monoInline">{hostMapHint.www}</span>.
+          <div className="text-xs leading-relaxed text-muted-foreground">
+            This will serve the site at <code className="font-mono text-foreground">{hostMapHint.base}</code> and{" "}
+            <code className="font-mono text-foreground">{hostMapHint.www}</code>.
           </div>
         </div>
       ) : null}
 
 
-    </div>
+      </div>
+    </CollapsiblePanel>
   );
 }

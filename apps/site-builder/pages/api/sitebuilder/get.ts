@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { firestore } from "@pt/firebase";
+import { sanitizePublicPayments } from "@/lib/sitebuilder/payments";
 
 type Resp =
   | { ok: true; site: any; canEdit: boolean }
@@ -53,7 +54,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     if (!published && !editable) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
 
-    return res.status(200).json({ ok: true, site: { ...site, id }, canEdit: editable });
+    const {
+      owner_email: _ownerEmail,
+      editor_emails: _editorEmails,
+      domains: _domains,
+      tenantId: _tenantId,
+      ...publicSite
+    } = site;
+    return res.status(200).json({
+      ok: true,
+      site: { ...publicSite, id, payments: sanitizePublicPayments(site.payments) },
+      canEdit: editable,
+    });
   } catch (e: any) {
     // eslint-disable-next-line no-console
     console.error("[sitebuilder/get] failed:", e);

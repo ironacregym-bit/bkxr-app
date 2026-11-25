@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { firestore } from "@pt/firebase";
 import { nowIso } from "@/lib/sitebuilder/model";
 import { sanitizeSitePatch } from "@/lib/sitebuilder/patch";
+import { sanitizePublicPayments } from "@/lib/sitebuilder/payments";
 
 type Resp =
   | { ok: true; site: any }
@@ -54,6 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       ...clean,
       // keep immutable-ish fields
       id: siteId,
+      tenantId: siteId,
       slug: site.slug,
       owner_email: site.owner_email,
       editor_emails: site.editor_emails || [],
@@ -63,7 +65,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     await ref.set(merged, { merge: false });
 
-    return res.status(200).json({ ok: true, site: merged });
+    const { tenantId: _tenantId, ...responseSite } = merged;
+    return res.status(200).json({
+      ok: true,
+      site: { ...responseSite, payments: sanitizePublicPayments(merged.payments) },
+    });
   } catch (e: any) {
     // eslint-disable-next-line no-console
     console.error("[sitebuilder/update] failed:", e);

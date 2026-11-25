@@ -9,6 +9,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@pt/email-engine": "*",
     "@pt/firebase": "*",
     "firebase": "^11.0.0",
     "lucide-react": "^0.542.0",

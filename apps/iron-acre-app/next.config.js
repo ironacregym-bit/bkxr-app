@@ -7,6 +7,7 @@ const nextConfig = {
     externalDir: true,
     outputFileTracingRoot: path.join(__dirname, "../.."),
   },
+  transpilePackages: ["@pt/email-engine"],
 };
 
 module.exports = nextConfig;

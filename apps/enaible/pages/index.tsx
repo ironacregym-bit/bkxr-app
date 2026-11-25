@@ -5,6 +5,7 @@ import {
   type FormEvent,
 } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import {
   Activity,
   Bot,
@@ -14,6 +15,7 @@ import {
   FileText,
   LayoutDashboard,
   LogOut,
+  Mail,
   Menu,
   Settings2,
   ShieldCheck,
@@ -46,6 +48,7 @@ const navigation = [
   { label: "Documents", icon: FileText },
   { label: "Activity & logs", icon: Activity },
   { label: "Organisation settings", icon: Settings2 },
+  { label: "Email & MCP", icon: Mail },
 ];
 
 export default function DashboardPage() {
@@ -197,6 +200,20 @@ export default function DashboardPage() {
         <nav className="flex-1 space-y-1 px-3 py-5">
           {navigation.map((item) => {
             const Icon = item.icon;
+            const className =
+              "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
+            if (item.label === "Email & MCP") {
+              return (
+                <Link
+                  className={className}
+                  href="/integrations/email"
+                  key={item.label}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              );
+            }
             return (
               <div
                 aria-current={item.active ? "page" : undefined}

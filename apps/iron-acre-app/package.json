@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@pt/email-engine": "*",
     "@ai-sdk/google": "^2.0.15",
     "@google-cloud/firestore": "^7.7.0",
     "@google/genai": "^1.13.0",

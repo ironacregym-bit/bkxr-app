@@ -24,6 +24,12 @@ function safeThemeMode(v: any): "dark" | "light" {
   return String(v || "").trim().toLowerCase() === "light" ? "light" : "dark";
 }
 
+function safeTemplate(v: any): "studio" | "editorial" {
+  return String(v || "").trim().toLowerCase() === "editorial"
+    ? "editorial"
+    : "studio";
+}
+
 function safeId(v: any, fallbackPrefix = "item") {
   const s = String(v || "").trim();
 
@@ -237,6 +243,7 @@ export function sanitizeSitePatch(patch: any) {
   };
 
   out.theme = {
+    template: safeTemplate(patch?.theme?.template),
     accent: safeHex(patch?.theme?.accent) || "#1fe0a5",
     mode: safeThemeMode(patch?.theme?.mode),
   };

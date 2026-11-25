@@ -53,6 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       tx.set(siteRef, {
         ...siteDoc,
         id: siteRef.id,
+        tenantId: siteRef.id,
       });
     });
 

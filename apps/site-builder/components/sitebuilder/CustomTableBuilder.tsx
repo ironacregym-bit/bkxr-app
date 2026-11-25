@@ -98,48 +98,48 @@ export default function CustomTableBuilder({ value, onChange }: Props) {
   }
 
   return (
-    <div className="tb-wrap">
-      <div className="tb-top">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="tb-title">Information tables</div>
-          <div className="tb-sub">
+          <div className="text-base font-semibold">Information tables</div>
+          <div className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Add opening times, event dates, pop-up shop days, price lists, class times or anything else that needs rows and columns.
           </div>
         </div>
 
-        <Button type="button" className="tb-btn" onClick={addTable}>
+        <Button type="button" onClick={addTable}>
           Add table
         </Button>
       </div>
 
       {tables.length === 0 ? (
-        <div className="tb-empty">No custom tables yet. Add one for shop open days, events or opening times.</div>
+        <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+          No custom tables yet. Add one for shop open days, events or opening times.
+        </div>
       ) : (
-        <div className="tb-list">
+        <div className="space-y-4">
           {tables.map((table) => (
-            <div key={table.id} className="tb-card">
-              <div className="tb-cardHead">
-                <div className="tb-cardTitle">Table</div>
+            <div key={table.id} className="space-y-5 rounded-xl border border-border bg-muted/20 p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="font-semibold">Table</div>
 
-                <Button type="button" className="tb-danger" onClick={() => removeTable(table.id)}>
+                <Button type="button" variant="destructive" size="sm" onClick={() => removeTable(table.id)}>
                   Remove table
                 </Button>
               </div>
 
-              <div className="tb-field">
-                <div className="tb-label">Table title</div>
+              <div className="grid gap-2 text-sm font-medium">
+                <div>Table title</div>
                 <Input
-                  className="tb-input"
                   value={table.title}
                   onChange={(e) => updateTable(table.id, { title: e.target.value })}
                   placeholder="Shop Open Days"
                 />
               </div>
 
-              <div className="tb-field">
-                <div className="tb-label">Intro text</div>
+              <div className="grid gap-2 text-sm font-medium">
+                <div>Intro text</div>
                 <Textarea
-                  className="tb-textarea"
                   value={table.intro || ""}
                   onChange={(e) => updateTable(table.id, { intro: e.target.value })}
                   rows={2}
@@ -147,19 +147,18 @@ export default function CustomTableBuilder({ value, onChange }: Props) {
                 />
               </div>
 
-              <div className="tb-columnsHead">
-                <div className="tb-label">Columns</div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm font-semibold">Columns</div>
 
-                <Button type="button" className="tb-mini" onClick={() => addColumn(table)}>
+                <Button type="button" variant="outline" size="sm" onClick={() => addColumn(table)}>
                   Add column
                 </Button>
               </div>
 
-              <div className="tb-columns">
+              <div className="grid gap-2">
                 {table.columns.map((column, columnIndex) => (
-                  <div key={`${table.id}_column_${columnIndex}`} className="tb-columnEditor">
+                  <div key={`${table.id}_column_${columnIndex}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
                     <Input
-                      className="tb-input"
                       value={column}
                       onChange={(e) => updateColumn(table, columnIndex, e.target.value)}
                       placeholder={`Column ${columnIndex + 1}`}
@@ -167,7 +166,8 @@ export default function CustomTableBuilder({ value, onChange }: Props) {
 
                     <Button
                       type="button"
-                      className="tb-smallDanger"
+                      variant="ghost"
+                      size="sm"
                       disabled={table.columns.length <= 1}
                       onClick={() => removeColumn(table, columnIndex)}
                     >
@@ -177,39 +177,38 @@ export default function CustomTableBuilder({ value, onChange }: Props) {
                 ))}
               </div>
 
-              <div className="tb-rowsHead">
-                <div className="tb-label">Rows</div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm font-semibold">Rows</div>
 
-                <Button type="button" className="tb-mini" onClick={() => addRow(table)}>
+                <Button type="button" variant="outline" size="sm" onClick={() => addRow(table)}>
                   Add row
                 </Button>
               </div>
 
-              <div className="tb-scroll">
-                <table className="tb-table">
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-[560px] border-collapse text-sm">
                   <thead>
-                    <tr>
+                    <tr className="border-b border-border bg-muted/40">
                       {table.columns.map((column, columnIndex) => (
-                        <th key={`${table.id}_head_${columnIndex}`}>{column || `Column ${columnIndex + 1}`}</th>
+                        <th key={`${table.id}_head_${columnIndex}`} className="px-3 py-2 text-left font-semibold">{column || `Column ${columnIndex + 1}`}</th>
                       ))}
-                      <th className="tb-actionCol">Action</th>
+                      <th className="px-3 py-2 text-left font-semibold">Action</th>
                     </tr>
                   </thead>
 
                   <tbody>
                     {table.rows.length === 0 ? (
                       <tr>
-                        <td colSpan={table.columns.length + 1} className="tb-mutedCell">
+                        <td colSpan={table.columns.length + 1} className="px-3 py-4 text-center text-muted-foreground">
                           No rows yet.
                         </td>
                       </tr>
                     ) : (
                       table.rows.map((row, rowIndex) => (
-                        <tr key={`${table.id}_row_${rowIndex}`}>
+                        <tr key={`${table.id}_row_${rowIndex}`} className="border-b border-border last:border-0">
                           {table.columns.map((_, columnIndex) => (
-                            <td key={`${table.id}_cell_${rowIndex}_${columnIndex}`}>
+                            <td key={`${table.id}_cell_${rowIndex}_${columnIndex}`} className="p-2">
                               <Input
-                                className="tb-cellInput"
                                 value={row[columnIndex] || ""}
                                 onChange={(e) => updateCell(table, rowIndex, columnIndex, e.target.value)}
                                 placeholder="Value"
@@ -217,8 +216,8 @@ export default function CustomTableBuilder({ value, onChange }: Props) {
                             </td>
                           ))}
 
-                          <td className="tb-actionCol">
-                            <Button type="button" className="tb-rowRemove" onClick={() => removeRow(table, rowIndex)}>
+                          <td className="px-2">
+                            <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(table, rowIndex)}>
                               Remove
                             </Button>
                           </td>

@@ -165,20 +165,20 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
   }
 
   return (
-    <div className="gb-wrap">
-      <div className="gb-top">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="gb-title">Image gallery</div>
-          <div className="gb-sub">Upload multiple images and they’ll be added to this responsive gallery.</div>
+          <div className="text-base font-semibold">Image gallery</div>
+          <div className="mt-1 text-sm leading-relaxed text-muted-foreground">Upload multiple images and they’ll be added to this responsive gallery.</div>
         </div>
 
-        <div className="gb-topActions">
-          <label className={`gb-btn ${uploading ? "is-disabled" : ""}`}>
+        <div className="flex flex-wrap gap-2">
+          <label className={`inline-flex min-h-10 cursor-pointer items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 ${uploading ? "pointer-events-none opacity-50" : ""}`}>
             <input
               type="file"
               accept="image/*"
               multiple
-              style={{ display: "none" }}
+              className="hidden"
               disabled={uploading}
               onChange={(e) => {
                 handleMultiUpload(e.target.files);
@@ -188,28 +188,26 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
             {uploading ? "Uploading…" : "Upload images"}
           </label>
 
-          <Button type="button" className="gb-secondaryBtn" onClick={addImage} disabled={uploading}>
+          <Button type="button" variant="outline" onClick={addImage} disabled={uploading}>
             Add blank image
           </Button>
         </div>
       </div>
 
-      {msg ? <div className="gb-msg">{msg}</div> : null}
+      {msg ? <div role="status" className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{msg}</div> : null}
 
-      <div className="gb-field">
-        <div className="gb-label">Gallery title</div>
+      <div className="grid gap-2 text-sm font-medium">
+        <div>Gallery title</div>
         <Input
-          className="gb-input"
           value={gallery.title}
           onChange={(e) => update({ title: e.target.value })}
           placeholder="Gallery"
         />
       </div>
 
-      <div className="gb-field">
-        <div className="gb-label">Intro text</div>
+      <div className="grid gap-2 text-sm font-medium">
+        <div>Intro text</div>
         <Textarea
-          className="gb-textarea"
           value={gallery.intro || ""}
           onChange={(e) => update({ intro: e.target.value })}
           rows={3}
@@ -218,24 +216,24 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
       </div>
 
       {gallery.images.length === 0 ? (
-        <div className="gb-empty">No gallery images yet. Upload images or add the first image manually.</div>
+        <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">No gallery images yet. Upload images or add the first image manually.</div>
       ) : (
-        <div className="gb-list">
+        <div className="grid gap-4 xl:grid-cols-2">
           {gallery.images.map((item, index) => (
-            <div key={item.id} className="gb-item">
-              <div className="gb-itemHead">
-                <div className="gb-itemTitle">Image {index + 1}</div>
+            <div key={item.id} className="space-y-4 rounded-xl border border-border bg-muted/20 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="font-semibold">Image {index + 1}</div>
 
-                <div className="gb-itemActions">
-                  <Button type="button" className="gb-mini" onClick={() => moveImage(item.id, "up")}>
+                <div className="flex flex-wrap gap-1">
+                  <Button type="button" variant="outline" size="sm" onClick={() => moveImage(item.id, "up")} disabled={index === 0}>
                     Up
                   </Button>
 
-                  <Button type="button" className="gb-mini" onClick={() => moveImage(item.id, "down")}>
+                  <Button type="button" variant="outline" size="sm" onClick={() => moveImage(item.id, "down")} disabled={index === gallery.images.length - 1}>
                     Down
                   </Button>
 
-                  <Button type="button" className="gb-danger" onClick={() => removeImage(item.id)}>
+                  <Button type="button" variant="destructive" size="sm" onClick={() => removeImage(item.id)}>
                     Remove
                   </Button>
                 </div>
@@ -249,21 +247,19 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
                 helpText="Upload a replacement image or paste a public image URL."
               />
 
-              <div className="gb-two">
-                <div className="gb-field">
-                  <div className="gb-label">Image title</div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2 text-sm font-medium">
+                  <div>Image title</div>
                   <Input
-                    className="gb-input"
                     value={item.title || ""}
                     onChange={(e) => updateImage(item.id, { title: e.target.value })}
                     placeholder="Optional title"
                   />
                 </div>
 
-                <div className="gb-field">
-                  <div className="gb-label">Alt text</div>
+                <div className="grid gap-2 text-sm font-medium">
+                  <div>Alt text</div>
                   <Input
-                    className="gb-input"
                     value={item.alt || ""}
                     onChange={(e) => updateImage(item.id, { alt: e.target.value })}
                     placeholder="Short description for accessibility"
@@ -271,10 +267,9 @@ export default function ImageGalleryBuilder({ value, onChange }: Props) {
                 </div>
               </div>
 
-              <div className="gb-field">
-                <div className="gb-label">Caption</div>
+              <div className="grid gap-2 text-sm font-medium">
+                <div>Caption</div>
                 <Textarea
-                  className="gb-textarea"
                   value={item.caption || ""}
                   onChange={(e) => updateImage(item.id, { caption: e.target.value })}
                   rows={2}

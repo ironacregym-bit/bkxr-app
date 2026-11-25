@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@pt/email-engine": "*",
     "@google-cloud/firestore": "^7.7.0",
     "@next-auth/firebase-adapter": "2.0.1",
     "class-variance-authority": "^0.7.1",
@@ -19,8 +20,10 @@
     "nodemailer": "^7.0.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "stripe": "^14.0.0",
     "swr": "^2.2.5",
-    "tailwind-merge": "^3.3.1"
+    "tailwind-merge": "^3.3.1",
+    "zod": "^4.1.5"
   },
   "devDependencies": {
     "@types/node": "^20.11.30",

@@ -54,6 +54,40 @@ session and tenant model.
 - **Firestore rules:** client SDK access is denied globally. Server APIs use
   Firebase Admin, which bypasses those rules; tenant checks therefore remain
   mandatory in every server operation.
+- **Email:** `packages/email-engine` is the reusable SMTP sender and
+  server-to-server client. EnAible hosts a tenant-scoped email API and
+  stateless Streamable HTTP MCP endpoint. Apps and agents use per-tenant API
+  keys; the tenant is derived from the stored credential, never from request
+  input.
+- **Approved sends:** owners and administrators create plain-text templates,
+  which is the explicit human approval step for automated sends. API keys are
+  limited to exact recipient domains and 20 send attempts per key per UTC day.
+  The server stores only a hash of each API key, validates variables against
+  template placeholders, uses idempotency records, and stores email request
+  records beneath the tenant with `tenantId`. SMTP credentials and `EMAIL_FROM`
+  remain server-only and shared globally by the EnAible service.
+
+## SiteBuilder payments
+
+- Each SiteBuilder site can connect its owner's Stripe Express account using
+  the platform's server-side `STRIPE_SECRET_KEY`. Connected account IDs and
+  product configuration are stored with that site; secret keys and card
+  details are never stored in Firestore or sent to the browser.
+- Only the persisted site owner can connect Stripe or change payment products.
+  Checkout resolves the public slug, enabled product, price and connected
+  account from Firestore; browser input cannot select a price or recipient.
+- Payments use direct Stripe Checkout sessions on the site's connected
+  account. The initial implementation supports one-time products in GBP, EUR
+  and USD. It does not include recurring subscriptions, order fulfillment,
+  refunds, or an in-app order-management screen.
+- `STRIPE_SECRET_KEY` must be configured on the SiteBuilder Vercel project.
+  `SITEBUILDER_STRIPE_ACCOUNT_COUNTRY` optionally chooses the Connect account
+  country and defaults to `GB`. Configure `NEXTAUTH_URL` for the canonical
+  SiteBuilder origin and `SITEBUILDER_BASE_HOST`/`SITEBUILDER_BASE_HOSTS` for
+  allowed hosted domains. The connected accounts need Stripe's
+  `card_payments` capability enabled before products can be published.
+- The checkout return page verifies the Stripe session against the connected
+  account before displaying a successful payment confirmation.
 
 ## Tenant data
 
@@ -63,12 +97,35 @@ Future tenant-owned agents, workflows, screens, executions, approvals,
 documents, integrations, evaluation runs and audit records must live beneath
 their tenant and include a matching `tenantId` field.
 
+## Email and MCP
+
+- Each organisation manages API keys and approved templates beneath
+  `tenants/{tenantId}/emailApiKeys` and
+  `tenants/{tenantId}/emailTemplates`. Key-management APIs require a current
+  authenticated owner/administrator membership. External requests authenticate
+  with a high-entropy Bearer key whose stored hash is verified in constant
+  time; the key's encoded tenant ID is only a lookup hint and must match the
+  persisted tenant and key records.
+- `POST /api/email/send` and `POST /api/mcp` share the same sending service.
+  MCP exposes `send_approved_email`; it cannot supply arbitrary HTML, subject,
+  or message body. The email text and subject come from an owner-approved
+  tenant template, while variables are restricted to its declared placeholders.
+- Recipient domains are exact-match allowlists attached to each key. The
+  server caps each key at 20 send attempts per UTC day, including failed SMTP
+  attempts, and uses an idempotency key to prevent repeated sends; failed or
+  in-progress requests cannot be retried with that same key.
+- Delivery is through the existing SMTP configuration with one service-wide
+  `EMAIL_FROM` address. Per-tenant sender identities, recipient consent and
+  unsubscribe management, HTML templates, attachments, and an email history
+  UI are not implemented.
+
 ## Known gaps
 
 The EnAIble app currently has no agent registry/runtime, workflow engine,
-document ingestion, provider abstraction, MCP tools, approval service,
-evaluation framework, invitations, rate limiting, retention controls, or
-production hosting configuration. These are future milestones, not implemented
-capabilities. The existing workout builder has not been moved into EnAIble;
-it must be assessed for tenant-safe APIs and configurations after the platform
+document ingestion, general-purpose provider abstraction, workflow approval
+service, evaluation framework, invitations, general rate limiting, retention
+controls, or production hosting configuration. These remain future milestones;
+the email MCP endpoint and email-template approval controls are implemented
+separately. The existing workout builder has not been moved into EnAIble; it
+must be assessed for tenant-safe APIs and configurations after the platform
 foundation is established.

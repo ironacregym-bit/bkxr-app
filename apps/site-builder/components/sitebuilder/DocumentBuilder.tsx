@@ -55,12 +55,12 @@ export default function DocumentBuilder({
   }
 
   return (
-    <div className="db-wrap">
-      <div className="db-top">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="db-title">Documents</div>
+          <div className="text-base font-semibold">Documents</div>
 
-          <div className="db-sub">
+          <div className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Upload PDFs, Word documents, Excel files and
             other downloadable resources.
           </div>
@@ -68,7 +68,6 @@ export default function DocumentBuilder({
 
         <Button
           type="button"
-          className="db-btn"
           onClick={addDocument}
         >
           Add document
@@ -76,24 +75,25 @@ export default function DocumentBuilder({
       </div>
 
       {value.length === 0 ? (
-        <div className="db-empty">
+        <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           No documents added yet.
         </div>
       ) : (
-        <div className="db-list">
+        <div className="space-y-4">
           {value.map((doc, index) => (
             <div
               key={doc.id}
-              className="db-card"
+              className="space-y-5 rounded-xl border border-border bg-muted/20 p-4 sm:p-5"
             >
-              <div className="db-cardHead">
-                <div className="db-cardTitle">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="font-semibold">
                   Document {index + 1}
                 </div>
 
                 <Button
                   type="button"
-                  className="db-danger"
+                  variant="destructive"
+                  size="sm"
                   onClick={() =>
                     removeDocument(doc.id)
                   }
@@ -102,14 +102,13 @@ export default function DocumentBuilder({
                 </Button>
               </div>
 
-              <div className="db-two">
-                <div className="db-field">
-                  <div className="db-label">
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="grid content-start gap-2 text-sm font-medium">
+                  <div>
                     Document title
                   </div>
 
                   <Input
-                    className="db-input"
                     value={doc.title}
                     onChange={(e) =>
                       updateDocument(doc.id, {
@@ -120,13 +119,12 @@ export default function DocumentBuilder({
                   />
                 </div>
 
-                <div className="db-field">
-                  <div className="db-label">
+                <div className="grid content-start gap-2 text-sm font-medium">
+                  <div>
                     Description
                   </div>
 
                   <Textarea
-                    className="db-textarea"
                     rows={3}
                     value={doc.description || ""}
                     onChange={(e) =>

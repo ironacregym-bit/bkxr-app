@@ -1,5 +1,6 @@
 // DocumentUploadField.tsx
 import { useMemo, useState } from "react";
+import { Input } from "@/components/ui/input";
 
 type Props = {
   label: string;
@@ -26,7 +27,10 @@ export default function DocumentUploadField({
   );
 
   async function handleFile(file: File) {
-    if (!canUpload) return;
+    if (!canUpload) {
+      setMsg("Document uploads are not configured. Paste a public file URL instead.");
+      return;
+    }
 
     setUploading(true);
 
@@ -45,7 +49,7 @@ export default function DocumentUploadField({
         }
       );
 
-      const json = await resp.json();
+      const json = await resp.json().catch(() => null);
 
       if (!resp.ok || !json?.secure_url) {
         throw new Error("Upload failed");
@@ -61,31 +65,30 @@ export default function DocumentUploadField({
   }
 
   return (
-    <div>
+    <div className="space-y-2 text-sm font-medium">
       <div>{label}</div>
 
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="Paste a public document URL" />
 
-      <label>
+      <label className={`inline-flex min-h-9 cursor-pointer items-center justify-center rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium transition-colors hover:bg-muted/70 ${uploading ? "pointer-events-none opacity-50" : ""}`}>
         <input
           type="file"
           accept=".pdf,.doc,.docx,.xls,.xlsx"
-          style={{ display: "none" }}
+          className="hidden"
+          disabled={uploading}
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (!file) return;
 
             handleFile(file);
+            e.currentTarget.value = "";
           }}
         />
 
-        {uploading ? "Uploading..." : "Upload document"}
+        {uploading ? "Uploading…" : "Upload document"}
       </label>
 
-      {msg && <div>{msg}</div>}
+      {msg && <div role="status" className="text-xs font-normal text-muted-foreground">{msg}</div>}
     </div>
   );
 }

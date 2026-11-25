@@ -58,22 +58,21 @@ export default function ImageUploadField(props: Props) {
   }
 
   return (
-    <div className="iu-field">
-      <div className="iu-label">{label}</div>
+    <div className="space-y-2 text-sm font-medium">
+      <div>{label}</div>
 
       <Input
-        className="iu-input"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Paste image URL or upload below"
       />
 
-      <div className="iu-actions">
-        <label className={`iu-uploadBtn ${uploading ? "is-disabled" : ""}`}>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className={`inline-flex min-h-9 cursor-pointer items-center justify-center rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium transition-colors hover:bg-muted/70 ${uploading ? "pointer-events-none opacity-50" : ""}`}>
           <input
             type="file"
             accept="image/*"
-            style={{ display: "none" }}
+            className="hidden"
             disabled={uploading}
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -86,12 +85,12 @@ export default function ImageUploadField(props: Props) {
         </label>
       </div>
 
-      {helpText ? <div className="iu-help">{helpText}</div> : null}
-      {msg ? <div className="iu-msg">{msg}</div> : null}
+      {helpText ? <div className="text-xs font-normal leading-relaxed text-muted-foreground">{helpText}</div> : null}
+      {msg ? <div role="status" className="text-xs font-normal text-muted-foreground">{msg}</div> : null}
 
       {value ? (
-        <div className="iu-previewWrap">
-          <img src={value} alt="" className="iu-preview" />
+        <div className="overflow-hidden rounded-lg border border-border bg-muted/30">
+          <img src={value} alt="" className="max-h-64 w-full object-contain" />
         </div>
       ) : null}
 

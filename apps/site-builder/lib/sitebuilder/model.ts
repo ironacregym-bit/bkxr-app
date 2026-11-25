@@ -1,6 +1,22 @@
 export type SiteTheme = {
+  template?: "studio" | "editorial";
   accent?: string | null;
   mode?: "dark" | "light";
+};
+
+export type SitePaymentProduct = {
+  id: string;
+  name: string;
+  description: string;
+  amountMinor: number;
+  currency: "gbp" | "eur" | "usd";
+  active: boolean;
+};
+
+export type SitePayments = {
+  enabled: boolean;
+  products: SitePaymentProduct[];
+  stripeAccountId?: string;
 };
 
 export type SiteHero = {
@@ -65,6 +81,7 @@ export type SiteDocuments = SiteDocument[];
 
 export type SiteDoc = {
   id: string;
+  tenantId: string;
   slug: string;
 
   documents: SiteDocuments;
@@ -73,6 +90,7 @@ export type SiteDoc = {
   editor_emails: string[];
 
   published: boolean;
+  payments?: SitePayments;
 
   created_at: string;
   updated_at: string;
@@ -154,24 +172,29 @@ export function nowIso() {
   return new Date().toISOString();
 }
 
-export function defaultSiteContent(args: { slug: string; ownerEmail: string; name?: string }) {
+export function defaultSiteContent(args: { slug: string; ownerEmail: string; name?: string }): Omit<SiteDoc, "id" | "tenantId"> {
   const name = (args.name || "").trim() || "New Site";
   const title = `${name} | Official Site`;
 
   const created_at = nowIso();
 
-  const doc: Omit<SiteDoc, "id"> = {
+  const doc: Omit<SiteDoc, "id" | "tenantId"> = {
     slug: args.slug,
 
     owner_email: args.ownerEmail,
     editor_emails: [],
 
     published: false,
+    payments: {
+      enabled: false,
+      products: [],
+    },
 
     created_at,
     updated_at: created_at,
 
     theme: {
+      template: "studio",
       accent: "#1fe0a5",
       mode: "dark",
     },

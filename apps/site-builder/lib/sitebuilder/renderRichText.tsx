@@ -22,7 +22,7 @@ export function renderRichText(content?: string): React.ReactNode {
     blocks.push(
       <p
         key={`p-${blocks.length}`}
-        className="sb-richParagraph"
+        className="mb-4 leading-7 opacity-80 last:mb-0"
       >
         {paragraph.join(" ")}
       </p>
@@ -37,7 +37,7 @@ export function renderRichText(content?: string): React.ReactNode {
     blocks.push(
       <ul
         key={`ul-${blocks.length}`}
-        className="sb-richList"
+        className="my-4 list-disc space-y-2 pl-6 leading-7 opacity-80"
       >
         {bulletList.map((item, i) => (
           <li key={i}>{item}</li>
@@ -54,7 +54,7 @@ export function renderRichText(content?: string): React.ReactNode {
     blocks.push(
       <ol
         key={`ol-${blocks.length}`}
-        className="sb-richList sb-richNumbered"
+        className="my-4 list-decimal space-y-2 pl-6 leading-7 opacity-80"
       >
         {numberList.map((item, i) => (
           <li key={i}>{item}</li>
@@ -85,7 +85,7 @@ export function renderRichText(content?: string): React.ReactNode {
       blocks.push(
         <h4
           key={`h4-${blocks.length}`}
-          className="sb-richH4"
+          className="mb-2 mt-5 text-base font-semibold"
         >
           {line.replace(/^###\s+/, "")}
         </h4>
@@ -100,7 +100,7 @@ export function renderRichText(content?: string): React.ReactNode {
       blocks.push(
         <h3
           key={`h3-${blocks.length}`}
-          className="sb-richH3"
+          className="mb-3 mt-6 text-lg font-semibold"
         >
           {line.replace(/^##\s+/, "")}
         </h3>
@@ -115,7 +115,7 @@ export function renderRichText(content?: string): React.ReactNode {
       blocks.push(
         <h2
           key={`h2-${blocks.length}`}
-          className="sb-richH2"
+          className="mb-4 mt-8 text-2xl font-semibold tracking-tight"
         >
           {line.replace(/^#\s+/, "")}
         </h2>

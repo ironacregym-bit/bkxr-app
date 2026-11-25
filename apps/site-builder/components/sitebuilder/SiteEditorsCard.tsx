@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import CollapsiblePanel from "./CollapsiblePanel";
 
 type ListResp =
   | {
@@ -152,31 +153,32 @@ export default function SiteEditorsCard(props: {
   }, [siteId]);
 
   return (
-    <div className="sc-card">
-      <div className="sc-title">Editors</div>
-      <div className="sc-sub">
-        Add client emails here and they’ll be able to log in and edit this site from their own SiteBuilder dashboard.
+    <CollapsiblePanel
+      title="Editors"
+      description="Add client emails here and they’ll be able to log in and edit this site from their own SiteBuilder dashboard."
+    >
+      <div className="space-y-5">
+
+      {msg ? <div role="status" className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{msg}</div> : null}
+
+      <div className="space-y-2">
+        <div className="text-sm font-semibold">Owner</div>
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">{ownerEmail || "—"}</div>
       </div>
 
-      {msg ? <div className="sc-msg">{msg}</div> : null}
+      <div className="space-y-2">
+        <div className="text-sm font-semibold">Editors with access</div>
 
-      <div className="sc-section">
-        <div className="sc-label">Owner</div>
-        <div className="sc-owner">{ownerEmail || "—"}</div>
-      </div>
+        {editorEmails.length === 0 ? <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">No editors added yet.</div> : null}
 
-      <div className="sc-section">
-        <div className="sc-label">Editors with access</div>
-
-        {editorEmails.length === 0 ? <div className="sc-muted">No editors added yet.</div> : null}
-
-        <div className="sc-list">
+        <div className="space-y-2">
           {editorEmails.map((item) => (
-            <div key={item} className="sc-row">
-              <div className="sc-email">{item}</div>
+            <div key={item} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+              <div className="break-all text-sm">{item}</div>
 
               <Button
-                className="sc-link"
+                variant="outline"
+                size="sm"
                 onClick={() => removeEditor(item)}
                 disabled={!canManage || busy}
               >
@@ -187,35 +189,35 @@ export default function SiteEditorsCard(props: {
         </div>
       </div>
 
-      <div className="sc-section">
-        <div className="sc-label">Add editor</div>
+      <div className="space-y-2">
+        <div className="text-sm font-semibold">Add editor</div>
 
-        <div className="sc-form">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Input
-            className="sc-input"
             placeholder="client@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={!canManage || busy}
           />
 
-          <Button className="sc-btn" onClick={addEditor} disabled={!canManage || busy}>
+          <Button onClick={addEditor} disabled={!canManage || busy}>
             {busy ? "Working…" : "Add access"}
           </Button>
         </div>
 
         {!canManage ? (
-          <div className="sc-help">
+          <div className="text-xs leading-relaxed text-muted-foreground">
             Only the site owner can manage editor access.
           </div>
         ) : (
-          <div className="sc-help">
+          <div className="text-xs leading-relaxed text-muted-foreground">
             Once added, that email can log in and this site will appear in their dashboard automatically.
           </div>
         )}
       </div>
 
 
-    </div>
+      </div>
+    </CollapsiblePanel>
   );
 }
