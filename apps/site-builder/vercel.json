@@ -1,0 +1,1 @@
+{"buildCommand":"npm --prefix=../.. run build --workspace=@pt/site-builder"}
