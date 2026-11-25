@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { firestore } from "@pt/firebase";
 import { sanitizePublicPayments } from "@/lib/sitebuilder/payments";
 import ProductCheckoutButton from "@/components/sitebuilder/ProductCheckoutButton";
+import type { SiteDomain } from "@/lib/sitebuilder/model";
 import { renderRichText } from "../../lib/sitebuilder/renderRichText";
 
 type GalleryImage = {
@@ -52,6 +53,8 @@ type PublicSite = {
   published: boolean;
   owner_email?: string;
   editor_emails?: string[];
+  domains?: SiteDomain[];
+  tenantId?: string;
   payments?: {
     enabled: boolean;
     products: PublicPaymentProduct[];
