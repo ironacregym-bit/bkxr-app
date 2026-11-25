@@ -22,12 +22,6 @@ const adapter =
   projectId && clientEmail && privateKey
     ? FirestoreAdapter({
         credential: cert({ projectId, clientEmail, privateKey }),
-        collections: {
-          users: "sitebuilder_auth_users",
-          accounts: "sitebuilder_auth_accounts",
-          sessions: "sitebuilder_auth_sessions",
-          verificationTokens: "sitebuilder_auth_verification_tokens",
-        },
       })
     : undefined;
 

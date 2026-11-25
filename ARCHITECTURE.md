@@ -25,11 +25,11 @@ session and tenant model.
 - The gym app currently uses NextAuth rather than Firebase Authentication.
   Its authentication and roles are not reused for EnAIble because EnAIble
   requires its own Firebase-backed tenant membership model.
-- SiteBuilder has its own NextAuth configuration, cookie names, and Firebase
-  adapter collections. It does not import the gym app's auth callbacks or
-  persist SiteBuilder accounts in the gym app's NextAuth collections. Its
-  dashboard permission is still read server-side from the persisted user
-  record; site ownership and editor access are checked against each site.
+- SiteBuilder has its own NextAuth configuration, cookie names, and redirect
+  policy; it does not import the gym app's auth callbacks. Its Firebase
+  adapter uses the adapter's default Firestore collections, while dashboard
+  permission is read server-side from the persisted user record and site
+  ownership/editor access is checked against each site.
 - The gym app's AI workout builder is tied to a Gemini-specific model
   selection path and existing global draft/execution collections. It is not
   tenant-safe as-is, so it remains in the gym app until its APIs and persisted

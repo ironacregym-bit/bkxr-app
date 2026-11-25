@@ -15,8 +15,8 @@
   Stripe Connect onboarding with configurable one-time products and secure
   hosted checkout.
 - [x] SiteBuilder has an independent NextAuth configuration with app-specific
-  cookies and Firestore adapter collections; cross-origin auth redirects are
-  restricted to its configured origin.
+  cookies; cross-origin auth redirects are restricted to its configured
+  origin.
 - [x] Shared `@pt/email-engine` package, tenant-scoped approved email
   templates/API keys, API send endpoint, and EnAible Streamable HTTP MCP tool
   for app and agent callers.
