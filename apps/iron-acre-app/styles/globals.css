@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-body: "Figtree";
+    --font-display: "Big Shoulders Display";
+    --background: 130 13% 9%;
+    --foreground: 80 13% 90%;
+    --card: 128 13% 12%;
+    --card-foreground: 80 13% 90%;
+    --popover: 128 13% 12%;
+    --popover-foreground: 80 13% 90%;
+    --primary: 25 100% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 125 12% 14%;
+    --secondary-foreground: 80 13% 90%;
+    --muted: 125 12% 14%;
+    --muted-foreground: 105 8% 66%;
+    --accent: 125 12% 14%;
+    --accent-foreground: 80 13% 90%;
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 127 11% 20%;
+    --input: 127 11% 20%;
+    --ring: 25 100% 40%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body {
+    min-height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-body), sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display), sans-serif;
+  }
+}
+
+@layer components {
+  .ia-auth-panel {
+    @apply w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl sm:p-8;
+  }
+
+  .ia-field-label {
+    @apply mb-2 block text-sm font-medium text-foreground;
+  }
+
+  .ia-form-field {
+    @apply space-y-2;
+  }
+}

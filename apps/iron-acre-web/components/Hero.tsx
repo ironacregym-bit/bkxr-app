@@ -1,4 +1,5 @@
 import LeadCapture from "./LeadCapture";
+import SiteHeader from "./SiteHeader";
 import { Container } from "./ui/container";
 
 export default function Hero() {
@@ -17,6 +18,7 @@ export default function Hero() {
         muted
         loop
         playsInline
+        poster="/images/GymFrontView.jpeg"
         className="
           absolute
           inset-0
@@ -43,68 +45,14 @@ export default function Hero() {
         "
       />
 
+      <SiteHeader variant="overlay" />
+
       <Container>
-
         <div className="relative z-10">
-
-          <div
-            className="
-              flex
-              items-center
-              justify-between
-              py-5
-            "
-          >
-            <div
-              className="
-                flex
-                items-center
-                gap-3
-              "
-            >
-              <img
-                src="/images/iron_acre_logo_transparent.png"
-                alt="Iron Acre Gym"
-                className="
-                  h-10
-                  w-10
-                  object-contain
-                "
-              />
-
-              <span
-                className="
-                  font-['Big_Shoulders_Display']
-                  text-2xl
-                  font-black
-                  uppercase
-                "
-              >
-                Iron Acre Gym
-              </span>
-            </div>
-
-            <a
-              href="#start"
-              className="
-                hidden
-                md:inline-flex
-                rounded-md
-                bg-[#cc5500]
-                px-4
-                py-2
-                text-sm
-                font-semibold
-              "
-            >
-              Start Free
-            </a>
-          </div>
-
           <div
             className="
               grid
-              min-h-[calc(100vh-100px)]
+              min-h-[calc(100vh-76px)]
               items-center
               gap-10
               lg:grid-cols-[1fr_340px]
@@ -122,7 +70,7 @@ export default function Hero() {
                   font-bold
                 "
               >
-                Westerfield, Ipswich
+                Outdoor gym · Westerfield, Ipswich
               </div>
 
               <h1
@@ -159,13 +107,15 @@ export default function Hero() {
               id="start"
               className="w-full"
             >
-              <LeadCapture />
+              <LeadCapture
+                successHref="/7-day-workout"
+                successLinkLabel="View your 7-day workout"
+              />
             </div>
 
           </div>
 
         </div>
-
       </Container>
 
     </section>

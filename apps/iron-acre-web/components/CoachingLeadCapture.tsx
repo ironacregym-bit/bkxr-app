@@ -16,6 +16,9 @@ export default function CoachingLeadCapture() {
   const [success, setSuccess] =
     useState(false);
 
+  const [confirmationEmailSent, setConfirmationEmailSent] =
+    useState(false);
+
   const [error, setError] =
     useState("");
 
@@ -30,7 +33,7 @@ export default function CoachingLeadCapture() {
     try {
       const response =
         await fetch(
-          "/api/capture",
+          "/api/leads/coaching",
           {
             method: "POST",
 
@@ -40,22 +43,9 @@ export default function CoachingLeadCapture() {
             },
 
             body: JSON.stringify({
-              formId:
-                "coachingLead",
-
-              payload: {
-                name,
-                email,
-
-                source:
-                  "coaching",
-
-                applicationEmailSent:
-                  false,
-
-                reviewed:
-                  false,
-              },
+              name,
+              email,
+              source: "coaching",
             }),
           }
         );
@@ -70,6 +60,9 @@ export default function CoachingLeadCapture() {
         );
       }
 
+      setConfirmationEmailSent(
+        result.confirmationEmailSent === true
+      );
       setSuccess(true);
     } catch (err: any) {
       setError(
@@ -86,6 +79,14 @@ export default function CoachingLeadCapture() {
       <div className="text-white/70">
         Application received.
         We'll be in touch soon.
+        {!confirmationEmailSent && (
+          <p
+            className="mt-3 text-sm text-white/55"
+            role="status"
+          >
+            Your application is saved, but we couldn't send the confirmation email yet.
+          </p>
+        )}
       </div>
     );
   }
@@ -98,6 +99,8 @@ export default function CoachingLeadCapture() {
       <Input
         placeholder="First name"
         value={name}
+        maxLength={100}
+        autoComplete="given-name"
         onChange={(e) =>
           setName(
             e.target.value
@@ -110,6 +113,8 @@ export default function CoachingLeadCapture() {
         type="email"
         placeholder="Email address"
         value={email}
+        maxLength={254}
+        autoComplete="email"
         onChange={(e) =>
           setEmail(
             e.target.value

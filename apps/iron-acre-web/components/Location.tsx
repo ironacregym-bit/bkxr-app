@@ -1,4 +1,3 @@
-import { Button } from "./ui/button";
 import { Container } from "./ui/container";
 
 export default function Location() {
@@ -41,6 +40,7 @@ export default function Location() {
 
             <iframe
               src="https://www.google.com/maps?q=Iron%20Acre%20Gym&output=embed"
+              title="Map showing Iron Acre Gym in Westerfield, Ipswich"
               className="h-[350px] w-full"
               loading="lazy"
             />
@@ -97,15 +97,14 @@ export default function Location() {
 
               </div>
 
-              <Button
-                className="
-                  h-11
-                  bg-[#cc5500]
-                  hover:bg-[#db6712]
-                "
+              <a
+                href="https://www.google.com/maps/dir/?api=1&destination=Iron+Acre+Gym%2C+Westerfield%2C+Ipswich"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-11 items-center rounded-md bg-[#cc5500] px-5 font-semibold text-white hover:bg-[#db6712]"
               >
                 Get Directions
-              </Button>
+              </a>
 
             </div>
 

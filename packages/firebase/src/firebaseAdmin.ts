@@ -7,6 +7,7 @@ import {
   Timestamp as AdminTimestamp,
   Firestore,
 } from "firebase-admin/firestore";
+import { getAuth, Auth } from "firebase-admin/auth";
 
 /**
  * Normalise multiline private keys from env (Vercel stores \n as escaped).
@@ -61,6 +62,8 @@ if (!getApps().length) {
 
 // Primary Firestore export (keeps your existing name)
 export const adminDb: Firestore = getFirestore(app);
+export const adminAuth: Auth = getAuth(app);
+export const adminApp = app;
 
 // Convenience re‑exports used by APIs
 export const Timestamp = AdminTimestamp;

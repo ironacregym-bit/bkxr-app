@@ -3,6 +3,18 @@ export function getCoachingTemplate({
 }: {
   firstName: string;
 }) {
+  const safeFirstName = firstName.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+
+    return entities[character];
+  });
+
   return {
     subject:
       "Coaching Application Received",
@@ -13,7 +25,7 @@ export function getCoachingTemplate({
       </h1>
 
       <p>
-        Hi ${firstName},
+        Hi ${safeFirstName},
       </p>
 
       <p>

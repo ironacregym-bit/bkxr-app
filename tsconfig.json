@@ -26,6 +26,6 @@
       ]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "types/next-auth.d.ts"],
-  "exclude": ["node_modules"]
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", "apps/iron-acre-app", "apps/iron-acre-web", "apps/site-builder", "apps/enaible"]
 }

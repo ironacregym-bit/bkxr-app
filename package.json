@@ -11,12 +11,20 @@
   ],
 
   "scripts": {
-    "build": "next build",
-    "start": "next start",
-    "dev": "next dev -p 3000",
+    "build": "turbo run build",
+    "start": "turbo run start --filter=@pt/iron-acre-app",
+    "dev": "turbo run dev",
 
     "turbo:build": "turbo run build",
-    "turbo:dev": "turbo run dev"
+    "turbo:dev": "turbo run dev",
+    "ironacre:build": "turbo run build --filter=@pt/iron-acre-app",
+    "ironacre:dev": "turbo run dev --filter=@pt/iron-acre-app",
+    "ironacre:start": "turbo run start --filter=@pt/iron-acre-app",
+    "sitebuilder:build": "turbo run build --filter=@pt/site-builder",
+    "sitebuilder:dev": "turbo run dev --filter=@pt/site-builder",
+    "enaible:build": "turbo run build --filter=@pt/enaible",
+    "enaible:dev": "turbo run dev --filter=@pt/enaible",
+    "enaible:start": "turbo run start --filter=@pt/enaible"
   },
 
   "dependencies": {

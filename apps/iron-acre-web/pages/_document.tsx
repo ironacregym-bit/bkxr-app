@@ -7,7 +7,7 @@ import {
 
 export default function Document() {
   return (
-    <Html lang="en">
+    <Html lang="en-GB">
       <Head>
 
         <link

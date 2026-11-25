@@ -2,5 +2,9 @@
   "name": "@pt/firebase",
   "private": true,
   "version": "1.0.0",
-  "main": "./src/index.ts"
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@google-cloud/firestore": "^7.7.0",
+    "firebase-admin": "^11.10.1"
+  }
 }

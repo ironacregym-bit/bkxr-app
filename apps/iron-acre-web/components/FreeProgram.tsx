@@ -1,4 +1,3 @@
-import { Button } from "./ui/button";
 import { Container } from "./ui/container";
 
 export default function FreeProgram() {
@@ -13,7 +12,10 @@ export default function FreeProgram() {
   ];
 
   return (
-    <section className="bg-[#141a15] py-16">
+    <section
+      id="free-program"
+      className="bg-[#141a15] py-16"
+    >
 
       <Container>
 
@@ -93,9 +95,12 @@ export default function FreeProgram() {
 
         <div className="mt-10">
 
-          <Button>
-            Get The Program
-          </Button>
+          <a
+            href="/7-day-workout"
+            className="inline-flex h-11 items-center rounded-md bg-[#cc5500] px-5 font-semibold text-white hover:bg-[#db6712]"
+          >
+            View The Full 7-Day Workout
+          </a>
 
         </div>
 
