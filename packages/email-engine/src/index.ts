@@ -1,6 +1,5 @@
 export { sendEmail } from "./send-email";
 export { sendTemplate } from "./send-template";
-export { sendApprovedEmail } from "./client";
 export {
   approvedEmailRequestSchema,
   approvedEmailResponseSchema,
