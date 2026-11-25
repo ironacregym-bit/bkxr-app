@@ -55,6 +55,13 @@ export type EmailTemplateRecord = {
   revokedBy?: string;
 };
 
+type EmailReservation =
+  | { alreadySent: true }
+  | {
+      alreadySent: false;
+      rendered: { subject: string; text: string };
+    };
+
 export async function requireEmailApiCredential(req: NextApiRequest) {
   const authorization = req.headers.authorization || "";
   const match = /^Bearer (.+)$/i.exec(authorization);
@@ -163,105 +170,109 @@ export async function sendApprovedTemplateEmail(
     .digest("hex");
   const today = new Date().toISOString().slice(0, 10);
 
-  const reservation = await adminDb.runTransaction(async (transaction) => {
-    const keySnapshot = await transaction.get(credential.keyRef);
-    const requestSnapshot = await transaction.get(requestRef);
-    if (!keySnapshot.exists) {
-      throw new ApiError(401, "Email API key is no longer active");
-    }
-
-    const keyRecord = keySnapshot.data() as EmailApiKeyRecord | undefined;
-    if (
-      !keyRecord ||
-      keyRecord.tenantId !== credential.tenantId ||
-      keyRecord.keyId !== credential.keyId ||
-      keyRecord.revokedAt
-    ) {
-      throw new ApiError(401, "Email API key is no longer active");
-    }
-
-    if (requestSnapshot.exists) {
-      const previous = requestSnapshot.data();
-      if (
-        previous?.tenantId !== credential.tenantId ||
-        previous?.keyId !== credential.keyId ||
-        previous?.requestId !== requestId
-      ) {
-        throw new Error("Email idempotency record has invalid tenant metadata.");
+  const reservation = await adminDb.runTransaction<EmailReservation>(
+    async (transaction) => {
+      const keySnapshot = await transaction.get(credential.keyRef);
+      const requestSnapshot = await transaction.get(requestRef);
+      if (!keySnapshot.exists) {
+        throw new ApiError(401, "Email API key is no longer active");
       }
-      if (previous?.payloadHash !== payloadHash) {
+
+      const keyRecord = keySnapshot.data() as EmailApiKeyRecord | undefined;
+      if (
+        !keyRecord ||
+        keyRecord.tenantId !== credential.tenantId ||
+        keyRecord.keyId !== credential.keyId ||
+        keyRecord.revokedAt
+      ) {
+        throw new ApiError(401, "Email API key is no longer active");
+      }
+
+      if (requestSnapshot.exists) {
+        const previous = requestSnapshot.data();
+        if (
+          previous?.tenantId !== credential.tenantId ||
+          previous?.keyId !== credential.keyId ||
+          previous?.requestId !== requestId
+        ) {
+          throw new Error(
+            "Email idempotency record has invalid tenant metadata."
+          );
+        }
+        if (previous?.payloadHash !== payloadHash) {
+          throw new ApiError(
+            409,
+            "The idempotency key was already used for a different email"
+          );
+        }
+        if (previous?.status === "sent") {
+          return { alreadySent: true };
+        }
         throw new ApiError(
           409,
-          "The idempotency key was already used for a different email"
+          "This email request is already being processed or previously failed"
         );
       }
-      if (previous?.status === "sent") {
-        return { alreadySent: true };
+
+      const templateSnapshot = await transaction.get(templateRef);
+      const template = templateSnapshot.data() as
+        | EmailTemplateRecord
+        | undefined;
+      if (
+        !templateSnapshot.exists ||
+        !template ||
+        template.tenantId !== credential.tenantId ||
+        template.templateId !== parsed.data.templateId ||
+        template.status !== "approved" ||
+        typeof template.subject !== "string" ||
+        typeof template.text !== "string"
+      ) {
+        throw new ApiError(404, "Approved email template not found");
       }
-      throw new ApiError(
-        409,
-        "This email request is already being processed or previously failed"
-      );
-    }
 
-    const templateSnapshot = await transaction.get(templateRef);
-    const template = templateSnapshot.data() as
-      | EmailTemplateRecord
-      | undefined;
-    if (
-      !templateSnapshot.exists ||
-      !template ||
-      template.tenantId !== credential.tenantId ||
-      template.templateId !== parsed.data.templateId ||
-      template.status !== "approved" ||
-      typeof template.subject !== "string" ||
-      typeof template.text !== "string"
-    ) {
-      throw new ApiError(404, "Approved email template not found");
-    }
+      let rendered: { subject: string; text: string };
+      try {
+        rendered = renderEmailTemplate(
+          { subject: template.subject, text: template.text },
+          variables
+        );
+      } catch (error) {
+        throw new ApiError(
+          400,
+          error instanceof Error ? error.message : "Invalid template variables"
+        );
+      }
 
-    let rendered: { subject: string; text: string };
-    try {
-      rendered = renderEmailTemplate(
-        { subject: template.subject, text: template.text },
-        variables
-      );
-    } catch (error) {
-      throw new ApiError(
-        400,
-        error instanceof Error ? error.message : "Invalid template variables"
-      );
-    }
+      const sendsToday =
+        keyRecord.dailySendDate === today ? keyRecord.dailySendCount : 0;
+      if (
+        typeof sendsToday !== "number" ||
+        !Number.isInteger(sendsToday) ||
+        sendsToday < 0
+      ) {
+        throw new Error("Email API key has an invalid daily send counter.");
+      }
+      if (sendsToday >= EMAIL_SEND_ATTEMPTS_PER_DAY) {
+        throw new ApiError(429, "Daily email send limit reached");
+      }
 
-    const sendsToday =
-      keyRecord.dailySendDate === today ? keyRecord.dailySendCount : 0;
-    if (
-      typeof sendsToday !== "number" ||
-      !Number.isInteger(sendsToday) ||
-      sendsToday < 0
-    ) {
-      throw new Error("Email API key has an invalid daily send counter.");
+      transaction.update(credential.keyRef, {
+        dailySendDate: today,
+        dailySendCount: sendsToday + 1,
+      });
+      transaction.create(requestRef, {
+        tenantId: credential.tenantId,
+        requestId,
+        keyId: credential.keyId,
+        templateId: parsed.data.templateId,
+        recipient: parsed.data.to,
+        payloadHash,
+        status: "sending",
+        createdAt: new Date().toISOString(),
+      });
+      return { alreadySent: false, rendered };
     }
-    if (sendsToday >= EMAIL_SEND_ATTEMPTS_PER_DAY) {
-      throw new ApiError(429, "Daily email send limit reached");
-    }
-
-    transaction.update(credential.keyRef, {
-      dailySendDate: today,
-      dailySendCount: sendsToday + 1,
-    });
-    transaction.create(requestRef, {
-      tenantId: credential.tenantId,
-      requestId,
-      keyId: credential.keyId,
-      templateId: parsed.data.templateId,
-      recipient: parsed.data.to,
-      payloadHash,
-      status: "sending",
-      createdAt: new Date().toISOString(),
-    });
-    return { alreadySent: false, rendered };
-  });
+  );
 
   if (reservation.alreadySent) {
     return { requestId, status: "sent" as const, duplicate: true };
