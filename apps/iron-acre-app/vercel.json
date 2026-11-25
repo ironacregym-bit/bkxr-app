@@ -1,9 +1,1 @@
-
-{
-  "crons": [
-    {
-      "path": "/api/notify/cron/monday-kickoff",
-      "schedule": "0 7 * * 1"
-    }
-  ]
-}
+{"buildCommand":"npm --prefix=../.. run build --workspace=@pt/iron-acre-app","crons":[{"path":"/api/notify/cron/monday-kickoff","schedule":"0 7 * * 1"}]}
