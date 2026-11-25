@@ -50,6 +50,8 @@ type PublicSite = {
   id: string;
   slug: string;
   published: boolean;
+  owner_email?: string;
+  editor_emails?: string[];
   payments?: {
     enabled: boolean;
     products: PublicPaymentProduct[];
