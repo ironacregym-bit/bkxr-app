@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resolveSiteBuilderRedirectUrl } from "./auth-redirect";
+import {
+  getSiteBuilderOrigin,
+  resolveSiteBuilderRedirectUrl,
+  SITEBUILDER_PRODUCTION_URL,
+} from "./auth-redirect";
 
 describe("resolveSiteBuilderRedirectUrl", () => {
   const siteBuilderUrl = "https://builder.example.com";
@@ -16,7 +20,7 @@ describe("resolveSiteBuilderRedirectUrl", () => {
         "https://ironacregym.co.uk/register",
         siteBuilderUrl
       )
-    ).toBe(siteBuilderUrl);
+    ).toBe("https://builder.example.com/sitebuilder");
   });
 
   it("preserves absolute URLs on the SiteBuilder origin", () => {
@@ -26,5 +30,30 @@ describe("resolveSiteBuilderRedirectUrl", () => {
         siteBuilderUrl
       )
     ).toBe("https://builder.example.com/sitebuilder");
+  });
+});
+
+describe("getSiteBuilderOrigin", () => {
+  it("prefers the configured SiteBuilder domain over a deployment URL", () => {
+    expect(
+      getSiteBuilderOrigin({
+        siteBuilderUrl: "https://site-builder-two-pi.vercel.app",
+        deploymentUrl: "site-builder-git-main-abc.vercel.app",
+        isPreview: true,
+      })
+    ).toBe("https://site-builder-two-pi.vercel.app");
+  });
+
+  it("uses the SiteBuilder deployment URL for preview builds", () => {
+    expect(
+      getSiteBuilderOrigin({
+        deploymentUrl: "site-builder-git-branch-abc.vercel.app",
+        isPreview: true,
+      })
+    ).toBe("https://site-builder-git-branch-abc.vercel.app");
+  });
+
+  it("never falls back to the gym app's NEXTAUTH_URL in production", () => {
+    expect(getSiteBuilderOrigin({})).toBe(SITEBUILDER_PRODUCTION_URL);
   });
 });

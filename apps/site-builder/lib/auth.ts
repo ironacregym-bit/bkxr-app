@@ -4,7 +4,24 @@ import EmailProvider from "next-auth/providers/email";
 import GoogleProvider from "next-auth/providers/google";
 import type { NextAuthOptions } from "next-auth";
 import { firestore } from "@pt/firebase";
-import { resolveSiteBuilderRedirectUrl } from "./auth-redirect";
+import {
+  getSiteBuilderOrigin,
+  resolveSiteBuilderRedirectUrl,
+} from "./auth-redirect";
+
+const siteBuilderOrigin = getSiteBuilderOrigin({
+  siteBuilderUrl: process.env.SITEBUILDER_URL,
+  deploymentUrl: process.env.VERCEL_URL,
+  isPreview: process.env.VERCEL_ENV === "preview",
+  fallbackUrl:
+    process.env.NODE_ENV === "production"
+      ? undefined
+      : "http://localhost:3002",
+});
+
+// NextAuth v4 reads this environment variable when constructing OAuth callback URLs.
+process.env.NEXTAUTH_URL = siteBuilderOrigin;
+process.env.NEXTAUTH_URL_INTERNAL = siteBuilderOrigin;
 
 function normalizePrivateKey(value?: string) {
   return value?.replace(/\\n/g, "\n").replace(/^"+|"+$/g, "").trim();
@@ -139,12 +156,11 @@ export const authOptions: NextAuthOptions = {
       session.user.permissions = permissions;
       return session;
     },
-    async redirect({ url, baseUrl }) {
-      const siteBuilderUrl =
-        process.env.SITEBUILDER_URL ||
-        process.env.NEXTAUTH_URL ||
-        baseUrl;
-      return resolveSiteBuilderRedirectUrl(url, siteBuilderUrl);
+    async redirect({ url }) {
+      return resolveSiteBuilderRedirectUrl(
+        url,
+        siteBuilderOrigin
+      );
     },
   },
 };
