@@ -30,6 +30,19 @@ session and tenant model.
   adapter uses the adapter's default Firestore collections, while dashboard
   permission is read server-side from the persisted user record and site
   ownership/editor access is checked against each site.
+- SiteBuilder custom domains are stored as tenant-scoped Firestore host
+  mappings. The server provisions domains through the Vercel Projects API,
+  requires both a per-site DNS TXT ownership challenge and Vercel verification
+  before activation, and resolves custom-host mappings server-side.
+  `VERCEL_ACCESS_TOKEN` (or `VERCEL_TOKEN`), `VERCEL_PROJECT_ID`, and optional
+  `VERCEL_TEAM_ID` are server-only deployment settings. SiteBuilder displays
+  the recommended DNS targets and ownership-verification records; customers
+  still need to configure those records at their DNS provider.
+  `SITEBUILDER_HOSTS_JSON` remains a compatibility path for existing domains;
+  new domains do not require environment-variable edits. Domain management is
+  limited to authenticated users who are persisted site owners or editors.
+  Site creation and dashboard access remain restricted to persisted
+  SiteBuilder/admin permissions; arbitrary sign-ups are not enabled.
 - The gym app's AI workout builder is tied to a Gemini-specific model
   selection path and existing global draft/execution collections. It is not
   tenant-safe as-is, so it remains in the gym app until its APIs and persisted

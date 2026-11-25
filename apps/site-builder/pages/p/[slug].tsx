@@ -5,6 +5,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { firestore } from "@pt/firebase";
+import { canEditSite } from "@/lib/sitebuilder/access";
 import { sanitizePublicPayments } from "@/lib/sitebuilder/payments";
 import ProductCheckoutButton from "@/components/sitebuilder/ProductCheckoutButton";
 import type { SiteDomain } from "@/lib/sitebuilder/model";
@@ -214,36 +215,74 @@ function renderContactLine(line: string, accent: string) {
   return line;
 }
 
-function isAuthorized(site: { owner_email?: string; editor_emails?: string[] }, email: string) {
-  const normalizedEmail = String(email || "").toLowerCase();
-  if (!normalizedEmail) return false;
-  if (String(site.owner_email || "").toLowerCase() === normalizedEmail) return true;
-  const editors = Array.isArray(site.editor_emails) ? site.editor_emails : [];
-  return editors.map((item) => String(item || "").toLowerCase()).includes(normalizedEmail);
-}
-
 export const getServerSideProps: GetServerSideProps = async (context) => {
-  const slug = String(context.params?.slug || "").toLowerCase().trim();
-  if (!slug) return { notFound: true };
+  let slug = String(context.params?.slug || "").toLowerCase().trim();
+  const isDomainRequest = String(context.query._sb_domain || "") === "1";
+  if (!slug || (isDomainRequest && slug !== "__domain")) {
+    return { notFound: true };
+  }
 
   const session = await getServerSession(context.req, context.res, authOptions);
   const email = session?.user?.email ? String(session.user.email).toLowerCase() : "";
   const host = normalizeHost(String(context.req.headers.host || ""));
-  const baseHost = normalizeHost(String(process.env.SITEBUILDER_BASE_HOST || ""));
 
   try {
-    const slugSnapshot = await firestore.collection("sitebuilder_slugs").doc(slug).get();
-    if (!slugSnapshot.exists) return { notFound: true };
+    let siteId = "";
+    let domainMapping: Record<string, unknown> | undefined;
+    if (isDomainRequest) {
+      const domainSnapshot = await firestore
+        .collection("sitebuilder_hosts")
+        .doc(host)
+        .get();
+      if (!domainSnapshot.exists) return { notFound: true };
 
-    const slugData: any = slugSnapshot.data() || {};
-    const siteId = String(slugData.siteId || "").trim();
-    if (!siteId) return { notFound: true };
+      const domain = domainSnapshot.data() || {};
+      if (domain.status !== "active" || !domain.ownershipVerifiedAt) {
+        return { notFound: true };
+      }
+      domainMapping = domain;
 
-    const siteSnapshot = await firestore.collection("sitebuilder_sites").doc(siteId).get();
+      siteId = String(domain.siteId || "").trim();
+      if (!siteId) return { notFound: true };
+    } else {
+      const slugSnapshot = await firestore
+        .collection("sitebuilder_slugs")
+        .doc(slug)
+        .get();
+      if (!slugSnapshot.exists) return { notFound: true };
+
+      const slugData: any = slugSnapshot.data() || {};
+      siteId = String(slugData.siteId || "").trim();
+      if (!siteId) return { notFound: true };
+    }
+
+    const siteSnapshot = await firestore
+      .collection("sitebuilder_sites")
+      .doc(siteId)
+      .get();
     if (!siteSnapshot.exists) return { notFound: true };
 
     const site = siteSnapshot.data() as PublicSite;
-    const canEdit = isAuthorized(site, email);
+    if (isDomainRequest) {
+      if (
+        !site.tenantId ||
+        String(domainMapping?.tenantId || "") !== String(site.tenantId)
+      ) {
+        return { notFound: true };
+      }
+
+      const mappedSlug = String(domainMapping?.slug || "")
+        .toLowerCase()
+        .trim();
+      const siteSlug = String(site.slug || "").toLowerCase().trim();
+      if (mappedSlug && siteSlug && mappedSlug !== siteSlug) {
+        return { notFound: true };
+      }
+      slug = mappedSlug || siteSlug;
+      if (!slug) return { notFound: true };
+    }
+
+    const canEdit = canEditSite(site, email);
     if (!site.published && !canEdit) return { notFound: true };
 
     const {
@@ -262,7 +301,14 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
           payments: sanitizePublicPayments(site.payments),
         },
         canEdit,
-        isCustomDomain: Boolean(host && baseHost && host !== baseHost),
+        isCustomDomain:
+          isDomainRequest ||
+          (!host.endsWith(".vercel.app") &&
+            host !== normalizeHost(String(process.env.SITEBUILDER_BASE_HOST || "")) &&
+            !String(process.env.SITEBUILDER_BASE_HOSTS || "")
+              .split(",")
+              .map(normalizeHost)
+              .includes(host)),
       },
     };
   } catch (error) {

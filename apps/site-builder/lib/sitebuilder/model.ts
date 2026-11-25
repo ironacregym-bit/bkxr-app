@@ -65,7 +65,18 @@ export type SiteCustomTable = {
 export type SiteDomain = {
   host: string;
   status: "pending" | "verified" | "active";
-  verificationToken: string;
+  verification?: Array<{
+    domain: string;
+    type: string;
+    value: string;
+  }>;
+  dnsTargets?: Array<{
+    type: "A" | "CNAME";
+    value: string;
+    rank: number;
+  }>;
+  ownershipToken?: string;
+  verificationToken?: string;
   addedAt: string;
   verifiedAt?: string;
 };
@@ -266,8 +277,4 @@ export function defaultSiteContent(args: { slug: string; ownerEmail: string; nam
 export function normalizeHost(host: string) {
   const h = String(host || "").trim().toLowerCase();
   return h.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-}
-
-export function makeVerificationToken() {
-  return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
 }

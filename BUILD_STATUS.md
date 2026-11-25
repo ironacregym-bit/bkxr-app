@@ -17,6 +17,11 @@
 - [x] SiteBuilder has an independent NextAuth configuration with app-specific
   cookies; cross-origin auth redirects are restricted to its configured
   origin.
+- [x] SiteBuilder custom-domain onboarding provisions domains through Vercel,
+  requires per-site DNS ownership and Vercel verification before activation,
+  and routes active hosts through tenant-scoped Firestore mappings for
+  persisted site owners/editors; legacy environment mappings remain supported
+  during migration.
 - [x] Shared `@pt/email-engine` package, tenant-scoped approved email
   templates/API keys, API send endpoint, and EnAible Streamable HTTP MCP tool
   for app and agent callers.
@@ -46,6 +51,10 @@
 - [ ] Set SiteBuilder's `NEXTAUTH_URL`, `SITEBUILDER_URL`, and unique
   `SITEBUILDER_NEXTAUTH_SECRET` in its Vercel project; authorize its Google
   OAuth callback URL and verify sign-in independently of Iron Acre Gym.
+- [ ] Configure a project-scoped `VERCEL_ACCESS_TOKEN` and
+  `VERCEL_PROJECT_ID` (plus `VERCEL_TEAM_ID` for team projects) in SiteBuilder
+  to enable self-service custom-domain provisioning; verify DNS with a test
+  customer domain before migrating existing domains.
 - [ ] Add recurring billing, order history/fulfilment, refunds, and webhook
   handling only when those workflows are defined.
 - [ ] Configure EnAible SMTP credentials and a verified sender, then test the
