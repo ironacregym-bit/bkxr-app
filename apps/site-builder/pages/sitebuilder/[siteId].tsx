@@ -22,8 +22,7 @@ export const getServerSideProps: GetServerSideProps = async (
     };
   }
 
-  const permissions =
-    ((session.user as any)?.permissions as string[]) || [];
+  const permissions = session.user?.permissions || [];
 
   const hasSiteBuilderAccess =
     permissions.includes("sitebuilder") ||

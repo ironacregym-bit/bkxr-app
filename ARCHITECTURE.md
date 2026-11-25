@@ -25,6 +25,11 @@ session and tenant model.
 - The gym app currently uses NextAuth rather than Firebase Authentication.
   Its authentication and roles are not reused for EnAIble because EnAIble
   requires its own Firebase-backed tenant membership model.
+- SiteBuilder has its own NextAuth configuration, cookie names, and Firebase
+  adapter collections. It does not import the gym app's auth callbacks or
+  persist SiteBuilder accounts in the gym app's NextAuth collections. Its
+  dashboard permission is still read server-side from the persisted user
+  record; site ownership and editor access are checked against each site.
 - The gym app's AI workout builder is tied to a Gemini-specific model
   selection path and existing global draft/execution collections. It is not
   tenant-safe as-is, so it remains in the gym app until its APIs and persisted
@@ -84,9 +89,11 @@ session and tenant model.
   refunds, or an in-app order-management screen.
 - `STRIPE_SECRET_KEY` must be configured on the SiteBuilder Vercel project.
   `SITEBUILDER_STRIPE_ACCOUNT_COUNTRY` optionally chooses the Connect account
-  country and defaults to `GB`. Configure `NEXTAUTH_URL` for the canonical
-  SiteBuilder origin and `SITEBUILDER_BASE_HOST`/`SITEBUILDER_BASE_HOSTS` for
-  allowed hosted domains. The connected accounts need Stripe's
+  country and defaults to `GB`. Configure `NEXTAUTH_URL` and `SITEBUILDER_URL`
+  to the canonical SiteBuilder origin and use a unique
+  `SITEBUILDER_NEXTAUTH_SECRET`; do not reuse the Iron Acre Gym auth secret.
+  Configure `SITEBUILDER_BASE_HOST`/`SITEBUILDER_BASE_HOSTS` for allowed hosted
+  domains. The connected accounts need Stripe's
   `card_payments` capability enabled before products can be published.
 - The checkout return page verifies the Stripe session against the connected
   account before displaying a successful payment confirmation.

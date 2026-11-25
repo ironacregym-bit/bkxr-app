@@ -14,6 +14,9 @@
 - [x] SiteBuilder has separate editor views, collapsible admin panels, and
   Stripe Connect onboarding with configurable one-time products and secure
   hosted checkout.
+- [x] SiteBuilder has an independent NextAuth configuration with app-specific
+  cookies and Firestore adapter collections; cross-origin auth redirects are
+  restricted to its configured origin.
 - [x] Shared `@pt/email-engine` package, tenant-scoped approved email
   templates/API keys, API send endpoint, and EnAible Streamable HTTP MCP tool
   for app and agent callers.
@@ -40,6 +43,9 @@
   CSS until all consumers have been migrated and verified.
 - [ ] Configure and verify `STRIPE_SECRET_KEY` on the SiteBuilder Vercel
   project, then complete a Stripe test-mode Connect onboarding and checkout.
+- [ ] Set SiteBuilder's `NEXTAUTH_URL`, `SITEBUILDER_URL`, and unique
+  `SITEBUILDER_NEXTAUTH_SECRET` in its Vercel project; authorize its Google
+  OAuth callback URL and verify sign-in independently of Iron Acre Gym.
 - [ ] Add recurring billing, order history/fulfilment, refunds, and webhook
   handling only when those workflows are defined.
 - [ ] Configure EnAible SMTP credentials and a verified sender, then test the
