@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Container } from "./ui/container";
 
 export default function MeetRob() {
@@ -10,19 +11,20 @@ export default function MeetRob() {
 
         <div className="grid gap-8 lg:grid-cols-[280px_1fr] lg:items-center">
 
-          <div>
+          <div className="relative h-[360px]">
 
-            <img
-              src="/images/rob.jpg"
-              alt="Rob coaching at Iron Acre Gym"
-              className="
-                h-[360px]
-                w-full
-                rounded-lg
-                object-cover
-                shadow-xl
-              "
+            <Image
+              src="/images/Gym_side_view.JPG"
+              alt="Outdoor training area at Iron Acre Gym"
+              fill
+              sizes="(min-width: 1024px) 280px, 100vw"
+              className="rounded-lg object-cover shadow-xl"
             />
+            <div className="absolute inset-x-0 bottom-0 rounded-b-lg bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-12">
+              <p className="text-sm font-semibold text-white">
+                Outdoor training space · Westerfield
+              </p>
+            </div>
 
           </div>
 

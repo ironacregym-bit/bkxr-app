@@ -11,6 +11,8 @@ type LeadCaptureProps = {
   buttonLabel?: string;
   successHeading?: string;
   successMessage?: string;
+  successHref?: string;
+  successLinkLabel?: string;
 };
 
 export default function LeadCapture({
@@ -20,6 +22,8 @@ export default function LeadCapture({
   buttonLabel = "Get My Free Program",
   successHeading = "You're In.",
   successMessage = "Your details have been saved.",
+  successHref,
+  successLinkLabel,
 }: LeadCaptureProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -113,6 +117,15 @@ export default function LeadCapture({
         <p className="text-white/70">
           {successMessage}
         </p>
+
+        {successHref && successLinkLabel && (
+          <a
+            href={successHref}
+            className="mt-4 inline-flex font-semibold text-[#e98740] underline decoration-white/25 underline-offset-4 hover:text-white"
+          >
+            {successLinkLabel}
+          </a>
+        )}
 
         {!confirmationEmailSent && (
           <p

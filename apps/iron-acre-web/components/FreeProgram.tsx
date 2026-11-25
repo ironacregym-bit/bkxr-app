@@ -96,10 +96,10 @@ export default function FreeProgram() {
         <div className="mt-10">
 
           <a
-            href="#start"
+            href="/7-day-workout"
             className="inline-flex h-11 items-center rounded-md bg-[#cc5500] px-5 font-semibold text-white hover:bg-[#db6712]"
           >
-            Get The Program
+            View The Full 7-Day Workout
           </a>
 
         </div>

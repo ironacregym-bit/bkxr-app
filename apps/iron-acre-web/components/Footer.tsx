@@ -25,6 +25,24 @@ export default function Footer() {
             aria-label="Footer"
             className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/70"
           >
+            <a href="/outdoor-gym" className="hover:text-white">
+              Outdoor gym
+            </a>
+            <a href="/strongman-functional-training" className="hover:text-white">
+              Strength training
+            </a>
+            <a href="/boxing" className="hover:text-white">
+              Boxing
+            </a>
+            <a href="/online-coaching" className="hover:text-white">
+              Online coaching
+            </a>
+            <a href="/pricing-times" className="hover:text-white">
+              Prices &amp; times
+            </a>
+            <a href="/7-day-workout" className="hover:text-white">
+              7-day workout
+            </a>
             <a href="/winter-arc" className="hover:text-white">
               Winter Arc 2027
             </a>

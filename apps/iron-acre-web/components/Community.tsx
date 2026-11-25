@@ -4,7 +4,7 @@ import { Container } from "./ui/container";
 export default function Community() {
   return (
     <BackgroundSection
-      image="/images/community.jpg"
+      image="/images/GymFrontView.jpeg"
       overlayClassName="
         bg-gradient-to-b
         from-black/70

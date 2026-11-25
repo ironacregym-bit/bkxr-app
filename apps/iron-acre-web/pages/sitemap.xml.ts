@@ -1,7 +1,16 @@
 import type { GetServerSideProps } from "next";
 import { getServerSiteUrl } from "../lib/site-url";
 
-const publicPaths = ["/", "/winter-arc"];
+const publicPaths = [
+  "/",
+  "/winter-arc",
+  "/7-day-workout",
+  "/outdoor-gym",
+  "/strongman-functional-training",
+  "/boxing",
+  "/online-coaching",
+  "/pricing-times",
+];
 
 export const getServerSideProps: GetServerSideProps = async ({
   res,

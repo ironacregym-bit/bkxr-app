@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Container } from "./ui/container";
 
 export default function GymWithAView() {
@@ -39,18 +40,14 @@ export default function GymWithAView() {
 
           </div>
 
-          <div>
+          <div className="relative h-[320px]">
 
-            <img
-              src="../public/images/GymFrontView.jpeg"
-              alt="Iron Acre meadow"
-              className="
-                h-[320px]
-                w-full
-                rounded-lg
-                object-cover
-                shadow-xl
-              "
+            <Image
+              src="/images/GymFrontView.jpeg"
+              alt="Outdoor training area at Iron Acre Gym in Westerfield, Ipswich"
+              fill
+              sizes="(min-width: 1024px) 50vw, 100vw"
+              className="rounded-lg object-cover shadow-xl"
             />
 
           </div>

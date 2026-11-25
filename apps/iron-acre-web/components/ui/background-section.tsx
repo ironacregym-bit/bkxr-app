@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 interface BackgroundSectionProps {
   image: string;
   children: React.ReactNode;
@@ -25,18 +27,12 @@ export function BackgroundSection({
         ${className}
       `}
     >
-      <div
-        className="
-          absolute
-          inset-0
-          bg-cover
-          bg-center
-          bg-no-repeat
-          scale-105
-        "
-        style={{
-          backgroundImage: `url(${image})`,
-        }}
+      <Image
+        src={image}
+        alt=""
+        fill
+        sizes="100vw"
+        className="scale-105 object-cover"
       />
 
       <div

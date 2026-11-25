@@ -1,6 +1,8 @@
 import LeadCapture from "../components/LeadCapture";
 import Seo from "../components/Seo";
+import SiteHeader from "../components/SiteHeader";
 import { getCanonicalUrl } from "../lib/site-url";
+import Image from "next/image";
 
 const winterArcSchema = {
   "@context": "https://schema.org",
@@ -87,38 +89,23 @@ export default function WinterArcPage() {
       <main className="min-h-screen bg-[#141a15] text-[#e8eae2]">
         <section className="relative overflow-hidden border-b border-white/10">
           <div className="absolute inset-0">
-            <img
+            <Image
               src="/images/GymFrontView.jpeg"
               alt=""
-              className="h-full w-full object-cover opacity-20"
+              fill
+              sizes="100vw"
+              priority
+              className="object-cover opacity-20"
             />
             <div className="absolute inset-0 bg-gradient-to-b from-[#141a15]/35 via-[#141a15]/75 to-[#141a15]" />
           </div>
 
-          <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-6 sm:pb-28">
-            <header className="mb-16 flex items-center justify-between">
-              <a
-                href="/"
-                className="flex items-center gap-3"
-                aria-label="Iron Acre Gym home"
-              >
-                <img
-                  src="/images/iron_acre_logo_transparent.png"
-                  alt=""
-                  className="h-10 w-10 object-contain"
-                />
-                <span className="font-display text-2xl font-black uppercase">
-                  Iron Acre Gym
-                </span>
-              </a>
-              <a
-                href="#register"
-                className="rounded-md bg-[#cc5500] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#db6712]"
-              >
-                Register interest
-              </a>
-            </header>
-
+          <SiteHeader
+            variant="overlay"
+            ctaHref="#register"
+            ctaLabel="Register interest"
+          />
+          <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-14 sm:pb-28">
             <div className="grid items-center gap-12 lg:grid-cols-[1fr_380px]">
               <div>
                 <p className="mb-4 text-sm font-bold uppercase tracking-[0.18em] text-[#e98740]">

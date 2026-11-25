@@ -5,7 +5,9 @@
 The repository is an npm-workspaces/Turborepo monorepo containing four
 applications:
 
-- `apps/iron-acre-web`: the public Iron Acre marketing and lead-capture site.
+- `apps/iron-acre-web`: the public Iron Acre marketing and lead-capture site,
+  including local service pages for outdoor gym training, functional strength,
+  boxing, online coaching, prices/times and a seven-day starter workout.
 - `apps/iron-acre-app`: the gym/member application, currently using the
   Next.js Pages Router and NextAuth.
 - `apps/site-builder`: the SiteBuilder application.

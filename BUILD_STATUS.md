@@ -17,6 +17,10 @@
 - [x] Shared `@pt/email-engine` package, tenant-scoped approved email
   templates/API keys, API send endpoint, and EnAible Streamable HTTP MCP tool
   for app and agent callers.
+- [x] Iron Acre public site has responsive navigation and local landing pages
+  for outdoor gym training, functional strength, boxing, online coaching,
+  prices/times and the advertised seven-day workout. Existing image references
+  use verified assets, and the new routes have page metadata and sitemap entries.
 
 ## Outstanding
 

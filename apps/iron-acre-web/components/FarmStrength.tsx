@@ -4,7 +4,7 @@ import { Container } from "./ui/container";
 export default function FarmStrength() {
   return (
     <BackgroundSection
-      image="/images/farm-strength.jpg"
+      image="/images/Gym_side_view.JPG"
       overlayClassName="
         bg-gradient-to-b
         from-black/80
