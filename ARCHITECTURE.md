@@ -20,6 +20,13 @@ Tailwind and existing shadcn-style primitives. EnAIble uses the same framework
 and Firebase Admin infrastructure, but has its own Firebase Authentication
 session and tenant model.
 
+GitHub Actions CI checks SiteBuilder and the Iron Acre public website on pull
+requests to `main` and pushes to `main`. Vercel Git integration is the
+intended deployment path for those two apps; each needs its own Vercel project
+rooted at its `apps/` directory. CI does not contain production credentials
+or perform production deployments. See `CI_CD.md` for project and release
+setup.
+
 ## Reuse boundaries and conflicts
 
 - The gym app currently uses NextAuth rather than Firebase Authentication.

@@ -125,15 +125,19 @@ have been checked; it has not been removed as part of this migration.
 - Added EnAIble's separate authentication, tenant-membership, default-deny
   Firestore, and approved-email/MCP foundation.
 - Added public Iron Acre marketing and service pages.
+- Added a root npm lockfile and initial GitHub Actions checks for SiteBuilder
+  and the Iron Acre public website; updated all apps to Next.js 14.2.35 and
+  corrected monorepo output-tracing configuration.
 - Updated architecture, build-status, and environment-example documentation.
 
 **Important current-state qualifications**
 
 - PR #1 is an **open draft**, not merged. The self-service domain changes are
   on that PR branch and are not yet in `main`.
-- `git diff --check` passed for the domain changes, but tests, type checking,
-  and production builds have not been run in the current environment because
-  Node/npm were unavailable.
+- The selected CI checks passed locally: SiteBuilder's 18 tests and
+  type-check, plus production builds for all four apps. Type-checks for the
+  other two apps also passed. One existing EnAIble tenant-cookie test fails;
+  EnAIble is outside the initial deployment CI scope.
 - A previous SiteBuilder sign-in attempt reported Firebase Firestore
   `PERMISSION_DENIED`. Confirm the service account, project, and IAM access
   before relying on live authentication, site lookup, or domain operations.
@@ -149,10 +153,10 @@ passes verification.
 
 ### 1. Before changing production
 
-1. Review PR #1 and run dependency installation, SiteBuilder tests,
-   type-check, and production build in an environment with the repository's
-   supported Node/npm toolchain. Resolve failures before the production
-   deployment.
+1. Review PR #1 and confirm the GitHub Actions CI check passes; its
+   dependency installation, SiteBuilder tests/type-check/build, and marketing
+   website build have passed locally. Resolve any CI failures before
+   production deployment.
 2. Confirm Firebase Admin credentials point to the intended Firestore
    project and that the service account has the required access. Test the
    existing Firestore permission failure first.

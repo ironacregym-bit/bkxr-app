@@ -29,6 +29,10 @@
   for outdoor gym training, functional strength, boxing, online coaching,
   prices/times and the advertised seven-day workout. Existing image references
   use verified assets, and the new routes have page metadata and sitemap entries.
+- [x] GitHub Actions CI workflow added for SiteBuilder tests/type-check/build
+  and the Iron Acre public website build, using a root npm lockfile.
+- [x] All workspaces updated to the patched Next.js 14.2.35 release, and
+  monorepo output tracing configured under the Next.js 14 experimental options.
 
 ## Outstanding
 
@@ -55,6 +59,9 @@
   `VERCEL_PROJECT_ID` (plus `VERCEL_TEAM_ID` for team projects) in SiteBuilder
   to enable self-service custom-domain provisioning; verify DNS with a test
   customer domain before migrating existing domains.
+- [ ] Connect separate Vercel projects for `apps/site-builder` and
+  `apps/iron-acre-web` to GitHub for preview and production deployments; verify
+  each project's environment variables and require the CI check on `main`.
 - [ ] Add recurring billing, order history/fulfilment, refunds, and webhook
   handling only when those workflows are defined.
 - [ ] Configure EnAible SMTP credentials and a verified sender, then test the
@@ -78,8 +85,11 @@
 
 ## Known limitations and validation
 
-- Node.js/npm is unavailable in the current environment, so automated tests,
-  type checks and builds have not been run.
+- `npm ci` and the selected CI checks passed locally with Node.js 22 and npm
+  10.8.2. SiteBuilder's 18 tests, its type-check, and builds for the selected
+  apps passed. Type-checks and builds for the other two apps also passed.
+- The EnAIble test suite has one existing failing tenant-cookie tampering test;
+  EnAIble is not in the initial deployment CI scope.
 - Firebase credentials, Firebase Email/Password provider, local runtime and
   deployment have not been configured or verified.
 - Authentication currently supports email/password only. Rate limiting,
