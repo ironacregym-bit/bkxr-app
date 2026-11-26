@@ -134,6 +134,8 @@ have been checked; it has not been removed as part of this migration.
 
 - PR #1 is an **open draft**, not merged. The self-service domain changes are
   on that PR branch and are not yet in `main`.
+- The CI workflow is pushed to the PR branch but is not active on GitHub yet;
+  it must reach `main` before GitHub can run it for future pull requests.
 - The selected CI checks passed locally: SiteBuilder's 18 tests and
   type-check, plus production builds for all four apps. Type-checks for the
   other two apps also passed. One existing EnAIble tenant-cookie test fails;

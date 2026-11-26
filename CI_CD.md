@@ -14,6 +14,11 @@ The workflow uses read-only repository permissions and requires no production
 credentials. Keep Firebase service-account keys, OAuth secrets, Stripe keys,
 Vercel tokens, and SMTP credentials out of GitHub Actions.
 
+The workflow is currently on the feature branch in draft PR #1. GitHub does
+not yet list or run it because it is not on the default branch. Merge the
+workflow to `main` before expecting GitHub Actions checks on subsequent pull
+requests or pushes.
+
 ## Vercel deployments
 
 Use Vercel's Git integration for continuous deployment. Create or connect one
@@ -66,8 +71,8 @@ code requires them.
 
 ## Release flow
 
-1. A pull request opens a Vercel preview for each linked project and runs the
-   GitHub Actions checks.
+1. After the workflow has reached `main`, a pull request opens a Vercel
+   preview for each linked project and runs the GitHub Actions checks.
 2. Review the preview and require the `SiteBuilder and marketing website`
    CI check to pass before merging.
 3. Merging to `main` triggers Vercel production deployments for the linked
@@ -76,9 +81,9 @@ code requires them.
    the existing SiteBuilder deployment available while customer domains are
    moved one at a time.
 
-Configure GitHub branch protection for `main` to require the CI check. This
-repository change adds the workflow but cannot enable branch protection or
-connect Vercel projects on the user's behalf.
+Configure GitHub branch protection for `main` to require the CI check after
+the workflow is merged. This repository change adds the workflow but cannot
+enable branch protection or connect Vercel projects on the user's behalf.
 
 ## Limitations
 

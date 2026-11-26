@@ -62,6 +62,8 @@
 - [ ] Connect separate Vercel projects for `apps/site-builder` and
   `apps/iron-acre-web` to GitHub for preview and production deployments; verify
   each project's environment variables and require the CI check on `main`.
+- [ ] Merge the CI workflow from the current draft PR to `main` before expecting
+  GitHub Actions to run; workflows are not active on the default branch yet.
 - [ ] Add recurring billing, order history/fulfilment, refunds, and webhook
   handling only when those workflows are defined.
 - [ ] Configure EnAible SMTP credentials and a verified sender, then test the
