@@ -28,6 +28,8 @@ export function verifyTenantCookie(
 
   const tenantId = value.slice(0, separator);
   const suppliedSignature = value.slice(separator + 1);
+  if (!/^[a-f\d]{64}$/i.test(suppliedSignature)) return null;
+
   const expectedSignature = signatureFor(
     userId,
     tenantId,

@@ -8,7 +8,11 @@ not yet implemented.
 
 ## Local development
 
-1. Configure Firebase Authentication with the Email/Password provider.
+1. In Firebase Console, enable the Email/Password and Google sign-in providers
+   under **Authentication → Sign-in method**, and add localhost plus the
+   deployed EnAIble domain to **Authorized domains**. Google sign-in uses
+   Firebase's existing web configuration; no separate Google OAuth secret is
+   needed in EnAIble's environment.
 2. Copy `.env.example` to `.env.local` and fill in the Firebase web
    configuration, Firebase Admin service-account values and a random
    `ENAIBLE_SESSION_SECRET` of at least 32 characters. To enable email
@@ -21,7 +25,11 @@ not yet implemented.
 Firebase Admin credentials must remain server-side. Do not commit `.env.local`
 or service-account keys. All browser Firestore reads and writes are denied by
 the root Firestore rules; application data access must go through authenticated
-server APIs that derive tenant membership from the session.
+server APIs that derive tenant membership from the session. Verified Firebase
+identities are mirrored to `enaible_users/{uid}` with their user ID, email,
+display name and timestamps. Passwords and OAuth credentials are not copied
+into Firestore; organisation memberships remain under
+`tenants/{tenantId}/members/{uid}`.
 
 ## Email API and MCP
 
@@ -62,8 +70,8 @@ header. Email sends use EnAible's server-side SMTP settings and global
 
 ## Current limitations
 
-- Email/password authentication only; password recovery, MFA, invitations and
-  organisation member management are not implemented.
+- Firebase Email/Password and Google sign-in are supported; password recovery,
+  MFA, invitations and organisation member management are not implemented.
 - Email currently supports tenant-authored plain-text templates only. It has
   no attachments, HTML templates, unsubscribe workflow, per-recipient consent
   tracking, send-history UI or provider webhook handling.

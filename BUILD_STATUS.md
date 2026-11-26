@@ -4,8 +4,9 @@
 
 - [x] Existing monorepo and applications inspected; EnAIble added as a
   separate Turbo workspace.
-- [x] Phase 1 foundation: Firebase Email/Password client authentication,
-  server-verified HttpOnly sessions, organisation creation and selection,
+- [x] Phase 1 foundation: Firebase Email/Password and Google client
+  authentication, server-verified HttpOnly sessions, organisation creation and
+  selection,
   membership-derived roles, signed active-tenant context and an empty-state
   tenant dashboard.
 - [x] Default-deny Firestore client rules and Firebase configuration added.
@@ -37,7 +38,8 @@
 ## Outstanding
 
 - [ ] Run dependency installation, type checking, tests and a production build.
-- [ ] Configure Firebase project credentials and enable Email/Password auth.
+- [ ] Configure Firebase project credentials and enable Email/Password and
+  Google auth providers.
 - [ ] Add signup email verification, password recovery, invitations and member
   administration.
 - [ ] Add general rate limiting, abuse protection, retention controls and
@@ -88,13 +90,12 @@
 ## Known limitations and validation
 
 - `npm ci` and the selected CI checks passed locally with Node.js 22 and npm
-  10.8.2. SiteBuilder's 18 tests, its type-check, and builds for the selected
-  apps passed. Type-checks and builds for the other two apps also passed.
-- The EnAIble test suite has one existing failing tenant-cookie tampering test;
-  EnAIble is not in the initial deployment CI scope.
-- Firebase credentials, Firebase Email/Password provider, local runtime and
-  deployment have not been configured or verified.
-- Authentication currently supports email/password only. Rate limiting,
+  10.8.2. EnAIble's 14 tests, type-check and production build pass; SiteBuilder's
+  18 tests, type-check and selected app builds also passed.
+- EnAIble is not in the initial deployment CI scope.
+- Firebase credentials, Email/Password and Google provider enablement,
+  authorized domains and deployment have not been configured or verified.
+- Authentication supports email/password and Google sign-in. Rate limiting,
   account recovery, email verification, MFA and user invitations are not
   implemented.
 - Email has no unsubscribe or recipient-consent workflow, HTML or attachment

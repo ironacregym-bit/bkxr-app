@@ -65,9 +65,12 @@ setup.
 
 - **Frontend:** Next.js 14 Pages Router, React, TypeScript, Tailwind CSS and
   local shadcn-style UI primitives in `apps/enaible`.
-- **Authentication:** Firebase Authentication Email/Password in the browser.
-  The client exchanges an ID token for a five-day, HttpOnly Firebase session
-  cookie. Server APIs verify the cookie before reading user or tenant data.
+- **Authentication:** Firebase Authentication Email/Password and Google
+  sign-in in the browser. The client exchanges a verified ID token for a
+  five-day, HttpOnly Firebase session cookie. The server mirrors basic profile
+  claims to `enaible_users/{uid}`; passwords and OAuth credentials are not
+  stored in Firestore. Server APIs verify the cookie before reading user or
+  tenant data.
 - **Tenant context:** memberships are stored at
   `tenants/{tenantId}/members/{userId}`. An active organisation cookie is
   signed server-side and is accepted only when the authenticated user still

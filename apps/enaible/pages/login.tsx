@@ -1,13 +1,16 @@
 import { useState, type FormEvent } from "react";
 import {
+  GoogleAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithPopup,
 } from "firebase/auth";
 import { ArrowRight, Bot, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getFirebaseAuth } from "@/lib/firebase-client";
+import { createOrganizationSchema } from "@/lib/schemas";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"sign-in" | "register">("sign-in");
@@ -16,6 +19,46 @@ export default function LoginPage() {
   const [organizationName, setOrganizationName] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  async function establishSession(idToken: string) {
+    const sessionResponse = await fetch("/api/auth/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken }),
+    });
+
+    if (!sessionResponse.ok) {
+      const result = await sessionResponse.json();
+      throw new Error(result.error || "Could not start your session");
+    }
+  }
+
+  async function createOrganization(name: string) {
+    const organizationResponse = await fetch("/api/organizations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const result = await organizationResponse.json();
+
+    if (!organizationResponse.ok) {
+      throw new Error(result.error || "Could not create your organisation");
+    }
+
+    const selectResponse = await fetch("/api/organizations/select", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tenantId: result.organization.tenantId,
+      }),
+    });
+    if (!selectResponse.ok) {
+      const selectionError = await selectResponse.json();
+      throw new Error(
+        selectionError.error || "Could not select your organisation"
+      );
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,45 +71,10 @@ export default function LoginPage() {
         mode === "register"
           ? await createUserWithEmailAndPassword(auth, email, password)
           : await signInWithEmailAndPassword(auth, email, password);
-      const idToken = await credential.user.getIdToken();
-      const sessionResponse = await fetch("/api/auth/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      });
-
-      if (!sessionResponse.ok) {
-        const result = await sessionResponse.json();
-        throw new Error(result.error || "Could not start your session");
-      }
+      await establishSession(await credential.user.getIdToken());
 
       if (mode === "register") {
-        const organizationResponse = await fetch("/api/organizations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: organizationName }),
-        });
-        const result = await organizationResponse.json();
-
-        if (!organizationResponse.ok) {
-          throw new Error(
-            result.error || "Could not create your organisation"
-          );
-        }
-
-        const selectResponse = await fetch("/api/organizations/select", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tenantId: result.organization.tenantId,
-          }),
-        });
-        if (!selectResponse.ok) {
-          const selectionError = await selectResponse.json();
-          throw new Error(
-            selectionError.error || "Could not select your organisation"
-          );
-        }
+        await createOrganization(organizationName);
       }
 
       window.location.assign("/");
@@ -75,6 +83,55 @@ export default function LoginPage() {
         submitError instanceof Error
           ? submitError.message
           : "Sign-in failed. Please try again."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    setError("");
+
+    if (mode === "register") {
+      const parsedOrganization = createOrganizationSchema.safeParse({
+        name: organizationName,
+      });
+      if (!parsedOrganization.success) {
+        setError(
+          parsedOrganization.error.issues[0]?.message ||
+            "Enter a valid organisation name"
+        );
+        return;
+      }
+    }
+
+    setSubmitting(true);
+
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      const credential = await signInWithPopup(getFirebaseAuth(), provider);
+      await establishSession(await credential.user.getIdToken());
+
+      if (mode === "register") {
+        const organizationsResponse = await fetch("/api/organizations");
+        const result = await organizationsResponse.json();
+        if (!organizationsResponse.ok) {
+          throw new Error(
+            result.error || "Could not check your organisations"
+          );
+        }
+        if (result.organizations.length === 0) {
+          await createOrganization(organizationName);
+        }
+      }
+
+      window.location.assign("/");
+    } catch (signInError) {
+      setError(
+        signInError instanceof Error
+          ? signInError.message
+          : "Google sign-in failed. Please try again."
       );
     } finally {
       setSubmitting(false);
@@ -120,6 +177,24 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <Button
+              className="w-full"
+              disabled={submitting}
+              onClick={handleGoogleSignIn}
+              type="button"
+              variant="outline"
+            >
+              {mode === "register"
+                ? "Sign up with Google"
+                : "Continue with Google"}
+            </Button>
+
+            <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="h-px flex-1 bg-border" />
+              or continue with email
+              <span className="h-px flex-1 bg-border" />
+            </div>
+
             <form className="space-y-4" onSubmit={handleSubmit}>
               {mode === "register" && (
                 <label className="block space-y-2 text-sm font-medium">

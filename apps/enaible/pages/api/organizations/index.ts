@@ -9,6 +9,7 @@ import {
   createOrganizationSchema,
   tenantRoleSchema,
 } from "@/lib/schemas";
+import { ENAIBLE_USERS_COLLECTION } from "@/lib/enaible-user-profile";
 
 export default async function handler(
   req: NextApiRequest,
@@ -111,7 +112,7 @@ export default async function handler(
           createdAt: now,
         });
         transaction.set(
-          adminDb.collection("users").doc(user.uid),
+          adminDb.collection(ENAIBLE_USERS_COLLECTION).doc(user.uid),
           {
             userId: user.uid,
             email: user.email,
