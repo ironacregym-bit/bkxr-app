@@ -32,7 +32,7 @@ export default async function handler(
   res: NextApiResponse
 ) {
   try {
-    const context = await requireTenantContext(req);
+    const context = await requireTenantContext(req, res);
     requireRole(context, ["platform_admin", "owner", "administrator"]);
     const templatesRef = adminDb
       .collection("tenants")

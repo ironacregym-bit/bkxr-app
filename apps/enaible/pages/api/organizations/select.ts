@@ -28,7 +28,7 @@ export default async function handler(
   }
 
   try {
-    const user = await requireUser(req);
+    const user = await requireUser(req, res);
     const memberRef = adminDb
       .collection("tenants")
       .doc(parsed.data.tenantId)

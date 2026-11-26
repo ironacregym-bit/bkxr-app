@@ -1,139 +1,29 @@
-import { useState, type FormEvent } from "react";
-import {
-  GoogleAuthProvider,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-} from "firebase/auth";
-import { ArrowRight, Bot, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { useRouter } from "next/router";
+import { signIn } from "next-auth/react";
+import { Bot, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { getFirebaseAuth } from "@/lib/firebase-client";
-import { createOrganizationSchema } from "@/lib/schemas";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 export default function LoginPage() {
-  const [mode, setMode] = useState<"sign-in" | "register">("sign-in");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [organizationName, setOrganizationName] = useState("");
-  const [error, setError] = useState("");
+  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
-
-  async function establishSession(idToken: string) {
-    const sessionResponse = await fetch("/api/auth/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken }),
-    });
-
-    if (!sessionResponse.ok) {
-      const result = await sessionResponse.json();
-      throw new Error(result.error || "Could not start your session");
-    }
-  }
-
-  async function createOrganization(name: string) {
-    const organizationResponse = await fetch("/api/organizations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    const result = await organizationResponse.json();
-
-    if (!organizationResponse.ok) {
-      throw new Error(result.error || "Could not create your organisation");
-    }
-
-    const selectResponse = await fetch("/api/organizations/select", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tenantId: result.organization.tenantId,
-      }),
-    });
-    if (!selectResponse.ok) {
-      const selectionError = await selectResponse.json();
-      throw new Error(
-        selectionError.error || "Could not select your organisation"
-      );
-    }
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    setSubmitting(true);
-
-    try {
-      const auth = getFirebaseAuth();
-      const credential =
-        mode === "register"
-          ? await createUserWithEmailAndPassword(auth, email, password)
-          : await signInWithEmailAndPassword(auth, email, password);
-      await establishSession(await credential.user.getIdToken());
-
-      if (mode === "register") {
-        await createOrganization(organizationName);
-      }
-
-      window.location.assign("/");
-    } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Sign-in failed. Please try again."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
+  const [error, setError] = useState("");
+  const authError = router.query.error;
 
   async function handleGoogleSignIn() {
     setError("");
-
-    if (mode === "register") {
-      const parsedOrganization = createOrganizationSchema.safeParse({
-        name: organizationName,
-      });
-      if (!parsedOrganization.success) {
-        setError(
-          parsedOrganization.error.issues[0]?.message ||
-            "Enter a valid organisation name"
-        );
-        return;
-      }
-    }
-
     setSubmitting(true);
-
     try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-      const credential = await signInWithPopup(getFirebaseAuth(), provider);
-      await establishSession(await credential.user.getIdToken());
-
-      if (mode === "register") {
-        const organizationsResponse = await fetch("/api/organizations");
-        const result = await organizationsResponse.json();
-        if (!organizationsResponse.ok) {
-          throw new Error(
-            result.error || "Could not check your organisations"
-          );
-        }
-        if (result.organizations.length === 0) {
-          await createOrganization(organizationName);
-        }
-      }
-
-      window.location.assign("/");
-    } catch (signInError) {
-      setError(
-        signInError instanceof Error
-          ? signInError.message
-          : "Google sign-in failed. Please try again."
-      );
-    } finally {
+      await signIn("google", { callbackUrl: "/" });
+    } catch {
+      setError("Could not start Google sign-in. Please try again.");
       setSubmitting(false);
     }
   }
@@ -167,109 +57,31 @@ export default function LoginPage() {
             <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary lg:hidden">
               <Bot className="h-5 w-5" />
             </div>
-            <CardTitle className="text-2xl">
-              {mode === "register" ? "Create your workspace" : "Welcome back"}
-            </CardTitle>
+            <CardTitle className="text-2xl">Sign in to EnAIble</CardTitle>
             <CardDescription>
-              {mode === "register"
-                ? "Set up your EnAIble account and organisation."
-                : "Sign in to your organisation workspace."}
+              Use your Google account to securely access your organisation
+              workspace.
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {(authError || error) && (
+              <p
+                aria-live="polite"
+                className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+                role="alert"
+              >
+                {error ||
+                  "Google sign-in could not be completed. Please try again."}
+              </p>
+            )}
             <Button
               className="w-full"
               disabled={submitting}
               onClick={handleGoogleSignIn}
               type="button"
-              variant="outline"
             >
-              {mode === "register"
-                ? "Sign up with Google"
-                : "Continue with Google"}
+              {submitting ? "Redirecting to Google..." : "Continue with Google"}
             </Button>
-
-            <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="h-px flex-1 bg-border" />
-              or continue with email
-              <span className="h-px flex-1 bg-border" />
-            </div>
-
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              {mode === "register" && (
-                <label className="block space-y-2 text-sm font-medium">
-                  Organisation name
-                  <Input
-                    autoComplete="organization"
-                    maxLength={80}
-                    minLength={2}
-                    onChange={(event) =>
-                      setOrganizationName(event.target.value)
-                    }
-                    required
-                    value={organizationName}
-                  />
-                </label>
-              )}
-              <label className="block space-y-2 text-sm font-medium">
-                Email
-                <Input
-                  autoComplete="email"
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                  type="email"
-                  value={email}
-                />
-              </label>
-              <label className="block space-y-2 text-sm font-medium">
-                Password
-                <Input
-                  autoComplete={
-                    mode === "register" ? "new-password" : "current-password"
-                  }
-                  minLength={6}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                  type="password"
-                  value={password}
-                />
-              </label>
-
-              {error && (
-                <p
-                  aria-live="polite"
-                  className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200"
-                  role="alert"
-                >
-                  {error}
-                </p>
-              )}
-
-              <Button className="w-full" disabled={submitting} type="submit">
-                {submitting
-                  ? "Please wait..."
-                  : mode === "register"
-                    ? "Create workspace"
-                    : "Sign in"}
-                {!submitting && <ArrowRight className="h-4 w-4" />}
-              </Button>
-            </form>
-
-            <p className="mt-6 text-center text-sm text-muted-foreground">
-              {mode === "register"
-                ? "Already have an account?"
-                : "New to EnAIble?"}{" "}
-              <button
-                className="font-medium text-primary hover:underline"
-                onClick={() => {
-                  setMode(mode === "register" ? "sign-in" : "register");
-                  setError("");
-                }}
-                type="button"
-              >
-                {mode === "register" ? "Sign in" : "Create an account"}
-              </button>
-            </p>
           </CardContent>
         </Card>
       </div>

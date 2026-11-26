@@ -1,8 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import {
-  clearSessionCookieHeader,
-  clearTenantCookieHeader,
-} from "@/lib/server-auth";
+import { clearTenantCookieHeader } from "@/lib/server-auth";
 
 export default function handler(
   req: NextApiRequest,
@@ -13,9 +10,6 @@ export default function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  res.setHeader("Set-Cookie", [
-    clearSessionCookieHeader(),
-    clearTenantCookieHeader(),
-  ]);
+  res.setHeader("Set-Cookie", clearTenantCookieHeader());
   return res.status(204).end();
 }

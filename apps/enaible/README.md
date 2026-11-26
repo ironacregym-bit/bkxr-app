@@ -1,35 +1,40 @@
 # EnAIble
 
 EnAIble is a separate Next.js application in this monorepo. Its foundation
-provides Firebase Authentication, server-verified sessions, organisation
+uses NextAuth Google OAuth, the shared GCP Firestore project, organisation
 membership and a tenant-scoped dashboard. It also hosts a tenant-scoped email
 API and MCP tool endpoint. General agent execution and invoice processing are
 not yet implemented.
 
 ## Local development
 
-1. In Firebase Console, enable the Email/Password and Google sign-in providers
-   under **Authentication → Sign-in method**, and add localhost plus the
-   deployed EnAIble domain to **Authorized domains**. Google sign-in uses
-   Firebase's existing web configuration; no separate Google OAuth secret is
-   needed in EnAIble's environment.
-2. Copy `.env.example` to `.env.local` and fill in the Firebase web
-   configuration, Firebase Admin service-account values and a random
-   `ENAIBLE_SESSION_SECRET` of at least 32 characters. To enable email
+1. In Google Cloud Console, configure an OAuth web client and add
+   `http://localhost:3003/api/auth/callback/google` as an authorized redirect
+   URI. Add `https://<enaible-domain>/api/auth/callback/google` for production.
+   The GCP project must have Firestore enabled, and the service account must
+   have permission to access the Firestore database.
+2. Copy `.env.example` to `.env.local`. Set the EnAIble OAuth client values,
+   the same GCP Firestore project and service-account credentials used by
+   SiteBuilder, and separate random secrets of at least 32 characters for
+   `ENAIBLE_NEXTAUTH_SECRET` and `ENAIBLE_SESSION_SECRET`. To enable email
    delivery, also configure the SMTP values and a verified `EMAIL_FROM`
    address.
 3. From the repository root, install the monorepo dependencies and run
    `npm run enaible:dev`.
 4. Open `http://localhost:3003`.
 
-Firebase Admin credentials must remain server-side. Do not commit `.env.local`
-or service-account keys. All browser Firestore reads and writes are denied by
-the root Firestore rules; application data access must go through authenticated
-server APIs that derive tenant membership from the session. Verified Firebase
-identities are mirrored to `enaible_users/{uid}` with their user ID, email,
-display name and timestamps. Passwords and OAuth credentials are not copied
-into Firestore; organisation memberships remain under
-`tenants/{tenantId}/members/{uid}`.
+Keep the GCP service-account private key and OAuth client secret server-side.
+Do not commit `.env.local` or credential files. No Firebase client
+configuration or Firebase Authentication is used. Browser Firestore access is
+denied by the root rules; authenticated server APIs use the shared GCP
+Firestore project and derive tenant membership from persisted records.
+
+NextAuth user profiles are stored in `enaible_users/{uid}` and the minimal
+Google account link is stored in `enaible_accounts`; OAuth access and refresh
+tokens are not persisted. Existing profile documents in the legacy `users`
+collection are copied to `enaible_users` on first Google sign-in where needed
+to preserve the existing user ID and tenant memberships. Organisation
+memberships remain under `tenants/{tenantId}/members/{uid}`.
 
 ## Email API and MCP
 
@@ -70,8 +75,8 @@ header. Email sends use EnAible's server-side SMTP settings and global
 
 ## Current limitations
 
-- Firebase Email/Password and Google sign-in are supported; password recovery,
-  MFA, invitations and organisation member management are not implemented.
+- Google OAuth sign-in is supported; email/password login, MFA, invitations
+  and organisation member management are not implemented.
 - Email currently supports tenant-authored plain-text templates only. It has
   no attachments, HTML templates, unsubscribe workflow, per-recipient consent
   tracking, send-history UI or provider webhook handling.

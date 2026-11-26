@@ -29,7 +29,7 @@ export default async function handler(
   res: NextApiResponse
 ) {
   try {
-    const context = await requireTenantContext(req);
+    const context = await requireTenantContext(req, res);
     requireRole(context, ["platform_admin", "owner", "administrator"]);
     const tenantRef = adminDb.collection("tenants").doc(context.tenantId);
     const keysRef = tenantRef.collection("emailApiKeys");

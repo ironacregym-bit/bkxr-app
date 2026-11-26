@@ -18,16 +18,16 @@ function normalizeKey(key?: string | null): string | undefined {
 }
 
 /**
- * Prefer FIREBASE_* (Service Account) if set.
- * Optionally fall back to GOOGLE_* if you’ve been using those.
+ * Prefer GCP GOOGLE_* service-account values.
+ * Accept FIREBASE_* aliases for existing deployments.
  * If neither is set, fall back to applicationDefault() so it works on GCP/Emulator.
  */
 const FIREBASE_PROJECT_ID =
-  process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_PROJECT_ID;
+  process.env.GOOGLE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
 const FIREBASE_CLIENT_EMAIL =
-  process.env.FIREBASE_CLIENT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL;
+  process.env.GOOGLE_CLIENT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL;
 const FIREBASE_PRIVATE_KEY = normalizeKey(
-  process.env.FIREBASE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY
+  process.env.GOOGLE_PRIVATE_KEY || process.env.FIREBASE_PRIVATE_KEY
 );
 
 let app: App;

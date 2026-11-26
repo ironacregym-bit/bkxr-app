@@ -9,7 +9,7 @@ import {
   createOrganizationSchema,
   tenantRoleSchema,
 } from "@/lib/schemas";
-import { ENAIBLE_USERS_COLLECTION } from "@/lib/enaible-user-profile";
+import { ENAIBLE_USERS_COLLECTION } from "@/lib/auth-collections";
 
 export default async function handler(
   req: NextApiRequest,
@@ -17,7 +17,7 @@ export default async function handler(
 ) {
   if (req.method === "GET") {
     try {
-      const user = await requireUser(req);
+      const user = await requireUser(req, res);
       const memberships = await adminDb
         .collectionGroup("members")
         .where("userId", "==", user.uid)
@@ -92,7 +92,7 @@ export default async function handler(
     }
 
     try {
-      const user = await requireUser(req);
+      const user = await requireUser(req, res);
       const tenantRef = adminDb.collection("tenants").doc();
       const memberRef = tenantRef.collection("members").doc(user.uid);
       const now = new Date().toISOString();
@@ -116,7 +116,7 @@ export default async function handler(
           {
             userId: user.uid,
             email: user.email,
-            displayName: user.name,
+            name: user.name,
             updatedAt: now,
           },
           { merge: true }

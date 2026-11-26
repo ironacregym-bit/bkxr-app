@@ -13,12 +13,12 @@ applications:
 - `apps/site-builder`: the SiteBuilder application.
 - `apps/enaible`: the new, separate EnAIble platform application.
 
-The existing stack is Next.js 14, React 18, TypeScript 5, Firebase/Firestore,
+The existing stack is Next.js 14, React 18, TypeScript 5, GCP Firestore,
 and shared packages under `packages/`. Existing reusable infrastructure
 includes the Firebase package and the email engine; the app styling work uses
 Tailwind and existing shadcn-style primitives. EnAIble uses the same framework
-and Firebase Admin infrastructure, but has its own Firebase Authentication
-session and tenant model.
+and GCP Firestore project as SiteBuilder, but has its own NextAuth session and
+tenant model; it does not use Firebase Authentication.
 
 GitHub Actions CI checks SiteBuilder and the Iron Acre public website on pull
 requests to `main` and pushes to `main`. Vercel Git integration is the
@@ -29,14 +29,13 @@ setup.
 
 ## Reuse boundaries and conflicts
 
-- The gym app currently uses NextAuth rather than Firebase Authentication.
-  Its authentication and roles are not reused for EnAIble because EnAIble
-  requires its own Firebase-backed tenant membership model.
+- The gym app currently uses NextAuth. Its authentication and roles are not
+  reused for EnAIble because EnAIble has its own tenant membership model.
 - SiteBuilder has its own NextAuth configuration, cookie names, and redirect
-  policy; it does not import the gym app's auth callbacks. Its Firebase
-  adapter uses the adapter's default Firestore collections, while dashboard
-  permission is read server-side from the persisted user record and site
-  ownership/editor access is checked against each site.
+  policy; it does not import the gym app's auth callbacks. EnAIble follows the
+  same Google OAuth and GCP service-account pattern but uses a custom adapter
+  with isolated `enaible_users` and `enaible_accounts` collections and its own
+  tenant authorization model.
 - SiteBuilder custom domains are stored as tenant-scoped Firestore host
   mappings. The server provisions domains through the Vercel Projects API,
   requires both a per-site DNS TXT ownership challenge and Vercel verification
@@ -55,8 +54,9 @@ setup.
   tenant-safe as-is, so it remains in the gym app until its APIs and persisted
   data are redesigned for EnAIble's tenant boundaries.
 - The shared Firebase package exposes Firestore client functionality through
-  its main barrel. EnAIble imports Firebase Admin through a separate alias so
-  ordinary package consumers do not eagerly initialize Admin services.
+  its main barrel. EnAIble imports the server-only Admin SDK through a
+  separate alias to access GCP Firestore; this does not enable Firebase
+  Authentication. Ordinary package consumers do not eagerly initialize Admin.
 - No browser Firestore usage was found in the current applications; the new
   root rules explicitly deny browser Firestore access. Existing server-side
   Firebase Admin access remains unaffected.
@@ -65,12 +65,12 @@ setup.
 
 - **Frontend:** Next.js 14 Pages Router, React, TypeScript, Tailwind CSS and
   local shadcn-style UI primitives in `apps/enaible`.
-- **Authentication:** Firebase Authentication Email/Password and Google
-  sign-in in the browser. The client exchanges a verified ID token for a
-  five-day, HttpOnly Firebase session cookie. The server mirrors basic profile
-  claims to `enaible_users/{uid}`; passwords and OAuth credentials are not
-  stored in Firestore. Server APIs verify the cookie before reading user or
-  tenant data.
+- **Authentication:** Google OAuth through NextAuth with JWT-backed,
+  HttpOnly sessions. No Firebase Authentication or app-managed passwords are
+  used. User profiles live in `enaible_users/{uid}`; only the Google account
+  identifier and provider metadata needed to resolve sign-ins are stored in
+  `enaible_accounts`. OAuth access and refresh tokens are not persisted.
+  Server APIs resolve the NextAuth session before reading user or tenant data.
 - **Tenant context:** memberships are stored at
   `tenants/{tenantId}/members/{userId}`. An active organisation cookie is
   signed server-side and is accepted only when the authenticated user still
@@ -78,12 +78,13 @@ setup.
 - **Authorisation:** each tenant-scoped request resolves role from Firestore
   membership data. Browser-supplied tenant identifiers are never trusted
   without a membership lookup.
-- **Persistence:** privileged application access uses Firebase Admin through
-  the dedicated `@pt/firebase/admin` TypeScript alias. The shared
-  `@pt/firebase` barrel does not eagerly initialize Firebase Admin.
+- **Persistence:** privileged application access uses the shared GCP
+  Firestore database through the dedicated `@pt/firebase/admin` TypeScript
+  alias and GCP service-account credentials. The shared `@pt/firebase` barrel
+  does not eagerly initialize the Admin SDK.
 - **Firestore rules:** client SDK access is denied globally. Server APIs use
-  Firebase Admin, which bypasses those rules; tenant checks therefore remain
-  mandatory in every server operation.
+  server credentials, which bypass those rules; tenant checks therefore
+  remain mandatory in every server operation.
 - **Email:** `packages/email-engine` is the reusable SMTP sender and
   server-to-server client. EnAible hosts a tenant-scoped email API and
   stateless Streamable HTTP MCP endpoint. Apps and agents use per-tenant API

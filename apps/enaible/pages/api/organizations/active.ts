@@ -14,7 +14,7 @@ export default async function handler(
   }
 
   try {
-    const context = await requireTenantContext(req);
+    const context = await requireTenantContext(req, res);
     return res.status(200).json({
       organization: {
         tenantId: context.tenantId,

@@ -4,12 +4,12 @@
 
 - [x] Existing monorepo and applications inspected; EnAIble added as a
   separate Turbo workspace.
-- [x] Phase 1 foundation: Firebase Email/Password and Google client
-  authentication, server-verified HttpOnly sessions, organisation creation and
-  selection,
-  membership-derived roles, signed active-tenant context and an empty-state
-  tenant dashboard.
-- [x] Default-deny Firestore client rules and Firebase configuration added.
+- [x] Phase 1 foundation: Google OAuth through NextAuth, GCP Firestore-backed
+  profiles, server-verified HttpOnly sessions, organisation creation and
+  selection, membership-derived roles, signed active-tenant context and an
+  empty-state tenant dashboard.
+- [x] Default-deny Firestore client rules and GCP Firestore configuration
+  added.
 - [x] Initial tenant-cookie and Zod validation unit tests added.
 - [x] EnAIble setup notes and architecture/convention documentation added.
 - [x] SiteBuilder has separate editor views, collapsible admin panels, and
@@ -37,11 +37,11 @@
 
 ## Outstanding
 
-- [ ] Run dependency installation, type checking, tests and a production build.
-- [ ] Configure Firebase project credentials and enable Email/Password and
-  Google auth providers.
-- [ ] Add signup email verification, password recovery, invitations and member
-  administration.
+- [x] Install dependencies and validate tests, type checking and production
+  builds for the selected apps.
+- [ ] Configure EnAIble's Google OAuth client, GCP Firestore service account,
+  authorized callback URL and production secrets.
+- [ ] Add organisation invitations, member administration and MFA.
 - [ ] Add general rate limiting, abuse protection, retention controls and
   production deployment configuration.
 - [ ] Implement the configurable agent foundation (schemas, registry, provider
@@ -76,8 +76,10 @@
 - EnAIble is a distinct Next.js app and does not replace the gym app.
 - The initial EnAIble milestone is Phase 1 only; no agent or invoice workflow
   is claimed complete.
-- Firebase Admin access is imported from `@pt/firebase/admin` so unrelated
+- GCP Firestore access is imported from `@pt/firebase/admin` so unrelated
   consumers of the shared client Firebase barrel do not initialize Admin.
+- EnAIble uses NextAuth with a custom Firestore adapter; user and provider
+  records are isolated in `enaible_users` and `enaible_accounts`.
 - Tenant identity is derived from a signed HttpOnly active-tenant cookie and
   revalidated against the authenticated user's Firestore membership on every
   tenant-scoped request.
@@ -93,11 +95,10 @@
   10.8.2. EnAIble's 14 tests, type-check and production build pass; SiteBuilder's
   18 tests, type-check and selected app builds also passed.
 - EnAIble is not in the initial deployment CI scope.
-- Firebase credentials, Email/Password and Google provider enablement,
-  authorized domains and deployment have not been configured or verified.
-- Authentication supports email/password and Google sign-in. Rate limiting,
-  account recovery, email verification, MFA and user invitations are not
-  implemented.
+- EnAIble OAuth credentials, GCP Firestore permissions, authorized callback
+  URLs and deployment have not been configured or verified.
+- Authentication supports Google sign-in only. Rate limiting, MFA,
+  organisation invitations and member administration are not implemented.
 - Email has no unsubscribe or recipient-consent workflow, HTML or attachment
   support, email activity screen, or per-tenant sender identities.
 - SiteBuilder payments currently cover one-time Stripe Checkout only. Payment

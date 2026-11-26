@@ -21,7 +21,7 @@ import {
   ShieldCheck,
   Workflow,
 } from "lucide-react";
-import { signOut } from "firebase/auth";
+import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,7 +31,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getFirebaseAuth } from "@/lib/firebase-client";
 import type { OrganizationMembership } from "@/lib/schemas";
 
 type User = {
@@ -174,7 +173,7 @@ export default function DashboardPage() {
 
   async function handleSignOut() {
     await fetch("/api/auth/logout", { method: "POST" });
-    await signOut(getFirebaseAuth());
+    await signOut({ redirect: false });
     await router.replace("/login");
   }
 

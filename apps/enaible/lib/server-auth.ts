@@ -2,47 +2,15 @@ import type {
   NextApiRequest,
   NextApiResponse,
 } from "next";
-import { adminAuth, adminDb } from "@pt/firebase/admin";
+import { getServerSession } from "next-auth/next";
+import { adminDb } from "@pt/firebase/admin";
+import { authOptions } from "./auth";
 import type { TenantRole } from "./schemas";
 import { tenantRoleSchema } from "./schemas";
 import { signTenantCookie, verifyTenantCookie } from "./tenant-cookie";
 
-const SESSION_COOKIE = "enaible_session";
 const TENANT_COOKIE = "enaible_active_tenant";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 5;
-const INVALID_ID_TOKEN_CODES = new Set([
-  "auth/argument-error",
-  "auth/invalid-id-token",
-  "auth/id-token-expired",
-  "auth/id-token-revoked",
-  "auth/user-disabled",
-  "auth/user-not-found",
-]);
-const INVALID_SESSION_COOKIE_CODES = new Set([
-  "auth/argument-error",
-  "auth/invalid-session-cookie",
-  "auth/session-cookie-expired",
-  "auth/session-cookie-revoked",
-  "auth/user-disabled",
-  "auth/user-not-found",
-]);
-
-function firebaseErrorCode(error: unknown): string | undefined {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    typeof error.code === "string"
-  ) {
-    return error.code;
-  }
-  return undefined;
-}
-
-export function isInvalidFirebaseIdToken(error: unknown) {
-  const code = firebaseErrorCode(error);
-  return code ? INVALID_ID_TOKEN_CODES.has(code) : false;
-}
 
 export class ApiError extends Error {
   constructor(
@@ -99,14 +67,6 @@ function cookieOptions(maxAge: number) {
   ].join("; ");
 }
 
-export function sessionCookieHeader(value: string) {
-  return `${SESSION_COOKIE}=${encodeURIComponent(value)}; ${cookieOptions(SESSION_MAX_AGE_SECONDS)}`;
-}
-
-export function clearSessionCookieHeader() {
-  return `${SESSION_COOKIE}=; ${cookieOptions(0)}`;
-}
-
 export function clearTenantCookieHeader() {
   return `${TENANT_COOKIE}=; ${cookieOptions(0)}`;
 }
@@ -127,36 +87,26 @@ export function activeTenantCookieHeader(
 }
 
 export async function requireUser(
-  req: NextApiRequest
+  req: NextApiRequest,
+  res: NextApiResponse
 ): Promise<AuthenticatedUser> {
-  const sessionCookie = readCookie(req, SESSION_COOKIE);
-  if (!sessionCookie) {
+  const session = await getServerSession(req, res, authOptions);
+  if (!session?.user?.id) {
     throw new ApiError(401, "Authentication required");
   }
 
-  try {
-    const claims = await adminAuth.verifySessionCookie(
-      sessionCookie,
-      true
-    );
-
-    return {
-      uid: claims.uid,
-      email: typeof claims.email === "string" ? claims.email : null,
-      name: typeof claims.name === "string" ? claims.name : null,
-    };
-  } catch (error) {
-    if (INVALID_SESSION_COOKIE_CODES.has(firebaseErrorCode(error) || "")) {
-      throw new ApiError(401, "Session expired. Please sign in again.");
-    }
-    throw error;
-  }
+  return {
+    uid: session.user.id,
+    email: typeof session.user.email === "string" ? session.user.email : null,
+    name: typeof session.user.name === "string" ? session.user.name : null,
+  };
 }
 
 export async function requireTenantContext(
-  req: NextApiRequest
+  req: NextApiRequest,
+  res: NextApiResponse
 ): Promise<TenantContext> {
-  const user = await requireUser(req);
+  const user = await requireUser(req, res);
   const tenantCookie = readCookie(req, TENANT_COOKIE);
   const secret = process.env.ENAIBLE_SESSION_SECRET;
 
@@ -226,4 +176,4 @@ export function sendApiError(
   });
 }
 
-export { adminAuth, adminDb };
+export { adminDb };

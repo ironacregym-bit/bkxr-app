@@ -11,7 +11,7 @@ export default async function handler(
   }
 
   try {
-    return res.status(200).json({ user: await requireUser(req) });
+    return res.status(200).json({ user: await requireUser(req, res) });
   } catch (error) {
     return sendApiError(res, error, "Could not load your account");
   }
