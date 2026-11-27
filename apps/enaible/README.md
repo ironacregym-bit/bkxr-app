@@ -73,6 +73,36 @@ OAuth discovery, so the selected MCP client must allow a custom authorization
 header. Email sends use EnAible's server-side SMTP settings and global
 `EMAIL_FROM` identity.
 
+The existing endpoint runs wherever EnAIble is deployed; it does not need a
+separate Google-hosted MCP server to use GCP Firestore. Configure SMTP and
+create a tenant-approved template and API key in **Email & MCP**, then use
+the MCP URL and Bearer header above with a compatible client. Test with a safe
+recipient before live use. The key permits sends according to the saved policy;
+it is not a general-purpose MCP credential.
+
+If you later want Google Cloud hosting, [Cloud Run](https://cloud.google.com/run/docs)
+can host an HTTP service, but a Cloud Run deployment for this monorepo has not
+been configured or verified. It would need a deployable service image, an
+HTTPS endpoint, a least-privilege service identity for Firestore, secure secret
+management, SMTP connectivity, and a compatible MCP client. Do not copy
+service-account keys or MCP bearer keys into source code.
+
+## Organisation knowledge
+
+Select an organisation on the dashboard and open **Documents** to paste text
+or upload a `.txt` file. Owners and administrators can add, search and delete
+up to 100 documents per organisation, each limited to 20,000 characters.
+Documents are stored under `tenants/{tenantId}/knowledge` with tenant metadata.
+The API derives tenant and role from the authenticated session and membership,
+not the request body. Search is a basic keyword match over this bounded set;
+it is not semantic or vector search. Documents are untrusted content: do not
+upload credentials or sensitive personal data.
+
+This is a storage and retrieval foundation only. It is not yet connected to an
+agent, workout generator, or MCP knowledge tool, and it does not test model
+output for hallucinations. The existing email-only MCP key does not grant
+access to knowledge.
+
 ## Current limitations
 
 - Google OAuth sign-in is supported; email/password login, MFA, invitations

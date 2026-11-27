@@ -12,6 +12,8 @@
   added.
 - [x] Initial tenant-cookie and Zod validation unit tests added.
 - [x] EnAIble setup notes and architecture/convention documentation added.
+- [x] Organisation-scoped plain-text knowledge records and keyword search,
+  limited to owners and administrators, with schema and retrieval tests.
 - [x] SiteBuilder has separate editor views, collapsible admin panels, and
   Stripe Connect onboarding with configurable one-time products and secure
   hosted checkout.
@@ -46,6 +48,8 @@
   production deployment configuration.
 - [ ] Implement the configurable agent foundation (schemas, registry, provider
   abstraction, workflow and JSON screen renderer).
+- [ ] Connect the knowledge foundation to agent execution and a separately
+  scoped MCP retrieval tool; implement output validation and evaluation.
 - [ ] Decide and migrate the existing workout builder only after tenant-safe
   platform foundations are available.
 - [ ] Do not implement the invoice agent before authentication, tenancy,
@@ -92,7 +96,7 @@
 ## Known limitations and validation
 
 - `npm ci` and the selected CI checks passed locally with Node.js 22 and npm
-  10.8.2. EnAIble's 14 tests, type-check and production build pass; SiteBuilder's
+  10.8.2. EnAIble's 19 tests, type-check and production build pass; SiteBuilder's
   18 tests, type-check and selected app builds also passed.
 - EnAIble is not in the initial deployment CI scope.
 - EnAIble OAuth credentials, GCP Firestore permissions, authorized callback

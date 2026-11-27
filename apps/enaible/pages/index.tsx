@@ -201,6 +201,14 @@ export default function DashboardPage() {
             const Icon = item.icon;
             const className =
               "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
+            if (item.label === "Documents") {
+              return (
+                <Link className={className} href="/knowledge" key={item.label}>
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              );
+            }
             if (item.label === "Email & MCP") {
               return (
                 <Link
@@ -427,8 +435,8 @@ export default function DashboardPage() {
                   },
                   {
                     label: "Documents processed",
-                    value: "0",
-                    note: "Private to this organisation",
+                    value: "—",
+                    note: "Usage metrics not yet available",
                     icon: FileText,
                   },
                 ].map((metric) => {
@@ -497,6 +505,24 @@ export default function DashboardPage() {
                           Tenant-scoped membership and owner role are active.
                         </p>
                       </div>
+                      <Link href="/knowledge" className="inline-block text-sm text-primary">
+                        Manage organisation knowledge
+                      </Link>
+                      <form className="space-y-2 border-t border-border pt-4" onSubmit={createOrganization}>
+                        <label className="block text-sm" htmlFor="new-organisation">
+                          Create another organisation
+                        </label>
+                        <Input
+                          id="new-organisation"
+                          maxLength={80}
+                          minLength={2}
+                          onChange={(event) => setOrganizationName(event.target.value)}
+                          placeholder="Organisation name"
+                          required
+                          value={organizationName}
+                        />
+                        <Button disabled={saving} type="submit" variant="outline">Create organisation</Button>
+                      </form>
                     </div>
                     <div className="flex gap-3">
                       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">

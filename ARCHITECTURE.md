@@ -97,6 +97,12 @@ setup.
   template placeholders, uses idempotency records, and stores email request
   records beneath the tenant with `tenantId`. SMTP credentials and `EMAIL_FROM`
   remain server-only and shared globally by the EnAible service.
+- **Knowledge foundation:** owners and administrators can add, delete and
+  search bounded plain-text records beneath `tenants/{tenantId}/knowledge`.
+  The server resolves tenant membership before accessing records and verifies
+  each record's tenant metadata. Search is a bounded keyword match, not vector
+  search, and is not yet connected to an agent or MCP tool. Email API keys
+  remain send-only and do not authorize knowledge access.
 
 ## SiteBuilder payments
 
